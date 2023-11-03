@@ -9,10 +9,12 @@ class IgnoreClientContentNegotiation(BaseContentNegotiation):
         """
         Select the first parser in the `.parser_classes` list.
         """
+        # TODO double-check and write down why this is the correct thing
         return parsers[0]
 
     def select_renderer(self, request, renderers, format_suffix):
         """
         Select the first renderer in the `.renderer_classes` list.
         """
+        # TODO double-check and write down why this is the correct thing
         return (renderers[0], renderers[0].media_type)
