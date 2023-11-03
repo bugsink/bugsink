@@ -1,3 +1,4 @@
+# VENDORED from glitchtip/events/parsers.py, af9a700a8706f20771b005804d8c92ca95c8b072
 import codecs
 
 from django.conf import settings
