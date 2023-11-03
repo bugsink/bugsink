@@ -1,3 +1,11 @@
+# VENDORED from glitchtip, af9a700a8706f20771b005804d8c92ca95c8b072
+# Changes:
+# * flake8
+# * max size manually changed
+#
+# Before 1.0 I want to probably not do this as a middleware at all, but ingest everything without unzipping and then in
+# some async process do the actual unzipping (which is potentially costly)
+
 import io
 import logging
 import zlib
