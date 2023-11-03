@@ -1,3 +1,5 @@
+import json  # TODO consider faster APIs
+
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -19,7 +21,10 @@ class BaseIngestAPIView(APIView):
     http_method_names = ["post"]
 
     def process_event(self, event_data, request, project):
-        DecompressedEvent.objects.create(project=project, data=event_data)
+        DecompressedEvent.objects.create(
+            project=project,
+            data=json.dumps(event_data),  # TODO don't parse-then-print for BaseIngestion
+        )
 
 
 class IngestEventAPIView(BaseIngestAPIView):
