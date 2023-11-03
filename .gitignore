@@ -1,3 +1,7 @@
+# Python
+*.pyc
+__pycache__
+
 # Virtual Environments
 .env
 .venv
@@ -7,3 +11,7 @@ lib/
 lib64
 pyvenv.cfg
 share/
+
+# sqlite
+db.sqlite3
+db.*.sqlite3
