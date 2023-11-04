@@ -7,7 +7,9 @@ from .views import trigger_error
 
 
 urlpatterns = [
-    path('api/',  include('ingest.urls')),
+    path('api/', include('ingest.urls')),
+
+    path('events/', include('events.urls')),
 
     path('admin/', admin.site.urls),
 ]

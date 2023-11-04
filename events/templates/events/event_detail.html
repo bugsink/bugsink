@@ -1,0 +1,34 @@
+<html>
+
+
+{% for exception in exceptions %}
+    <h1>{{ exception.type }}: {{ exception.value }}</h1>
+    <b>{{ parsed_data.request.url }}</b><br>
+
+    {% for frame in exception.stacktrace.frames %}
+        
+        <p>
+            <br>
+            <b>{{ frame.filename }} line {{ frame.lineno }}, in {{ frame.function }}.</b><br>
+
+            <pre>
+{% for line in frame.pre_context %}{{ line }}
+{% endfor %}<b>{{ frame.context_line }}</b>
+{% for line in frame.post_context %}{{ line }}
+{% endfor %}
+            </pre>
+
+            {% for var, value in frame.vars.items %}
+            <b>{{ var }}</b>: <i>{{ value }}</i></br>
+            {% endfor %} 
+
+        </p>
+    
+    {% endfor %}
+
+    {% if not forloop.last %}While handling the above exception, yad yad<br>{% endif %}
+
+{% endfor %}
+
+
+</html>
