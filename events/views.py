@@ -3,6 +3,7 @@ import json
 from django.shortcuts import render, get_object_or_404
 
 from ingest.models import DecompressedEvent
+from issues.utils import get_hash_for_data
 
 
 def decompressed_event_detail(request, pk):
@@ -19,3 +20,13 @@ def decompressed_event_detail(request, pk):
         "parsed_data": parsed_data,
         "exceptions": exceptions,
     })
+
+
+def debug_get_hash(request, decompressed_event_pk):
+    # debug view; not for eternity
+
+    obj = get_object_or_404(DecompressedEvent, pk=decompressed_event_pk)
+
+    parsed_data = json.loads(obj.data)
+
+    print(get_hash_for_data(parsed_data))
