@@ -46,7 +46,7 @@ MIDDLEWARE = [
     'sentry.middleware.proxy.DecompressBodyMiddleware',
 ]
 
-ROOT_URLCONF = 'project.urls'
+ROOT_URLCONF = 'bugsink.urls'
 
 TEMPLATES = [
     {
@@ -64,7 +64,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'project.wsgi.application'
+WSGI_APPLICATION = 'bugsink.wsgi.application'
 
 
 # Database
