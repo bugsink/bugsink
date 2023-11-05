@@ -1,0 +1,12 @@
+<html>
+
+<h1>Issues for project {{ project_id }}</h1>
+
+{% for issue in issue_list %}
+
+    <a href="/issues/issue/{{ issue.id }}/events/">{{ issue.id }} </a><br>
+
+{% endfor %}
+
+
+</html>

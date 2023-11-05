@@ -8,6 +8,9 @@ from rest_framework.views import APIView
 # from sentry.utils.auth import parse_auth_header
 
 from projects.models import Project
+from issues.models import Issue
+from issues.utils import get_hash_for_data
+
 
 from .negotiation import IgnoreClientContentNegotiation
 from .parsers import EnvelopeParser
@@ -21,10 +24,17 @@ class BaseIngestAPIView(APIView):
     http_method_names = ["post"]
 
     def process_event(self, event_data, request, project):
-        DecompressedEvent.objects.create(
+        event = DecompressedEvent.objects.create(
             project=project,
             data=json.dumps(event_data),  # TODO don't parse-then-print for BaseIngestion
         )
+
+        hash_ = get_hash_for_data(event_data)
+
+        issue, _ = Issue.objects.get_or_create(
+            hash=hash_,
+        )
+        issue.events.add(event)
 
 
 class IngestEventAPIView(BaseIngestAPIView):
@@ -43,9 +53,11 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
         if len(request.data) != 3:
             # multi-part envelopes trigger an error too
+            print("!= 3")
             return Response({"message": "Missing headers / unsupported type"}, status=status.HTTP_501_NOT_IMPLEMENTED)
 
         if request.data[1].get("type") != "event":
+            print("!= event")
             return Response({"message": "Only events are supported"}, status=status.HTTP_501_NOT_IMPLEMENTED)
 
         event = request.data[2]
