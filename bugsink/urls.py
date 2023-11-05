@@ -3,7 +3,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 
-from .views import trigger_error
+from .views import trigger_error, favicon
 
 
 urlpatterns = [
@@ -13,6 +13,8 @@ urlpatterns = [
     path('issues/', include('issues.urls')),
 
     path('admin/', admin.site.urls),
+
+    path("favicon.ico", favicon),
 ]
 
 if settings.DEBUG:
