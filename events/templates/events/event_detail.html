@@ -5,10 +5,7 @@
 </head>
 <body>
 
-<div class="flex justify-center items-center">
-
-    <div class="w-[96rem] p-4">
-
+<div class="m-4">
 {% for exception in exceptions %}
     <h1 class="text-3xl mt-4">{{ exception.type }}</h1>
     <div class="text-2xl">{{ exception.value }}</div>
@@ -16,18 +13,33 @@
 
     {% for frame in exception.stacktrace.frames %}
         
-        <div class="font-mono">
-            <div class="font-bold">{{ frame.filename }} line {{ frame.lineno }}, in {{ frame.function }}.</div>
+        <div class="xl:flex">
 
-<ol class="list-decimal ml-12" start="100">
-{% for line in frame.pre_context %}<li><div class="whitespace-pre w-full">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
-<li><div class="whitespace-pre font-bold bg-slate-200 w-full">{{ frame.context_line }} {# leave space to avoid collapse #}</div></li>
-{% for line in frame.post_context %}<li><div class="whitespace-pre w-full">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
-</ol>
+        <div class="m-4 bg-slate-100 xl:w-1/2">
 
+            <div class="font-mono">
+                <div class="pl-4 pt-2 pb-2 border-b-2 {% if frame.in_app %}bg-slate-300 border-slate-500{% else %}bg-slate-100 border-slate-300{% endif %}">
+                    <span class="font-bold">{{ frame.filename }}</span> in <span class="font-bold">{{ frame.function }}</span> line <span class="font-bold">{{ frame.lineno }}</span>.
+                </div>
+
+                <ol class="list-decimal ml-16 mt-6 mb-6" start="100">
+                {% for line in frame.pre_context %}<li><div class="whitespace-pre w-full">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
+                <li><div class="whitespace-pre font-bold bg-slate-300 w-full">{{ frame.context_line }} {# leave space to avoid collapse #}</div></li>
+                {% for line in frame.post_context %}<li><div class="whitespace-pre w-full">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
+                </ol>
+            </div>
+
+        </div>
+        <div class="m-4 mb-12 p-4 bg-slate-100 xl:w-1/2">
+            
             {% for var, value in frame.vars.items %}
-            <b>{{ var }}</b>: <i>{{ value }}</i></br>
+            <div class="flex">
+                <div class="w-1/4 pl-2 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ var }}</div>
+                <div class="w-3/4 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ value }}</div>
+            </div>
             {% endfor %} 
+
+        </div>
 
         </div>
 
@@ -36,10 +48,8 @@
     {% if not forloop.last %}While handling the above exception, yad yad<br>{% endif %}
 
 {% endfor %}
-
-    </div>
-
 </div>
+
 
 </body>
 </html>
