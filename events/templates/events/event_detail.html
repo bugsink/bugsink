@@ -5,29 +5,31 @@
 </head>
 <body>
 
+<div class="flex justify-center items-center">
+
+    <div class="w-[96rem] p-4">
 
 {% for exception in exceptions %}
-    <h1>{{ exception.type }}: {{ exception.value }}</h1>
-    <b>{{ parsed_data.request.url }}</b><br>
+    <h1 class="text-3xl mt-4">{{ exception.type }}</h1>
+    <div class="text-2xl">{{ exception.value }}</div>
+    <div class="italic mt-4">{{ parsed_data.request.method }} {{ parsed_data.request.url }}</div><br>
 
     {% for frame in exception.stacktrace.frames %}
         
-        <p>
-            <br>
-            <b>{{ frame.filename }} line {{ frame.lineno }}, in {{ frame.function }}.</b><br>
+        <div class="font-mono">
+            <div class="font-bold">{{ frame.filename }} line {{ frame.lineno }}, in {{ frame.function }}.</div>
 
-            <pre>
+            <div class="whitespace-pre-wrap">
 {% for line in frame.pre_context %}{{ line }}
-{% endfor %}<b>{{ frame.context_line }}</b>
-{% for line in frame.post_context %}{{ line }}
+{% endfor %}<div class="font-bold bg-slate-200 w-full">{{ frame.context_line }}</div>{% for line in frame.post_context %}{{ line }}
 {% endfor %}
-            </pre>
+            </div>
 
             {% for var, value in frame.vars.items %}
             <b>{{ var }}</b>: <i>{{ value }}</i></br>
             {% endfor %} 
 
-        </p>
+        </div>
     
     {% endfor %}
 
@@ -35,6 +37,9 @@
 
 {% endfor %}
 
+    </div>
+
+</div>
 
 </body>
 </html>
