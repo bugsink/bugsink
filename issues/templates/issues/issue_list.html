@@ -6,13 +6,22 @@
 
 <body>
 
-<h1>Issues for project {{ project_id }}</h1>
+<div class="m-4">
+<h1 class="text-3xl mt-4">Issues for project {{ project_id }}</h1>
 
-{% for issue in issue_list %}
+    <div>
+    {% for issue in issue_list %}
 
-    <a href="/issues/issue/{{ issue.id }}/events/">{{ issue.id }} </a><br>
+        <div class="m-2">
+            <div><a href="/issues/issue/{{ issue.id }}/events/" class="text-blue-800 font-bold">{{ issue.title }}</a> <span class="ml-2 italic">{{ issue.parsed_data.transaction }}</span> </div>
+            <div class="text-sm">from <b>8 Nov 12:33</b> | last <b>8 Nov 12:39</b> | with <b>3</b> events</div>
+        </div>
 
-{% endfor %}
+    {% endfor %}
+    <div>
+
+
+</div>
 
 
 </body>
