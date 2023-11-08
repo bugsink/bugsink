@@ -15,3 +15,11 @@ share/
 # sqlite
 db.sqlite3
 db.*.sqlite3
+
+# vim
+*.swo
+*.swp
+
+# node (tailwind)
+node_modules
+package*

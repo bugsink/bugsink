@@ -1,5 +1,10 @@
+{% load static tailwind_tags %}
 <html>
+<head>
+    {% tailwind_css %}
+</head>
 
+<body>
 <h1>Events for issue {{ issue.id }}</h1>
 
 {% for event in event_list %}
@@ -9,4 +14,5 @@
 {% endfor %}
 
 
+</body>
 </html>

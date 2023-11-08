@@ -17,6 +17,10 @@ DEBUG = True
 
 ALLOWED_HOSTS = ["*"]  # SECURITY WARNING: also make production-worthy
 
+INTERNAL_IPS = [
+    "127.0.0.1",
+]
+
 
 # Application definition
 
@@ -28,11 +32,16 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    'tailwind',
+    'theme',
+
     'projects',
     'ingest',
     'issues',
     'events',
 ]
+
+TAILWIND_APP_NAME = 'theme'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

@@ -1,3 +1,4 @@
 Django==4.2.*
 sentry-sdk==1.32.*
 djangorestframework==3.14.*
+django-tailwind=3.6.*

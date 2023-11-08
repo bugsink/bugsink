@@ -1,4 +1,9 @@
+{% load static tailwind_tags %}
 <html>
+<head>
+    {% tailwind_css %}
+</head>
+<body>
 
 
 {% for exception in exceptions %}
@@ -31,4 +36,5 @@
 {% endfor %}
 
 
+</body>
 </html>

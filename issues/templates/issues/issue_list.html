@@ -1,4 +1,10 @@
+{% load static tailwind_tags %}
 <html>
+<head>
+    {% tailwind_css %}
+</head>
+
+<body>
 
 <h1>Issues for project {{ project_id }}</h1>
 
@@ -9,4 +15,5 @@
 {% endfor %}
 
 
+</body>
 </html>
