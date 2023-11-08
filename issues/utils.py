@@ -5,29 +5,24 @@ from sentry.eventtypes.base import DefaultEvent
 from sentry.eventtypes.error import ErrorEvent
 
 
-def default_hash_input(title: str, culprit: str, type_) -> str:
+def default_issue_grouper(title: str, culprit: str, type_) -> str:
     return title + culprit + type_
 
 
-def generate_hash(
-    title: str, culprit: str, type_, extra: Optional[List[str]] = None
-) -> str:
-    """Generate insecure hash used for grouping issues"""
+def generate_issue_grouper(title: str, culprit: str, type_, extra: Optional[List[str]] = None) -> str:
     if extra:
-        hash_input = "".join(
+        return "".join(
             [
-                default_hash_input(title, culprit, type_)
+                default_issue_grouper(title, culprit, type_)
                 if part == "{{ default }}"
                 else part
                 for part in extra
             ]
         )
-    else:
-        hash_input = default_hash_input(title, culprit, type_)
-    return hashlib.md5(hash_input.encode()).hexdigest()
+    return default_issue_grouper(title, culprit, type_)
 
 
-def get_hash_for_data(data):
+def get_issue_grouper_for_data(data):
     if "exception" in data and data["exception"]:
         eventtype = ErrorEvent()
     else:
@@ -37,4 +32,11 @@ def get_hash_for_data(data):
 
     title = eventtype.get_title(metadata)
     culprit = eventtype.get_location(data)
-    return generate_hash(title, culprit, type(eventtype).__name__, data.get("fingerprint"))
+    return generate_issue_grouper(title, culprit, type(eventtype).__name__, data.get("fingerprint"))
+
+
+def get_hash_for_data(data):
+    """Generate hash used for grouping issues (note: not a cryptographically secure hash)"""
+    # NOTE: issue_grouper should be renamed to what it _is_ (hash is accidental, 'grouper', or 'key' maybe?
+    issue_grouper = get_issue_grouper_for_data(data)
+    return hashlib.md5(issue_grouper.encode()).hexdigest()

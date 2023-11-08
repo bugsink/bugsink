@@ -3,7 +3,7 @@ import json
 from django.shortcuts import render, get_object_or_404
 
 from ingest.models import DecompressedEvent
-from issues.utils import get_hash_for_data
+from issues.utils import get_hash_for_data, get_issue_grouper_for_data
 
 
 def decompressed_event_detail(request, pk):
@@ -19,6 +19,7 @@ def decompressed_event_detail(request, pk):
         "obj": obj,
         "parsed_data": parsed_data,
         "exceptions": exceptions,
+        "issue_grouper": get_issue_grouper_for_data(parsed_data),
     })
 
 
