@@ -783,6 +783,14 @@ select {
   margin: 1rem;
 }
 
+.m-8 {
+  margin: 2rem;
+}
+
+.m-16 {
+  margin: 4rem;
+}
+
 .mx-auto {
   margin-left: auto;
   margin-right: auto;
@@ -798,6 +806,14 @@ select {
 
 .mt-8 {
   margin-top: 2rem;
+}
+
+.ml-16 {
+  margin-left: 4rem;
+}
+
+.ml-12 {
+  margin-left: 3rem;
 }
 
 .block {
@@ -864,6 +880,14 @@ select {
   transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
 }
 
+.list-decimal {
+  list-style-type: decimal;
+}
+
+.list-none {
+  list-style-type: none;
+}
+
 .content-start {
   align-content: flex-start;
 }
@@ -874,6 +898,10 @@ select {
 
 .justify-center {
   justify-content: center;
+}
+
+.whitespace-pre {
+  white-space: pre;
 }
 
 .whitespace-pre-wrap {
