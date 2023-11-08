@@ -6,7 +6,7 @@ from sentry.eventtypes.error import ErrorEvent
 
 
 def default_issue_grouper(title: str, culprit: str, type_) -> str:
-    return title + culprit + type_
+    return title + " ⋄ " + culprit + " ⋄ " + type_
 
 
 def generate_issue_grouper(title: str, culprit: str, type_, extra: Optional[List[str]] = None) -> str:
