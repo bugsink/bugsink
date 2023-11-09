@@ -9,6 +9,7 @@ from rest_framework import exceptions
 # from projects.models import Project
 from sentry.utils.auth import parse_auth_header
 
+from bugsink.exceptions import ViolatedExpectation
 from projects.models import Project
 from issues.models import Issue
 from issues.utils import get_hash_for_data
@@ -27,24 +28,26 @@ class BaseIngestAPIView(APIView):
 
     @classmethod
     def auth_from_request(cls, request):
-        # VENDORED FROM GlitchTip at a4f33da8d4e759d61ffe073a00f2bb3839ac65f5
-        # Accept both sentry or glitchtip prefix.
-        for k in request.GET.keys():
-            if k in ["sentry_key", "glitchtip_key"]:
-                return request.GET[k]
+        # VENDORED FROM GlitchTip at a4f33da8d4e759d61ffe073a00f2bb3839ac65f5, with changes
 
-        if auth_header := request.META.get(
-            "HTTP_X_SENTRY_AUTH", request.META.get("HTTP_AUTHORIZATION")
-        ):
-            result = parse_auth_header(auth_header)
-            return result.get("sentry_key", result.get("glitchtip_key"))
+        # KvS: I have not been able to find documentation which suggests that the below is indeed used.
+        if "sentry_key" in request.GET:
+            raise ViolatedExpectation("sentry_key in request.GET is indeed used. Turn on this code.")
+            return request.GET["sentry_key"]
 
+        # KvS: parsing using HTTP headers. I'm not sure which of the headers is the "standard" in sentry-client land.
+        for auth_key in ["HTTP_X_SENTRY_AUTH", "HTTP_AUTHORIZATION"]:
+            if auth_key in request.META:
+                auth_dict = parse_auth_header(request.META[auth_key])
+                return auth_dict.get("sentry_key")
+
+        # KvS: this is presumably the path that is used for envelopes (and then also when
         if isinstance(request.data, list):
             if data_first := next(iter(request.data), None):
                 if isinstance(data_first, dict):
                     dsn = urlparse(data_first.get("dsn"))
-                    if username := dsn.username:
-                        return username
+                    if dsn.username:
+                        return dsn.username
 
         raise exceptions.NotAuthenticated("Unable to find authentication information")
 
