@@ -1,6 +1,8 @@
 import json  # TODO consider faster APIs
 from urllib.parse import urlparse
 
+from django.shortcuts import get_object_or_404
+
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -27,7 +29,7 @@ class BaseIngestAPIView(APIView):
     http_method_names = ["post"]
 
     @classmethod
-    def auth_from_request(cls, request):
+    def get_sentry_key_for_request(cls, request):
         # VENDORED FROM GlitchTip at a4f33da8d4e759d61ffe073a00f2bb3839ac65f5, with changes
 
         # KvS: I have not been able to find documentation which suggests that the below is indeed used.
@@ -41,7 +43,7 @@ class BaseIngestAPIView(APIView):
                 auth_dict = parse_auth_header(request.META[auth_key])
                 return auth_dict.get("sentry_key")
 
-        # KvS: this is presumably the path that is used for envelopes (and then also when
+        # KvS: this is presumably the path that is used for envelopes (and then also when the above are not provided)
         if isinstance(request.data, list):
             if data_first := next(iter(request.data), None):
                 if isinstance(data_first, dict):
@@ -50,6 +52,14 @@ class BaseIngestAPIView(APIView):
                         return dsn.username
 
         raise exceptions.NotAuthenticated("Unable to find authentication information")
+
+    @classmethod
+    def get_project(cls, request, project_id):
+        # NOTE this gives a 404 for non-properly authorized. Is this really something we care about, i.e. do we want to
+        # raise NotAuthenticated? In that case we need to get the project first, and then do a constant-time-comp on the
+        # sentry_key
+        sentry_key = cls.get_sentry_key_for_request(request)
+        return get_object_or_404(Project, pk=project_id, sentry_key=sentry_key)
 
     def process_event(self, event_data, request, project):
         event = DecompressedEvent.objects.create(
@@ -67,8 +77,9 @@ class BaseIngestAPIView(APIView):
 
 class IngestEventAPIView(BaseIngestAPIView):
 
-    def post(self, request, *args, **kwargs):
-        project = Project.objects.first()  # TODO actually parse project header
+    def post(self, request, project_id=None):
+        project = self.get_project(request, project_id)
+
         self.process_event(request.data, request, project)
         return Response()
 
@@ -76,8 +87,8 @@ class IngestEventAPIView(BaseIngestAPIView):
 class IngestEnvelopeAPIView(BaseIngestAPIView):
     parser_classes = [EnvelopeParser]
 
-    def post(self, request, *args, **kwargs):
-        project = Project.objects.first()  # TODO actually parse project header
+    def post(self, request, project_id=None):
+        project = self.get_project(request, project_id)
 
         if len(request.data) != 3:
             # multi-part envelopes trigger an error too
