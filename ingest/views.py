@@ -9,9 +9,8 @@ from rest_framework.views import APIView
 from rest_framework import exceptions
 
 # from projects.models import Project
-from sentry.utils.auth import parse_auth_header
+from compat.auth import parse_auth_header_value
 
-from bugsink.exceptions import ViolatedExpectation
 from projects.models import Project
 from issues.models import Issue
 from issues.utils import get_hash_for_data
@@ -30,20 +29,18 @@ class BaseIngestAPIView(APIView):
 
     @classmethod
     def get_sentry_key_for_request(cls, request):
-        # VENDORED FROM GlitchTip at a4f33da8d4e759d61ffe073a00f2bb3839ac65f5, with changes
-
-        # KvS: I have not been able to find documentation which suggests that the below is indeed used.
+        # "In situations where it's not possible to send [..] header, it's possible [..] values via the querystring"
+        # https://github.com/getsentry/develop/blob/b24a602de05b/src/docs/sdk/overview.mdx#L171
         if "sentry_key" in request.GET:
-            raise ViolatedExpectation("sentry_key in request.GET is indeed used. Turn on this code.")
             return request.GET["sentry_key"]
 
-        # KvS: parsing using HTTP headers. I'm not sure which of the headers is the "standard" in sentry-client land.
-        for auth_key in ["HTTP_X_SENTRY_AUTH", "HTTP_AUTHORIZATION"]:
-            if auth_key in request.META:
-                auth_dict = parse_auth_header(request.META[auth_key])
-                return auth_dict.get("sentry_key")
+        # Sentry used to support HTTP_AUTHORIZATION too, but that is unused since Sept. 27 2011
+        if "HTTP_X_SENTRY_AUTH" in request.META:
+            auth_dict = parse_auth_header_value(request.META["HTTP_X_SENTRY_AUTH"])
+            return auth_dict.get("sentry_key")
 
         # KvS: this is presumably the path that is used for envelopes (and then also when the above are not provided)
+        # TODO I'd much rather deal with that explicitly
         if isinstance(request.data, list):
             if data_first := next(iter(request.data), None):
                 if isinstance(data_first, dict):

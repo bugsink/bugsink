@@ -1,6 +1,7 @@
 from unittest import TestCase
 
 from .dsn import get_store_url, get_envelope_url, get_header_value
+from .auth import parse_auth_header_value
 
 
 class DsnTestCase(TestCase):
@@ -25,5 +26,10 @@ class DsnTestCase(TestCase):
 
     def test_get_header_value(self):
         self.assertEquals(
-            "Sentry sentry_key=public_key, sentry_version=7",
+            "Sentry sentry_key=public_key, sentry_version=7, sentry_client=bugsink/0.0.1",
             get_header_value("https://public_key@hosted.bugsink/1"))
+
+    def test_parse_header_value(self):
+        self.assertEquals(
+            {"sentry_key": "foo", "sentry_version": "bar"},
+            parse_auth_header_value('Sentry sentry_key=foo,sentry_version=bar'))

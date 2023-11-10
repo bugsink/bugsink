@@ -2,6 +2,8 @@ import urllib.parse
 
 
 def _get_url(sentry_dsn, ingest_method):
+    # https://github.com/getsentry/develop/blob/b24a602de05b/src/docs/sdk/overview.mdx#L94
+
     parts = urllib.parse.urlsplit(sentry_dsn)
 
     # note: we don't replicate Sentry's requirement that a project id must be an int
@@ -27,10 +29,13 @@ def get_header_value(sentry_dsn):
     return "Sentry " + ", ".join("%s=%s" % (key, value) for key, value in {
         "sentry_key": parts.username,
 
-        # this refers to the Sentry Protocol Version. It's hard to find documentation about this, but the current (late
-        # 2023) value is 7, and this has been the sentry-python's version since its Initial commit in June 2018.
+        # This refers to the Sentry Protocol Version. The current (late 2023) version is 7, and this has been the
+        # sentry-python's version since its Initial commit in June 2018.
+        # https://github.com/getsentry/develop/blob/b24a602de05b/src/docs/sdk/overview.mdx#L185
         "sentry_version": "7",
 
         # sentry_secret is deprecated, as mentioned elsewhere in the code.
-        # sentry_client ... may be useful, let's figure that out later TODO
+
+        # https://github.com/getsentry/develop/blob/b24a602de05b/src/docs/sdk/overview.mdx#L188
+        "sentry_client": "bugsink/0.0.1",
     }.items())
