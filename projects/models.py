@@ -30,3 +30,7 @@ class Project(models.Model):
 
     def __str__(self):
         return self.name
+
+    def get_dsn(self):
+        # TODO, because the server needs to know its own address
+        return get_dsn()

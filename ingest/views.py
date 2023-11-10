@@ -60,6 +60,7 @@ class BaseIngestAPIView(APIView):
         hash_ = get_hash_for_data(event_data)
 
         issue, _ = Issue.objects.get_or_create(
+            project=project,
             hash=hash_,
         )
         issue.events.add(event)

@@ -22,5 +22,15 @@ class Issue(models.Model):
     def title(self):
         # TODO: refactor to a (filled-on-create) field
         parsed_data = json.loads(self.events.first().data)
-        foo = parsed_data["exception"]["values"][0]
-        return foo["type"] + ": " + foo["value"]
+        exc = parsed_data.get("exception", {})
+        if "values" in exc:
+            values = exc["values"]
+        else:
+            values = exc
+
+        if isinstance(values, list):
+            first_value = values[0] if values else {}
+        else:
+            first_value = values
+
+        return first_value.get("type", "none") + ": " + first_value.get("value", "none")

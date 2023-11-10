@@ -6,9 +6,15 @@ from .models import Issue
 @admin.register(Issue)
 class IssueAdmin(admin.ModelAdmin):
     list_display = [
+        "title",
         "hash",
+        "project",
         "event_count",  # expensive operation as written now (query in loop)
     ]
+    list_filter = [
+        "project",
+    ]
+
     exclude = ["events"]
 
     readonly_fields = [
