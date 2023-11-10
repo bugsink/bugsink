@@ -1,5 +1,4 @@
 import json  # TODO consider faster APIs
-from urllib.parse import urlparse
 
 from django.shortcuts import get_object_or_404
 
@@ -29,6 +28,9 @@ class BaseIngestAPIView(APIView):
 
     @classmethod
     def get_sentry_key_for_request(cls, request):
+        # we simply pick the first authentication mechanism that matches, rather than raising a SuspiciousOperation as
+        # sentry does (I found the supplied reasons unconvincing). See https://github.com/getsentry/relay/pull/602
+
         # "In situations where it's not possible to send [..] header, it's possible [..] values via the querystring"
         # https://github.com/getsentry/develop/blob/b24a602de05b/src/docs/sdk/overview.mdx#L171
         if "sentry_key" in request.GET:
@@ -38,15 +40,6 @@ class BaseIngestAPIView(APIView):
         if "HTTP_X_SENTRY_AUTH" in request.META:
             auth_dict = parse_auth_header_value(request.META["HTTP_X_SENTRY_AUTH"])
             return auth_dict.get("sentry_key")
-
-        # KvS: this is presumably the path that is used for envelopes (and then also when the above are not provided)
-        # TODO I'd much rather deal with that explicitly
-        if isinstance(request.data, list):
-            if data_first := next(iter(request.data), None):
-                if isinstance(data_first, dict):
-                    dsn = urlparse(data_first.get("dsn"))
-                    if dsn.username:
-                        return dsn.username
 
         raise exceptions.NotAuthenticated("Unable to find authentication information")
 
@@ -95,6 +88,22 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         if request.data[1].get("type") != "event":
             print("!= event")
             return Response({"message": "Only events are supported"}, status=status.HTTP_501_NOT_IMPLEMENTED)
+
+        # TODO think about a good order to handle this in. Namely: if no project Header is provided, you are basically
+        # forced to do some parsing of the envelope... and this could be costly.
+        # https://gitlab.com/glitchtip/glitchtip-backend/-/issues/181
+
+        """
+        # KvS: this is presumably the path that is used for envelopes (and then also when the above are not provided)
+        # TODO I'd much rather deal with that explicitly
+        from urllib.parse import urlparse
+        if isinstance(request.data, list):
+            if data_first := next(iter(request.data), None):
+                if isinstance(data_first, dict):
+                    dsn = urlparse(data_first.get("dsn"))
+                    if dsn.username:
+                        return dsn.username
+        """
 
         event = request.data[2]
         self.process_event(event, request, project)
