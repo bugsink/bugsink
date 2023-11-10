@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'tailwind',
     'theme',
 
+    'compat',
     'projects',
     'ingest',
     'issues',
