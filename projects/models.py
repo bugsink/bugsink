@@ -1,10 +1,6 @@
-from uuid import uuid4
+import uuid
 
 from django.db import models
-
-
-def uuid4_hex():
-    return uuid4().hex
 
 
 class Project(models.Model):
@@ -21,7 +17,7 @@ class Project(models.Model):
     # The "because" in that sentence is dubious at least; however, I get why they say it, because they want to do JS and
     # native apps too, and there's really no way to do those without exposing (some) endpoint. Anyway, I don't think the
     # "public" key is public, and if you can help it it's always better to keep it private.
-    sentry_key = models.CharField(max_length=32, unique=True, null=False, default=uuid4_hex)
+    sentry_key = models.UUIDField(editable=False, default=uuid.uuid4)
 
     # We don't implement private_key because as of late 2023 the Sentry documentation says the following:
     # > The secret part of the DSN is optional and effectively deprecated. While clients will still honor it, if
@@ -34,3 +30,10 @@ class Project(models.Model):
     def get_dsn(self):
         # TODO, because the server needs to know its own address
         return get_dsn()
+
+    """
+    # TODO is this even more efficient?
+    indexes = [
+        models.Index(fields=["id", "sentry_key"]),
+    ]
+    """
