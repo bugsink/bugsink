@@ -2,13 +2,13 @@ import json
 
 from django.shortcuts import render, get_object_or_404
 
-from ingest.models import DecompressedEvent
 from issues.utils import get_hash_for_data, get_issue_grouper_for_data
 
+from .models import Event
 
-def decompressed_event_detail(request, pk):
-    # this view is misplaced "by nature" (it mixes ingested stuff and rendering); until we create a pipeline for that.
-    obj = get_object_or_404(DecompressedEvent, pk=pk)
+
+def event_detail(request, pk):
+    obj = get_object_or_404(Event, pk=pk)
 
     parsed_data = json.loads(obj.data)
 
@@ -23,10 +23,10 @@ def decompressed_event_detail(request, pk):
     })
 
 
-def debug_get_hash(request, decompressed_event_pk):
+def debug_get_hash(request, event_pk):
     # debug view; not for eternity
 
-    obj = get_object_or_404(DecompressedEvent, pk=decompressed_event_pk)
+    obj = get_object_or_404(Event, pk=event_pk)
 
     parsed_data = json.loads(obj.data)
 

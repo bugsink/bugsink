@@ -1,6 +1,5 @@
-from random import random
 from django.db import migrations, models
-import projects.models
+import uuid
 
 
 class Migration(migrations.Migration):
@@ -13,12 +12,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='project',
             name='name',
-            field=models.CharField(default=lambda: str(random()), max_length=255),
+            field=models.CharField(default='asdf', max_length=255),
             preserve_default=False,
         ),
         migrations.AddField(
             model_name='project',
             name='sentry_key',
-            field=models.CharField(default=projects.models.uuid4_hex, max_length=32, unique=True),
+            field=models.UUIDField(default=uuid.uuid4, editable=False),
         ),
     ]

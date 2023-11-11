@@ -1,7 +1,10 @@
+import json
 import uuid
+
 from django.db import models
 
 from projects.models import Project
+from compat.timestamp import parse_timestamp
 
 
 class Platform(models.TextChoices):
@@ -32,6 +35,10 @@ class Level(models.TextChoices):
     WARNING = "warning"
     INFO = "info"
     DEBUG = "debug"
+
+
+def maybe_empty(s):
+    return "" if not s else s
 
 
 class Event(models.Model):
@@ -115,6 +122,48 @@ class Event(models.Model):
     sdk_name = models.CharField(max_length=255, blank=True, null=False, default="")
     sdk_version = models.CharField(max_length=255, blank=True, null=False, default="")
 
+    # these 2 are perhaps temporary, I made them up myself. Idea: ability to get a sense of the shape of the data quicly
+    has_exception = models.BooleanField(null=False)
+    has_logentry = models.BooleanField(null=False)
+
+    # this is a temporary, bugsink-specific value;
+    debug_info = models.CharField(max_length=255, blank=True, null=False, default="")
+
     class Meta:
         unique_together = (("project", "event_id"),)
         # index_together = (("group_id", "datetime"),)  TODO seriously think about indexes
+
+    def get_absolute_url(self):
+        return "/events/event/%s/" % self.id
+
+    @classmethod
+    def from_json(cls, project, parsed_data, debug_info):
+        event, created = cls.objects.get_or_create(  # NOTE immediate creation... is this what we want?
+            event_id=parsed_data["event_id"],
+            project=project,
+            defaults={
+                'data': json.dumps(parsed_data),
+
+                'timestamp': parse_timestamp(parsed_data["timestamp"]),
+                'platform': parsed_data["platform"],
+
+                'level': maybe_empty(parsed_data.get("level", "")),
+                'logger': maybe_empty(parsed_data.get("logger", "")),
+                'transaction': maybe_empty(parsed_data.get("transaction", "")),
+
+                'server_name': maybe_empty(parsed_data.get("server_name", "")),
+                'release': maybe_empty(parsed_data.get("release", "")),
+                'dist': maybe_empty(parsed_data.get("dist", "")),
+
+                'environment': maybe_empty(parsed_data.get("environment", "")),
+
+                'sdk_name': maybe_empty(parsed_data.get("", {}).get("name", "")),
+                'sdk_version': maybe_empty(parsed_data.get("", {}).get("version", "")),
+
+                'has_exception': "exception" in parsed_data,
+                'has_logentry': "logentry" in parsed_data,
+
+                'debug_info': debug_info,
+            }
+        )
+        return event, created

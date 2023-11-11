@@ -14,6 +14,7 @@ from projects.models import Project
 from issues.models import Issue
 from issues.utils import get_hash_for_data
 
+from events.models import Event
 
 from .negotiation import IgnoreClientContentNegotiation
 from .parsers import EnvelopeParser
@@ -52,10 +53,16 @@ class BaseIngestAPIView(APIView):
         return get_object_or_404(Project, pk=project_id, sentry_key=sentry_key)
 
     def process_event(self, event_data, request, project):
-        event = DecompressedEvent.objects.create(
+        DecompressedEvent.objects.create(
             project=project,
             data=json.dumps(event_data),  # TODO don't parse-then-print for BaseIngestion
         )
+
+        debug_info = request.META.get("HTTP_X_BUGSINK_DEBUGINFO", "")
+
+        event, created = Event.from_json(project, event_data, debug_info)
+        if not created:
+            return
 
         hash_ = get_hash_for_data(event_data)
 

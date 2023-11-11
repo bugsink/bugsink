@@ -10,7 +10,7 @@ class Issue(models.Model):
     project = models.ForeignKey(
         "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
     hash = models.CharField(max_length=32, blank=False, null=False)
-    events = models.ManyToManyField("ingest.DecompressedEvent")
+    events = models.ManyToManyField("events.Event")
 
     def get_absolute_url(self):
         return f"/issues/issue/{ self.id }/events/"

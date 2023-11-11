@@ -7,7 +7,7 @@ from compat.dsn import get_store_url, get_header_value
 
 
 class Command(BaseCommand):
-    help = "..."
+    help = "Quick and dirty command to load a bunch of events from e.g. the sentry test codebase"
 
     def add_arguments(self, parser):
         parser.add_argument("--dsn")
@@ -18,16 +18,36 @@ class Command(BaseCommand):
 
         for json_filename in options["json_files"]:
             with open(json_filename) as f:
-                print("HIER", json_filename)
+                print("considering", json_filename)
                 try:
                     data = json.loads(f.read())
                 except Exception as e:
                     self.stderr.write("%s %s %s" % ("Not JSON", json_filename, str(e)))
+                    continue
+
+                if "event_id" not in data:
+                    self.stderr.write("%s %s" % ("Probably not a (single) event", json_filename))
+                    continue
+
+                if "timestamp" not in data:
+                    # weirdly enough a large numer of sentry test data don't actually have this required attribute set.
+                    # thus, we set it to something arbitrary on the sending side rather than have our server be robust
+                    # for it.
+                    data["timestamp"] = 0
+
+                if "platform" not in data:
+                    # in a few cases this value isn't set either in the sentry test data but I'd rather ignore those...
+                    # because 'platform' is such a valuable piece of info while getting a sense of the shape of the data
+                    self.stderr.write("%s %s" % ("Platform not set", json_filename))
+                    continue
 
                 try:
                     response = requests.post(
                         get_store_url(dsn),
-                        headers={"X-Sentry-Auth": get_header_value(dsn)},
+                        headers={
+                            "X-Sentry-Auth": get_header_value(dsn),
+                            "X-BugSink-DebugInfo": json_filename,
+                        },
                         json=data,
                     )
                     response.raise_for_status()
