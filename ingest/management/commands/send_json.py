@@ -41,6 +41,24 @@ class Command(BaseCommand):
                     self.stderr.write("%s %s" % ("Platform not set", json_filename))
                     continue
 
+                if data.get("type", "") == "transaction":
+                    # kinda weird that this is in the "type" field rather than endpoint/envelope but who cares, that's
+                    # where the info lives and we use it as an indicator to skip
+                    self.stderr.write("%s %s" % ("We don't do transactions", json_filename))
+                    continue
+
+                if data.get('profile'):
+                    # yet another case of undocumented behavior that I don't care about
+                    # ../sentry-current/static/app/utils/profiling/profile/formats/node/trace.json
+                    self.stderr.write("%s %s" % ("124", json_filename))
+                    continue
+
+                if data.get('message'):
+                    # yet another case of undocumented behavior that I don't care about (top-level "message")
+                    # ../glitchtip/events/test_data/py_hi_event.json
+                    self.stderr.write("%s %s" % ("asdf", json_filename))
+                    continue
+
                 try:
                     response = requests.post(
                         get_store_url(dsn),
