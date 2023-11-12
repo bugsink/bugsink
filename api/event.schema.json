@@ -207,9 +207,6 @@
           "description": " Platform identifier of this event (defaults to \"other\").\n\n A string representing the platform the SDK is submitting from. This will be used by the\n Sentry interface to customize various components in the interface, but also to enter or\n skip stacktrace processing.\n\n Acceptable values are: `as3`, `c`, `cfml`, `cocoa`, `csharp`, `elixir`, `haskell`, `go`,\n `groovy`, `java`, `javascript`, `native`, `node`, `objc`, `other`, `perl`, `php`, `python`,\n `ruby`",
           "type": "string"
         },
-        "project_id": {
-          "type": "integer"
-        },
         "received": {
           "description": " Timestamp when the event has been received by Sentry.",
           "default": null,
@@ -387,7 +384,6 @@
       "required": [
         "event_id",
         "platform",
-        "project_id",
         "timestamp"
       ],
       "additionalProperties": false
