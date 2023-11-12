@@ -1,7 +1,9 @@
 import json
 import requests
+import jsonschema
 
 from django.core.management.base import BaseCommand
+from django.conf import settings
 
 from compat.dsn import get_store_url, get_header_value
 
@@ -15,6 +17,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         dsn = options['dsn']
+
+        with open(settings.BASE_DIR / 'api/event.schema.json', 'r') as f:
+            schema = json.loads(f.read())
 
         for json_filename in options["json_files"]:
             with open(json_filename) as f:
@@ -57,6 +62,12 @@ class Command(BaseCommand):
                     # yet another case of undocumented behavior that I don't care about (top-level "message")
                     # ../glitchtip/events/test_data/py_hi_event.json
                     self.stderr.write("%s %s" % ("asdf", json_filename))
+                    continue
+
+                try:
+                    jsonschema.validate(data, schema)
+                except jsonschema.ValidationError as e:
+                    self.stderr.write("%s %s %s" % ("still not ok at", repr(e), json_filename))
                     continue
 
                 try:
