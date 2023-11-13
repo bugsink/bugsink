@@ -18,7 +18,7 @@ def event_detail(request, pk):
     # the list of exceptions, but we don't aim for endless backwards compat (yet) so we don't.
     exceptions = parsed_data["exception"]["values"] if "exception" in parsed_data else None
 
-    if parsed_data["logentry"]:
+    if "logentry" in parsed_data:
         logentry = parsed_data["logentry"]
         if "formatted" not in logentry:
             # TODO this is just a wild guess"
