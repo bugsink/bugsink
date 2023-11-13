@@ -1,3 +1,4 @@
+import time
 import json
 import requests
 import jsonschema
@@ -68,11 +69,15 @@ class Command(BaseCommand):
                     self.stderr.write("%s %s %s" % ("Not JSON", json_filename, str(e)))
                     continue
 
-                if "timestamp" not in data:
-                    # weirdly enough a large numer of sentry test data don't actually have this required attribute set.
-                    # thus, we set it to something arbitrary on the sending side rather than have our server be robust
-                    # for it.
-                    data["timestamp"] = 0
+                # Not applicable anymore
+                # weirdly enough a large numer of sentry test data don't actually have this required attribute set.
+                # thus, we set it to something arbitrary on the sending side rather than have our server be robust
+                # for it.
+                # if "timestamp" not in data:
+
+                # We just update the timestamp to 'now' to be able to avoid any 'ignore old stuff' filters (esp. on
+                # hosted sentry when we want to see anything over there)
+                data["timestamp"] = time.time()
 
                 if options["valid_only"] and not self.is_valid(data, json_filename):
                     continue
