@@ -23,14 +23,7 @@ class Issue(models.Model):
         # TODO: refactor to a (filled-on-create) field
         parsed_data = json.loads(self.events.first().data)
         exc = parsed_data.get("exception", {})
-        if "values" in exc:
-            values = exc["values"]
-        else:
-            values = exc
-
-        if isinstance(values, list):
-            first_value = values[0] if values else {}
-        else:
-            first_value = values
+        values = exc["values"]  # required by the json spec, so can be done safely
+        first_value = values[0] if values else {}
 
         return first_value.get("type", "none") + ": " + first_value.get("value", "none")

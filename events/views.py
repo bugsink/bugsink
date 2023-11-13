@@ -12,7 +12,8 @@ def event_detail(request, pk):
 
     parsed_data = json.loads(obj.data)
 
-    # NOTE: instead of values, this may also just be a flat list; TODO implement this
+    # sentry/glitchtip have some code here to deal with the case that "values" is not present, and exception itself is
+    # the list of exceptions, but we don't aim for endless backwards compat (yet) so we don't.
     exceptions = parsed_data["exception"]["values"]
 
     return render(request, "events/event_detail.html", {

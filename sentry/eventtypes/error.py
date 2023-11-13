@@ -23,14 +23,10 @@ class ErrorEvent(BaseEvent):
     key = "error"
 
     def get_metadata(self, data):
-        # Check for undocumented interface where exception has no values. Go SDK does this.
-        # https://docs.sentry.io/development/sdk-dev/event-payloads/exception/
-        # exception can be an list instead of a dictionary
         if isinstance(data.get("exception"), list):
             if len(data["exception"]) == 0:
                 return {}
-            # Force documented interface
-            data["exception"] = {"values": data["exception"]}
+
         exception = get_path(data, "exception", "values", -1)
         if not exception:
             return {}
