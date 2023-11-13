@@ -14,7 +14,17 @@ def event_detail(request, pk):
 
     # sentry/glitchtip have some code here to deal with the case that "values" is not present, and exception itself is
     # the list of exceptions, but we don't aim for endless backwards compat (yet) so we don't.
-    exceptions = parsed_data["exception"]["values"]
+    exceptions = parsed_data["exception"]["values"] if "exception" in parsed_data else None
+
+    if parsed_data["logentry"]:
+        logentry = parsed_data["logentry"]
+        if "formatted" not in logentry:
+            # TODO this is just a wild guess"
+            if "message" in logentry:
+                if "params" not in logentry:
+                    logentry["formatted"] = logentry["message"]
+                else:
+                    logentry["formatted"] = logentry["message"].format(logentry["params"])
 
     return render(request, "events/event_detail.html", {
         "obj": obj,
