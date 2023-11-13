@@ -136,6 +136,14 @@ class Event(models.Model):
     def get_absolute_url(self):
         return "/events/event/%s/" % self.id
 
+    def get_raw_link(self):
+        # for the admin
+        return "/events/event/%s/raw/" % self.id
+
+    def get_download_link(self):
+        # for the admin
+        return "/events/event/%s/download/" % self.id
+
     @classmethod
     def from_json(cls, project, parsed_data, debug_info):
         event, created = cls.objects.get_or_create(  # NOTE immediate creation... is this what we want?
