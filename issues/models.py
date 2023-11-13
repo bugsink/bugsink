@@ -22,7 +22,7 @@ class Issue(models.Model):
     def title(self):
         # TODO: refactor to a (filled-on-create) field
         parsed_data = json.loads(self.events.first().data)
-        exc = parsed_data.get("exception", {})
+        exc = parsed_data.get("exception", {"values": []})
         values = exc["values"]  # required by the json spec, so can be done safely
         first_value = values[0] if values else {}
 
