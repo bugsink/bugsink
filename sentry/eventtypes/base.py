@@ -23,10 +23,8 @@ class DefaultEvent(BaseEvent):
 
     def get_metadata(self, data):
         message = strip(
-            get_path(data, "logentry", "formatted")
-            or get_path(data, "logentry", "message")
-            or get_path(data, "message", "formatted")
-            or get_path(data, "message")
+            get_path(data, "logentry", "message")
+            or get_path(data, "logentry", "formatted")
         )
 
         if message:
