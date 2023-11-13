@@ -21,6 +21,7 @@ class Command(BaseCommand):
         with open(settings.BASE_DIR / 'api/event.schema.json', 'r') as f:
             schema = json.loads(f.read())
 
+        successfully_sent = []
         for json_filename in options["json_files"]:
             with open(json_filename) as f:
                 print("considering", json_filename)
@@ -82,3 +83,9 @@ class Command(BaseCommand):
                     response.raise_for_status()
                 except Exception as e:
                     self.stderr.write("%s %s" % ("foo", e))
+
+            successfully_sent.append(json_filename)
+
+        print("Successfuly sent to server")
+        for filename in successfully_sent:
+            print(filename)

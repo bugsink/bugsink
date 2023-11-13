@@ -1,0 +1,133 @@
+{
+    "modules": {
+        "System.Private.CoreLib": "4.0.0.0",
+        "myWebApp": "1.0.0.0",
+        "System.Runtime": "4.2.2.0",
+        "Microsoft.Extensions.Hosting.Abstractions": "3.1.3.0",
+        "Microsoft.AspNetCore.Html.Abstractions": "3.1.3.0",
+        "System.Security.Cryptography.Csp": "4.1.2.0",
+        "Microsoft.AspNetCore.WebUtilities": "3.1.3.0",
+        "System.Diagnostics.StackTrace": "4.1.2.0",
+        "System.Reflection.Metadata": "1.4.5.0",
+        "Sentry.PlatformAbstractions": "1.1.0.0"
+    },
+    "event_id": "78d7a93554124469a5a1d33518a60373",
+    "timestamp": "2020-05-12T22:30:36.0021839+00:00",
+    "logentry": {
+        "message": "An unhandled exception has occurred while executing the request.",
+        "formatted": "An unhandled exception has occurred while executing the request."
+    },
+    "logger": "Microsoft.AspNetCore.Diagnostics.DeveloperExceptionPageMiddleware",
+    "platform": "csharp",
+    "server_name": "52ff8bc29423",
+    "exception": {
+        "values": [
+            {
+                "type": "System.DivideByZeroException",
+                "value": "Attempted to divide by zero.",
+                "module": "System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e",
+                "thread_id": 6,
+                "stacktrace": {
+                    "frames": [
+                        {
+                            "function": "Invoke",
+                            "module": "Microsoft.AspNetCore.Diagnostics.DeveloperExceptionPageMiddleware",
+                            "in_app": false,
+                            "package": "Microsoft.AspNetCore.Diagnostics, Version=3.1.3.0, Culture=neutral, PublicKeyToken=adb9793829ddae60",
+                            "instruction_offset": 130
+                        },
+                        {
+                            "function": "InvokeHandlerMethodAsync",
+                            "module": "Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.PageActionInvoker",
+                            "in_app": false,
+                            "package": "Microsoft.AspNetCore.Mvc.RazorPages, Version=3.1.3.0, Culture=neutral, PublicKeyToken=adb9793829ddae60",
+                            "instruction_offset": 202
+                        },
+                        {
+                            "function": "Execute",
+                            "module": "Microsoft.AspNetCore.Mvc.RazorPages.Infrastructure.ExecutorFactory+VoidHandlerMethod",
+                            "in_app": false,
+                            "package": "Microsoft.AspNetCore.Mvc.RazorPages, Version=3.1.3.0, Culture=neutral, PublicKeyToken=adb9793829ddae60"
+                        },
+                        {
+                            "filename": "/app/Pages/Divide-Zero.cs",
+                            "function": "OnGet",
+                            "module": "myWebApp.Pages.DivideZeroModel",
+                            "lineno": 19,
+                            "colno": 6,
+                            "in_app": true,
+                            "package": "myWebApp, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                            "instruction_offset": 1
+                        },
+                        {
+                            "filename": "/app/Pages/Divide-Zero.cs",
+                            "function": "DivideByZero",
+                            "module": "myWebApp.Pages.DivideZeroModel",
+                            "lineno": 14,
+                            "colno": 13,
+                            "in_app": true,
+                            "package": "myWebApp, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                            "instruction_offset": 1
+                        }
+                    ]
+                }
+            }
+        ]
+    },
+    "contexts": {
+        "server-runtime": {
+            "type": "runtime",
+            "name": ".NET Core",
+            "version": "3.1.3",
+            "raw_description": ".NET Core 3.1.3"
+        },
+        "server-os": {
+            "type": "os",
+            "raw_description": "Linux 5.4.0-7626-generic #30~1588169883~20.04~bbe668a-Ubuntu SMP Wed Apr 29 21:00:02 UTC "
+        }
+    },
+    "request": {
+        "env": {
+            "DOCUMENT_ROOT": "/app/wwwroot",
+            "SERVER_NAME": "52ff8bc29423",
+            "SERVER_PORT": "5000"
+        },
+        "headers": {
+            "Connection": "keep-alive",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Encoding": "gzip, deflate",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Host": "localhost:5000",
+            "Referer": "http://localhost:5000/",
+            "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:76.0) Gecko/20100101 Firefox/76.0",
+            "DNT": "1",
+            "Upgrade-Insecure-Requests": "1"
+        },
+        "url": "http://localhost:5000/Divide-Zero",
+        "method": "GET",
+        "query_string": ""
+    },
+    "tags": {
+        "eventId": "UnhandledException",
+        "RequestId": "0HLVMOGBIU2OM:00000001",
+        "SpanId": "|74843252-4144625e3a3b8503.",
+        "ConnectionId": "0HLVMOGBIU2OM",
+        "TraceId": "74843252-4144625e3a3b8503"
+    },
+    "level": "error",
+    "environment": "Development",
+    "sdk": {
+        "packages": [
+            {
+                "name": "nuget:Sentry",
+                "version": "2.1.1"
+            },
+            {
+                "name": "nuget:Sentry.AspNetCore",
+                "version": "2.1.1"
+            }
+        ],
+        "name": "sentry.dotnet.aspnetcore",
+        "version": "2.1.1"
+    }
+}
