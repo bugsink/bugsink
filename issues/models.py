@@ -19,11 +19,16 @@ class Issue(models.Model):
         # TEMP solution; won't scale
         return json.loads(self.events.first().data)
 
-    def title(self):
-        # TODO: refactor to a (filled-on-create) field
+    def get_main_exception(self):
+        # TODO: refactor (its usages) to a (filled-on-create) field
+        # Note: first event, last exception
+
         parsed_data = json.loads(self.events.first().data)
         exc = parsed_data.get("exception", {"values": []})
         values = exc["values"]  # required by the json spec, so can be done safely
-        first_value = values[0] if values else {}
+        return values[-1] if values else {}
 
-        return first_value.get("type", "none") + ": " + first_value.get("value", "none")
+    def title(self):
+        # TODO: refactor to a (filled-on-create) field
+        main_exception = self.get_main_exception()
+        return main_exception.get("type", "none") + ": " + main_exception.get("value", "none")
