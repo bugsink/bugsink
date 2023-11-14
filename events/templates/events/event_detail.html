@@ -4,8 +4,8 @@
 <div class="m-4">
 {% for exception in exceptions %}
     <h1 class="text-3xl mt-4">{{ exception.type }}</h1>
-    <div class="text-2xl">{{ exception.value }}</div>
-    <div class="italic mt-4">{{ parsed_data.request.method }} {{ parsed_data.request.url }}</div><br>
+    <div class="text-xl">{{ exception.value }}</div>
+    {% if parsed_data.request %}<div class="italic mt-4">{{ parsed_data.request.method }} {{ parsed_data.request.url }}</div>{% endif %}
 
     {% for frame in exception.stacktrace.frames %}
         
@@ -41,7 +41,10 @@
 
     {% endfor %}
 
-    {% if not forloop.last %}While handling the above exception, yad yad<br>{% endif %}
+    {% if not forloop.last %}
+        <div class="italic">During handling of the above exception, another exception occurred:</div>
+        {# note: the above is specific to Python. In Python there's also "The above exception was the direct cause of the following exception:" (raise ... from) but we cannot distinguish those at this level because the info is lost #}
+    {% endif %}
 
 {% endfor %}
 
