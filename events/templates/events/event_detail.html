@@ -11,7 +11,7 @@
         
         <div class="xl:flex">
 
-        <div class="m-4 bg-slate-100 xl:w-1/2">
+        <div class="mt-4 mb-4 bg-slate-100 xl:w-1/2">
 
             <div class="font-mono">
                 <div class="pl-4 pt-2 pb-2 border-b-2 {% if frame.in_app %}bg-slate-300 border-slate-500{% else %}bg-slate-100 border-slate-300{% endif %}">
@@ -26,7 +26,7 @@
             </div>
 
         </div>
-        <div class="m-4 mb-12 p-4 bg-slate-100 xl:w-1/2">
+        <div class="mt-4 xl:ml-4 mb-12 p-4 bg-slate-100 xl:w-1/2">
             
             {% for var, value in frame.vars.items %}
             <div class="flex">
@@ -61,7 +61,7 @@
 
     <h1 class="text-3xl mt-4">Request</h1>
 
-        <div class="m-4 mb-12 p-4 bg-slate-100">
+        <div class="mt-4 mb-12 p-4 bg-slate-100">
             
             {% for request_key, request_value in parsed_data.request.items %}
             {% if request_key != "headers" and request_key != "env" %}{# we deal with these below #}

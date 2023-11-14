@@ -1071,6 +1071,10 @@ select {
 }
 
 @media (min-width: 1280px) {
+  .xl\:ml-4 {
+    margin-left: 1rem;
+  }
+
   .xl\:flex {
     display: flex;
   }
