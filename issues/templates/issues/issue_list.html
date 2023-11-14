@@ -1,10 +1,5 @@
-{% load static tailwind_tags %}
-<html>
-<head>
-    {% tailwind_css %}
-</head>
-
-<body>
+{% extends "base.html" %}
+{% block content %}
 
 <div class="m-4">
 <h1 class="text-3xl mt-4">Issues for project {{ project_id }}</h1>
@@ -23,6 +18,4 @@
 
 </div>
 
-
-</body>
-</html>
+{% endblock %}
