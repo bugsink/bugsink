@@ -8,14 +8,23 @@
     <div><span class="font-bold">ingest.management.commands.raise_exception</span> in <span class="font-bold">raise_exception</span></div>
 </div>
 
-<div class="m-4 border-2">
-<div class="p-4 bg-slate-200 border-b-2">Event 55 out of 55 which occured at <span class="font-bold">{{ event.timestamp }}</span> (most recent)</div>
+
+
+<div class="ml-4 mb-4 mr-4 border-2">
+
+<div class="flex bg-slate-50 border-b-2">
+    <a href="/issues/1/"><div class="p-4 text-cyan-500 font-bold border-cyan-500 border-b-4 hover:bg-slate-200">Stacktrace</div></a>
+    <a href="TODO"><div class="p-4 text-slate-500 font-bold border-slate-400 hover:bg-slate-200 hover:border-b-4">Event&nbsp;Details</div></a>
+    <a href="TODO"><div class="p-4 text-slate-500 font-bold border-slate-400 hover:bg-slate-200 hover:border-b-4">Event&nbsp;List</div></a>
+    <a href="TODO"><div class="p-4 text-slate-500 font-bold border-slate-400 hover:bg-slate-200 hover:border-b-4">Grouping</div></a>
+</div>
 
 <div class="p-4 bg-slate-50">
 
 {# <div class="font-bold">Stacktrace:</div> I think this is obvious?#}
 {% for exception in exceptions %}
-    <h1 class="text-2xl mt-4">{{ exception.type }}</h1>
+    {# option: make multi-exception stacktraces more clear <div class="border-l-4 border-cyan-500 pl-4"> }#}
+    <h1 class="text-2xl {% if forloop.counter0 > 0 %}mt-4{% endif %}">{{ exception.type }}</h1>  {# potentially: hide this whole block if there is only a single exception #}
     <div class="text-lg">{{ exception.value }}</div>
 
     {% for frame in exception.stacktrace.frames %}
@@ -51,6 +60,7 @@
         </div>
 
     {% endfor %}
+    {# </div> #} {# per-exception div in the multi-exception case #}
 
     {% if not forloop.last %}
         <div class="italic">During handling of the above exception, another exception occurred:</div>
@@ -116,5 +126,6 @@
 Issue grouper: <span class="font-mono whitespace-pre">"{{ issue_grouper }}"</span>
 
 </div> {# the inner issue-block #}
-</div>
+<div class="p-4 bg-slate-200 border-b-2">Event 55 out of 55 which occured at <span class="font-bold">{{ event.timestamp }}</span> (most recent)</div>
+</div>  {# the border #}
 {% endblock %}
