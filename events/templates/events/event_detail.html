@@ -1,4 +1,5 @@
 {% extends "events/base.html" %}
+{% load static %}
 
 {% block content %}
 <div class="m-4">
@@ -24,38 +25,39 @@
 {# <div class="font-bold">Stacktrace:</div> I think this is obvious?#}
 {% for exception in exceptions %}
     {# option: make multi-exception stacktraces more clear <div class="border-l-4 border-cyan-500 pl-4"> }#}
-    <h1 class="text-2xl {% if forloop.counter0 > 0 %}mt-4{% endif %}">{{ exception.type }}</h1>  {# potentially: hide this whole block if there is only a single exception #}
-    <div class="text-lg">{{ exception.value }}</div>
+    <h1 class="text-2xl font-bold {% if forloop.counter0 > 0 %}mt-4{% endif %}">{{ exception.type }}</h1>  {# potentially: hide this whole block if there is only a single exception #}
+    <div class="text-lg mb-4">{{ exception.value }}</div>
 
     {% for frame in exception.stacktrace.frames %}
         
-        <div class="xl:flex">
+        <div class="bg-white w-full font-mono">
 
-        <div class="mt-4 mb-4 bg-white xl:w-1/2">
+            <div class="pl-4 pt-2 pb-2 border-t-2 {% if frame.in_app %}bg-slate-300 border-slate-500{% else %}bg-white border-slate-300{% endif %}" onclick="toggleFrameVisibility(this)">
+                <span class="font-bold">{{ frame.filename }}</span> in <span class="font-bold">{{ frame.function }}</span> line <span class="font-bold">{{ frame.lineno }}</span>.
+            </div>
 
-            <div class="font-mono">
-                <div class="pl-4 pt-2 pb-2 border-b-2 {% if frame.in_app %}bg-slate-300 border-slate-500{% else %}bg-white border-slate-300{% endif %}">
-                    <span class="font-bold">{{ frame.filename }}</span> in <span class="font-bold">{{ frame.function }}</span> line <span class="font-bold">{{ frame.lineno }}</span>.
+            <div class="js-frame-details hidden">
+                <div class="xl:w-1/2">
+                    <ol class="list-decimal ml-16 mt-6 mb-6" start="100">
+                    {% for line in frame.pre_context %}<li><div class="whitespace-pre w-full">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
+                    <li><div class="whitespace-pre font-bold bg-slate-300 w-full">{{ frame.context_line }} {# leave space to avoid collapse #}</div></li>
+                    {% for line in frame.post_context %}<li><div class="whitespace-pre w-full">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
+                    </ol>
                 </div>
 
-                <ol class="list-decimal ml-16 mt-6 mb-6" start="100">
-                {% for line in frame.pre_context %}<li><div class="whitespace-pre w-full">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
-                <li><div class="whitespace-pre font-bold bg-slate-300 w-full">{{ frame.context_line }} {# leave space to avoid collapse #}</div></li>
-                {% for line in frame.post_context %}<li><div class="whitespace-pre w-full">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
-                </ol>
+                <div class="xl:w-1/2">
+                    <div class="flex">
+                        <div class="w-1/4 pt-2 pl-2 font-bold border-b-2 border-slate-500">Variable</div>
+                        <div class="w-3/4 pt-2 font-bold border-b-2 border-slate-500">Value</div>
+                    </div>
+                    {% for var, value in frame.vars.items %}
+                    <div class="flex {% if forloop.last %}mb-4{% endif %}">
+                        <div class="w-1/4 pl-2 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ var }}</div>
+                        <div class="w-3/4 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ value }}</div>
+                    </div>
+                    {% endfor %} 
+                </div>
             </div>
-
-        </div>
-        <div class="mt-4 xl:ml-4 mb-12 p-4 bg-white xl:w-1/2">
-            
-            {% for var, value in frame.vars.items %}
-            <div class="flex">
-                <div class="w-1/4 pl-2 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ var }}</div>
-                <div class="w-3/4 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ value }}</div>
-            </div>
-            {% endfor %} 
-
-        </div>
 
         </div>
 
@@ -63,7 +65,7 @@
     {# </div> #} {# per-exception div in the multi-exception case #}
 
     {% if not forloop.last %}
-        <div class="italic">During handling of the above exception, another exception occurred:</div>
+        <div class="italic pt-4">During handling of the above exception, another exception occurred:</div>
         {# note: the above is specific to Python. In Python there's also "The above exception was the direct cause of the following exception:" (raise ... from) but we cannot distinguish those at this level because the info is lost #}
     {% endif %}
 
@@ -128,4 +130,8 @@ Issue grouper: <span class="font-mono whitespace-pre">"{{ issue_grouper }}"</spa
 </div> {# the inner issue-block #}
 <div class="p-4 bg-slate-200 border-b-2">Event 55 out of 55 which occured at <span class="font-bold">{{ event.timestamp }}</span> (most recent)</div>
 </div>  {# the border #}
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'js/issue.js' %}"></script>
 {% endblock %}
