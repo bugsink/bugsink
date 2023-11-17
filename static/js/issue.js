@@ -4,7 +4,7 @@ function distanceToWindowBottom() {
     // https://stackoverflow.com/a/2800676/339144
     let scrollPosition = window.pageYOffset;
     let windowSize     = window.innerHeight;
-    let bodyHeight     = document.body.offsetHeight;
+    let bodyHeight     = document.querySelector("html").offsetHeight;
     return Math.max(bodyHeight - (scrollPosition + windowSize), 0);
 }
 
@@ -13,11 +13,11 @@ onscroll = (event) => {
 };
 
 function setBodyMinHeight() {
-  let bodyHeightPreCollapse = document.body.offsetHeight;
-  let body = document.querySelector("body");
+  let body = document.querySelector("html");
+  let bodyHeightPreCollapse = body.offsetHeight;
   // console.log("was actually", bodyHeightPreCollapse, "minimally", body.style.minHeight);
   body.style.minHeight = (bodyHeightPreCollapse - distanceToWindowBottom()) + "px";
-  // console.log("is now actually", document.body.offsetHeight, "minimally", body.style.minHeight);
+  // console.log("is now actually", document.html.offsetHeight, "minimally", html.style.minHeight);
 }
 
 function collapseSection(element) {
