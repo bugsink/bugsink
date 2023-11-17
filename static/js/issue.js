@@ -1,15 +1,35 @@
 "use strict";
 
+function distanceToWindowBottom() {
+    // https://stackoverflow.com/a/2800676/339144
+    let scrollPosition = window.pageYOffset;
+    let windowSize     = window.innerHeight;
+    let bodyHeight     = document.body.offsetHeight;
+    return Math.max(bodyHeight - (scrollPosition + windowSize), 0);
+}
+
+onscroll = (event) => {
+    console.log(distanceToWindowBottom());
+};
+
 // This is the important part!
 function collapseSection(element) {
   if (element.getAttribute("data-collapsed") === "true") {
     return;
   }
 
-  element.classList.remove("xl:flex");  // this appears to be necessary, not sure why
-
   // get the height of the element's inner content, regardless of its actual size
   var sectionHeight = element.scrollHeight;
+  let bodyHeightPreCollapse = document.body.offsetHeight;
+
+  console.log("?", sectionHeight, distanceToWindowBottom());
+  if (sectionHeight > distanceToWindowBottom()) {
+      let body = document.querySelector("body");
+      console.log((bodyHeightPreCollapse - distanceToWindowBottom()) + "px");
+      body.style.minHeight = (bodyHeightPreCollapse - distanceToWindowBottom()) + "px";
+  }
+
+  element.classList.remove("xl:flex");  // this appears to be necessary, not sure why
 
   // temporarily disable all css transitions
   var elementTransition = element.style.transition;

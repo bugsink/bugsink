@@ -9,15 +9,16 @@
 	</head>
 
 	<body>
-        <div class="flex pl-4 bg-slate-200">
-            <a href="/issues/1/"><div class="p-4 hover:bg-slate-400">My first project</div></a>  {# or, if you're single-org, or single-project, just show that #}
-            {# <div class="p-4 hover:bg-slate-400">Settings</div>#}
-            <a href="/admin/"><div class="p-4 hover:bg-slate-400">Admin</div></a>
+        <div id="content">
+            <div class="flex pl-4 bg-slate-200">
+                <a href="/issues/1/"><div class="p-4 hover:bg-slate-400">My first project</div></a>  {# or, if you're single-org, or single-project, just show that #}
+                {# <div class="p-4 hover:bg-slate-400">Settings</div>#}
+                <a href="/admin/"><div class="p-4 hover:bg-slate-400">Admin</div></a>
+            </div>
+            <div>
+                {% block content %}{% endblock %}
+            </div>
         </div>
-        <div>
-            {% block content %}{% endblock %}
-        </div>
-
     {% block extra_js %}{% endblock %}
     </body>
 </html>
