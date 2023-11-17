@@ -22,6 +22,12 @@
 
 <div class="p-4 bg-slate-50">
 
+<div class="flex place-content-end">
+    <div class="font-bold text-slate-500 border-slate-300 pl-2 pr-2 mr-2 border-2 rounded-md hover:bg-slate-200 cursor-pointer" onclick="showAllFrames()">Show all</div>
+    <div class="font-bold text-slate-500 border-slate-300 pl-2 pr-2 mr-2 border-2 rounded-md hover:bg-slate-200 cursor-pointer" onclick="showInAppFrames()">Show in-app</div>
+    <div class="font-bold text-slate-500 border-slate-300 pl-2 pr-2 mr-2 border-2 rounded-md hover:bg-slate-200 cursor-pointer" onclick="hideAllFrames()">Hide all</div>
+</div>
+
 {# <div class="font-bold">Stacktrace:</div> I think this is obvious?#}
 {% for exception in exceptions %}
     {# option: make multi-exception stacktraces more clear <div class="border-l-4 border-cyan-500 pl-4"> }#}
@@ -32,11 +38,11 @@
         
         <div class="bg-white w-full font-mono">
 
-            <div class="pl-4 pt-2 pb-2 border-t-2 {% if frame.in_app %}bg-slate-300 border-slate-500{% else %}bg-white border-slate-300{% endif %}" onclick="toggleFrameVisibility(this)">
+            <div class="pl-4 pt-2 pb-2 border-t-2 {% if frame.in_app %}bg-slate-300 border-slate-500{% else %}bg-white border-slate-300{% endif %} cursor-pointer" onclick="toggleFrameVisibility(this)">
                 <span class="font-bold">{{ frame.filename }}</span> in <span class="font-bold">{{ frame.function }}</span> line <span class="font-bold">{{ frame.lineno }}</span>.
             </div>
 
-            <div class="js-frame-details hidden">
+            <div class="js-frame-details {% if frame.in_app %}js-in-app{% endif %} {% if not forloop.last %}hidden{% else %}xl:flex{% endif %}"> {# todo this still shows the last frame of non-last exceptions, I just want the very last one #}
                 <div class="xl:w-1/2">
                     <ol class="list-decimal ml-16 mt-6 mb-6" start="100">
                     {% for line in frame.pre_context %}<li><div class="whitespace-pre w-full">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
