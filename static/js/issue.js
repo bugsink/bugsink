@@ -30,14 +30,14 @@ function collapseSection(element) {
   }
 
   // get the height of the element's inner content, regardless of its actual size
-  var sectionHeight = element.scrollHeight;
+  const sectionHeight = element.scrollHeight;
 
   setBodyMinHeight();
 
   element.classList.remove("xl:flex");  // this appears to be necessary, not sure why
 
   // temporarily disable all css transitions
-  var elementTransition = element.style.transition;
+  const elementTransition = element.style.transition;
   element.style.transition = '';
 
   // on the next frame (as soon as the previous style change has taken effect),
@@ -68,7 +68,7 @@ function expandSection(element) {
   element.classList.add("xl:flex");  // add back
 
   // get the height of the element's inner content, regardless of its actual size
-  var sectionHeight = element.scrollHeight;
+  const sectionHeight = element.scrollHeight;
 
   // have the element transition to the height of its inner content
   let explicitlySetValue = sectionHeight + 'px';
