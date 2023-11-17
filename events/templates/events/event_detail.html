@@ -38,8 +38,15 @@
         
         <div class="bg-white w-full font-mono">
 
-            <div class="pl-4 pt-2 pb-2 border-b-2 {% if forloop.first %}border-t-2{% endif %} {% if frame.in_app %}bg-slate-300 border-slate-500{% else %}bg-white border-slate-300{% endif %} cursor-pointer" onclick="toggleFrameVisibility(this)">
-                <span class="font-bold">{{ frame.filename }}</span> in <span class="font-bold">{{ frame.function }}</span> line <span class="font-bold">{{ frame.lineno }}</span>.
+            <div class="flex pl-4 pt-2 pb-2 border-b-2 {% if forloop.first %}border-t-2{% endif %} {% if frame.in_app %}bg-slate-300 border-slate-500{% else %}bg-white border-slate-300{% endif %} cursor-pointer" onclick="toggleFrameVisibility(this)">
+                <div>
+                    <span class="font-bold">{{ frame.filename }}</span> in <span class="font-bold">{{ frame.function }}</span> line <span class="font-bold">{{ frame.lineno }}</span>.
+                </div>
+                <div class="ml-auto pr-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 js-chevron transition-all {% if forloop.last %}rotate-180{% endif %}">
+                        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                    </svg>
+                </div>
             </div>
 
             <div class="js-frame-details {% if frame.in_app %}js-in-app{% endif %} {% if forloop.last %}xl:flex{% endif %} overflow-hidden transition-all"

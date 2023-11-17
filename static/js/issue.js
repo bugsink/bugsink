@@ -1,5 +1,9 @@
 "use strict";
 
+function toggleFoo(element) {
+    element.classList.toggle("rotate-180");
+}
+    
 function distanceToWindowBottom() {
     // https://stackoverflow.com/a/2800676/339144
     let scrollPosition = window.pageYOffset;
@@ -94,6 +98,7 @@ function toggleFrameVisibility(frameHeader) {
     } else {
         collapseSection(frameDetails);
     }
+    frameHeader.querySelector(".js-chevron").classList.toggle("rotate-180");
 }
 
 
@@ -101,14 +106,19 @@ function showAllFrames(frameHeader) {
     document.querySelectorAll(".js-frame-details").forEach((frameDetails) => {
         expandSection(frameDetails);
     });
+    document.querySelectorAll(".js-chevron").forEach((chevron) => {
+        chevron.classList.add("rotate-180");
+    });
 }
 
 function showInAppFrames(frameHeader) {
     document.querySelectorAll(".js-frame-details").forEach((frameDetails) => {
         if (frameDetails.classList.contains("js-in-app")) {
             expandSection(frameDetails);
+            frameDetails.parentNode.querySelector(".js-chevron").classList.add("rotate-180");
         } else {
             collapseSection(frameDetails);
+            frameDetails.parentNode.querySelector(".js-chevron").classList.remove("rotate-180");
         }
     });
 }
@@ -116,5 +126,8 @@ function showInAppFrames(frameHeader) {
 function hideAllFrames(frameHeader) {
     document.querySelectorAll(".js-frame-details").forEach((frameDetails) => {
         collapseSection(frameDetails);
+    });
+    document.querySelectorAll(".js-chevron").forEach((chevron) => {
+        chevron.classList.remove("rotate-180");
     });
 }
