@@ -9,10 +9,17 @@ function distanceToWindowBottom() {
 }
 
 onscroll = (event) => {
-    console.log(distanceToWindowBottom());
+    setBodyMinHeight();
 };
 
-// This is the important part!
+function setBodyMinHeight() {
+  let bodyHeightPreCollapse = document.body.offsetHeight;
+  let body = document.querySelector("body");
+  // console.log("was actually", bodyHeightPreCollapse, "minimally", body.style.minHeight);
+  body.style.minHeight = (bodyHeightPreCollapse - distanceToWindowBottom()) + "px";
+  // console.log("is now actually", document.body.offsetHeight, "minimally", body.style.minHeight);
+}
+
 function collapseSection(element) {
   if (element.getAttribute("data-collapsed") === "true") {
     return;
@@ -20,14 +27,8 @@ function collapseSection(element) {
 
   // get the height of the element's inner content, regardless of its actual size
   var sectionHeight = element.scrollHeight;
-  let bodyHeightPreCollapse = document.body.offsetHeight;
 
-  console.log("?", sectionHeight, distanceToWindowBottom());
-  if (sectionHeight > distanceToWindowBottom()) {
-      let body = document.querySelector("body");
-      console.log((bodyHeightPreCollapse - distanceToWindowBottom()) + "px");
-      body.style.minHeight = (bodyHeightPreCollapse - distanceToWindowBottom()) + "px";
-  }
+  setBodyMinHeight();
 
   element.classList.remove("xl:flex");  // this appears to be necessary, not sure why
 
@@ -57,6 +58,8 @@ function expandSection(element) {
   if (element.getAttribute("data-collapsed") !== "true") {
     return;
   }
+
+  setBodyMinHeight();
 
   element.classList.add("xl:flex");  // add back
 
