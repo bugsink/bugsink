@@ -10,6 +10,8 @@ class Issue(models.Model):
     project = models.ForeignKey(
         "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
     hash = models.CharField(max_length=32, blank=False, null=False)
+
+    # NOTE: principled, we can get rid of an M2M table by making this a FK from the other side
     events = models.ManyToManyField("events.Event")
 
     def get_absolute_url(self):

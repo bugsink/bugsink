@@ -1,8 +1,22 @@
+from django.shortcuts import redirect
 from django.conf import settings
 
 from django.views.decorators.http import require_GET
 from django.views.decorators.cache import cache_control
 from django.http import FileResponse, HttpRequest, HttpResponse
+
+from projects.models import Project
+from issues.views import issue_list
+
+
+def home(request):
+    # TODO if count() == 0 it's time to do onboarding :-)
+
+    if Project.objects.count() == 1:
+        project = Project.objects.get()
+        return redirect(issue_list, project_id=project.id)
+
+    raise NotImplementedError()  # some kind of Project-list
 
 
 def trigger_error(request):
