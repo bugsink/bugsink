@@ -134,7 +134,8 @@ class Event(models.Model):
         # index_together = (("group_id", "datetime"),)  TODO seriously think about indexes
 
     def get_absolute_url(self):
-        return "/events/event/%s/" % self.id
+        issue = self.issue_set.get()
+        return f"/issues/issue/{ issue.id }/event/{ self.id }/"
 
     def get_raw_link(self):
         # for the admin

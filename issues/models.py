@@ -13,7 +13,7 @@ class Issue(models.Model):
     events = models.ManyToManyField("events.Event")
 
     def get_absolute_url(self):
-        return f"/issues/issue/{ self.id }/events/"
+        return f"/issues/issue/{ self.id }/event/last/"
 
     def parsed_data(self):
         # TEMP solution; won't scale

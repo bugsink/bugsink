@@ -145,7 +145,9 @@ Issue grouper: <span class="font-mono whitespace-pre">"{{ issue_grouper }}"</spa
 <div class="flex p-4 bg-slate-200 border-b-2">
     <div>Event 55 out of 55 which occured at <span class="font-bold">{{ event.timestamp }}</span> (most recent)</div>
     <div class="ml-auto pr-4 font-bold text-slate-500">
-        <a href="/events/event/{{ event.id }}/download/">Download</a>
+        <a href="/admin/issues/issue/{{ issue.id }}/change/">Issue Admin</a>
+        | <a href="/admin/events/event/{{ event.id }}/change/">Event Admin</a>
+        | <a href="/events/event/{{ event.id }}/download/">Download</a>
         | <a href="/events/event/{{ event.id }}/raw/" >Raw</a>
     </div>
 </div>
