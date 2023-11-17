@@ -876,6 +876,14 @@ select {
   height: 100vh;
 }
 
+.h-0 {
+  height: 0px;
+}
+
+.max-h-0 {
+  max-height: 0px;
+}
+
 .w-1\/4 {
   width: 25%;
 }
@@ -930,6 +938,10 @@ select {
 
 .justify-items-end {
   justify-items: end;
+}
+
+.overflow-hidden {
+  overflow: hidden;
 }
 
 .whitespace-pre {
@@ -1191,6 +1203,24 @@ select {
 
 .filter {
   filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow);
+}
+
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+.delay-150 {
+  transition-delay: 150ms;
+}
+
+.delay-1000 {
+  transition-delay: 1000ms;
+}
+
+.duration-1000 {
+  transition-duration: 1000ms;
 }
 
 .ease-in-out {
