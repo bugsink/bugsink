@@ -44,7 +44,8 @@ function expandSection(element) {
   var sectionHeight = element.scrollHeight;
 
   // have the element transition to the height of its inner content
-  element.style.height = sectionHeight + 'px';
+  let explicitlySetValue = sectionHeight + 'px';
+  element.style.height = explicitlySetValue;
 
   // when the next css transition finishes (which should be the one we just triggered)
   const foo = function(e) {
@@ -52,7 +53,9 @@ function expandSection(element) {
     element.removeEventListener('transitionend', foo);
     
     // remove "height" from the element's inline styles, so it can return to its initial value
-    element.style.removeProperty("height");
+    if (element.style.height == explicitlySetValue) {
+        element.style.removeProperty("height");
+    }
   }
 
   element.addEventListener('transitionend', foo);
