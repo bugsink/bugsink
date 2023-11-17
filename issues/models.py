@@ -23,7 +23,19 @@ class Issue(models.Model):
 
     def get_main_exception(self):
         # TODO: refactor (its usages) to a (filled-on-create) field
+
         # Note: first event, last exception
+
+        # We call the last exception in the chain the main exception because it's the one you're most likely to care
+        # about. I'd roughly distinguish 2 cases for reraising:
+        #
+        # 1. intentionally rephrasing/retyping exceptions to more clearly express their meaning. In that case you
+        #    certainly care more about the rephrased thing than the original, that's the whole point.
+        #
+        # 2. actual "accidents" happening while error-handling. In that case you care about the accident first (bugsink
+        #    is a system to help you think about cases that you didn't properly think about in the first place),
+        #    although you may also care about the root cause. (In fact, sometimes you care more about the root cause,
+        #    but I'd say you'll have to yak-shave your way there).
 
         parsed_data = json.loads(self.events.first().data)
         exc = parsed_data.get("exception", {"values": []})
