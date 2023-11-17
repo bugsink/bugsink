@@ -43,7 +43,7 @@ def issue_event_detail(request, issue_pk, event_pk):
                 else:
                     logentry["formatted"] = logentry["message"].format(logentry["params"])
 
-    return render(request, "events/event_detail.html", {
+    return render(request, "issues/issue_detail.html", {
         "issue": issue,
         "event": event,
         "parsed_data": parsed_data,
