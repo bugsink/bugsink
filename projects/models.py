@@ -1,6 +1,9 @@
 import uuid
 
 from django.db import models
+from django.conf import settings
+
+from compat.dsn import build_dsn
 
 
 class Project(models.Model):
@@ -27,9 +30,9 @@ class Project(models.Model):
     def __str__(self):
         return self.name
 
-    def get_dsn(self):
-        # TODO, because the server needs to know its own address
-        return get_dsn()
+    @property
+    def dsn(self):
+        return build_dsn(settings.BASE_URL, self.id, self.sentry_key)
 
     """
     # TODO is this even more efficient?

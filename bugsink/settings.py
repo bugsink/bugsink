@@ -134,9 +134,11 @@ STATICFILES_DIRS = [
 # no support for uuid in this setting yet (https://code.djangoproject.com/ticket/32577) so we leave it as-is
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# ###################### MOST PER-SITE CONFIG BELOW THIS LINE ###################
 
-# {PROTOCOL}://{PUBLIC_KEY}:{SECRET_KEY}@{HOST}{PATH}/{PROJECT_ID}
-SENTRY_DSN = os.getenv("SENTRY_DSN")  # "http://ignored_public_key:ignored_secret_key@127.0.0.1:9000/1"
+
+# {PROTOCOL}://{PUBLIC_KEY}:{DEPRECATED_SECRET_KEY}@{HOST}{PATH}/{PROJECT_ID}
+SENTRY_DSN = os.getenv("SENTRY_DSN")
 
 
 if SENTRY_DSN is not None:
@@ -146,3 +148,5 @@ if SENTRY_DSN is not None:
         auto_session_tracking=False,
         traces_sample_rate=0,
     )
+
+BASE_URL = "http://glitchtip:9000"  # no trailing slash

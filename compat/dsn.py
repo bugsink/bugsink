@@ -1,6 +1,16 @@
 import urllib.parse
 
 
+def _colon_port(port):
+    return ":" + str(port) if port else ""
+
+
+def build_dsn(base_url, project_id, public_key):
+    parts = urllib.parse.urlsplit(base_url)
+    return (f"{ parts.scheme }://{ public_key }@{ parts.hostname }{ _colon_port(parts.port) }" +
+            f"{ parts.path }/{ project_id }")
+
+
 def _get_url(sentry_dsn, ingest_method):
     # https://github.com/getsentry/develop/blob/b24a602de05b/src/docs/sdk/overview.mdx#L94
 
@@ -10,7 +20,7 @@ def _get_url(sentry_dsn, ingest_method):
     path_before_api, project_id = parts.path.rsplit("/", 1)
 
     return (
-        parts.scheme + "://" + parts.hostname + (":" + str(parts.port) if parts.port else "") +
+        parts.scheme + "://" + parts.hostname + _colon_port(parts.port) +
         path_before_api + "/api/" + project_id + "/" + ingest_method + "/")
 
 

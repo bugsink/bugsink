@@ -2,12 +2,26 @@ from unittest import TestCase
 import datetime
 from django.test import override_settings
 
-from .dsn import get_store_url, get_envelope_url, get_header_value
+from .dsn import build_dsn, get_store_url, get_envelope_url, get_header_value
 from .auth import parse_auth_header_value
 from .timestamp import parse_timestamp
 
 
 class DsnTestCase(TestCase):
+    def test_build_dsn(self):
+        self.assertEquals(
+            "https://public_key@hosted.bugsink/1",
+            build_dsn("https://hosted.bugsink", "1", "public_key"))
+
+        self.assertEquals(
+            "https://public_key@hosted.bugsink/foo/1",
+            build_dsn("https://hosted.bugsink/foo", "1", "public_key"))
+
+    def test_build_dsn_non_default_port(self):
+        self.assertEquals(
+            "https://public_key@hosted.bugsink:9000/1",
+            build_dsn("https://hosted.bugsink:9000", "1", "public_key"))
+
     def test_get_store_url(self):
         self.assertEquals(
             "https://hosted.bugsink/api/1/store/",
