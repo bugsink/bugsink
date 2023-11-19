@@ -1,3 +1,5 @@
+import uuid
+
 import time
 import json
 import requests
@@ -15,6 +17,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--dsn")
         parser.add_argument("--valid-only", action="store_true")
+        parser.add_argument("--fresh-id", action="store_true")
+        parser.add_argument("--fresh-timestamp", action="store_true")
         parser.add_argument("json_files", nargs="+")
 
     def is_valid(self, data, json_filename):
@@ -69,15 +73,17 @@ class Command(BaseCommand):
                     self.stderr.write("%s %s %s" % ("Not JSON", json_filename, str(e)))
                     continue
 
-                # Not applicable anymore
-                # weirdly enough a large numer of sentry test data don't actually have this required attribute set.
-                # thus, we set it to something arbitrary on the sending side rather than have our server be robust
-                # for it.
-                # if "timestamp" not in data:
+                if "timestamp" not in data or options["fresh_timestamp"]:
+                    # weirdly enough a large numer of sentry test data don't actually have this required attribute set.
+                    # thus, we set it to something arbitrary on the sending side rather than have our server be robust
+                    # for it.
 
-                # We just update the timestamp to 'now' to be able to avoid any 'ignore old stuff' filters (esp. on
-                # hosted sentry when we want to see anything over there)
-                data["timestamp"] = time.time()
+                    # If promted, we just update the timestamp to 'now' to be able to avoid any 'ignore old stuff'
+                    # filters (esp. on hosted sentry when we want to see anything over there)
+                    data["timestamp"] = time.time()
+
+                if options["fresh_id"]:
+                    data["id"] = uuid.uuid4().hex
 
                 if options["valid_only"] and not self.is_valid(data, json_filename):
                     continue
