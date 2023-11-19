@@ -8,7 +8,7 @@
     {% for issue in issue_list %}
 
         <div class="m-4 ml-0 p-4 border-2 bg-slate-50">
-            <div><a href="/issues/issue/{{ issue.id }}/event/last/" class="text-blue-800 font-bold">{{ issue.title }}</a> <span class="ml-2 italic">{{ issue.parsed_data.transaction }}</span> </div>
+            <div><a href="/issues/issue/{{ issue.id }}/event/last/" class="text-cyan-500 font-bold">{{ issue.title }}</a> <span class="ml-2 italic">{{ issue.parsed_data.transaction }}</span> </div>
             <div class="text-sm">from <b>8 Nov 12:33</b> | last <b>8 Nov 12:39</b> | with <b>3</b> events</div>
         </div>
 
