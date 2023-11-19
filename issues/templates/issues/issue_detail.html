@@ -49,8 +49,10 @@
                 </div>
             </div>
 
-            <div class="js-frame-details {% if frame.in_app %}js-in-app{% endif %} {% if forloop.parentloop.last and forloop.last %}xl:flex{% endif %} overflow-hidden transition-all"
+            <div class="js-frame-details {% if frame.in_app %}js-in-app{% endif %}{% if frame.in_app %}bg-slate-300{% else %}border-slate-300{% endif %} overflow-hidden transition-all"
                 {% if not forloop.parentloop.last or not forloop.last %}data-collapsed="true" style="height: 0px"{% endif %}>
+                <div class="border-b-2 xl:flex border-slate-300">
+
                 <div class="xl:w-1/2">
                     <ol class="list-decimal ml-16 mt-6 mb-6" start="100">
                     {% for line in frame.pre_context %}<li><div class="whitespace-pre w-full">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
@@ -70,6 +72,8 @@
                         <div class="w-3/4 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ value }}</div>
                     </div>
                     {% endfor %} 
+                </div>
+
                 </div>
             </div>
 
