@@ -2,14 +2,18 @@
 {% load static %}
 
 {% block content %}
-<div class="m-4">
-    <h1 class="text-4xl mt-4">{{ issue.get_main_exception.type }}</h1>
-    <div class="text-xl">{{ issue.get_main_exception.value }}</div>
-    {% if parsed_data.request %}<div class="italic mt-4">{{ parsed_data.request.method }} {{ parsed_data.request.url }}</div>{% endif %}
-    <div><span class="font-bold">ingest.management.commands.raise_exception</span> in <span class="font-bold">raise_exception</span></div>
+<div class="m-4 flex">
+    <div>
+        <h1 class="text-4xl">{{ issue.get_main_exception.type }}</h1>
+        <div class="text-xl">{{ issue.get_main_exception.value }}</div>
+        {% if parsed_data.request %}<div class="italic mt-4">{{ parsed_data.request.method }} {{ parsed_data.request.url }}</div>{% endif %}
+        <div><span class="font-bold">ingest.management.commands.raise_exception</span> in <span class="font-bold">raise_exception</span></div>
+    </div>
+    <div class="ml-auto">
+        <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md">Resolve</button>
+        <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Mute</button>
+    </div>
 </div>
-
-
 
 <div class="ml-4 mb-4 mr-4 border-2">
 
