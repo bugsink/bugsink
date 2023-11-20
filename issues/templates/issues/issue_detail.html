@@ -26,17 +26,26 @@
 
 <div class="p-4 bg-slate-50">
 
-<div class="flex place-content-end">
-    <button class="font-bold text-slate-500 border-slate-300 pl-2 pr-2 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="showAllFrames()">Show all</button>
-    <button class="font-bold text-slate-500 border-slate-300 pl-2 pr-2 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="showInAppFrames()">Show in-app</button>
-    <button class="font-bold text-slate-500 border-slate-300 pl-2 pr-2 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="hideAllFrames()">Hide all</button>
-</div>
-
 {# <div class="font-bold">Stacktrace:</div> I think this is obvious?#}
 {% for exception in exceptions %}
     {# option: make multi-exception stacktraces more clear <div class="border-l-4 border-cyan-500 pl-4"> }#}
-    <h1 class="text-2xl font-bold {% if forloop.counter0 > 0 %}mt-4{% endif %}">{{ exception.type }}</h1>  {# potentially: hide this whole block if there is only a single exception #}
-    <div class="text-lg mb-4">{{ exception.value }}</div>
+
+    <div class="flex">
+        <div>
+            <h1 class="text-2xl font-bold {% if forloop.counter0 > 0 %}mt-4{% endif %}">{{ exception.type }}</h1>  {# potentially: hide this whole block if there is only a single exception #}
+            <div class="text-lg mb-4">{{ exception.value }}</div>
+
+        </div>
+        {% if forloop.counter0 == 0 %}
+        <div class="ml-auto">
+            <div class="flex place-content-end">
+                <button class="font-bold text-slate-500 border-slate-300 pl-2 pr-2 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="showAllFrames()">Show all</button>
+                <button class="font-bold text-slate-500 border-slate-300 pl-2 pr-2 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="showInAppFrames()">Show in-app</button>
+                <button class="font-bold text-slate-500 border-slate-300 pl-2 pr-2 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="hideAllFrames()">Hide all</button>
+            </div>
+        </div>
+        {% endif %}
+    </div>
 
     {% for frame in exception.stacktrace.frames %}
         
