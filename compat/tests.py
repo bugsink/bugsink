@@ -1,3 +1,4 @@
+import json
 from unittest import TestCase
 import datetime
 from django.test import override_settings
@@ -5,6 +6,7 @@ from django.test import override_settings
 from .dsn import build_dsn, get_store_url, get_envelope_url, get_header_value
 from .auth import parse_auth_header_value
 from .timestamp import parse_timestamp
+from .vars import unrepr
 
 
 class DsnTestCase(TestCase):
@@ -82,3 +84,19 @@ class TimestampTestCase(TestCase):
         self.assertEquals(
             datetime.datetime(2022, 9, 1, 9, 45, 0, tzinfo=datetime.timezone.utc),
             parse_timestamp("2022-09-01T09:45:00.000Z"))
+
+
+class VarsTestCase(TestCase):
+    def test_dicts(self):
+        d = json.loads('''{"baz":"1","foo":"'bar'","snu":"None","recurse":{"foo": "'bar'"}}''')
+
+        self.assertEquals(
+            '''{baz: 1, foo: 'bar', snu: None, recurse: {foo: 'bar'}}''',
+            unrepr(d))
+
+    def test_lists(self):
+        d = json.loads('''["'bar'","1","None",["'bar'","1","None"]]''')
+
+        self.assertEquals(
+            '''['bar', 1, None, ['bar', 1, None]]''',
+            unrepr(d))
