@@ -3,15 +3,18 @@ from django.shortcuts import render, get_object_or_404, redirect
 
 from events.models import Event
 
+from projects.models import Project
+
 from .utils import get_issue_grouper_for_data
 from .models import Issue
 
 
 def issue_list(request, project_id):
     issue_list = Issue.objects.filter(project_id=project_id)
+    project = get_object_or_404(Project, pk=project_id)
 
     return render(request, "issues/issue_list.html", {
-        "project_id": project_id,
+        "project": project,
         "issue_list": issue_list,
     })
 

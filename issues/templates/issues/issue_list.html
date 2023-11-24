@@ -1,19 +1,36 @@
 {% extends "base.html" %}
+
+{% block title %}Issues · {{ project.name }} · Bugsink{% endblock %}
+
 {% block content %}
 
 <div class="m-4">
-<h1 class="text-3xl mt-4">Issues for project {{ project_id }}</h1>
+<h1 class="text-4xl mt-4">{{ project.name }} - Issues</h1>
 
-    <div>
-    {% for issue in issue_list %}
+    <div class="mt-4">
+      {% comment %}
+      <thead>
+          <tr>
+              <th colspan="2">The table header</th>
+          </tr>
+      </thead>
+      {% endcomment %}
+            {% for issue in issue_list %}
+            <div class="bg-slate-50 border-b-2 border-l-2 border-r-2 flex flex-nowrap w-full">
+                <div class="flex-initial self-center">
+                    <input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4"/>
+                </div>
+                <div class="ml-0 pb-4 pt-4 pr-4 flex-auto truncate">
+                    <div class="flex flex-nowrap">
+                        <div class="w-4/5 pr-2 truncate"><a href="/issues/issue/{{ issue.id }}/event/last/" class="text-cyan-500 font-bold">{{ issue.title }}</a></div>
+                        <div class="w-1/5 ml-2 italic">{{ issue.parsed_data.transaction }} </div>
+                    </div>
+                    <div class="text-sm">from <b>8 Nov 12:33</b> | last <b>8 Nov 12:39</b> | with <b>3</b> events</div>
+                </div>
+            </div>
+            {% endfor %}
 
-        <div class="m-4 ml-0 p-4 border-2 bg-slate-50">
-            <div><a href="/issues/issue/{{ issue.id }}/event/last/" class="text-cyan-500 font-bold">{{ issue.title }}</a> <span class="ml-2 italic">{{ issue.parsed_data.transaction }}</span> </div>
-            <div class="text-sm">from <b>8 Nov 12:33</b> | last <b>8 Nov 12:39</b> | with <b>3</b> events</div>
-        </div>
-
-    {% endfor %}
-    <div>
+    </div>
 
 
 </div>
