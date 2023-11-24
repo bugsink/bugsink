@@ -15,4 +15,16 @@ class Command(BaseCommand):
         raise Exception(s)
 
     def raise_exception_from(self, s, e):
+        s = "foo"
+        l = ["bar", 1, None, ["bar", 1, None]]
+        d = {
+            "foo": "bar",
+            "baz": 1,
+            "snu": None,
+            "recurse": {
+                "foo": "bar",
+                "baz": 1,
+                "snu": None,
+            },
+        }
         raise Exception(s) from e
