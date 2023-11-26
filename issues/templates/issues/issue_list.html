@@ -9,13 +9,45 @@
 
     <div class="mt-4">
       <table class="w-full">
-      {% comment %}
       <thead>
-          <tr>
-              <th colspan="2">The table header</th>
-          </tr>
+            <tr class="bg-white border-slate-300 border-t-2 border-l-2 border-r-2 ">
+                <td colspan="4" class="text-right">
+                    <input type="text" name="search" placeholder="search issues..." class="w-1/5 m-4 focus:border-cyan-500 focus:ring-cyan-200 rounded-md"/>
+
+{% comment %}
+https://flowbite.com/docs/forms/floating-label/
+<div class="relative">
+    <input type="text" id="floating_outlined" class="block px-2.5 pb-2.5 pt-4 w-1/5 text-sm text-gray-900 bg-transparent rounded-lg border-1 border-gray-300 appearance-none dark:text-white dark:border-gray-600 dark:focus:border-blue-500 focus:outline-none focus:ring-0 focus:border-blue-600 peer" placeholder=" " />
+    <label for="floating_outlined" class="absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-gray-900 px-2 peer-focus:px-2 peer-focus:text-blue-600 peer-focus:dark:text-blue-500 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 rtl:peer-focus:translate-x-1/4 rtl:peer-focus:left-auto start-1">Floating outlined</label>
+</div>
+{% endcomment %}
+
+                </td>
+
+            </tr>
+
+
+            <tr class="bg-white border-slate-300 border-l-2 border-r-2">
+            <td>
+                <input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4"/>
+            </td>
+            <td class="w-full ml-0 pb-4 pt-4 pr-4">
+                <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md">Resolve</button>
+                <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Mute</button>
+                <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Reopen</button>
+
+            </td>
+
+            <td class="text-right font-bold p-4">
+                FOO
+            </td>
+
+            <td class="text-right font-bold p-4">
+                BAR
+            </td>
+
+            </tr>
       </thead>
-      {% endcomment %}
       <tbody>
             {% for issue in issue_list %}
             <tr class="bg-slate-50 border-slate-300 border-2 ">
