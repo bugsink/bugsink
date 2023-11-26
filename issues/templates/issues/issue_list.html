@@ -4,15 +4,26 @@
 
 {% block content %}
 
+
+
 <div class="m-4">
 <h1 class="text-4xl mt-4">{{ project.name }} - Issues</h1>
 
-    <div class="mt-4">
+<div class="flex bg-slate-50 border-b-2 mt-4 items-end">
+    <div class="flex">
+    <a href="TODO"><div class="p-4 text-cyan-500 font-bold border-cyan-500 border-b-4 hover:bg-slate-200">Unresolved</div></a>
+    <a href="TODO"><div class="p-4 text-slate-500 font-bold border-slate-400 hover:bg-slate-200 hover:border-b-4">Resolved</div></a>
+    <a href="TODO"><div class="p-4 text-slate-500 font-bold border-slate-400 hover:bg-slate-200 hover:border-b-4">Muted</div></a>
+    <a href="TODO"><div class="p-4 text-slate-500 font-bold border-slate-400 hover:bg-slate-200 hover:border-b-4">All</div></a>
+    </div>
+    <div class="ml-auto p-2">
+        <input type="text" name="search" placeholder="search issues..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md"/>
+    </div>
+</div>
+
+    <div>
       <table class="w-full">
       <thead>
-            <tr class="bg-white border-slate-300 border-t-2 border-l-2 border-r-2 ">
-                <td colspan="4" class="text-right">
-                    <input type="text" name="search" placeholder="search issues..." class="w-1/5 m-4 focus:border-cyan-500 focus:ring-cyan-200 rounded-md"/>
 
 {% comment %}
 https://flowbite.com/docs/forms/floating-label/
