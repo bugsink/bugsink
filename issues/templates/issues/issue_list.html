@@ -8,6 +8,7 @@
 <h1 class="text-4xl mt-4">{{ project.name }} - Issues</h1>
 
     <div class="mt-4">
+      <table class="w-full">
       {% comment %}
       <thead>
           <tr>
@@ -15,20 +16,40 @@
           </tr>
       </thead>
       {% endcomment %}
+      <tbody>
             {% for issue in issue_list %}
-            <div class="bg-slate-50 border-b-2 border-l-2 border-r-2 flex flex-nowrap w-full">
-                <div class="flex-initial self-center">
-                    <input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4"/>
+            <tr class="bg-slate-50 border-slate-300 border-2 ">
+            <td>
+                <input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4"/>
+            </td>
+            <td class="w-full ml-0 pb-4 pt-4 pr-4">
+                <div>
+                    <a href="/issues/issue/{{ issue.id }}/event/last/" class="text-cyan-500 font-bold">{{ issue.title|truncatechars:100 }}</a>
                 </div>
-                <div class="ml-0 pb-4 pt-4 pr-4 flex-auto truncate">
-                    <div class="flex flex-nowrap">
-                        <div class="w-4/5 pr-2 truncate"><a href="/issues/issue/{{ issue.id }}/event/last/" class="text-cyan-500 font-bold">{{ issue.title }}</a></div>
-                        <div class="w-1/5 ml-2 italic">{{ issue.parsed_data.transaction }} </div>
-                    </div>
-                    <div class="text-sm">from <b>8 Nov 12:33</b> | last <b>8 Nov 12:39</b> | with <b>3</b> events</div>
+                <div class="text-sm">from <b>8 Nov 12:33</b> | last <b>8 Nov 12:39</b> | with <b>3</b> events
+                    {% if issue.parsed_data.transaction %}| <span class="font-bold">{{ issue.parsed_data.transaction }} </span>{% endif %}
                 </div>
-            </div>
+            </td>
+
+            {% comment %}
+            [ ] first release (or commit), last release (or commit)
+            [ ] first seen
+            [ ] last seen.
+            [ ] assigned to
+            [ ] n.r. of events?
+            {% endcomment %}
+            <td class="text-right p-4">
+                ABC
+            </td>
+
+            <td class="text-right p-4">
+                123
+            </td>
+
+            </tr>
             {% endfor %}
+        </tbody>
+        </table>
 
     </div>
 
