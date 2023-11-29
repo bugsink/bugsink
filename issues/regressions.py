@@ -18,3 +18,24 @@ def is_regression(sorted_releases, fixed_at, events_at, current_event_at):
             return marked_as_resolved
 
     raise Exception("Can't find release '%s'" % current_event_at)
+
+
+def is_regression_2(sorted_releases, fixed_at, events_at, current_event_at):
+    # AKA is_regression_with_fixed_later_info
+
+    # for lack of a better name; I want to express this idea somewhere first; let's see how we utilize it in actual code
+    # later; hence also copy/pasta
+    fixed_at = fixed_at[:]
+    marked_as_resolved = False
+
+    for r in sorted_releases:
+        if r in events_at:
+            marked_as_resolved = False
+        elif r in fixed_at:
+            marked_as_resolved = True
+            fixed_at.remove(r)
+
+        if current_event_at == r:
+            return marked_as_resolved, len(fixed_at) > 0
+
+    raise Exception("Can't find release '%s'" % current_event_at)

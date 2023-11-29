@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from .regressions import is_regression
+from .regressions import is_regression, is_regression_2
 
 
 class RegressionTestCase(TestCase):
@@ -86,7 +86,6 @@ class RegressionTestCase(TestCase):
         events_at = ["a", "e"]
         fixed_at = ["c", "f"]
 
-        # NOTE should we not want to express the "fixed later" property here?
         self.assertEquals(False, is_regression(self.releases, fixed_at, events_at, current_event_at="a"))
         self.assertEquals(False, is_regression(self.releases, fixed_at, events_at, current_event_at="b"))
         self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="c"))
@@ -95,6 +94,16 @@ class RegressionTestCase(TestCase):
         self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="f"))
         self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="g"))
         self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="h"))
+
+        self.assertEquals((False, True), is_regression_2(self.releases, fixed_at, events_at, current_event_at="a"))
+        self.assertEquals((False, True), is_regression_2(self.releases, fixed_at, events_at, current_event_at="b"))
+        # the interesting bit from this block: a regression, but fixed already (for a later version)
+        self.assertEquals((True,  True), is_regression_2(self.releases, fixed_at, events_at, current_event_at="c"))
+        self.assertEquals((True,  True), is_regression_2(self.releases, fixed_at, events_at, current_event_at="d"))
+        self.assertEquals((False, True), is_regression_2(self.releases, fixed_at, events_at, current_event_at="e"))
+        self.assertEquals((True,  False), is_regression_2(self.releases, fixed_at, events_at, current_event_at="f"))
+        self.assertEquals((True,  False), is_regression_2(self.releases, fixed_at, events_at, current_event_at="g"))
+        self.assertEquals((True,  False), is_regression_2(self.releases, fixed_at, events_at, current_event_at="h"))
 
     def test_documented_thoughts_about_minor_and_patch_releases(self):
         # this test-case documents the limitation of our approach in the following combination of circumstances:
