@@ -14,53 +14,53 @@ class RegressionTestCase(TestCase):
         self.assertFalse(is_regression(
             self.releases,
             fixed_at=[],
-            issues_at=[],
-            current_issue_at="h"))
+            events_at=[],
+            current_event_at="h"))
 
         # same but with observed issues
         self.assertFalse(is_regression(
             self.releases,
             fixed_at=[],
-            issues_at=["b", "c", "f"],
-            current_issue_at="h"))
+            events_at=["b", "c", "f"],
+            current_event_at="h"))
 
     def test_first_regression(self):
         # breakage in the very release marked as the fix
         self.assertTrue(is_regression(
             self.releases,
             fixed_at=["b"],
-            issues_at=["a"],
-            current_issue_at="b"))
+            events_at=["a"],
+            current_event_at="b"))
 
         # breakage in a later release
         self.assertTrue(is_regression(
             self.releases,
             fixed_at=["b"],
-            issues_at=["a"],
-            current_issue_at="c"))
+            events_at=["a"],
+            current_event_at="c"))
 
-        # issues_at empty list (not expected to happen in real code, because how would you mark as fixed?)
+        # events_at empty list (not expected to happen in real code, because how would you mark as fixed?)
         # just proceed as above.
         self.assertTrue(is_regression(
             self.releases,
             fixed_at=["b"],
-            issues_at=[],
-            current_issue_at="b"))
+            events_at=[],
+            current_event_at="b"))
 
     def test_non_regressions(self):
         # breakage before the fix
         self.assertFalse(is_regression(
             self.releases,
             fixed_at=["b"],
-            issues_at=["a"],
-            current_issue_at="a"))
+            events_at=["a"],
+            current_event_at="a"))
 
         # breakage before the fix, but in a release the error had not been seen before.
         self.assertFalse(is_regression(
             self.releases,
             fixed_at=["c"],
-            issues_at=["a"],
-            current_issue_at="b"))
+            events_at=["a"],
+            current_event_at="b"))
 
     def test_observations_override_marked_resolutions(self):
         # if an issue has been marked as resolved but has also (presumably later on) been seen in reality to not have
@@ -68,22 +68,22 @@ class RegressionTestCase(TestCase):
         self.assertFalse(is_regression(
             self.releases,
             fixed_at=["c"],
-            issues_at=["c"],
-            current_issue_at="c"))
+            events_at=["c"],
+            current_event_at="c"))
 
     def test_longer_patterns(self):
         # breakage before the fix, but in a release the error had not been seen before.
-        issues_at = ["a", "d"]
+        events_at = ["a", "d"]
         fixed_at = ["c", "f"]
 
-        self.assertEquals(False, is_regression(self.releases, fixed_at, issues_at, current_issue_at="a"))
-        self.assertEquals(False, is_regression(self.releases, fixed_at, issues_at, current_issue_at="b"))
-        self.assertEquals(True,  is_regression(self.releases, fixed_at, issues_at, current_issue_at="c"))
-        self.assertEquals(False, is_regression(self.releases, fixed_at, issues_at, current_issue_at="d"))
-        self.assertEquals(False, is_regression(self.releases, fixed_at, issues_at, current_issue_at="e"))
-        self.assertEquals(True,  is_regression(self.releases, fixed_at, issues_at, current_issue_at="f"))
-        self.assertEquals(True,  is_regression(self.releases, fixed_at, issues_at, current_issue_at="g"))
-        self.assertEquals(True,  is_regression(self.releases, fixed_at, issues_at, current_issue_at="h"))
+        self.assertEquals(False, is_regression(self.releases, fixed_at, events_at, current_event_at="a"))
+        self.assertEquals(False, is_regression(self.releases, fixed_at, events_at, current_event_at="b"))
+        self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="c"))
+        self.assertEquals(False, is_regression(self.releases, fixed_at, events_at, current_event_at="d"))
+        self.assertEquals(False, is_regression(self.releases, fixed_at, events_at, current_event_at="e"))
+        self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="f"))
+        self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="g"))
+        self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="h"))
 
     def test_documented_thoughts_about_minor_and_patch_releases(self):
         # this test-case documents the limitation of our approach in the following combination of circumstances:
@@ -106,18 +106,18 @@ class RegressionTestCase(TestCase):
         # might be another way forward (rather than introducing a non-total order on releases).
 
         releases = ["3.1.0", "3.1.1", "3.1.2", "4.0.0", "4.0.1", "4.0.2"]
-        issues_at = ["3.1.1", "4.0.1"]
+        events_at = ["3.1.1", "4.0.1"]
         fixed_at = ["3.1.2", "4.0.2"]
 
         # In an ideal world: assertFalse
-        self.assertTrue(is_regression(releases, fixed_at, issues_at, current_issue_at="4.0.0"))
+        self.assertTrue(is_regression(releases, fixed_at, events_at, current_event_at="4.0.0"))
 
         # Note that if we abandon sort-by-version, and instead order by time-of-creation, the unideal behavior goes away
         # automatically...
         releases = ["3.1.0", "3.1.1", "4.0.0", "4.0.1", "3.1.2", "4.0.2"]
-        self.assertFalse(is_regression(releases, fixed_at, issues_at, current_issue_at="4.0.0"))
+        self.assertFalse(is_regression(releases, fixed_at, events_at, current_event_at="4.0.0"))
 
         # ... however, that introduces its own problems, such as not being able to mark the _lack_ of fixing in the
         # most recent major branch. (in the below, there is no fix on the 4.x branch reported, but a regression is
         # detected when 4.0.2 has the same problem it had in 4.0.1), i.e. the below should say 'assertFalse'
-        self.assertTrue(is_regression(releases, ["3.1.2"], issues_at, current_issue_at="4.0.2"))
+        self.assertTrue(is_regression(releases, ["3.1.2"], events_at, current_event_at="4.0.2"))
