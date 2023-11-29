@@ -72,14 +72,25 @@ class RegressionTestCase(TestCase):
             current_event_at="c"))
 
     def test_longer_patterns(self):
-        # breakage before the fix, but in a release the error had not been seen before.
-        events_at = ["a", "d"]
+        # Our model of regressions allows one to express brokennes over (linear) time, which is what this test proves.
+        # In particular: we keep track of more than one "fixed at" release, which allows us to warn about breakage
+        # _before_ the latest fix but after (or at the moment of) an earlier fix.
+        #
+        #        breakage                fix                breakage      fix
+        #           a          b          c         d           e          f          g          h
+        #                                 ^         ^
+        #                           our model allows us to warn about these points
+        #
+        # (We take on some complexity because of it, but avoiding False negatives is the number 1 priority of this
+        # software so I believe it's justified)
+        events_at = ["a", "e"]
         fixed_at = ["c", "f"]
 
+        # NOTE should we not want to express the "fixed later" property here?
         self.assertEquals(False, is_regression(self.releases, fixed_at, events_at, current_event_at="a"))
         self.assertEquals(False, is_regression(self.releases, fixed_at, events_at, current_event_at="b"))
         self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="c"))
-        self.assertEquals(False, is_regression(self.releases, fixed_at, events_at, current_event_at="d"))
+        self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="d"))
         self.assertEquals(False, is_regression(self.releases, fixed_at, events_at, current_event_at="e"))
         self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="f"))
         self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="g"))
