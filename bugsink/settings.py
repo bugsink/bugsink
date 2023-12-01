@@ -37,6 +37,7 @@ INSTALLED_APPS = [
 
     'compat',
     'projects',
+    'releases',
     'ingest',
     'issues',
     'events',
