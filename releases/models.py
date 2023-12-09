@@ -70,3 +70,39 @@ class Release(models.Model):
 
     class Meta:
         unique_together = ("project", "version")
+
+
+# Some thoughts that should go into a proper doc-like location later:
+#
+# 1. The folllowing restrictions are not (yet?) replicated from Sentry:
+#
+# There are a few restrictions -- the release name cannot:
+#
+# - contain newlines, tabulator characters, forward slashes(/), or back slashes(\\)
+# - be (in their entirety) period (.), double period (..), or space ( )
+# - exceed 200 characters
+#
+# 2. Sentry has the following "recommendations":
+#
+# > - for mobile devices use `package-name@version-number` or `package-name@version-number+build-number`. **Do not** use
+#     `VERSION_NUMBER (BUILD_NUMBER)` as the parenthesis are used for display purposes (foo@1.0+2 becomes 1.0 (2)), so
+#     invoking them will cause an error.  > - if you use a DVCS we recommend using the identifying hash (eg: the commit
+#     SHA, `da39a3ee5e6b4b0d3255bfef95601890afd80709`). You can let sentry-cli automatically determine this hash for
+#     supported version control systems with `sentry-cli releases propose-version`.
+# > - if you tag releases we recommend using the release tag prefixed with a product or package name (for example,
+#     `my-project-name@2.3.12`).
+#
+# We'd word that slightly differently:
+#
+# * We strongly recommend using semver† for your versions; if you do, releases will be ordered as you'd expect and
+#   humans will find it much easier to pronounce/reason about versions.
+# * Any non-semver versions will be ordered by date. The typical use-case would be commit-hashes, but since the ordering
+#   is by date and there is no special handling for commit hashes it really doesn't matter.
+# * Any charachters up to the last at-sign (@) will be interpreted as a package name and ignored (this is exclusively
+#   for compatability with existing Sentry setups; since bugsink releases are per-project package info is not needed)
+#
+# Note: When transitioning between version schemes, bugsink will "Just Work". In particular, releases detected by
+# bugsink before the switch will precede those occurring after the switch. The typical scenario involves a
+# straightforward shift from a state of "being too lazy to set up and merely using hashes" to adopting semver.
+#
+# † semver is defined as per the Python `semver` package, which also defines the ordering.
