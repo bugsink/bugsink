@@ -31,6 +31,9 @@ def ordered_releases(*filter_args, **filter_kwargs):
 class Release(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
+    # sentry does releases per-org; we don't follow that example. our belief is basically: [1] in reality releases are
+    # per software package and a software package is basically a bugsink project and [2] any cross-project-per-org
+    # analysis you might do is more likely to be in the realm of "transactions", something we don't want to support.
     project = models.ForeignKey(
         "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
 
