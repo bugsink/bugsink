@@ -1,7 +1,7 @@
 from django.test import TestCase
 from datetime import timedelta
 
-from .models import Release, ordered_releases
+from .models import Release, ordered_releases, RE_PACKAGE_VERSION
 
 
 class ReleaseTestCase(TestCase):
@@ -30,4 +30,27 @@ class ReleaseTestCase(TestCase):
         self.assertTrue(r3.is_semver)
         self.assertEquals(1, r3.sort_epoch)
 
-        self.assertEquals(ordered_releases(), [r0, r1, r3, r2])
+        # put in package name; this is basically ignored for ordering purposes
+        r4 = Release.objects.create(version="package@2.0.0")
+        self.assertTrue(r4.is_semver)
+
+        self.assertEquals(ordered_releases(), [r0, r1, r3, r2, r4])
+
+    def test_re_package_version(self):
+        self.assertEquals({"package": None, "version": "foo"}, RE_PACKAGE_VERSION.match("foo").groupdict())
+
+        self.assertEquals({"package": None, "version": "1.2.3"}, RE_PACKAGE_VERSION.match("1.2.3").groupdict())
+
+        self.assertEquals(
+            {"package": "mypackage", "version": "1.2.3"},
+            RE_PACKAGE_VERSION.match("mypackage@1.2.3").groupdict())
+
+        self.assertEquals(
+            {"package": "@mypackage", "version": "1.2.3"},
+            RE_PACKAGE_VERSION.match("@mypackage@1.2.3").groupdict())
+
+        # Sentry (as of late 2023) only allows an at-sign at the beginning of a package name, not anywhere else. I can't
+        # find any documentation or git-logs for why, so this is not replicated here.
+        self.assertEquals(
+            {"package": "@mypac@kage", "version": "1.2.3"},
+            RE_PACKAGE_VERSION.match("@mypac@kage@1.2.3").groupdict())

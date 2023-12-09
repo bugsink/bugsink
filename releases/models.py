@@ -1,3 +1,4 @@
+import re
 import uuid
 
 from semver.version import Version
@@ -6,8 +7,12 @@ from django.db import models
 from django.utils import timezone
 
 
-def is_valid_semver(version):
+RE_PACKAGE_VERSION = re.compile('((?P<package>.*)[@])?(?P<version>.*)')
+
+
+def is_valid_semver(full_version):
     try:
+        version = RE_PACKAGE_VERSION.match(full_version).groupdict()["version"]
         Version.parse(version)
         return True
     except ValueError:
@@ -17,7 +22,7 @@ def is_valid_semver(version):
 def sort_key(release):
     return (
         release.sort_epoch,
-        Version.parse(release.version) if release.is_semver else release.date_released
+        Version.parse(release.semver) if release.is_semver else release.date_released
     )
 
 
@@ -37,16 +42,20 @@ class Release(models.Model):
     project = models.ForeignKey(
         "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
 
+    # full version as provided by either implicit (per-event) or explicit (some API) means, including package name
     version = models.CharField(max_length=255, null=False, blank=False)
 
     date_released = models.DateTimeField(default=timezone.now)
 
-    is_semver = models.BooleanField()
-    sort_epoch = models.IntegerField()
+    semver = models.CharField(max_length=255, null=False, editable=False)
+    is_semver = models.BooleanField(editable=False)
+    sort_epoch = models.IntegerField(editable=False)
 
     def save(self, *args, **kwargs):
         if self.is_semver is None:
             self.is_semver = is_valid_semver(self.version)
+            if self.is_semver:
+                self.semver = RE_PACKAGE_VERSION.match(self.version)["version"]
 
             # whether doing this epoch setting inline on-creation is a smart idea... will become clear soon enough.
             any_release_from_last_epoch = Release.objects.filter(project=self.project).order_by("sort_epoch").last()
