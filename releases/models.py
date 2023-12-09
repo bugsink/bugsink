@@ -46,7 +46,7 @@ class Release(models.Model):
             self.is_semver = is_valid_semver(self.version)
 
             # whether doing this epoch setting inline on-creation is a smart idea... will become clear soon enough.
-            any_release_from_last_epoch = Release.filter(project=self.project).objects.order_by("sort_epoch").last()
+            any_release_from_last_epoch = Release.objects.filter(project=self.project).order_by("sort_epoch").last()
             if any_release_from_last_epoch is None:
                 self.sort_epoch = 0
             elif self.is_semver == any_release_from_last_epoch.is_semver:
