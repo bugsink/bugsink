@@ -46,7 +46,8 @@ class Release(models.Model):
         "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
 
     # full version as provided by either implicit (per-event) or explicit (some API) means, including package name
-    version = models.CharField(max_length=255, null=False, blank=False)
+    # max_length matches Even.release (which is deduced from Sentry)
+    version = models.CharField(max_length=250, null=False, blank=False)
 
     date_released = models.DateTimeField(default=timezone.now)
 
