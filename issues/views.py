@@ -28,6 +28,30 @@ def issue_last_event(request, issue_pk):
 
 def issue_event_detail(request, issue_pk, event_pk):
     issue = get_object_or_404(Issue, pk=issue_pk)
+
+    if request.method == "POST":
+        if request.POST["action"] == "resolved":
+            issue.is_resolved = True
+
+        elif request.POST["action"] == "resolved_latest":
+            issue.is_resolved = True
+            issue.add_fixed_at(issue.project.get_latest_release())
+
+        elif request.POST["action"] == "resolved_next":
+            issue.is_resolved = True
+            issue.is_resolved_by_next_release = True
+
+        elif request.POST["action"] == "reopen":
+            issue.is_resolved = False
+            issue.is_resolved_by_next_release = False  # ?? echt?
+            # TODO and what about fixed_at ?
+
+        elif request.POST["action"] == "mute":
+            ...
+
+        issue.save()
+        return redirect(issue_event_detail, issue_pk=issue_pk, event_pk=event_pk)
+
     event = get_object_or_404(Event, pk=event_pk)
 
     parsed_data = json.loads(event.data)

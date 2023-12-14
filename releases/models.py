@@ -9,6 +9,7 @@ from django.utils import timezone
 
 RE_PACKAGE_VERSION = re.compile('((?P<package>.*)[@])?(?P<version>.*)')
 
+
 # We don't actually parse for HEX yet (it's simply non-semver to us) but if we do we could use the following lengths:
 # 12 | 16 | 20 | 32 | 40 | 64
 
@@ -30,7 +31,7 @@ def sort_key(release):
 
 
 def ordered_releases(*filter_args, **filter_kwargs):
-    """..."""
+    """Python-based sorting of Release objects (to facilitate semver-based sorting when applicable)"""
     releases = Release.objects.filter(*filter_args, **filter_kwargs)
 
     return sorted(releases, key=sort_key)
@@ -74,6 +75,11 @@ class Release(models.Model):
 
     class Meta:
         unique_together = ("project", "version")
+
+    def get_short_version(self):
+        if self.is_semver:
+            return self.version
+        return self.version[:12]
 
 
 # Some thoughts that should go into a proper doc-like location later:

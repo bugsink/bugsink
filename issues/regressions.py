@@ -1,6 +1,9 @@
+from releases.models import ordered_releases
+
+
 def is_regression(sorted_releases, fixed_at, events_at, current_event_at):
     # NOTE: linear in time with the number of releases; however, for now it's a nice reference implementation.
-    # premature ... and the root of all evil. some thoughts though:
+    # premature optimizations and the root of all evil and all that. some thoughts though:
     #
     # "if current_event_at in events_at" return False <= this could be a shortcut
     # * sorted_releases grows with time for projects, but how many 'fixed_at` can we reasonably expect?
@@ -22,8 +25,32 @@ def is_regression(sorted_releases, fixed_at, events_at, current_event_at):
     raise Exception("Can't find release '%s'" % current_event_at)
 
 
+def event_is_regression(event):
+    if not event.is_resolved:
+        return False
+
+    if event.is_resolved_by_next_release:
+        # i.e. this is solved, but only "in the future". The assumption (which is true in our code) here is: once this
+        # point is reached, all "actually seen releases" will have already been accounted for.
+        return False
+
+    if not event.project.has_releases:
+        return True  # i.e. `return event.is_resolved`, which is True if this point is reached.
+
+    sorted_releases = [r.version for r in ordered_releases(project=event.project)]
+    fixed_at = event.get_fixed_at()
+    events_at = event.get_events_at()
+    current_event_at = event.release
+
+    return is_regression(sorted_releases, fixed_at, events_at, current_event_at)
+
+
 def is_regression_2(sorted_releases, fixed_at, events_at, current_event_at):
-    # AKA is_regression_with_fixed_later_info
+    # AKA is_regression_with_fixed_later_info, i.e. returns a tuple of which the second element expresses something
+    # about this happening in the middle of your timeline. On a second viewing I'm a lot less sure that this is useful
+    # than I was previously. I mean: if you marked something as fixed (explicitly) on some old feature branch, and it
+    # reoccurs, you want to know that. The fact that you've also marked it as fixed on a later branch doesn't change
+    # that.
 
     # for lack of a better name; I want to express this idea somewhere first; let's see how we utilize it in actual code
     # later; hence also copy/pasta

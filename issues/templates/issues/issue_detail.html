@@ -10,8 +10,26 @@
         <div><span class="font-bold">ingest.management.commands.raise_exception</span> in <span class="font-bold">raise_exception</span></div>
     </div>
     <div class="ml-auto">
-        <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md">Resolve</button>
-        <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Mute</button>
+        <form action="" method="post">
+        {% csrf_token %}
+        {% if issue.is_resolved %}
+            <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" name="action" value="reopen">Reopen</button>
+        {% else %}
+            {% if issue.project.has_releases %}
+                {% if not issue.occurs_in_last_release %}
+                    {# As an alternative to 'resolved in get_latest' I briefly considered 'resolved in first-after-last-seen'. I settled on "who cares, it's in the margin anyway" #}
+                    {# and if you, as a user, really insist on getting this 100% right you can always be explicit by setting up your CLI integrations #}
+                    <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-cyan-400 active:ring rounded-md" name="action" value="resolved_latest">Resolved in {{ issue.project.get_latest_release.get_short_version }}</button>
+                {% endif %}
+                {# 'by next' is even if 'by current' is also shown: just because you haven't seen 'by current' doesn't mean it's actually already solved #} 
+                <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" name="action" value="resolved_next">Resolved in next release</button>
+            {% else %}
+                <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" name="action" value="resolved">Resolved</button>
+            {% endif %}
+        {% endif %}
+
+        <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md" name="action" value="mute">Mute</button>
+        </form>
     </div>
 </div>
 

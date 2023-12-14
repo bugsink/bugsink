@@ -11,8 +11,16 @@ class Issue(models.Model):
         "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
     hash = models.CharField(max_length=32, blank=False, null=False)
 
-    # NOTE: principled, we can get rid of an M2M table by making this a FK from the other side
+    # TODO: we should get rid of an M2M table by making this a FK from the other side
     events = models.ManyToManyField("events.Event")
+
+    # fields related to resolution:
+    # what does this mean for the release-based use cases? it means what you filter on.
+    # it also simply means: it was "marked as resolved" after the last regression (if any)
+    is_resolved = models.BooleanField(default=False)
+    is_resolved_by_next_release = models.BooleanField(default=False)
+    fixed_at = models.TextField(blank=False, null=False, default='[]')
+    events_at = models.TextField(blank=False, null=False, default='[]')
 
     def get_absolute_url(self):
         return f"/issues/issue/{ self.id }/event/last/"
@@ -46,3 +54,18 @@ class Issue(models.Model):
         # TODO: refactor to a (filled-on-create) field
         main_exception = self.get_main_exception()
         return main_exception.get("type", "none") + ": " + main_exception.get("value", "none")
+
+    def get_fixed_at(self):
+        return json.loads(self.fixed_at)
+
+    def get_events_at(self):
+        return json.loads(self.events_at)
+
+    def add_fixed_at(self, release):
+        fixed_at = self.get_fixed_at()
+        if release.version not in fixed_at:
+            fixed_at.append(release.version)
+            self.fixed_at = json.dumps(fixed_at)
+
+    def occurs_in_last_release(self):
+        return False  # TODO actually implement (and then: implement in a performant manner)

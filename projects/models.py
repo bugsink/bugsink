@@ -27,6 +27,9 @@ class Project(models.Model):
     # > supplied, future versions of Sentry will entirely ignore it.
     # private_key = ...
 
+    # denormalized/cached fields below
+    has_releases = models.BooleanField(editable=False, default=False)
+
     def __str__(self):
         return self.name
 
@@ -40,3 +43,8 @@ class Project(models.Model):
         models.Index(fields=["id", "sentry_key"]),
     ]
     """
+
+    def get_latest_release(self):
+        # TODO perfomance considerations... this can be denormalized/cached at the project level
+        from releases.models import ordered_releases
+        return list(ordered_releases(project=self))[-1]
