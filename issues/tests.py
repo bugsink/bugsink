@@ -245,4 +245,16 @@ still exist. And: if you go looking for unresolved issues, you'll find this one.
 
 Having said all of that, I might do something radical and _not implement reopen in the UI at all!_ Let's see if I run
 into the lack of it existing.
+
+... having said that, it's not _that bad_, and I think I could answer the original question, if pressed (allowing us to
+reintroduce the Reopen button in the UI). I would simply say: let's not bother doing a proper administration of
+`fixed_at` points when the issue is manually reopened. Manually reopening as such allows us to avoid an alert that we
+don't need, and get our administration of not-yet-resolved issues in order. The only scenario where this goes wrong is
+something along these lines:
+
+at some point ("a") which does not have seen breakage we mark as resolved. we then reopen. "a" remains marked as
+resolved, because we're in the "let's not bother" scenario. Then, we get a later point where we first see the issue in
+the wild ("b") and resolve it ("c"). Then, if we were to see it again in "a", as per the test_longer_patterns, this
+would be seen as a regression when in reality it was never solved in "a", and its marking-as-such should probably have
+seen as an undo rather than anything else.
 """
