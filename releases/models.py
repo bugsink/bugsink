@@ -6,6 +6,8 @@ from semver.version import Version
 from django.db import models
 from django.utils import timezone
 
+from issues.models import Issue
+
 
 RE_PACKAGE_VERSION = re.compile('((?P<package>.*)[@])?(?P<version>.*)')
 
@@ -80,6 +82,24 @@ class Release(models.Model):
         if self.is_semver:
             return self.version
         return self.version[:12]
+
+
+def create_release_if_needed(project, version):
+    # NOTE: we even create a Release for the empty release here; we need the associated info (date_released) if a
+    # real release is ever created later.
+    release, release_created = Release.objects.get_or_create(project=project, version=version)
+    if release_created and version != "":
+        if not project.has_releases:
+            project.has_releases = True
+            project.save()
+
+        if release == project.get_latest_release():
+            for bnr_issue in Issue.objects.filter(project=project, is_resolved_by_next_release=True):
+                bnr_issue.add_fixed_at(release)
+                bnr_issue.is_resolved_by_next_release = False
+                bnr_issue.save()
+
+    return release
 
 
 # Some thoughts that should go into a proper doc-like location later:

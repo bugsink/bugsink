@@ -25,22 +25,21 @@ def is_regression(sorted_releases, fixed_at, events_at, current_event_at):
     raise Exception("Can't find release '%s'" % current_event_at)
 
 
-def event_is_regression(event):
-    if not event.is_resolved:
+def issue_is_regression(issue, current_event_at):
+    if not issue.is_resolved:
         return False
 
-    if event.is_resolved_by_next_release:
+    if issue.is_resolved_by_next_release:
         # i.e. this is solved, but only "in the future". The assumption (which is true in our code) here is: once this
         # point is reached, all "actually seen releases" will have already been accounted for.
         return False
 
-    if not event.project.has_releases:
-        return True  # i.e. `return event.is_resolved`, which is True if this point is reached.
+    if not issue.project.has_releases:
+        return True  # i.e. `return issue.is_resolved`, which is True if this point is reached.
 
-    sorted_releases = [r.version for r in ordered_releases(project=event.project)]
-    fixed_at = event.get_fixed_at()
-    events_at = event.get_events_at()
-    current_event_at = event.release
+    sorted_releases = [r.version for r in ordered_releases(project=issue.project)]
+    fixed_at = issue.get_fixed_at()
+    events_at = issue.get_events_at()
 
     return is_regression(sorted_releases, fixed_at, events_at, current_event_at)
 

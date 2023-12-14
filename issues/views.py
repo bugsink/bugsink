@@ -6,7 +6,7 @@ from events.models import Event
 from projects.models import Project
 
 from .utils import get_issue_grouper_for_data
-from .models import Issue
+from .models import Issue, IssueResolver
 
 
 def issue_list(request, project_id):
@@ -31,20 +31,13 @@ def issue_event_detail(request, issue_pk, event_pk):
 
     if request.method == "POST":
         if request.POST["action"] == "resolved":
-            issue.is_resolved = True
-
+            IssueResolver.resolve(issue)
         elif request.POST["action"] == "resolved_latest":
-            issue.is_resolved = True
-            issue.add_fixed_at(issue.project.get_latest_release())
-
+            IssueResolver.resolve_by_latest(issue)
         elif request.POST["action"] == "resolved_next":
-            issue.is_resolved = True
-            issue.is_resolved_by_next_release = True
-
+            IssueResolver.resolve_by_next(issue)
         elif request.POST["action"] == "reopen":
-            issue.is_resolved = False
-            issue.is_resolved_by_next_release = False  # ?? echt?
-            # TODO and what about fixed_at ?
+            IssueResolver.reopen(issue)
 
         elif request.POST["action"] == "mute":
             ...

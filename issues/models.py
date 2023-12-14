@@ -69,3 +69,27 @@ class Issue(models.Model):
 
     def occurs_in_last_release(self):
         return False  # TODO actually implement (and then: implement in a performant manner)
+
+
+class IssueResolver(object):
+    """basically: a namespace"""
+
+    @staticmethod
+    def resolve(issue):
+        issue.is_resolved = True
+
+    @staticmethod
+    def resolve_by_latest(issue):
+        issue.is_resolved = True
+        issue.add_fixed_at(issue.project.get_latest_release())
+
+    @staticmethod
+    def resolve_by_next(issue):
+        issue.is_resolved = True
+        issue.is_resolved_by_next_release = True
+
+    @staticmethod
+    def reopen(issue):
+        issue.is_resolved = False
+        issue.is_resolved_by_next_release = False  # ?? echt?
+        # TODO and what about fixed_at ?

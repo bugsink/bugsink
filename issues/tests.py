@@ -1,10 +1,16 @@
 from unittest import TestCase
+from django.test import TestCase as DjangoTestCase
 
-from .regressions import is_regression, is_regression_2
+from projects.models import Project
+from releases.models import create_release_if_needed
+
+from .models import Issue, IssueResolver
+from .regressions import is_regression, is_regression_2, issue_is_regression
 
 
-class RegressionTestCase(TestCase):
+class RegressionUtilTestCase(TestCase):
     # This tests the concept of "what is a regression?", it _does not_ test for regressions in our code :-)
+    # this particular testcase tests straight on the utility `is_regression` (i.e. not all issue-handling code)
 
     def setUp(self):
         self.releases = ["a", "b", "c", "d", "e", "f", "g", "h"]
@@ -141,3 +147,69 @@ class RegressionTestCase(TestCase):
         # most recent major branch. (in the below, there is no fix on the 4.x branch reported, but a regression is
         # detected when 4.0.2 has the same problem it had in 4.0.1), i.e. the below should say 'assertFalse'
         self.assertTrue(is_regression(releases, ["3.1.2"], events_at, current_event_at="4.0.2"))
+
+
+class RegressionIssueTestCase(DjangoTestCase):
+    # this particular testcase is more of an integration test: it tests the handling of issue objects.
+
+    def test_issue_is_regression_no_releases(self):
+        project = Project.objects.create()
+
+        # new issue is not a regression
+        issue = Issue.objects.create(project=project)
+        self.assertFalse(issue_is_regression(issue, "anything"))
+
+        # resolve the issue, a reoccurrence is a regression
+        IssueResolver.resolve(issue)
+        issue.save()
+        self.assertTrue(issue_is_regression(issue, "anything"))
+
+        # reopen the issue (as is done when a real regression is seen; or as would be done manually); nothing is a
+        # regression once the issue is open
+        IssueResolver.reopen(issue)
+        issue.save()
+        self.assertFalse(issue_is_regression(issue, "anything"))
+
+    def test_issue_is_regression_with_releases_resolve_by_latest(self):
+        project = Project.objects.create()
+
+        create_release_if_needed(project, "1.0.0")
+        create_release_if_needed(project, "2.0.0")
+
+        # new issue is not a regression
+        issue = Issue.objects.create(project=project)
+        self.assertFalse(issue_is_regression(issue, "anything"))
+
+        # resolve the by latest, reoccurrences of older releases are not regressions but occurrences by latest are
+        IssueResolver.resolve_by_latest(issue)
+        issue.save()
+        self.assertFalse(issue_is_regression(issue, "1.0.0"))
+        self.assertTrue(issue_is_regression(issue, "2.0.0"))
+
+        # reopen the issue (as is done when a real regression is seen; or as would be done manually); nothing is a
+        # regression once the issue is open
+        IssueResolver.reopen(issue)
+        issue.save()
+        self.assertFalse(issue_is_regression(issue, "1.0.0"))
+        self.assertFalse(issue_is_regression(issue, "2.0.0"))
+
+    def test_issue_is_regression_with_releases_resolve_by_next(self):
+        project = Project.objects.create()
+
+        create_release_if_needed(project, "1.0.0")
+        create_release_if_needed(project, "2.0.0")
+
+        # new issue is not a regression
+        issue = Issue.objects.create(project=project)
+        self.assertFalse(issue_is_regression(issue, "anything"))
+
+        # resolve the by next, reoccurrences of any existing releases are not regressions
+        IssueResolver.resolve_by_next(issue)
+        issue.save()
+        self.assertFalse(issue_is_regression(issue, "1.0.0"))
+        self.assertFalse(issue_is_regression(issue, "2.0.0"))
+
+        # a new release appears (as part of a new event); this is a regression
+        create_release_if_needed(project, "3.0.0")
+        issue_fresh = Issue.objects.get(pk=issue.pk)
+        self.assertTrue(issue_is_regression(issue_fresh, "3.0.0"))

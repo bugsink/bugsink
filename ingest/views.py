@@ -11,12 +11,12 @@ from rest_framework import exceptions
 from compat.auth import parse_auth_header_value
 
 from projects.models import Project
-from issues.models import Issue
+from issues.models import Issue, IssueResolver
 from issues.utils import get_hash_for_data
-from issues.regressions import event_is_regression
+from issues.regressions import issue_is_regression
 
 from events.models import Event
-from releases.models import Release
+from releases.models import create_release_if_needed
 
 from .negotiation import IgnoreClientContentNegotiation
 from .parsers import EnvelopeParser
@@ -66,19 +66,7 @@ class BaseIngestAPIView(APIView):
         if not event_created:
             return
 
-        # NOTE: we even create a Release for the empty release here; we need the associated info (date_released) if a
-        # real release is ever created later.
-        release, release_created = Release.objects.get_or_create(project=project, version=event.release)
-        if release_created and event.release != "":
-            if not project.has_releases:
-                project.has_releases = True
-                project.save()
-
-            if release == project.get_latest_release():
-                for bnr_issue in Issue.objects.filter(project=project, is_resolved_by_next_release=True):
-                    bnr_issue.add_fixed_at(release)
-                    bnr_issue.is_resolved_by_next_release = False
-                    bnr_issue.save()
+        create_release_if_needed(project, event.release)
 
         hash_ = get_hash_for_data(event_data)
 
@@ -91,11 +79,12 @@ class BaseIngestAPIView(APIView):
         if issue_created:
             pass  # alerting code goes here
 
-        elif event_is_regression(event):  # new issues cannot be regressions by definition, hence the 'else'
+        elif issue_is_regression(issue, event.release):  # new issues cannot be regressions by definition, hence 'else'
             pass  # alerting code goes here
-            issue.is_resolved = False
+            IssueResolver.reopen(issue)
 
         # TODO bookkeeping of events_at goes here.
+        issue.save()
 
 
 class IngestEventAPIView(BaseIngestAPIView):
