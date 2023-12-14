@@ -13,7 +13,8 @@
         <form action="" method="post">
         {% csrf_token %}
         {% if issue.is_resolved %}
-            <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" name="action" value="reopen">Reopen</button>
+            {# see issues/tests.py for why this is turned off ATM #}
+            {# <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" name="action" value="reopen">Reopen</button> #}
         {% else %}
             {% if issue.project.has_releases %}
                 {% if not issue.occurs_in_last_release %}

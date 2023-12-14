@@ -224,3 +224,25 @@ class RegressionIssueTestCase(DjangoTestCase):
         # first-seen at any later release: regression
         create_release_if_needed(project, "4.0.0")
         self.assertTrue(issue_is_regression(fresh(issue), "4.0.0"))
+
+
+"""
+Some thoughts on re-opening, that I have to put 'somewhere'; might as well put them here in the tests where I first
+thought of them... The direct cause for these thoughts was that I found it very hard to reason about the following
+question: "what does re-opening an issue mean for the `fixed_at` points?"
+
+First: re-opening an issue (from the UI) is kinda funny in the first place. What are you saying by doing that anyway?
+You're saying "this is an issue that continues to exist, despite me/someone at some point saying that it was resolved".
+You're doing this with "pure brainpower", i.e. by thinking it through rather than waiting for an issue to reoccur
+naturally.
+
+Why would you ever want to do this? My main guess is: to undo a click on resolve that you just did. If that's so, we
+might implement re-open more closely as such an undo (and the anwer to the first question would also follow from it,
+i.e. it would be "the last-added `fixed_at` point should be removed"
+
+The main consequences of re-opening are: you won't be bothered (alerts) about a regression that you just understood to
+still exist. And: if you go looking for unresolved issues, you'll find this one.
+
+Having said all of that, I might do something radical and _not implement reopen in the UI at all!_ Let's see if I run
+into the lack of it existing.
+"""
