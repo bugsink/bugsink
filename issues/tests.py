@@ -190,6 +190,10 @@ class RegressionIssueTestCase(DjangoTestCase):
         self.assertFalse(issue_is_regression(fresh(issue), "1.0.0"))
         self.assertTrue(issue_is_regression(fresh(issue), "2.0.0"))
 
+        # a new release happens, and the issue is seen there: also a regression
+        create_release_if_needed(project, "3.0.0")
+        self.assertTrue(issue_is_regression(fresh(issue), "3.0.0"))
+
         # reopen the issue (as is done when a real regression is seen; or as would be done manually); nothing is a
         # regression once the issue is open
         IssueResolver.reopen(issue)
@@ -216,3 +220,7 @@ class RegressionIssueTestCase(DjangoTestCase):
         # a new release appears (as part of a new event); this is a regression
         create_release_if_needed(project, "3.0.0")
         self.assertTrue(issue_is_regression(fresh(issue), "3.0.0"))
+
+        # first-seen at any later release: regression
+        create_release_if_needed(project, "4.0.0")
+        self.assertTrue(issue_is_regression(fresh(issue), "4.0.0"))
