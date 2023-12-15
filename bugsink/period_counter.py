@@ -4,18 +4,48 @@ from datetime import datetime, timezone, timedelta
 # the loss of granularity when stepping up to minutes) but we pick something that's close to the next level of
 # granularity. We can start measuring performance (time, memory) from there and can always make it bigger later.
 
-# i.e. keep 60 minutes of 60 seconds each, 24 hours of 3600 seconds each etc.
-MAX_MINUTES = 60 * 60
-MAX_HOURS = 24 * (60 * 60)
-MAX_DAYS = 30 * (60 * 60 * 24)
-MAX_MONTHS = 366 * (60 * 60 * 24)  # i.e. 12 months will be available
-MAX_YEARS = 5 * (366 * 60 * 60 * 24)
+MAX_MINUTES = 60
+MAX_HOURS = 24
+MAX_DAYS = 30
+MAX_MONTHS = 12
+MAX_YEARS = 5
+
+
+FOO_MIN = 1000, 1, 1, 0, 0
+FOO_MAX = 3000, 12, "?", 23, 59
+
+
+def apply_n(f, n, v):
+    for i in range(n):
+        v = f(v)
+    return v
+
+
+def _prev_tup(tup):
+    aslist = list(tup)
+    for i, val in reversed(list(enumerate(aslist))):
+        if aslist[i] == FOO_MIN[i]:
+            if i == 2:
+                # day roll-over: just use a datetime
+                aslist = list((datetime(*aslist, tzinfo=timezone.utc) - timedelta(days=1)).timetuple()[:len(tup)])
+                break
+
+            else:
+                # roll over to max
+                aslist[i] = FOO_MAX[i]
+                # implied because no break: continue with the left hand side
+
+        else:
+            aslist[i] -= 1
+            break
+
+    return tuple(aslist)
 
 
 def _inc(d, tup, n, max_age):
     if tup not in d:
         # evict
-        min_tup = (datetime(*tup, tzinfo=timezone.utc) - timedelta(max_age)).timetuple()[:len(tup)]
+        min_tup = apply_n(_prev_tup, max_age, tup)
         d = {k: v for k, v in d.items() if d >= min_tup}
 
         # default
