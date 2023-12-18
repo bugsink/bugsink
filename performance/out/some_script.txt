@@ -1,0 +1,7 @@
+1_000 iterations of _prev_tup in 1.608ms. The main thing we care about is not this little
+private helper though, but PeriodCounter.inc(). Let's test that next.
+
+On testing: I noticed variations of a factor 2 even running these tests only a couple of times. For now I picked the
+slow results for a check in.
+
+
