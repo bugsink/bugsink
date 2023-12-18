@@ -30,4 +30,7 @@ slow results for a check in.
 """)
 
 
+def print_thoughts_about_inc():
+
+
 print_thoughts_about_prev_tup()
