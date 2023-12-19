@@ -11,6 +11,14 @@ def apply_n(f, n, v):
     return v
 
 
+class callback(object):
+    def __init__(self):
+        self.calls = 0
+
+    def __call__(self):
+        self.calls += 1
+
+
 class PeriodCounterTestCase(TestCase):
 
     def test_prev_tup(self):
@@ -42,3 +50,54 @@ class PeriodCounterTestCase(TestCase):
         datetime_utc = datetime.now(timezone.utc)  # basically I just want to write this down somewhere
         pc = PeriodCounter()
         pc.inc(datetime_utc)
+
+    def test_event_listeners_for_total(self):
+        timepoint = datetime(2020, 1, 1, 10, 15, tzinfo=timezone.utc)
+
+        pc = PeriodCounter()
+        wbt = callback()
+        wbf = callback()
+        pc.add_event_listener("total", 1, 2, wbt, wbf, event_state=False)
+
+        # first inc: should not yet trigger
+        pc.inc(timepoint)
+        self.assertEquals(0, wbt.calls)
+
+        # second inc: should trigger (threshold of 2)
+        pc.inc(timepoint)
+        self.assertEquals(1, wbt.calls)
+
+        # third inc: should not trigger again
+        pc.inc(timepoint)
+        self.assertEquals(1, wbt.calls)
+
+    def test_event_listeners_for_year(self):
+        tp_2020 = datetime(2020, 1, 1, 10, 15, tzinfo=timezone.utc)
+        tp_2021 = datetime(2021, 1, 1, 10, 15, tzinfo=timezone.utc)
+        tp_2022 = datetime(2022, 1, 1, 10, 15, tzinfo=timezone.utc)
+
+        pc = PeriodCounter()
+        wbt = callback()
+        wbf = callback()
+        pc.add_event_listener("year", 2, 3, wbt, wbf, event_state=False)
+
+        pc.inc(tp_2020)
+        self.assertEquals(0, wbt.calls)
+
+        pc.inc(tp_2020)
+        self.assertEquals(0, wbt.calls)
+
+        # 3rd in total: become True
+        pc.inc(tp_2021)
+        self.assertEquals(1, wbt.calls)
+
+        # into a new year, total == 2: become false
+        self.assertEquals(0, wbf.calls)
+        pc.inc(tp_2022)
+        self.assertEquals(1, wbf.calls)
+        self.assertEquals(1, wbt.calls)  # unchanged
+
+        # 3rd in (new) total: become True again
+        pc.inc(tp_2022)
+        self.assertEquals(2, wbt.calls)
+        self.assertEquals(1, wbf.calls)  # unchanged
