@@ -1,51 +1,55 @@
-Now, the alert rules.
+# Alert Rules
 
-Opinionated take (as well as the default setting):
+## Opinionated take
 
-* any state-change for-the-worse, i.e.
-    * new
-    * regression
-    * no-longer-muted (for whatever reason, including 'by volume')
-        this is also where 
+Default setting, may be adapted at organisational level.
 
-    "you should care about errors on your project".
+You should get alerts for:
 
-also available:
+* **Any State Change for the Worse:**
+    - New issues
+    - Regressions
+    - Unmuting (could be due to volume)
 
-* by volume, over periode, first/any, e.g.:
-    "any time more than 5 events per hour happen"
-    "first time more than 10 events per day happen"      <= this is basically a way to avoid getting swamped in "bug sewer" scenarios
-    "first time the total number of events > 100"
+    The basic belief underlying this is: "you should care about the errors on your project". And therefor, you'll be
+    alerted when they occur.
 
-    an alternative take:
-        auto-mute such events, based on auto-muting rules.
+You may configure alerts for:
 
+* **Volume-Based Rules:**
+    - _Any time_ more than 5 events per hour occur
+    - _First time_ more than 10 events per day
+    - _First time_ the total number of events exceeds 100
+    
+    The idea is: to avoid getting swamped, set thresholds slightly higher then 1 (over some period).
 
-unmuting-by-volume/period is a thing.
-    this is "first time" by definition.
+    An alternative approach is to automatically unmute issues based on such rules (and to initially mute them as long as
+    they don't match the rules yet); and then send the notification on-unmute. (by the definition of unmuting, the alert
+    occurs only the _first time_ the condition occurs)
 
-====
+## Personal Notification Settings
 
-what about personal notification settings?
-    they exist, generally and
-    per-project (follow the default or specific) 
-        
-    reason (for per-project settings).
-        there is such a thing as "involved in the project, but not involved enough to get updates about it). e.g. consulting member or some kind of lead
+Personal notification settings exist both globally and per project. 
 
-    but they exist only as a single toggle: yes/no/(default)
-        i.e. you can't select specific rules to follow for a project.
+Reasons for per-project settings include scenarios where someone is involved in the project but not to the extent of
+needing constant updates (e.g., consulting members or certain leads). 
 
+However, these settings are limited to a single toggle: yes/no/(default). That is, you can't choose specific rules to
+follow for a project.
 
-on the project is where you configure the alerting rules for the project.
-    "for everybody that wants the notifications"
+Configuration of alerting rules is project-centered. The idea is that the 2 main variables that control when alerts
+should be sent are project-centric (not member-centric), namely:
 
-    the reasoning here is: a project has a certain amount of brokenness, and a certain need for correctness (an amount of received love).
-        if you're on the project in an active role, you'll subscribe to that.
+* how broken the project is (how many errors are generated)
+* how important brokenness is
 
+I.e. there is a single (configurable) threshold per project for what constitues "worth alerting about but avoiding
+swamping in false positives" which you can then subscribe to or not.
 
-what about chat-ops?
-    0-n configurable on the project level. not related to users.
-        probably with a default on the org level.
+## Chat-Ops
 
-    same rules as the rest of the alerts.
+You may configure any number of chat-ops endpoints (mattermost/slack channels). These are not connected to individual
+users. There's likely a default setting at the organization level.
+
+The chat-ops channels always receive the per-project configured set of notifications, i.e. the threshold cannot be
+changed per chat-op-channel (as with users).
