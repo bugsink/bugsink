@@ -1,14 +1,16 @@
 ## _prev_tup()
 
-1_000 iterations of _prev_tup in 1.608mss. The main thing we care about is not this little
+1_000 iterations of _prev_tup in 0.794ms. The main thing we care about is not this little
 private helper though, but PeriodCounter.inc(). Let's test that next.
-
-On testing: I noticed variations of a factor 2 even running these tests only a couple of times. For now I picked the
-slow results for a check in.
 
 
 ## PeriodCounter.inc()
 
-1_000 iterations of PeriodCounter.inc() in 82.716ms. We care about evaluation of some event more though. Let's
+1_000 iterations of PeriodCounter.inc() in 25.186ms. We care about evaluation of some event more though. Let's
 test that next.
 
+## PeriodCounter.inc()
+
+1_000 iterations of PeriodCounter.inc() in 93.481ms. (when 3 event-listeners are active). I'm not sure exactly
+what a good performance would be here, but I can say the following: this means when a 1,000 events happen in a second,
+the period-counter uses up 10% of the budget. A first guess would be: this is good enough.
