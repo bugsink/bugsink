@@ -73,10 +73,10 @@ def print_thoughts_about_event_evaluation():
     def noop():
         pass
 
-    # let's add some event-listeners. These are chosen to match a typical setup of quota for a given issue or project
-    # (as we now believe such setups to be). i.e. a monthly maximum is 'distributed down' in such a way that the lower
-    # granularities are somewhat more than would be expected by simply dividing in equal parts. Rationale: we want to
-    # allow some burstyness, but we don't want to "eat up our budget" for a larger time-period in a single burst.
+    # Now, let's add some event-listeners. These are chosen to match a typical setup of quota for a given Issue or
+    # Project. In this setup, the monthly maximum is spread out in a way that the smaller parts are a bit more than just
+    # splitting things equally. Why? We want some flexibility for bursts of activity without using up the entire budget
+    # for a longer time all at once.
     pc.add_event_listener("day",    30, 10_000, noop, noop, event_state=False)  # 1 month rolling window
     pc.add_event_listener("hour",   24,  1_000, noop, noop, event_state=False)  # 1 day rolling window
     pc.add_event_listener("minute", 60,    200, noop, noop, event_state=False)  # 1 hour rolling window
