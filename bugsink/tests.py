@@ -57,7 +57,7 @@ class PeriodCounterTestCase(TestCase):
         pc = PeriodCounter()
         wbt = callback()
         wbf = callback()
-        pc.add_event_listener("total", 1, 2, wbt, wbf, event_state=False)
+        pc.add_event_listener("total", 1, 2, wbt, wbf, initial_event_state=False)
 
         # first inc: should not yet trigger
         pc.inc(timepoint)
@@ -79,7 +79,7 @@ class PeriodCounterTestCase(TestCase):
         pc = PeriodCounter()
         wbt = callback()
         wbf = callback()
-        pc.add_event_listener("year", 2, 3, wbt, wbf, event_state=False)
+        pc.add_event_listener("year", 2, 3, wbt, wbf, initial_event_state=False)
 
         pc.inc(tp_2020)
         self.assertEquals(0, wbt.calls)

@@ -77,9 +77,9 @@ def print_thoughts_about_event_evaluation():
     # Project. In this setup, the monthly maximum is spread out in a way that the smaller parts are a bit more than just
     # splitting things equally. Why? We want some flexibility for bursts of activity without using up the entire budget
     # for a longer time all at once.
-    pc.add_event_listener("day",    30, 10_000, noop, noop, event_state=False)  # 1 month rolling window
-    pc.add_event_listener("hour",   24,  1_000, noop, noop, event_state=False)  # 1 day rolling window
-    pc.add_event_listener("minute", 60,    200, noop, noop, event_state=False)  # 1 hour rolling window
+    pc.add_event_listener("day",    30, 10_000, noop, noop, initial_event_state=False)  # 1 month rolling window
+    pc.add_event_listener("hour",   24,  1_000, noop, noop, initial_event_state=False)  # 1 day rolling window
+    pc.add_event_listener("minute", 60,    200, noop, noop, initial_event_state=False)  # 1 hour rolling window
 
     # make sure the pc has some data before we start. we pick a 1-month period to match the listeners in the above.
     for point in buckets_to_points_in_time(

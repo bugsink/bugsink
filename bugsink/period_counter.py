@@ -99,18 +99,18 @@ class PeriodCounter(object):
                         wbt()
 
     def add_event_listener(self, period_name, how_many_periods, gte_threshold, when_becomes_true, when_becomes_false,
-                           event_state=None, tup=None):
+                           initial_event_state=None, tup=None):
 
-        if len([arg for arg in [event_state, tup] if arg is None]) != 1:
+        if len([arg for arg in [initial_event_state, tup] if arg is None]) != 1:
             # either be explicit, or let us deduce
-            raise ValueError("Provide exactly one of (event_state, tup)")
+            raise ValueError("Provide exactly one of (initial_event_state, tup)")
 
         tl = self._tl_for_period(period_name)
-        if event_state is None:
-            event_state = self._get_event_state(tup, tl, how_many_periods, gte_threshold)
+        if initial_event_state is None:
+            initial_event_state = self._get_event_state(tup, tl, how_many_periods, gte_threshold)
 
         self.event_listeners[tl][(how_many_periods, gte_threshold)] = \
-            (when_becomes_true, when_becomes_false, event_state)
+            (when_becomes_true, when_becomes_false, initial_event_state)
 
     def _tl_for_period(self, period_name):
         return {
