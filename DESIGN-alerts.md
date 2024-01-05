@@ -11,13 +11,13 @@ You should get alerts for:
     - Regressions
     - Unmuting (could be due to volume)
 
-    The basic belief underlying this is: "you should care about the errors on your project". And therefor, you'll be
+    The basic belief underlying this is: "you should care about the errors on your project". And therefore, you'll be
     alerted when they occur.
 
 You may configure alerts for:
 
 * **Volume-Based Rules:**
-    - _Any time_ more than 5 events per hour occur
+    - _Any time_ more than 5 events per the last 3 hours occur
     - _First time_ more than 10 events per day
     - _First time_ the total number of events exceeds 100
     

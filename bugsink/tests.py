@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from unittest import TestCase
 
 from bugsink.period_counter import PeriodCounter, _prev_tup
+from bugsink.volume_based_condition import VolumeBasedCondition
 
 
 def apply_n(f, n, v):
@@ -117,3 +118,14 @@ class PeriodCounterTestCase(TestCase):
         pc.inc(tp_2022)
         self.assertEquals(2, wbt.calls)
         self.assertEquals(1, wbf.calls)  # unchanged
+
+
+class VolumeBasedConditionTestCase(TestCase):
+
+    def test_serialization(self):
+        vbc = VolumeBasedCondition("any", "day", 1, 100)
+        json_str = vbc.to_json_str()
+        self.assertEquals('{"any_or_first": "any", "period": "day", "nr_of_periods": 1, "volume": 100}', json_str)
+
+        vbc2 = VolumeBasedCondition.from_json_str(json_str)
+        self.assertEquals(vbc, vbc2)
