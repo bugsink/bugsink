@@ -3,8 +3,7 @@ import json
 
 class VolumeBasedCondition(object):
 
-    def __init__(self, any_or_first, period, nr_of_periods, volume):
-        self.any_or_first = any_or_first
+    def __init__(self, period, nr_of_periods, volume):
         self.period = period
         self.nr_of_periods = nr_of_periods
         self.volume = volume
@@ -13,7 +12,6 @@ class VolumeBasedCondition(object):
     def from_json_str(cls, json_str):  # TODO had toch gewoon dict moeten wezen
         json_dict = json.loads(json_str)
         return VolumeBasedCondition(
-            json_dict['any_or_first'],
             json_dict['period'],
             json_dict['nr_of_periods'],
             json_dict['volume'],

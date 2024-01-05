@@ -123,9 +123,9 @@ class PeriodCounterTestCase(TestCase):
 class VolumeBasedConditionTestCase(TestCase):
 
     def test_serialization(self):
-        vbc = VolumeBasedCondition("any", "day", 1, 100)
+        vbc = VolumeBasedCondition("day", 1, 100)
         json_str = vbc.to_json_str()
-        self.assertEquals('{"any_or_first": "any", "period": "day", "nr_of_periods": 1, "volume": 100}', json_str)
+        self.assertEquals('{"period": "day", "nr_of_periods": 1, "volume": 100}', json_str)
 
         vbc2 = VolumeBasedCondition.from_json_str(json_str)
         self.assertEquals(vbc, vbc2)
