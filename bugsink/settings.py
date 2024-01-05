@@ -41,6 +41,8 @@ INSTALLED_APPS = [
     'ingest',
     'issues',
     'events',
+
+    'performance',
 ]
 
 TAILWIND_APP_NAME = 'theme'

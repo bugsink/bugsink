@@ -1,16 +1,34 @@
+from django.core.management.base import BaseCommand
+
 import random
 import time
 from datetime import datetime, timezone
 
-from bugsink.period_counter import _prev_tup, PeriodCounter
+from django.conf import settings
 
+from bugsink.period_counter import _prev_tup, PeriodCounter
 from performance.bursty_data import generate_bursty_data, buckets_to_points_in_time
+from bugsink.registry import get_pc_registry
+
 from projects.models import Project
 from issues.models import Issue
 from events.models import Event
 
 
 # this file is the beginning of an approach to getting a handle on performance.
+
+
+class Command(BaseCommand):
+    help = "..."
+
+    def handle(self, *args, **options):
+        if "performance" not in str(settings.DATABASES["default"]["NAME"]):
+            raise ValueError("This command should only be run on the performance-test database")
+
+        print_thoughts_about_prev_tup()
+        print_thoughts_about_inc()
+        print_thoughts_about_event_evaluation()
+        print_thoughts_about_pc_registry()
 
 
 class passed_time(object):
@@ -113,33 +131,31 @@ the period-counter uses up 3% of the budget. A first guess would be: this is goo
 
 
 def print_thoughts_about_pc_registry():
-    # as a first approach, let's focus on a 'typical' (whatever that means) local setup (not hosted), for a small team.
-    # maybe 10 people would work on max 10 projects. let's assume we have 10k per-project limits for events set up. and
-    # let's assume 100 issues per project (far from inbox-zero, approach bug-sewer territory)
-    #
-    projects = [Project.objects.create(name="project %s" % i) for i in range(10)]
-    issues_by_project = {}
+    # note: in load_performance_insights we use minimal (non-data-containing) events here. this may not be
+    # representative of real world performance. having said that: this immediately triggers the thought that for real
+    # initialization only timestamps and issue_ids are needed, and that we should adjust the code accordingly
 
-    for p in projects:
-        issues_by_project[p.id] = [Issue.objects.create(project=p, hash="hash %d" % i) for i in range(100)]
+    with passed_time() as t:
+        get_pc_registry()
 
-    # now we have 10 projects, each with 100 issues. let's create 10k events for each project.
-    for p in projects:
-        points = buckets_to_points_in_time(
-            generate_bursty_data(num_buckets=350, expected_nr_of_bursts=10),
-            datetime(2020, 10, 15, tzinfo=timezone.utc),
-            datetime(2021, 10, 15, 10, 5, tzinfo=timezone.utc),
-            10_000,
-        )
+    print(f"""## get_pc_registry()
 
-        for point in points:
-            # note: because we use such minimal (non-data-containing) events here, the setup in the below may actually
-            # not be representative of real world performance. having said that: this immediately triggers the thought
-            # that for real initialization only timestamps and issue_ids are needed, and that we should adjust the code
-            # accordingly
-            Event.objects.create(project=p, issue=random.choice(issues_by_project[p.id]), server_side_timestamp=point)
+getting the pc-registry takes {t.elapsed:.3f}ms. (with the default fixtures, which contain
 
+* { Project.objects.count() } projects,
+* { Issue.objects.count() } issues,
+* { Event.objects.count() } events
 
-print_thoughts_about_prev_tup()
-print_thoughts_about_inc()
-print_thoughts_about_event_evaluation()
+This means (surprisingly) we can take our eye off optimizing this particular part of code (for now), because:
+
+* in the (expected) production setup where we we cut ingestion and handling in 2 parts, 6s delay on the handling server
+  boot is fine.
+* in the debugserver (integrated ingestion/handling) we don't expect 100k events; and even if we did a 6s delay on the
+  first event/request is fine.
+
+Ways forward once we do decide to improve:
+
+* regular saving of state (savepoint in time, with "unhandled after") (the regularity of saving is left as an exercise
+  to the reader)
+* more granular caching/loading, e.g. load per project/issue on demand
+""")

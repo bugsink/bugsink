@@ -1,16 +1,37 @@
 ## _prev_tup()
 
-1_000 iterations of _prev_tup in 0.816ms. The main thing we care about is not this little
+1_000 iterations of _prev_tup in 0.832ms. The main thing we care about is not this little
 private helper though, but PeriodCounter.inc(). Let's test that next.
 
 
 ## PeriodCounter.inc()
 
-1_000 iterations of PeriodCounter.inc() in 7.766ms. We care about evaluation of some event more though. Let's
+1_000 iterations of PeriodCounter.inc() in 7.885ms. We care about evaluation of some event more though. Let's
 test that next.
 
 ## PeriodCounter.inc()
 
-1_000 iterations of PeriodCounter.inc() in 29.593ms. (when 3 event-listeners are active). I'm not sure exactly
+1_000 iterations of PeriodCounter.inc() in 29.567ms. (when 3 event-listeners are active). I'm not sure exactly
 what a good performance would be here, but I can say the following: this means when a 1,000 events happen in a second,
 the period-counter uses up 3% of the budget. A first guess would be: this is good enough.
+## get_pc_registry()
+
+getting the pc-registry takes 6615.371ms. (with the default fixtures, which contain
+
+* 10 projects,
+* 1000 issues,
+* 100000 events
+
+This means (surprisingly) we can take our eye off optimizing this particular part of code (for now), because:
+
+* in the (expected) production setup where we we cut ingestion and handling in 2 parts, 6s delay on the handling server
+  boot is fine.
+* in the debugserver (integrated ingestion/handling) we don't expect 100k events; and even if we did a 6s delay on the
+  first event/request is fine.
+
+Ways forward once we do decide to improve:
+
+* regular saving of state (savepoint in time, with "unhandled after") (the regularity of saving is left as an exercise
+  to the reader)
+* more granular caching/loading, e.g. load per project/issue on demand
+
