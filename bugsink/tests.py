@@ -2,8 +2,8 @@ from datetime import datetime, timezone
 
 from unittest import TestCase
 
-from bugsink.period_counter import PeriodCounter, _prev_tup
-from bugsink.volume_based_condition import VolumeBasedCondition
+from .period_counter import PeriodCounter, _prev_tup, TL_YEAR
+from .volume_based_condition import VolumeBasedCondition
 
 
 def apply_n(f, n, v):
@@ -118,6 +118,21 @@ class PeriodCounterTestCase(TestCase):
         pc.inc(tp_2022)
         self.assertEquals(2, wbt.calls)
         self.assertEquals(1, wbf.calls)  # unchanged
+
+    def test_event_listeners_auto_remove(self):
+        tp_2020 = datetime(2020, 1, 1, 10, 15, tzinfo=timezone.utc)
+
+        pc = PeriodCounter()
+        wbt = callback()
+        wbf = callback()
+        pc.add_event_listener("year", 1, 1, wbt, wbf, auto_remove=True, initial_event_state=False)
+
+        self.assertEquals(0, wbt.calls)
+        pc.inc(tp_2020)
+
+        self.assertEquals(1, wbt.calls)
+
+        self.assertEquals({}, pc.event_listeners[TL_YEAR])
 
 
 class VolumeBasedConditionTestCase(TestCase):
