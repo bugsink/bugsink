@@ -91,21 +91,21 @@ class PeriodCounter(object):
             is_new_period = _inc(self.counts[tl], tup[:tl], n, mx)
 
             event_listeners_for_tl = self.event_listeners[tl]
-            for ((how_many_periods, gte_threshold), (wbt, wbf, is_true)) in list(event_listeners_for_tl.items()):
+            for ((nr_of_periods, gte_threshold), (wbt, wbf, is_true)) in list(event_listeners_for_tl.items()):
                 if is_true:
                     if not is_new_period:
                         continue  # no new period means: never becomes false, because no old period becomes irrelevant
 
-                    if not self._get_event_state(tup[:tl], tl, how_many_periods, gte_threshold):
-                        event_listeners_for_tl[(how_many_periods, gte_threshold)] = (wbt, wbf, False)
+                    if not self._get_event_state(tup[:tl], tl, nr_of_periods, gte_threshold):
+                        event_listeners_for_tl[(nr_of_periods, gte_threshold)] = (wbt, wbf, False)
                         wbf()
 
                 else:
-                    if self._get_event_state(tup[:tl], tl, how_many_periods, gte_threshold):
-                        event_listeners_for_tl[(how_many_periods, gte_threshold)] = (wbt, wbf, True)
+                    if self._get_event_state(tup[:tl], tl, nr_of_periods, gte_threshold):
+                        event_listeners_for_tl[(nr_of_periods, gte_threshold)] = (wbt, wbf, True)
                         wbt()
 
-    def add_event_listener(self, period_name, how_many_periods, gte_threshold, when_becomes_true, when_becomes_false,
+    def add_event_listener(self, period_name, nr_of_periods, gte_threshold, when_becomes_true, when_becomes_false,
                            initial_event_state=None, tup=None):
 
         if len([arg for arg in [initial_event_state, tup] if arg is None]) != 1:
@@ -114,9 +114,9 @@ class PeriodCounter(object):
 
         tl = self._tl_for_period(period_name)
         if initial_event_state is None:
-            initial_event_state = self._get_event_state(tup, tl, how_many_periods, gte_threshold)
+            initial_event_state = self._get_event_state(tup, tl, nr_of_periods, gte_threshold)
 
-        self.event_listeners[tl][(how_many_periods, gte_threshold)] = \
+        self.event_listeners[tl][(nr_of_periods, gte_threshold)] = \
             (when_becomes_true, when_becomes_false, initial_event_state)
 
     def _tl_for_period(self, period_name):
@@ -129,8 +129,8 @@ class PeriodCounter(object):
             "minute": 5,
         }[period_name]
 
-    def _get_event_state(self, tup, tl, how_many_periods, gte_threshold):
-        min_tup = _prev_tup(tup, how_many_periods - 1) if tup != () else ()
+    def _get_event_state(self, tup, tl, nr_of_periods, gte_threshold):
+        min_tup = _prev_tup(tup, nr_of_periods - 1) if tup != () else ()
         counts_for_tl = self.counts[tl]
         total = sum([v for k, v in counts_for_tl.items() if k >= min_tup])
 
