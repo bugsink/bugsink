@@ -106,7 +106,7 @@ def print_thoughts_about_event_evaluation():
 
 1_000 iterations of PeriodCounter.inc() in {t.elapsed:.3f}ms. (when 3 event-listeners are active). I'm not sure exactly
 what a good performance would be here, but I can say the following: this means when a 1,000 events happen in a second,
-the period-counter uses up 10% of the budget. A first guess would be: this is good enough.""")
+the period-counter uses up 3% of the budget. A first guess would be: this is good enough.""")
 
 
 print_thoughts_about_prev_tup()

@@ -21,7 +21,7 @@ class callback(object):
 
 class PeriodCounterTestCase(TestCase):
 
-    def test_prev_tup(self):
+    def test_prev_tup_near_rollover(self):
         self.assertEquals((2020,), _prev_tup((2021,)))
 
         self.assertEquals((2020,  1), _prev_tup((2020,  2)))
@@ -40,11 +40,19 @@ class PeriodCounterTestCase(TestCase):
         self.assertEquals((2020,  1,  1,  0,  0), _prev_tup((2020,  1,  1,  0,  1)))
         self.assertEquals((2019, 12, 31, 23, 59), _prev_tup((2020,  1,  1,  0,  0)))
 
+    def test_prev_tup_large_number_of_applications(self):
         self.assertEquals((1920,), apply_n(_prev_tup, 100, (2020,)))
         self.assertEquals((2010, 5), apply_n(_prev_tup, 120, (2020, 5)))
         self.assertEquals((2019, 5, 7,), apply_n(_prev_tup, 366, (2020, 5, 7)))
         self.assertEquals((2020, 5, 6, 20,), apply_n(_prev_tup, 24, (2020, 5, 7, 20,)))
         self.assertEquals((2020, 5, 6, 20, 12), apply_n(_prev_tup, 1440, (2020, 5, 7, 20, 12)))
+
+    def test_prev_tup_with_explicit_n(self):
+        self.assertEquals(_prev_tup((2020,), 100), apply_n(_prev_tup, 100, (2020,)))
+        self.assertEquals(_prev_tup((2020, 5), 120), apply_n(_prev_tup, 120, (2020, 5)))
+        self.assertEquals(_prev_tup((2020, 5, 7), 366), apply_n(_prev_tup, 366, (2020, 5, 7)))
+        self.assertEquals(_prev_tup((2020, 5, 7, 20,), 24), apply_n(_prev_tup, 24, (2020, 5, 7, 20,)))
+        self.assertEquals(_prev_tup((2020, 5, 7, 20, 12), 1440), apply_n(_prev_tup, 1440, (2020, 5, 7, 20, 12)))
 
     def test_foo(self):
         datetime_utc = datetime.now(timezone.utc)  # basically I just want to write this down somewhere

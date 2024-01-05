@@ -25,29 +25,37 @@ TL_HOUR = 4
 TL_MINUTE = 5
 
 
-def apply_n(f, n, v):
-    for i in range(n):
-        v = f(v)
-    return v
-
-
-def _prev_tup(tup):
+def _prev_tup(tup, n=1):
     aslist = list(tup)
+
+    # if n > 1 we try to first remove the largest possible chunk from the last element of the tuple, so that we can
+    # then do the remainder in the loop (for performance reasons)
+    if n > 1:
+        DONE_IN_LOOP = 1
+        first_chunk = min(n - DONE_IN_LOOP, max(0, tup[-1] - MIN_VALUE_AT_TUP_INDEX[-1] - DONE_IN_LOOP))
+        aslist[-1] -= first_chunk
+        remainder = n - first_chunk - DONE_IN_LOOP
+    else:
+        remainder = 0
+
     for tup_index, val in reversed(list(enumerate(aslist))):
         if aslist[tup_index] == MIN_VALUE_AT_TUP_INDEX[tup_index]:
             if tup_index == 2:
                 # day roll-over: just use a datetime
                 aslist = list((datetime(*aslist, tzinfo=timezone.utc) - timedelta(days=1)).timetuple()[:len(tup)])
-                break
+                break  # we've used a timedelta, so we don't need to do months/years "by hand" in the loop
 
             else:
                 # roll over to max
                 aslist[tup_index] = MAX_VALUE_AT_TUP_INDEX[tup_index]
-                # implied because no break: continue with the left hand side
+                # implied because no break: continue with the left hand side of the tuple
 
         else:
             aslist[tup_index] -= 1
             break
+
+    if remainder > 0:
+        return _prev_tup(aslist, remainder)
 
     return tuple(aslist)
 
@@ -58,7 +66,7 @@ def _inc(d, tup, n, max_age):
     if tup not in d:
         if len(d) > 0:
             new_period = True
-            min_tup = apply_n(_prev_tup, max_age - 1, tup)
+            min_tup = _prev_tup(tup, max_age - 1)
             for k, v in list(d.items()):
                 if k < min_tup:
                     del d[k]
@@ -123,7 +131,7 @@ class PeriodCounter(object):
         }[period_name]
 
     def _get_event_state(self, tup, tl, how_many_periods, gte_threshold):
-        min_tup = apply_n(_prev_tup, how_many_periods - 1, tup)
+        min_tup = _prev_tup(tup, how_many_periods - 1) if tup != () else ()
         d = self.counts[tl]
         total = sum([v for k, v in d.items() if k >= min_tup])
 
