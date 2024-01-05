@@ -12,8 +12,8 @@ MAX_YEARS = 5
 MAX_TOTALS = 1
 
 
-FOO_MIN = 1000, 1, 1, 0, 0
-FOO_MAX = 3000, 12, "?", 23, 59
+MIN_VALUE_AT_TUP_INDEX = 1000, 1, 1, 0, 0
+MAX_VALUE_AT_TUP_INDEX = 3000, 12, "?", 23, 59
 
 
 # TL for "tuple length", the length of the tuples for a given time-period
@@ -33,20 +33,20 @@ def apply_n(f, n, v):
 
 def _prev_tup(tup):
     aslist = list(tup)
-    for i, val in reversed(list(enumerate(aslist))):
-        if aslist[i] == FOO_MIN[i]:
-            if i == 2:
+    for tup_index, val in reversed(list(enumerate(aslist))):
+        if aslist[tup_index] == MIN_VALUE_AT_TUP_INDEX[tup_index]:
+            if tup_index == 2:
                 # day roll-over: just use a datetime
                 aslist = list((datetime(*aslist, tzinfo=timezone.utc) - timedelta(days=1)).timetuple()[:len(tup)])
                 break
 
             else:
                 # roll over to max
-                aslist[i] = FOO_MAX[i]
+                aslist[tup_index] = MAX_VALUE_AT_TUP_INDEX[tup_index]
                 # implied because no break: continue with the left hand side
 
         else:
-            aslist[i] -= 1
+            aslist[tup_index] -= 1
             break
 
     return tuple(aslist)
