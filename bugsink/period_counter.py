@@ -60,23 +60,23 @@ def _prev_tup(tup, n=1):
     return tuple(aslist)
 
 
-def _inc(d, tup, n, max_age):
-    new_period = False
+def _inc(counts_for_tl, tup, n, max_age):
+    is_new_period = False
 
-    if tup not in d:
-        if len(d) > 0:
-            new_period = True
+    if tup not in counts_for_tl:
+        if len(counts_for_tl) > 0:
+            is_new_period = True
             min_tup = _prev_tup(tup, max_age - 1)
-            for k, v in list(d.items()):
+            for k, v in list(counts_for_tl.items()):
                 if k < min_tup:
-                    del d[k]
+                    del counts_for_tl[k]
 
         # default
-        d[tup] = 0
+        counts_for_tl[tup] = 0
 
     # inc
-    d[tup] += n
-    return new_period
+    counts_for_tl[tup] += n
+    return is_new_period
 
 
 class PeriodCounter(object):
@@ -89,12 +89,12 @@ class PeriodCounter(object):
         tup = datetime_utc.timetuple()
 
         for tl, mx in enumerate([MAX_TOTALS, MAX_YEARS, MAX_MONTHS, MAX_DAYS, MAX_HOURS, MAX_MINUTES]):
-            new_period = _inc(self.counts[tl], tup[:tl],  n, mx)
+            is_new_period = _inc(self.counts[tl], tup[:tl], n, mx)
 
             event_listeners_for_tl = self.event_listeners[tl]
             for ((how_many_periods, gte_threshold), (wbt, wbf, is_true)) in list(event_listeners_for_tl.items()):
                 if is_true:
-                    if not new_period:
+                    if not is_new_period:
                         continue  # no new period means: never becomes false, because no old period becomes irrelevant
 
                     if not self._get_event_state(tup[:tl], tl, how_many_periods, gte_threshold):
@@ -132,7 +132,7 @@ class PeriodCounter(object):
 
     def _get_event_state(self, tup, tl, how_many_periods, gte_threshold):
         min_tup = _prev_tup(tup, how_many_periods - 1) if tup != () else ()
-        d = self.counts[tl]
-        total = sum([v for k, v in d.items() if k >= min_tup])
+        counts_for_tl = self.counts[tl]
+        total = sum([v for k, v in counts_for_tl.items() if k >= min_tup])
 
         return total >= gte_threshold
