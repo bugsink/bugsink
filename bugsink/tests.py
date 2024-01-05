@@ -1,9 +1,16 @@
+import uuid
 from datetime import datetime, timezone
 
 from unittest import TestCase
+from django.test import TestCase as DjangoTestCase
 
-from .period_counter import PeriodCounter, _prev_tup, TL_YEAR
+from projects.models import Project
+from issues.models import Issue
+from events.models import Event
+
+from .period_counter import PeriodCounter, _prev_tup, TL_DAY, TL_YEAR
 from .volume_based_condition import VolumeBasedCondition
+from .registry import PeriodCounterRegistry
 
 
 def apply_n(f, n, v):
@@ -139,8 +146,48 @@ class VolumeBasedConditionTestCase(TestCase):
 
     def test_serialization(self):
         vbc = VolumeBasedCondition("day", 1, 100)
-        json_str = vbc.to_json_str()
-        self.assertEquals('{"period": "day", "nr_of_periods": 1, "volume": 100}', json_str)
+        self.assertEquals({"period": "day", "nr_of_periods": 1, "volume": 100}, vbc.to_dict())
 
-        vbc2 = VolumeBasedCondition.from_json_str(json_str)
+        vbc2 = VolumeBasedCondition.from_dict(vbc.to_dict())
         self.assertEquals(vbc, vbc2)
+
+
+class PCRegistryTestCase(DjangoTestCase):
+
+    def test_empty(self):
+        result = PeriodCounterRegistry().load_from_scratch(
+            Project.objects.all(),
+            Issue.objects.all(),
+            Event.objects.all(),
+            datetime.now(timezone.utc),
+        )
+        self.assertEquals(({}, {}), result)
+
+    def test_with_muted_issue_and_event(self):
+        project = Project.objects.create(name="project")
+        issue = Issue.objects.create(
+            project=project,
+            is_muted=True,
+            unmute_on_volume_based_conditions='[{"period": "day", "nr_of_periods": 1, "volume": 100}]',
+        )
+        Event.objects.create(
+            project=project,
+            issue=issue,
+            timestamp=datetime.now(timezone.utc),
+            server_side_timestamp=datetime.now(timezone.utc),
+            event_id=uuid.uuid4().hex,
+            has_exception=True,
+            has_logentry=True,
+            data="{}",
+        )
+
+        by_project, by_issue = PeriodCounterRegistry().load_from_scratch(
+            Project.objects.all(),
+            Issue.objects.all(),
+            Event.objects.all(),
+            datetime.now(timezone.utc),
+        )
+
+        self.assertEquals({project.id}, by_project.keys())
+        self.assertEquals({issue.id}, by_issue.keys())
+        self.assertEquals({(1, 100)}, by_issue[issue.id].event_listeners[TL_DAY].keys())

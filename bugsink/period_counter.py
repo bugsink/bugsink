@@ -131,7 +131,7 @@ class PeriodCounter(object):
 
         tl = self._tl_for_period(period_name)
         if initial_event_state is None:
-            initial_event_state = self._get_event_state(tup, tl, nr_of_periods, gte_threshold)
+            initial_event_state = self._get_event_state(tup[:tl], tl, nr_of_periods, gte_threshold)
 
         self.event_listeners[tl][(nr_of_periods, gte_threshold)] = \
             (when_becomes_true, when_becomes_false, auto_remove, initial_event_state)
