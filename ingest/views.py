@@ -67,7 +67,7 @@ class BaseIngestAPIView(APIView):
         DecompressedEvent.objects.create(
             project=project,
             data=json.dumps(event_data),  # TODO don't parse-then-print for BaseIngestion
-            timestamp=now,  # TODO this doesn't work because of auto_add_now
+            timestamp=now,
         )
 
         debug_info = request.META.get("HTTP_X_BUGSINK_DEBUGINFO", "")
