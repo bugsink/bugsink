@@ -64,12 +64,11 @@ def _inc(counts_for_tl, tup, n, max_age):
     is_new_period = False
 
     if tup not in counts_for_tl:
-        if len(counts_for_tl) > 0:
-            is_new_period = True
-            min_tup = _prev_tup(tup, max_age - 1)
-            for k, v in list(counts_for_tl.items()):
-                if k < min_tup:
-                    del counts_for_tl[k]
+        is_new_period = True
+        min_tup = _prev_tup(tup, max_age - 1)
+        for k, v in list(counts_for_tl.items()):
+            if k < min_tup:
+                del counts_for_tl[k]
 
         # default
         counts_for_tl[tup] = 0

@@ -54,6 +54,14 @@ class PeriodCounterTestCase(TestCase):
         self.assertEquals(_prev_tup((2020, 5, 7, 20,), 24), apply_n(_prev_tup, 24, (2020, 5, 7, 20,)))
         self.assertEquals(_prev_tup((2020, 5, 7, 20, 12), 1440), apply_n(_prev_tup, 1440, (2020, 5, 7, 20, 12)))
 
+    def test_prev_tup_works_for_empty_tup(self):
+        # in general 'prev' is not defined for empty tuples; but it is convienient to define it as the empty tuple
+        # because it makes the implementation of PeriodCounter simpler for the case of "all 1 'total' periods".
+
+        self.assertEquals((), _prev_tup(()))
+        # the meaninglessness of prev_tup is not extended to the case of n > 1, because "2 total periods" makes no sense
+        # self.assertEquals((), _prev_tup((), 2))
+
     def test_foo(self):
         datetime_utc = datetime.now(timezone.utc)  # basically I just want to write this down somewhere
         pc = PeriodCounter()
