@@ -1,9 +1,16 @@
 import json
+from datetime import datetime, timezone
+
+from projects.models import Project
+from events.models import Event
 
 from .period_counter import PeriodCounter
 from .volume_based_condition import VolumeBasedCondition
 
 from issues.models import Issue
+
+
+_registry = None
 
 
 def create_unmute_issue_handler(issue_id):
@@ -20,6 +27,15 @@ def create_unmute_issue_handler(issue_id):
 
 class PeriodCounterRegistry(object):
 
+    def __init__(self):
+        self.by_project, self.by_issue = self.load_from_scratch(
+            projects=Project.objects.all(),
+            issues=Issue.objects.all(),
+            ordered_events=Event.objects.all().order_by('server_side_timestamp'),
+            now=datetime.now(timezone.utc),
+        )
+
+    @classmethod
     def load_from_scratch(self, projects, issues, ordered_events, now):
         # create period counters for all projects and issues
         by_project = {}
@@ -62,6 +78,18 @@ class PeriodCounterRegistry(object):
                 )
 
         return by_project, by_issue
+
+
+def get_pc_registry():
+    # lazy initialization; this is TSTTCPW for 'run once when the server starts'; it has the obvious drawback that it
+    # slows down the first (handled) event. When we get to the "real gunicorn server" we should probably just hook into
+    # gunicorn's events to initialize this
+    # (note once you do this: don't hook into app-initialization; there you cannot expect to be running DB stuff)
+
+    global _registry
+    if _registry is None:
+        _registry = PeriodCounterRegistry()
+    return _registry
 
 
 # some TODOs:

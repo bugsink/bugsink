@@ -18,6 +18,7 @@ from issues.regressions import issue_is_regression
 
 from events.models import Event
 from releases.models import create_release_if_needed
+from bugsink.registry import get_pc_registry
 
 from .negotiation import IgnoreClientContentNegotiation
 from .parsers import EnvelopeParser
@@ -61,7 +62,7 @@ class BaseIngestAPIView(APIView):
         # and issue period counters.
         now = datetime.now(timezone.utc)
 
-        project_pc = project_period_counters[project.id]
+        project_pc = get_pc_registry().by_project[project.id]
         project_pc.inc(now)
 
         DecompressedEvent.objects.create(
@@ -87,7 +88,7 @@ class BaseIngestAPIView(APIView):
 
         create_release_if_needed(project, event.release)
 
-        issue_pc = issue_period_counters[issue.id]
+        issue_pc = get_pc_registry().by_issue[issue.id]
         issue_pc.inc(now)
 
         if issue_created:
