@@ -47,7 +47,7 @@ class Event(models.Model):
     # https://develop.sentry.dev/sdk/event-payloads/types/ (more up-to-date and complete)
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)  # This ID is internal to bugsink
-    server_side_timestamp = models.DateTimeField(db_index=True, blank=False, null=False)  # TODO set this on-ingest
+    server_side_timestamp = models.DateTimeField(db_index=True, blank=False, null=False)
 
     # > Required. Hexadecimal string representing a uuid4 value. The length is exactly 32 characters. Dashes are not
     # > allowed. Has to be lowercase.
@@ -147,11 +147,12 @@ class Event(models.Model):
         return "/events/event/%s/download/" % self.id
 
     @classmethod
-    def from_json(cls, project, parsed_data, debug_info):
+    def from_json(cls, project, parsed_data, server_side_timestamp, debug_info):
         event, created = cls.objects.get_or_create(  # NOTE immediate creation... is this what we want?
             event_id=parsed_data["event_id"],
             project=project,
             defaults={
+                'server_side_timestamp': server_side_timestamp,
                 'data': json.dumps(parsed_data),
 
                 'timestamp': parse_timestamp(parsed_data["timestamp"]),

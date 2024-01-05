@@ -72,7 +72,7 @@ class BaseIngestAPIView(APIView):
 
         debug_info = request.META.get("HTTP_X_BUGSINK_DEBUGINFO", "")
 
-        event, event_created = Event.from_json(project, event_data, debug_info)
+        event, event_created = Event.from_json(project, event_data, now, debug_info)
         if not event_created:
             return
 

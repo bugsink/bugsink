@@ -52,7 +52,7 @@ class PeriodCounterRegistry(object):
                     gte_threshold=vbc.volume,
                     when_becomes_true=create_unmute_issue_handler(issue.id),
                     tup=now_tup,
-                    auto_remove=True,  # (at least when it's 'first time'... but this may be the only thing we support)
+                    auto_remove=True,  # unmuting is needed only once; hence auto_remove to avoid recurring unmute calls
                 )
 
         return by_project, by_issue
