@@ -47,6 +47,7 @@ class Event(models.Model):
     # https://develop.sentry.dev/sdk/event-payloads/types/ (more up-to-date and complete)
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)  # This ID is internal to bugsink
+    server_side_timestamp = models.DateTimeField(db_index=True, blank=False, null=False)  # TODO set this on-ingest
 
     # > Required. Hexadecimal string representing a uuid4 value. The length is exactly 32 characters. Dashes are not
     # > allowed. Has to be lowercase.

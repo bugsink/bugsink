@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import json  # TODO consider faster APIs
 
 from django.shortcuts import get_object_or_404
@@ -55,9 +56,18 @@ class BaseIngestAPIView(APIView):
         return get_object_or_404(Project, pk=project_id, sentry_key=sentry_key)
 
     def process_event(self, event_data, request, project):
+        # because we want to count events before having created event objects (quota may block the latter) we cannot
+        # depend on event.timestamp; instead, we look on the clock once here, and then use that for both the project
+        # and issue period counters.
+        now = datetime.now(timezone.utc)
+
+        project_pc = project_period_counters[project.id]
+        project_pc.inc(now)
+
         DecompressedEvent.objects.create(
             project=project,
             data=json.dumps(event_data),  # TODO don't parse-then-print for BaseIngestion
+            timestamp=now,  # TODO this doesn't work because of auto_add_now
         )
 
         debug_info = request.META.get("HTTP_X_BUGSINK_DEBUGINFO", "")
@@ -76,11 +86,17 @@ class BaseIngestAPIView(APIView):
         )
         issue.events.add(event)
 
+        issue_pc = issue_period_counters[issue.id]
+        issue_pc.inc(now)
+
         if issue_created:
-            pass  # alerting code goes here
+            if project.alert_on_new_issue:
+                alert_for_new_issue.delay(issue)
 
         elif issue_is_regression(issue, event.release):  # new issues cannot be regressions by definition, hence 'else'
-            pass  # alerting code goes here
+            if project.alert_on_regression:
+                alert_for_regression.delay(issue)
+
             IssueResolver.reopen(issue)
 
         # TODO bookkeeping of events_at goes here.

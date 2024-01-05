@@ -25,6 +25,10 @@ TL_HOUR = 4
 TL_MINUTE = 5
 
 
+def noop():
+    pass
+
+
 def _prev_tup(tup, n=1):
     aslist = list(tup)
 
@@ -85,6 +89,9 @@ class PeriodCounter(object):
         self.event_listeners = {tuple_length: {} for tuple_length in range(TL_MINUTE + 1)}
 
     def inc(self, datetime_utc, n=1):
+        # we only allow UTC, and we generally use Django model fields, which are UTC, so this should be good:
+        assert datetime_utc.tzinfo == timezone.utc
+
         tup = datetime_utc.timetuple()
 
         for tl, mx in enumerate([MAX_TOTALS, MAX_YEARS, MAX_MONTHS, MAX_DAYS, MAX_HOURS, MAX_MINUTES]):
@@ -105,8 +112,12 @@ class PeriodCounter(object):
                         event_listeners_for_tl[(nr_of_periods, gte_threshold)] = (wbt, wbf, True)
                         wbt()
 
-    def add_event_listener(self, period_name, nr_of_periods, gte_threshold, when_becomes_true, when_becomes_false,
-                           initial_event_state=None, tup=None):
+    def add_event_listener(self, period_name, nr_of_periods, gte_threshold, when_becomes_true=noop,
+                           when_becomes_false=noop, initial_event_state=None, tup=None):
+        # note: the 'events' here are not bugsink-events; but the more general concept of 'an event'; we may consider a
+        # different name for this in the future because of that.
+
+        # tup means: tup for the current time, which can be used to determine the initial state of the event listener.
 
         if len([arg for arg in [initial_event_state, tup] if arg is None]) != 1:
             # either be explicit, or let us deduce

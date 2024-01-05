@@ -22,6 +22,9 @@ class Issue(models.Model):
     fixed_at = models.TextField(blank=False, null=False, default='[]')
     events_at = models.TextField(blank=False, null=False, default='[]')
 
+    is_muted = models.BooleanField(default=False)
+    unmute_on_volume_based_conditions = models.TextField(blank=False, null=False, default="[]")  # json string
+
     def get_absolute_url(self):
         return f"/issues/issue/{ self.id }/event/last/"
 

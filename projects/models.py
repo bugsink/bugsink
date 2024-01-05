@@ -44,6 +44,12 @@ class Project(models.Model):
     ]
     """
 
+    # alerting conditions
+    alert_on_new_issue = models.BooleanField(default=True)
+    alert_on_regression = models.BooleanField(default=True)
+    alert_on_unmute = models.BooleanField(default=True)
+    alert_on_volume_based_conditions = models.TextField(blank=False, null=False, default="[]")  # json string
+
     def get_latest_release(self):
         # TODO perfomance considerations... this can be denormalized/cached at the project level
         from releases.models import ordered_releases

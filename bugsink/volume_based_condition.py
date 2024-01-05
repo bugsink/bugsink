@@ -10,7 +10,7 @@ class VolumeBasedCondition(object):
         self.volume = volume
 
     @classmethod
-    def from_json_str(cls, json_str):
+    def from_json_str(cls, json_str):  # TODO had toch gewoon dict moeten wezen
         json_dict = json.loads(json_str)
         return VolumeBasedCondition(
             json_dict['any_or_first'],
