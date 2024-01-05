@@ -72,19 +72,20 @@ class BaseIngestAPIView(APIView):
 
         debug_info = request.META.get("HTTP_X_BUGSINK_DEBUGINFO", "")
 
-        event, event_created = Event.from_json(project, event_data, now, debug_info)
-        if not event_created:
-            return
-
-        create_release_if_needed(project, event.release)
-
         hash_ = get_hash_for_data(event_data)
-
         issue, issue_created = Issue.objects.get_or_create(
             project=project,
             hash=hash_,
         )
-        issue.events.add(event)
+
+        event, event_created = Event.from_json(project, event_data, issue, now, debug_info)
+        if not event_created:
+            # note: previously we created the event before the issue, which allowed for one less query. I don't see
+            # straight away how we can reproduce that now that we create issue-before-event (since creating the issue
+            # first is needed to be able to set the FK in one go)
+            return
+
+        create_release_if_needed(project, event.release)
 
         issue_pc = issue_period_counters[issue.id]
         issue_pc.inc(now)

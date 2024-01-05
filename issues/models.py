@@ -11,9 +11,6 @@ class Issue(models.Model):
         "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
     hash = models.CharField(max_length=32, blank=False, null=False)
 
-    # TODO: we should get rid of an M2M table by making this a FK from the other side
-    events = models.ManyToManyField("events.Event")
-
     # fields related to resolution:
     # what does this mean for the release-based use cases? it means what you filter on.
     # it also simply means: it was "marked as resolved" after the last regression (if any)

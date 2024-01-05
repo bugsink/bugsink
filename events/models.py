@@ -49,6 +49,9 @@ class Event(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)  # This ID is internal to bugsink
     server_side_timestamp = models.DateTimeField(db_index=True, blank=False, null=False)
 
+    # not actually expected to be null, but we want to be able to delete issues without deleting events (cleanup later)
+    issue = models.ForeignKey("issues.Issue", blank=False, null=True, on_delete=models.SET_NULL)
+
     # > Required. Hexadecimal string representing a uuid4 value. The length is exactly 32 characters. Dashes are not
     # > allowed. Has to be lowercase.
     # Not a primary key: events may be duplicated across projects
@@ -135,8 +138,7 @@ class Event(models.Model):
         # index_together = (("group_id", "datetime"),)  TODO seriously think about indexes
 
     def get_absolute_url(self):
-        issue = self.issue_set.get()
-        return f"/issues/issue/{ issue.id }/event/{ self.id }/"
+        return f"/issues/issue/{ self.issue_id }/event/{ self.id }/"
 
     def get_raw_link(self):
         # for the admin
