@@ -70,7 +70,7 @@ class BaseIngestAPIView(APIView):
         # before proceeding because it may be useful for debugging errors in the digest process.
         ingested_event = cls.ingest_event(now, event_data, request, project)
         if settings.BUGSINK_DIGEST_IMMEDIATELY:
-            cls.digest_event(now, event_data, project, ingested_event.debug_info)
+            cls.digest_event(ingested_event, event_data)
 
     @classmethod
     def ingest_event(cls, now, event_data, request, project):
@@ -87,28 +87,31 @@ class BaseIngestAPIView(APIView):
         )
 
     @classmethod
-    def digest_event(cls, now, event_data, project, debug_info):
+    def digest_event(cls, ingested_event, event_data):
+        # event_data is passed explicitly to avoid re-parsing something that may be availabe anyway; we'll come up with
+        # a better signature later if this idea sticks
+
         hash_ = get_hash_for_data(event_data)
         issue, issue_created = Issue.objects.get_or_create(
-            project=project,
+            project=ingested_event.project,
             hash=hash_,
         )
 
-        event, event_created = Event.from_json(project, issue, event_data, now, debug_info)
+        event, event_created = Event.from_ingested(ingested_event, issue, event_data)
         if not event_created:
             # note: previously we created the event before the issue, which allowed for one less query. I don't see
             # straight away how we can reproduce that now that we create issue-before-event (since creating the issue
             # first is needed to be able to set the FK in one go)
             return
 
-        create_release_if_needed(project, event.release)
+        create_release_if_needed(ingested_event.project, event.release)
 
         if issue_created:
-            if project.alert_on_new_issue:
+            if ingested_event.project.alert_on_new_issue:
                 pass  # alert_for_new_issue.delay(issue)
 
         elif issue_is_regression(issue, event.release):  # new issues cannot be regressions by definition, hence 'else'
-            if project.alert_on_regression:
+            if ingested_event.project.alert_on_regression:
                 pass  # alert_for_regression.delay(issue)
 
             IssueResolver.reopen(issue)
@@ -117,7 +120,7 @@ class BaseIngestAPIView(APIView):
             get_pc_registry().by_issue[issue.id] = PeriodCounter()
 
         issue_pc = get_pc_registry().by_issue[issue.id]
-        issue_pc.inc(now)
+        issue_pc.inc(ingested_event.timestamp)
 
         # TODO bookkeeping of events_at goes here.
         issue.save()

@@ -149,13 +149,17 @@ class Event(models.Model):
         return "/events/event/%s/download/" % self.id
 
     @classmethod
-    def from_json(cls, project, issue, parsed_data, server_side_timestamp, debug_info):
+    def from_ingested(cls, ingested_event, issue, parsed_data):
+        # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
+        # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
+        # objects etc).
+
         event, created = cls.objects.get_or_create(  # NOTE immediate creation... is this what we want?
             event_id=parsed_data["event_id"],
-            project=project,
+            project=ingested_event.project,
             defaults={
                 'issue': issue,
-                'server_side_timestamp': server_side_timestamp,
+                'server_side_timestamp': ingested_event.timestamp,
                 'data': json.dumps(parsed_data),
 
                 'timestamp': parse_timestamp(parsed_data["timestamp"]),
@@ -177,7 +181,7 @@ class Event(models.Model):
                 'has_exception': "exception" in parsed_data,
                 'has_logentry': "logentry" in parsed_data,
 
-                'debug_info': debug_info,
+                'debug_info': ingested_event.debug_info,
             }
         )
         return event, created
