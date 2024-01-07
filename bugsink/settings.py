@@ -136,6 +136,11 @@ STATICFILES_DIRS = [
 # no support for uuid in this setting yet (https://code.djangoproject.com/ticket/32577) so we leave it as-is
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+
+# ###################### SERVER-MODE SETTINGS #################
+
+BUGSINK_DIGEST_IMMEDIATELY = True
+
 # ###################### MOST PER-SITE CONFIG BELOW THIS LINE ###################
 
 

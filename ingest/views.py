@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 import json  # TODO consider faster APIs
 
 from django.shortcuts import get_object_or_404
+from django.conf import settings
 
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -19,6 +20,7 @@ from issues.regressions import issue_is_regression
 from events.models import Event
 from releases.models import create_release_if_needed
 from bugsink.registry import get_pc_registry
+from bugsink.period_counter import PeriodCounter
 
 from .negotiation import IgnoreClientContentNegotiation
 from .parsers import EnvelopeParser
@@ -56,30 +58,43 @@ class BaseIngestAPIView(APIView):
         sentry_key = cls.get_sentry_key_for_request(request)
         return get_object_or_404(Project, pk=project_id, sentry_key=sentry_key)
 
-    def process_event(self, event_data, request, project):
+    @classmethod
+    def process_event(cls, event_data, project, request):
         # because we want to count events before having created event objects (quota may block the latter) we cannot
         # depend on event.timestamp; instead, we look on the clock once here, and then use that for both the project
         # and issue period counters.
         now = datetime.now(timezone.utc)
 
+        # note: we may want to skip saving the raw data in a setup where we have integrated ingest/digest, but for now
+        # we just always save it; note that even for the integrated setup a case can be made for saving the raw data
+        # before proceeding because it may be useful for debugging errors in the digest process.
+        ingested_event = cls.ingest_event(now, event_data, request, project)
+        if settings.BUGSINK_DIGEST_IMMEDIATELY:
+            cls.digest_event(now, event_data, project, ingested_event.debug_info)
+
+    @classmethod
+    def ingest_event(cls, now, event_data, request, project):
         project_pc = get_pc_registry().by_project[project.id]
         project_pc.inc(now)
 
-        DecompressedEvent.objects.create(
+        debug_info = request.META.get("HTTP_X_BUGSINK_DEBUGINFO", "")
+
+        return DecompressedEvent.objects.create(
             project=project,
             data=json.dumps(event_data),  # TODO don't parse-then-print for BaseIngestion
             timestamp=now,
+            debug_info=debug_info,
         )
 
-        debug_info = request.META.get("HTTP_X_BUGSINK_DEBUGINFO", "")
-
+    @classmethod
+    def digest_event(cls, now, event_data, project, debug_info):
         hash_ = get_hash_for_data(event_data)
         issue, issue_created = Issue.objects.get_or_create(
             project=project,
             hash=hash_,
         )
 
-        event, event_created = Event.from_json(project, event_data, issue, now, debug_info)
+        event, event_created = Event.from_json(project, issue, event_data, now, debug_info)
         if not event_created:
             # note: previously we created the event before the issue, which allowed for one less query. I don't see
             # straight away how we can reproduce that now that we create issue-before-event (since creating the issue
@@ -88,18 +103,21 @@ class BaseIngestAPIView(APIView):
 
         create_release_if_needed(project, event.release)
 
-        issue_pc = get_pc_registry().by_issue[issue.id]
-        issue_pc.inc(now)
-
         if issue_created:
             if project.alert_on_new_issue:
-                alert_for_new_issue.delay(issue)
+                pass  # alert_for_new_issue.delay(issue)
 
         elif issue_is_regression(issue, event.release):  # new issues cannot be regressions by definition, hence 'else'
             if project.alert_on_regression:
-                alert_for_regression.delay(issue)
+                pass  # alert_for_regression.delay(issue)
 
             IssueResolver.reopen(issue)
+
+        if issue.id not in get_pc_registry().by_issue:
+            get_pc_registry().by_issue[issue.id] = PeriodCounter()
+
+        issue_pc = get_pc_registry().by_issue[issue.id]
+        issue_pc.inc(now)
 
         # TODO bookkeeping of events_at goes here.
         issue.save()
@@ -110,7 +128,7 @@ class IngestEventAPIView(BaseIngestAPIView):
     def post(self, request, project_id=None):
         project = self.get_project(request, project_id)
 
-        self.process_event(request.data, request, project)
+        self.process_event(request.data, project, request)
         return Response()
 
 

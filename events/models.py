@@ -130,7 +130,7 @@ class Event(models.Model):
     has_exception = models.BooleanField(null=False)
     has_logentry = models.BooleanField(null=False)
 
-    # this is a temporary, bugsink-specific value;
+    # this is a temporary(?), bugsink-specific value;
     debug_info = models.CharField(max_length=255, blank=True, null=False, default="")
 
     class Meta:
@@ -149,11 +149,12 @@ class Event(models.Model):
         return "/events/event/%s/download/" % self.id
 
     @classmethod
-    def from_json(cls, project, parsed_data, server_side_timestamp, debug_info):
+    def from_json(cls, project, issue, parsed_data, server_side_timestamp, debug_info):
         event, created = cls.objects.get_or_create(  # NOTE immediate creation... is this what we want?
             event_id=parsed_data["event_id"],
             project=project,
             defaults={
+                'issue': issue,
                 'server_side_timestamp': server_side_timestamp,
                 'data': json.dumps(parsed_data),
 

@@ -1,4 +1,3 @@
-import uuid
 from datetime import datetime, timezone
 
 from unittest import TestCase
@@ -7,6 +6,7 @@ from django.test import TestCase as DjangoTestCase
 from projects.models import Project
 from issues.models import Issue
 from events.models import Event
+from events.factories import create_event
 
 from .period_counter import PeriodCounter, _prev_tup, TL_DAY, TL_YEAR
 from .volume_based_condition import VolumeBasedCondition
@@ -170,16 +170,8 @@ class PCRegistryTestCase(DjangoTestCase):
             is_muted=True,
             unmute_on_volume_based_conditions='[{"period": "day", "nr_of_periods": 1, "volume": 100}]',
         )
-        Event.objects.create(
-            project=project,
-            issue=issue,
-            timestamp=datetime.now(timezone.utc),
-            server_side_timestamp=datetime.now(timezone.utc),
-            event_id=uuid.uuid4().hex,
-            has_exception=True,
-            has_logentry=True,
-            data="{}",
-        )
+
+        create_event(project, issue)
 
         by_project, by_issue = PeriodCounterRegistry().load_from_scratch(
             Project.objects.all(),

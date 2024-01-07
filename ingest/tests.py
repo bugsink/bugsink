@@ -3,8 +3,29 @@ import datetime
 from django.conf import settings
 from django.test import TestCase
 from django.utils import timezone
+from django.test.client import RequestFactory
+
+from projects.models import Project
+from events.factories import create_event_data
 
 from .models import DecompressedEvent
+from .views import BaseIngestAPIView
+
+
+class IngestViewTestCase(TestCase):
+
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def test_ingest_view(self):
+        project = Project.objects.create(name="test")
+        request = self.factory.post("/api/1/store/")
+
+        BaseIngestAPIView().process_event(
+            create_event_data(),
+            project,
+            request,
+        )
 
 
 class TimeZoneTesCase(TestCase):
