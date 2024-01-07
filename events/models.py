@@ -47,6 +47,10 @@ class Event(models.Model):
     # https://develop.sentry.dev/sdk/event-payloads/types/ (more up-to-date and complete)
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)  # This ID is internal to bugsink
+
+    # null=True reveals our doubts about "should this always be set, or even be done at all?"
+    ingested_event = models.ForeignKey("ingest.DecompressedEvent", null=True, on_delete=models.SET_NULL)
+
     server_side_timestamp = models.DateTimeField(db_index=True, blank=False, null=False)
 
     # not actually expected to be null, but we want to be able to delete issues without deleting events (cleanup later)
@@ -158,6 +162,7 @@ class Event(models.Model):
             event_id=parsed_data["event_id"],
             project=ingested_event.project,
             defaults={
+                'ingested_event': ingested_event,  # <= thoughts about defaults v.s. check-as-part-of-get go here :-)
                 'issue': issue,
                 'server_side_timestamp': ingested_event.timestamp,
                 'data': json.dumps(parsed_data),
