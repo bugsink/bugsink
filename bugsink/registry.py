@@ -16,12 +16,26 @@ UNMUTE_PURPOSE = "unmute"
 
 def create_unmute_issue_handler(issue_id):
     def unmute():
-        # or just push this into a classmethod
-        # or make this using .update to avoid 1 of the 2 DB queries
+        # we might just push this into a [class]method of Issue
         issue = Issue.objects.get(id=issue_id)
-        issue.is_muted = False
-        issue.unmute_on_volume_based_conditions = "[]"
-        issue.save()
+
+        if issue.is_muted:
+            # we check on is_muted explicitly: it may be so that multiple unmute conditions happens simultaneously (and
+            # not just in "funny configurations"). i.e. a single event could push you past more than 3 events per day or
+            # 100 events per year. We don't want 2 "unmuted" alerts being sent in that case.
+
+            issue.is_muted = False
+
+            issue.unmute_on_volume_based_conditions = "[]"
+            issue.save()
+
+            # We keep the pc_registry and the value of issue.unmute_on_volume_based_conditions in-sync to avoid going
+            # mad (in general). A specific case that I can think of off the top of my head that goes wrong if you
+            # wouldn't do this, even given the fact that we check on is_muted in the above: you might re-mute but with
+            # different unmute conditions, and in that case you don't want your old outdated conditions triggering
+            # anything. (Side note: I'm not sure how I feel about reaching out to the global registry here; the
+            # alternative would be to pass this along.)
+            get_pc_registry().by_issue[issue_id].remove_event_listener(UNMUTE_PURPOSE)
 
     return unmute
 
