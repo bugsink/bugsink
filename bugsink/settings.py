@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'ingest',
     'issues',
     'events',
+    'alerts',
 
     'performance',
 ]
@@ -137,6 +138,12 @@ STATICFILES_DIRS = [
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
+# Generic CELERY settings (i.e. no expected config per-installation)
+
+CELERY_IGNORE_RESULT = True  # we don't use the "result" part of celery
+CELERY_BROKER_CONNECTION_TIMEOUT = 2.5  # long enough for glitches, short enough to get notified about real problems
+
+
 # ###################### SERVER-MODE SETTINGS #################
 
 BUGSINK_DIGEST_IMMEDIATELY = True
@@ -157,3 +164,7 @@ if SENTRY_DSN is not None:
     )
 
 BASE_URL = "http://glitchtip:9000"  # no trailing slash
+
+
+CELERY_BROKER_URL = 'amqp://bugsink:bugsink@localhost/'
+CELERY_TASK_ALWAYS_EAGER = True

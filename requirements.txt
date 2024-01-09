@@ -4,3 +4,4 @@ djangorestframework==3.14.*
 django-tailwind==3.6.*
 jsonschema==4.19.*
 semver==3.0.*
+Celery[librabbitmq]

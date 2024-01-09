@@ -70,7 +70,7 @@ class BaseIngestAPIView(APIView):
         # before proceeding because it may be useful for debugging errors in the digest process.
         ingested_event = cls.ingest_event(now, event_data, request, project)
         if settings.BUGSINK_DIGEST_IMMEDIATELY:
-            cls.digest_event(ingested_event, event_data)
+            cls.digest_event(ingested_event, event_data, alerter_foo)
 
     @classmethod
     def ingest_event(cls, now, event_data, request, project):
