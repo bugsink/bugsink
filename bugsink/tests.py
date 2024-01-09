@@ -8,7 +8,7 @@ from issues.models import Issue
 from events.models import Event
 from events.factories import create_event
 
-from .period_counter import PeriodCounter, _prev_tup, TL_DAY, TL_YEAR
+from .period_counter import PeriodCounter, _prev_tup, TL_DAY, TL_MONTH, TL_YEAR
 from .volume_based_condition import VolumeBasedCondition
 from .registry import PeriodCounterRegistry
 
@@ -126,13 +126,23 @@ class PeriodCounterTestCase(TestCase):
         self.assertEquals(2, wbt.calls)
         self.assertEquals(1, wbf.calls)  # unchanged
 
-    def test_event_listeners_auto_remove(self):
+    def test_event_listeners_purpose(self):
         tp_2020 = datetime(2020, 1, 1, 10, 15, tzinfo=timezone.utc)
 
         pc = PeriodCounter()
         wbt = callback()
+
+        class destructive_callback(object):
+            def __init__(self):
+                self.calls = 0
+
+            def __call__(self):
+                pc.remove_event_listener("foo")
+                self.calls += 1
+
         wbf = callback()
-        pc.add_event_listener("year", 1, 1, wbt, wbf, auto_remove=True, initial_event_state=False)
+        pc.add_event_listener("year", 1, 1, wbt, wbf, purpose="foo", initial_event_state=False)
+        pc.add_event_listener("month", 1, 1, destructive_callback(), wbf, purpose="foo", initial_event_state=False)
 
         self.assertEquals(0, wbt.calls)
         pc.inc(tp_2020)
@@ -140,6 +150,7 @@ class PeriodCounterTestCase(TestCase):
         self.assertEquals(1, wbt.calls)
 
         self.assertEquals({}, pc.event_listeners[TL_YEAR])
+        self.assertEquals({}, pc.event_listeners[TL_MONTH])
 
 
 class VolumeBasedConditionTestCase(TestCase):

@@ -11,6 +11,7 @@ from issues.models import Issue
 
 
 _registry = None
+UNMUTE_PURPOSE = "unmute"
 
 
 def create_unmute_issue_handler(issue_id):
@@ -74,7 +75,7 @@ class PeriodCounterRegistry(object):
                     gte_threshold=vbc.volume,
                     when_becomes_true=create_unmute_issue_handler(issue.id),
                     tup=now.timetuple(),
-                    auto_remove=True,  # unmuting is needed only once; hence auto_remove to avoid recurring unmute calls
+                    purpose=UNMUTE_PURPOSE,
                 )
 
         return by_project, by_issue

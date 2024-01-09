@@ -98,28 +98,22 @@ class PeriodCounter(object):
             is_new_period = _inc(self.counts[tl], tup[:tl], n, mx)
 
             event_listeners_for_tl = self.event_listeners[tl]
-            for ((nr_of_periods, gte_threshold), (wbt, wbf, ar, is_true)) in list(event_listeners_for_tl.items()):
+            for ((nr_of_periods, gte_threshold), (wbt, wbf, purp, is_true)) in list(event_listeners_for_tl.items()):
                 if is_true:
                     if not is_new_period:
                         continue  # no new period means: never becomes false, because no old period becomes irrelevant
 
                     if not self._get_event_state(tup[:tl], tl, nr_of_periods, gte_threshold):
-                        if ar:
-                            del event_listeners_for_tl[(nr_of_periods, gte_threshold)]
-                        else:
-                            event_listeners_for_tl[(nr_of_periods, gte_threshold)] = (wbt, wbf, ar, False)
+                        event_listeners_for_tl[(nr_of_periods, gte_threshold)] = (wbt, wbf, purp, False)
                         wbf()
 
                 else:
                     if self._get_event_state(tup[:tl], tl, nr_of_periods, gte_threshold):
-                        if ar:
-                            del event_listeners_for_tl[(nr_of_periods, gte_threshold)]
-                        else:
-                            event_listeners_for_tl[(nr_of_periods, gte_threshold)] = (wbt, wbf, ar, True)
+                        event_listeners_for_tl[(nr_of_periods, gte_threshold)] = (wbt, wbf, purp, True)
                         wbt()
 
     def add_event_listener(self, period_name, nr_of_periods, gte_threshold, when_becomes_true=noop,
-                           when_becomes_false=noop, auto_remove=False, initial_event_state=None, tup=None):
+                           when_becomes_false=noop, purpose=None, initial_event_state=None, tup=None):
         # note: the 'events' here are not bugsink-events; but the more general concept of 'an event'; we may consider a
         # different name for this in the future because of that.
 
@@ -134,7 +128,18 @@ class PeriodCounter(object):
             initial_event_state = self._get_event_state(tup[:tl], tl, nr_of_periods, gte_threshold)
 
         self.event_listeners[tl][(nr_of_periods, gte_threshold)] = \
-            (when_becomes_true, when_becomes_false, auto_remove, initial_event_state)
+            (when_becomes_true, when_becomes_false, purpose, initial_event_state)
+
+    def remove_event_listener(self, purpose):
+        """
+        Remove all event listeners with the given purpose. The purpose is a string that can be used to identify the
+        event listener. (The idea is: callbacks are organized by purpose, and when you want to remove a callback, you
+        can do so by specifying the purpose.)
+        """
+        for tl, mx in enumerate([MAX_TOTALS, MAX_YEARS, MAX_MONTHS, MAX_DAYS, MAX_HOURS, MAX_MINUTES]):
+            for k, (wbt, wbf, this_purp, state) in list(self.event_listeners[tl].items()):
+                if this_purp == purpose:
+                    del self.event_listeners[tl][k]
 
     def _tl_for_period(self, period_name):
         return {
