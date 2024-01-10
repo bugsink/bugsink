@@ -1,3 +1,4 @@
+from collections import namedtuple
 from datetime import datetime, timezone, timedelta
 
 # these constants are quite arbitrary; it can easily be argued that 90 minutes is an interesting time-frame (because of
@@ -23,6 +24,18 @@ TL_MONTH = 2
 TL_DAY = 3
 TL_HOUR = 4
 TL_MINUTE = 5
+
+
+EventListener = namedtuple("EventListener", "when_becomes_true when_becomes_false purpose is_true")
+
+
+def change_state(listener, is_true):
+    return EventListener(
+        when_becomes_true=listener.when_becomes_true,
+        when_becomes_false=listener.when_becomes_false,
+        purpose=listener.purpose,
+        is_true=is_true,
+    )
 
 
 def noop():
@@ -98,19 +111,19 @@ class PeriodCounter(object):
             is_new_period = _inc(self.counts[tl], tup[:tl], n, mx)
 
             event_listeners_for_tl = self.event_listeners[tl]
-            for ((nr_of_periods, gte_threshold), (wbt, wbf, purp, is_true)) in list(event_listeners_for_tl.items()):
-                if is_true:
+            for ((nr_of_periods, gte_threshold), listener) in list(event_listeners_for_tl.items()):
+                if listener.is_true:
                     if not is_new_period:
                         continue  # no new period means: never becomes false, because no old period becomes irrelevant
 
                     if not self._get_event_state(tup[:tl], tl, nr_of_periods, gte_threshold):
-                        event_listeners_for_tl[(nr_of_periods, gte_threshold)] = (wbt, wbf, purp, False)
-                        wbf()
+                        event_listeners_for_tl[(nr_of_periods, gte_threshold)] = change_state(listener, False)
+                        listener.when_becomes_false()
 
                 else:
                     if self._get_event_state(tup[:tl], tl, nr_of_periods, gte_threshold):
-                        event_listeners_for_tl[(nr_of_periods, gte_threshold)] = (wbt, wbf, purp, True)
-                        wbt()
+                        event_listeners_for_tl[(nr_of_periods, gte_threshold)] = change_state(listener, True)
+                        listener.when_becomes_true()
 
     def add_event_listener(self, period_name, nr_of_periods, gte_threshold, when_becomes_true=noop,
                            when_becomes_false=noop, purpose=None, initial_event_state=None, tup=None):
@@ -134,7 +147,7 @@ class PeriodCounter(object):
             initial_event_state = self._get_event_state(tup[:tl], tl, nr_of_periods, gte_threshold)
 
         self.event_listeners[tl][(nr_of_periods, gte_threshold)] = \
-            (when_becomes_true, when_becomes_false, purpose, initial_event_state)
+            EventListener(when_becomes_true, when_becomes_false, purpose, initial_event_state)
 
     def remove_event_listener(self, purpose):
         """
