@@ -100,24 +100,44 @@ class Issue(models.Model):
 
 
 class IssueResolver(object):
-    """basically: a namespace"""
+    """basically: a namespace; with static methods that combine field-setting in a single place"""
 
     @staticmethod
     def resolve(issue):
         issue.is_resolved = True
 
+        # an issue cannot be both resolved and muted; muted means "the problem persists but don't tell me about it
+        # (or maybe unless some specific condition happens)" and resolved means "the problem is gone". Hence, resolving
+        # an issue means unmuting it.
+        IssueResolver.unmute(issue)
+
     @staticmethod
     def resolve_by_latest(issue):
         issue.is_resolved = True
         issue.add_fixed_at(issue.project.get_latest_release())
+        IssueResolver.unmute(issue)  # as in IssueResolver.resolve()
 
     @staticmethod
     def resolve_by_next(issue):
         issue.is_resolved = True
         issue.is_resolved_by_next_release = True
+        IssueResolver.unmute(issue)  # as in IssueResolver.resolve()
 
     @staticmethod
     def reopen(issue):
         issue.is_resolved = False
         issue.is_resolved_by_next_release = False  # ?? echt?
         # TODO and what about fixed_at ?
+
+        # as in IssueResolver.resolve(), but not because a reopened issue cannot be muted (we could mute it soon after
+        # reopening) but because when reopening an issue you're doing this from a resolved state; calling unmute() here
+        # is done as a consistency-enforcement after the fact.
+        IssueResolver.unmute(issue)
+
+    @staticmethod
+    def unmute(issue):
+        issue.is_muted = False
+        issue.unmute_on_volume_based_conditions = "[]"
+        # TODO keep the pc_registry and the value of self.unmute_on_volume_based_conditions in-sync
+        # (maybe use an if-statement on is_muted/unmute_on_volume_based_conditions to figure out if there's any work to
+        # do here at all)
