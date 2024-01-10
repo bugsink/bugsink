@@ -17,8 +17,11 @@ class IngestViewTestCase(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
 
-    def test_ingest_view(self):
-        project = Project.objects.create(name="test")
+    def test_ingest_view_no_alerts(self):
+        project = Project.objects.create(
+            alert_on_new_issue=False,
+            name="test",
+        )
         request = self.factory.post("/api/1/store/")
 
         BaseIngestAPIView().process_event(

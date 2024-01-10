@@ -93,7 +93,9 @@ class Issue(models.Model):
             # alternative would be to pass this along.)
             get_pc_registry().by_issue[self.id].remove_event_listener(UNMUTE_PURPOSE)
 
-            if self.project.alert_on_unmute:  # TODO guard on project is None
+            # (note: we can expect project to be set, because it will be None only when projects are deleted in
+            # which case no more unmuting happens)
+            if self.project.alert_on_unmute:
                 send_unmute_notification.delay(self.id)
 
 

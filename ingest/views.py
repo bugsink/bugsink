@@ -70,7 +70,7 @@ class BaseIngestAPIView(APIView):
         # before proceeding because it may be useful for debugging errors in the digest process.
         ingested_event = cls.ingest_event(now, event_data, request, project)
         if settings.BUGSINK_DIGEST_IMMEDIATELY:
-            cls.digest_event(ingested_event, event_data, alerter_foo)
+            cls.digest_event(ingested_event, event_data)
 
     @classmethod
     def ingest_event(cls, now, event_data, request, project):
@@ -108,11 +108,11 @@ class BaseIngestAPIView(APIView):
 
         if issue_created:
             if ingested_event.project.alert_on_new_issue:
-                pass  # alert_for_new_issue.delay(issue)
+                alert_for_new_issue.delay(issue)
 
         elif issue_is_regression(issue, event.release):  # new issues cannot be regressions by definition, hence 'else'
             if ingested_event.project.alert_on_regression:
-                pass  # alert_for_regression.delay(issue)
+                alert_for_regression.delay(issue)
 
             IssueResolver.reopen(issue)
 
