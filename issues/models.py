@@ -3,6 +3,8 @@ import uuid
 
 from django.db import models
 
+from alerts.tasks import send_unmute_notification
+
 
 class Issue(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -90,6 +92,9 @@ class Issue(models.Model):
             # anything. (Side note: I'm not sure how I feel about reaching out to the global registry here; the
             # alternative would be to pass this along.)
             get_pc_registry().by_issue[self.id].remove_event_listener(UNMUTE_PURPOSE)
+
+            if self.project.alert_on_unmute:  # TODO guard on project is None
+                send_unmute_notification.delay(self.id)
 
 
 class IssueResolver(object):

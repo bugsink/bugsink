@@ -15,7 +15,6 @@ UNMUTE_PURPOSE = "unmute"
 
 def create_unmute_issue_handler(issue_id):
     def unmute():
-        # we might just push this into a [class]method of Issue
         issue = Issue.objects.get(id=issue_id)
         issue.unmute()
 
