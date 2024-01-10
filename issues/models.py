@@ -70,6 +70,27 @@ class Issue(models.Model):
     def occurs_in_last_release(self):
         return False  # TODO actually implement (and then: implement in a performant manner)
 
+    def unmute(self):
+        from bugsink.registry import get_pc_registry, UNMUTE_PURPOSE  # avoid circular import
+
+        if self.is_muted:
+            # we check on is_muted explicitly: it may be so that multiple unmute conditions happens simultaneously (and
+            # not just in "funny configurations"). i.e. a single event could push you past more than 3 events per day or
+            # 100 events per year. We don't want 2 "unmuted" alerts being sent in that case.
+
+            self.is_muted = False
+
+            self.unmute_on_volume_based_conditions = "[]"
+            self.save()
+
+            # We keep the pc_registry and the value of self.unmute_on_volume_based_conditions in-sync to avoid going
+            # mad (in general). A specific case that I can think of off the top of my head that goes wrong if you
+            # wouldn't do this, even given the fact that we check on is_muted in the above: you might re-mute but with
+            # different unmute conditions, and in that case you don't want your old outdated conditions triggering
+            # anything. (Side note: I'm not sure how I feel about reaching out to the global registry here; the
+            # alternative would be to pass this along.)
+            get_pc_registry().by_issue[self.id].remove_event_listener(UNMUTE_PURPOSE)
+
 
 class IssueResolver(object):
     """basically: a namespace"""

@@ -1,8 +1,11 @@
 from unittest import TestCase
 from django.test import TestCase as DjangoTestCase
+from datetime import datetime, timezone
 
 from projects.models import Project
 from releases.models import create_release_if_needed
+from bugsink.registry import reset_pc_registry, get_pc_registry
+from bugsink.period_counter import TL_DAY
 
 from .models import Issue, IssueResolver
 from .regressions import is_regression, is_regression_2, issue_is_regression
@@ -258,3 +261,28 @@ the wild ("b") and resolve it ("c"). Then, if we were to see it again in "a", as
 would be seen as a regression when in reality it was never solved in "a", and its marking-as-such should probably have
 seen as an undo rather than anything else.
 """
+
+
+class UnmuteTestCase(TestCase):
+
+    def setUp(self):
+        reset_pc_registry()
+
+    def tearDown(self):
+        reset_pc_registry()
+
+    def test_unmute_simple_case(self):
+        issue = Issue.objects.create(
+            unmute_on_volume_based_conditions='[{"period": "day", "nr_of_periods": 1, "volume": 1}]',
+            is_muted=True,
+        )
+
+        # because we create our objects before getting the lazy registry, event-listeners will be correctly set by
+        # registry.load_from_scratch()
+        registry = get_pc_registry()
+
+        registry.by_issue[issue.id].inc(datetime.now(timezone.utc))
+
+        self.assertFalse(Issue.objects.get(id=issue.id).is_muted)
+        self.assertEquals("[]", Issue.objects.get(id=issue.id).unmute_on_volume_based_conditions)
+        self.assertEquals({}, registry.by_issue[issue.id].event_listeners[TL_DAY])
