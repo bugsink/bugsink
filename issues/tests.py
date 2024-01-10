@@ -272,8 +272,8 @@ class UnmuteTestCase(TestCase):
     def tearDown(self):
         reset_pc_registry()
 
-    @patch("issues.models.send_unmute_notification")
-    def test_unmute_simple_case(self, send_unmute_notification):
+    @patch("issues.models.send_unmute_alert")
+    def test_unmute_simple_case(self, send_unmute_alert):
         project = Project.objects.create()
 
         issue = Issue.objects.create(
@@ -292,10 +292,10 @@ class UnmuteTestCase(TestCase):
         self.assertEquals("[]", Issue.objects.get(id=issue.id).unmute_on_volume_based_conditions)
         self.assertEquals({}, registry.by_issue[issue.id].event_listeners[TL_DAY])
 
-        self.assertEquals(1, send_unmute_notification.delay.call_count)
+        self.assertEquals(1, send_unmute_alert.delay.call_count)
 
-    @patch("issues.models.send_unmute_notification")
-    def test_unmute_two_simultaneously_should_lead_to_one_notification(self, send_unmute_notification):
+    @patch("issues.models.send_unmute_alert")
+    def test_unmute_two_simultaneously_should_lead_to_one_alert(self, send_unmute_alert):
         project = Project.objects.create()
 
         issue = Issue.objects.create(
@@ -317,4 +317,4 @@ class UnmuteTestCase(TestCase):
         self.assertEquals("[]", Issue.objects.get(id=issue.id).unmute_on_volume_based_conditions)
         self.assertEquals({}, registry.by_issue[issue.id].event_listeners[TL_DAY])
 
-        self.assertEquals(1, send_unmute_notification.delay.call_count)
+        self.assertEquals(1, send_unmute_alert.delay.call_count)

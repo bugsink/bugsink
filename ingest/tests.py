@@ -1,4 +1,5 @@
 import datetime
+from unittest.mock import patch
 
 from django.conf import settings
 from django.test import TestCase
@@ -17,7 +18,9 @@ class IngestViewTestCase(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
 
-    def test_ingest_view_no_alerts(self):
+    @patch("ingest.views.send_new_issue_alert")
+    @patch("ingest.views.send_regression_alert")
+    def test_ingest_view_no_alerts(self, send_regression_alert, send_new_issue_alert):
         project = Project.objects.create(
             alert_on_new_issue=False,
             name="test",
@@ -29,6 +32,25 @@ class IngestViewTestCase(TestCase):
             project,
             request,
         )
+        self.assertFalse(send_regression_alert.delay.called)
+        self.assertFalse(send_new_issue_alert.delay.called)
+
+    @patch("ingest.views.send_new_issue_alert")
+    @patch("ingest.views.send_regression_alert")
+    def test_ingest_view_new_issue_alert(self, send_regression_alert, send_new_issue_alert):
+        project = Project.objects.create(
+            alert_on_new_issue=True,
+            name="test",
+        )
+        request = self.factory.post("/api/1/store/")
+
+        BaseIngestAPIView().process_event(
+            create_event_data(),
+            project,
+            request,
+        )
+        self.assertTrue(send_new_issue_alert.delay.called)
+        self.assertFalse(send_regression_alert.delay.called)
 
 
 class TimeZoneTesCase(TestCase):

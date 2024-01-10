@@ -21,6 +21,7 @@ from events.models import Event
 from releases.models import create_release_if_needed
 from bugsink.registry import get_pc_registry
 from bugsink.period_counter import PeriodCounter
+from alerts.tasks import send_new_issue_alert, send_regression_alert
 
 from .negotiation import IgnoreClientContentNegotiation
 from .parsers import EnvelopeParser
@@ -108,11 +109,11 @@ class BaseIngestAPIView(APIView):
 
         if issue_created:
             if ingested_event.project.alert_on_new_issue:
-                alert_for_new_issue.delay(issue)
+                send_new_issue_alert.delay(issue)
 
         elif issue_is_regression(issue, event.release):  # new issues cannot be regressions by definition, hence 'else'
             if ingested_event.project.alert_on_regression:
-                alert_for_regression.delay(issue)
+                send_regression_alert.delay(issue)
 
             IssueResolver.reopen(issue)
 

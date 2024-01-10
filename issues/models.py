@@ -3,7 +3,7 @@ import uuid
 
 from django.db import models
 
-from alerts.tasks import send_unmute_notification
+from alerts.tasks import send_unmute_alert
 
 
 class Issue(models.Model):
@@ -96,7 +96,7 @@ class Issue(models.Model):
             # (note: we can expect project to be set, because it will be None only when projects are deleted in
             # which case no more unmuting happens)
             if self.project.alert_on_unmute:
-                send_unmute_notification.delay(self.id)
+                send_unmute_alert.delay(self.id)
 
 
 class IssueResolver(object):
