@@ -114,6 +114,12 @@ class PeriodCounter(object):
 
     def add_event_listener(self, period_name, nr_of_periods, gte_threshold, when_becomes_true=noop,
                            when_becomes_false=noop, purpose=None, initial_event_state=None, tup=None):
+        # NOTE as it stands we store only a single event_listener at the key (nr_of_periods, gte_threshold); this means
+        # that if you add a second event_listener with the same key, it will overwrite the first one. As long as we have
+        # a single event-listener per goal (e.g. unmuting) this may actually be a feature; but if we start monitoring
+        # both quota/unmuting in a single period_counter, these things will conflict and we'll need to keep a list as
+        # the values in our dict.
+
         # note: the 'events' here are not bugsink-events; but the more general concept of 'an event'; we may consider a
         # different name for this in the future because of that.
 
