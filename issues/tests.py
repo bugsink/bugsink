@@ -293,3 +293,28 @@ class UnmuteTestCase(TestCase):
         self.assertEquals({}, registry.by_issue[issue.id].event_listeners[TL_DAY])
 
         self.assertEquals(1, send_unmute_notification.delay.call_count)
+
+    @patch("issues.models.send_unmute_notification")
+    def test_unmute_two_simultaneously_should_lead_to_one_notification(self, send_unmute_notification):
+        project = Project.objects.create()
+
+        issue = Issue.objects.create(
+            project=project,
+            unmute_on_volume_based_conditions='''[
+    {"period": "day", "nr_of_periods": 1, "volume": 1},
+    {"period": "month", "nr_of_periods": 1, "volume": 1}
+]''',
+            is_muted=True,
+        )
+
+        # because we create our objects before getting the lazy registry, event-listeners will be correctly set by
+        # registry.load_from_scratch()
+        registry = get_pc_registry()
+
+        registry.by_issue[issue.id].inc(datetime.now(timezone.utc))
+
+        self.assertFalse(Issue.objects.get(id=issue.id).is_muted)
+        self.assertEquals("[]", Issue.objects.get(id=issue.id).unmute_on_volume_based_conditions)
+        self.assertEquals({}, registry.by_issue[issue.id].event_listeners[TL_DAY])
+
+        self.assertEquals(1, send_unmute_notification.delay.call_count)
