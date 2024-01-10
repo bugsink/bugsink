@@ -8,7 +8,7 @@ from releases.models import create_release_if_needed
 from bugsink.registry import reset_pc_registry, get_pc_registry
 from bugsink.period_counter import TL_DAY
 
-from .models import Issue, IssueResolver
+from .models import Issue, IssueStateManager
 from .regressions import is_regression, is_regression_2, issue_is_regression
 
 
@@ -168,13 +168,13 @@ class RegressionIssueTestCase(DjangoTestCase):
         self.assertFalse(issue_is_regression(fresh(issue), "anything"))
 
         # resolve the issue, a reoccurrence is a regression
-        IssueResolver.resolve(issue)
+        IssueStateManager.resolve(issue)
         issue.save()
         self.assertTrue(issue_is_regression(fresh(issue), "anything"))
 
         # reopen the issue (as is done when a real regression is seen; or as would be done manually); nothing is a
         # regression once the issue is open
-        IssueResolver.reopen(issue)
+        IssueStateManager.reopen(issue)
         issue.save()
         self.assertFalse(issue_is_regression(fresh(issue), "anything"))
 
@@ -189,7 +189,7 @@ class RegressionIssueTestCase(DjangoTestCase):
         self.assertFalse(issue_is_regression(fresh(issue), "anything"))
 
         # resolve the by latest, reoccurrences of older releases are not regressions but occurrences by latest are
-        IssueResolver.resolve_by_latest(issue)
+        IssueStateManager.resolve_by_latest(issue)
         issue.save()
         self.assertFalse(issue_is_regression(fresh(issue), "1.0.0"))
         self.assertTrue(issue_is_regression(fresh(issue), "2.0.0"))
@@ -200,7 +200,7 @@ class RegressionIssueTestCase(DjangoTestCase):
 
         # reopen the issue (as is done when a real regression is seen; or as would be done manually); nothing is a
         # regression once the issue is open
-        IssueResolver.reopen(issue)
+        IssueStateManager.reopen(issue)
         issue.save()
         self.assertFalse(issue_is_regression(fresh(issue), "1.0.0"))
         self.assertFalse(issue_is_regression(fresh(issue), "2.0.0"))
@@ -216,7 +216,7 @@ class RegressionIssueTestCase(DjangoTestCase):
         self.assertFalse(issue_is_regression(fresh(issue), "anything"))
 
         # resolve the by next, reoccurrences of any existing releases are not regressions
-        IssueResolver.resolve_by_next(issue)
+        IssueStateManager.resolve_by_next(issue)
         issue.save()
         self.assertFalse(issue_is_regression(fresh(issue), "1.0.0"))
         self.assertFalse(issue_is_regression(fresh(issue), "2.0.0"))

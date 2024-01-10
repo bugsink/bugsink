@@ -6,7 +6,7 @@ from events.models import Event
 from projects.models import Project
 
 from .utils import get_issue_grouper_for_data
-from .models import Issue, IssueResolver
+from .models import Issue, IssueStateManager
 
 
 def issue_list(request, project_id):
@@ -31,13 +31,13 @@ def issue_event_detail(request, issue_pk, event_pk):
 
     if request.method == "POST":
         if request.POST["action"] == "resolved":
-            IssueResolver.resolve(issue)
+            IssueStateManager.resolve(issue)
         elif request.POST["action"] == "resolved_latest":
-            IssueResolver.resolve_by_latest(issue)
+            IssueStateManager.resolve_by_latest(issue)
         elif request.POST["action"] == "resolved_next":
-            IssueResolver.resolve_by_next(issue)
+            IssueStateManager.resolve_by_next(issue)
         elif request.POST["action"] == "reopen":
-            IssueResolver.reopen(issue)
+            IssueStateManager.reopen(issue)
 
         elif request.POST["action"] == "mute":
             ...

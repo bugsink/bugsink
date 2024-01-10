@@ -13,7 +13,7 @@ from rest_framework import exceptions
 from compat.auth import parse_auth_header_value
 
 from projects.models import Project
-from issues.models import Issue, IssueResolver
+from issues.models import Issue, IssueStateManager
 from issues.utils import get_hash_for_data
 from issues.regressions import issue_is_regression
 
@@ -115,7 +115,7 @@ class BaseIngestAPIView(APIView):
             if ingested_event.project.alert_on_regression:
                 send_regression_alert.delay(issue)
 
-            IssueResolver.reopen(issue)
+            IssueStateManager.reopen(issue)
 
         if issue.id not in get_pc_registry().by_issue:
             get_pc_registry().by_issue[issue.id] = PeriodCounter()

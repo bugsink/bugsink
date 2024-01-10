@@ -99,7 +99,7 @@ class Issue(models.Model):
                 send_unmute_alert.delay(self.id)
 
 
-class IssueResolver(object):
+class IssueStateManager(object):
     """basically: a namespace; with static methods that combine field-setting in a single place"""
 
     @staticmethod
@@ -109,19 +109,19 @@ class IssueResolver(object):
         # an issue cannot be both resolved and muted; muted means "the problem persists but don't tell me about it
         # (or maybe unless some specific condition happens)" and resolved means "the problem is gone". Hence, resolving
         # an issue means unmuting it.
-        IssueResolver.unmute(issue)
+        IssueStateManager.unmute(issue)
 
     @staticmethod
     def resolve_by_latest(issue):
         issue.is_resolved = True
         issue.add_fixed_at(issue.project.get_latest_release())
-        IssueResolver.unmute(issue)  # as in IssueResolver.resolve()
+        IssueStateManager.unmute(issue)  # as in IssueStateManager.resolve()
 
     @staticmethod
     def resolve_by_next(issue):
         issue.is_resolved = True
         issue.is_resolved_by_next_release = True
-        IssueResolver.unmute(issue)  # as in IssueResolver.resolve()
+        IssueStateManager.unmute(issue)  # as in IssueStateManager.resolve()
 
     @staticmethod
     def reopen(issue):
@@ -129,10 +129,10 @@ class IssueResolver(object):
         issue.is_resolved_by_next_release = False  # ?? echt?
         # TODO and what about fixed_at ?
 
-        # as in IssueResolver.resolve(), but not because a reopened issue cannot be muted (we could mute it soon after
-        # reopening) but because when reopening an issue you're doing this from a resolved state; calling unmute() here
-        # is done as a consistency-enforcement after the fact.
-        IssueResolver.unmute(issue)
+        # as in IssueStateManager.resolve(), but not because a reopened issue cannot be muted (we could mute it soon
+        # after reopening) but because when reopening an issue you're doing this from a resolved state; calling unmute()
+        # here is done as a consistency-enforcement after the fact.
+        IssueStateManager.unmute(issue)
 
     @staticmethod
     def unmute(issue):
