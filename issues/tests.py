@@ -267,6 +267,21 @@ seen as an undo rather than anything else.
 class UnmuteTestCase(TestCase):
 
     def setUp(self):
+        """
+        (TODO The below is not implemented yet; we may need it at some point)
+
+        To avoid unintentional modifications to the pc_registry in tests without a recent reset, consider the following
+
+        1. In each setup method, explicitly set a testing flag to indicate that it is safe to interact
+           with the pc_registry. For example, include the line:
+              `set_testing_flag(True)` (as well as resetting the pc_registry)
+
+        2. In each tearDown method, reset the testing flag to indicate that further modifications
+           to the pc_registry should be avoided. For example, include the line:
+              `set_testing_flag(False)`
+
+        This approach helps prevent accidental influences of one test on another via the pc_registry.
+        """
         reset_pc_registry()
 
     def tearDown(self):
