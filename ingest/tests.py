@@ -21,6 +21,18 @@ class IngestViewTestCase(TestCase):
 
     def setUp(self):
         self.request_factory = RequestFactory()
+        self.loud_project = Project.objects.create(
+            name="loud",
+            alert_on_new_issue=True,
+            alert_on_regression=True,
+            alert_on_unmute=True,
+        )
+        self.quiet_project = Project.objects.create(
+            name="quiet",
+            alert_on_new_issue=False,
+            alert_on_regression=False,
+            alert_on_unmute=False,
+        )
         reset_pc_registry()  # see notes in issues/tests.py for possible improvement; needed because we test unmuting.
 
     def tearDown(self):
@@ -30,15 +42,11 @@ class IngestViewTestCase(TestCase):
     @patch("ingest.views.send_regression_alert")
     @patch("issues.models.send_unmute_alert")
     def test_ingest_view_no_alerts(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
-        project = Project.objects.create(
-            alert_on_new_issue=False,
-            name="test",
-        )
         request = self.request_factory.post("/api/1/store/")
 
         BaseIngestAPIView().process_event(
             create_event_data(),
-            project,
+            self.quiet_project,
             request,
         )
         self.assertFalse(send_regression_alert.delay.called)
@@ -49,15 +57,11 @@ class IngestViewTestCase(TestCase):
     @patch("ingest.views.send_regression_alert")
     @patch("issues.models.send_unmute_alert")
     def test_ingest_view_new_issue_alert(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
-        project = Project.objects.create(
-            alert_on_new_issue=True,
-            name="test",
-        )
         request = self.request_factory.post("/api/1/store/")
 
         BaseIngestAPIView().process_event(
             create_event_data(),
-            project,
+            self.loud_project,
             request,
         )
         self.assertTrue(send_new_issue_alert.delay.called)
@@ -68,14 +72,9 @@ class IngestViewTestCase(TestCase):
     @patch("ingest.views.send_regression_alert")
     @patch("issues.models.send_unmute_alert")
     def test_ingest_view_regression_alert(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
-        project = Project.objects.create(
-            alert_on_regression=True,   # TODO here and above: fluctuate this variable and change expectations on result
-            name="test",
-        )
-
         event_data = create_event_data()
 
-        issue, _ = get_or_create_issue(project, event_data)
+        issue, _ = get_or_create_issue(self.loud_project, event_data)
         issue.is_resolved = True
         issue.save()
 
@@ -83,7 +82,7 @@ class IngestViewTestCase(TestCase):
 
         BaseIngestAPIView().process_event(
             event_data,
-            project,
+            self.loud_project,
             request,
         )
         self.assertFalse(send_new_issue_alert.delay.called)
@@ -96,15 +95,9 @@ class IngestViewTestCase(TestCase):
     def test_ingest_view_funny_state(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
         # "funny", because we build an issue with a funny state (muted, resolved) on purpose to check that only a
         # regression alert is sent.
-        project = Project.objects.create(
-            alert_on_regression=True,
-            alert_on_unmute=True,
-            name="test",
-        )
-
         event_data = create_event_data()
 
-        issue, _ = get_or_create_issue(project, event_data)
+        issue, _ = get_or_create_issue(self.loud_project, event_data)
 
         # creation of the funny state:
         IssueStateManager.mute(issue, "[{\"period\": \"day\", \"nr_of_periods\": 1, \"volume\": 1}]")
@@ -115,7 +108,7 @@ class IngestViewTestCase(TestCase):
 
         BaseIngestAPIView().process_event(
             event_data,
-            project,
+            self.loud_project,
             request,
         )
         self.assertFalse(send_new_issue_alert.delay.called)
@@ -126,15 +119,9 @@ class IngestViewTestCase(TestCase):
     @patch("ingest.views.send_regression_alert")
     @patch("issues.models.send_unmute_alert")
     def test_ingest_view_unmute_alert(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
-        project = Project.objects.create(
-            alert_on_regression=True,
-            alert_on_unmute=True,
-            name="test",
-        )
-
         event_data = create_event_data()
 
-        issue, _ = get_or_create_issue(project, event_data)
+        issue, _ = get_or_create_issue(self.loud_project, event_data)
 
         IssueStateManager.mute(issue, "[{\"period\": \"day\", \"nr_of_periods\": 1, \"volume\": 1}]")
         issue.save()
@@ -143,7 +130,7 @@ class IngestViewTestCase(TestCase):
 
         BaseIngestAPIView().process_event(
             event_data,
-            project,
+            self.loud_project,
             request,
         )
         self.assertFalse(send_new_issue_alert.delay.called)
