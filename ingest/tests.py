@@ -9,7 +9,7 @@ from django.test.client import RequestFactory
 from projects.models import Project
 from events.factories import create_event_data
 from issues.factories import get_or_create_issue
-from issues.models import IssueStateManager
+from issues.models import IssueStateManager, Issue
 from bugsink.registry import reset_pc_registry
 
 from .models import DecompressedEvent
@@ -37,21 +37,6 @@ class IngestViewTestCase(TestCase):
 
     def tearDown(self):
         reset_pc_registry()
-
-    @patch("ingest.views.send_new_issue_alert")
-    @patch("ingest.views.send_regression_alert")
-    @patch("issues.models.send_unmute_alert")
-    def test_ingest_view_no_alerts(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
-        request = self.request_factory.post("/api/1/store/")
-
-        BaseIngestAPIView().process_event(
-            create_event_data(),
-            self.quiet_project,
-            request,
-        )
-        self.assertFalse(send_regression_alert.delay.called)
-        self.assertFalse(send_new_issue_alert.delay.called)
-        self.assertFalse(send_unmute_alert.delay.called)
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
@@ -136,6 +121,49 @@ class IngestViewTestCase(TestCase):
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertFalse(send_regression_alert.delay.called)
         self.assertTrue(send_unmute_alert.delay.called)
+
+    @patch("ingest.views.send_new_issue_alert")
+    @patch("ingest.views.send_regression_alert")
+    @patch("issues.models.send_unmute_alert")
+    def test_ingest_view_no_alerts(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
+        request = self.request_factory.post("/api/1/store/")
+
+        # the thing we want to test here is "are no alerts sent when alerting is turned off"; but to make sure our test
+        # doesn't silently break we've included the positive case in the loop here.
+        for (expected_called, project) in [(False, self.quiet_project), (True, self.loud_project)]:
+            # new event
+            BaseIngestAPIView().process_event(
+                create_event_data(),
+                project,
+                request,
+            )
+            self.assertEquals(expected_called, send_new_issue_alert.delay.called)
+
+            issue = Issue.objects.get(project=project)
+            issue.is_resolved = True
+            issue.save()
+
+            # regression
+            BaseIngestAPIView().process_event(
+                create_event_data(),
+                project,
+                request,
+            )
+
+            self.assertEquals(expected_called, send_regression_alert.delay.called)
+
+            # mute
+            issue = Issue.objects.get(project=project)
+            IssueStateManager.mute(issue, "[{\"period\": \"day\", \"nr_of_periods\": 1, \"volume\": 3}]")
+            issue.save()
+
+            # unmute via API
+            BaseIngestAPIView().process_event(
+                create_event_data(),
+                project,
+                request,
+            )
+            self.assertEquals(expected_called, send_unmute_alert.delay.called)
 
 
 class TimeZoneTesCase(TestCase):
