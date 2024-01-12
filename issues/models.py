@@ -133,7 +133,7 @@ class IssueStateManager(object):
         ]
 
         for vbc in unmute_vbcs:
-            issue_pc.add_event_listener(
+            initial_state = issue_pc.add_event_listener(
                 period_name=vbc.period,
                 nr_of_periods=vbc.nr_of_periods,
                 gte_threshold=vbc.volume,
@@ -141,6 +141,19 @@ class IssueStateManager(object):
                 tup=now.timetuple(),
                 purpose=UNMUTE_PURPOSE,
             )
+            if initial_state:
+                # What do you really mean when passing an unmute-condition that is immediately true? Probably: not what
+                # you asked for (you asked for muting, but provided a condition that would immediately unmute).
+                #
+                # We guard for this also because in our implementation, having passed the "become true" point means that
+                # in fact the condition will only become true _after_ it has become false once. (i.e. the opposite of
+                # what you'd expect).
+                #
+                # Whether to raise an Exception (rather than e.g. validate, or warn, or whatever) is an open question.
+                # For now we do it to avoid surprises.
+                #
+                # One alternative implementation would be: immediately unmute (but that's surprising too!)
+                raise Exception("The unmute condition is already true")
 
     @staticmethod
     def unmute(issue, implicitly_called=False):

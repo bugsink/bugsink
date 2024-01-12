@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from projects.models import Project
 from releases.models import create_release_if_needed
 from bugsink.registry import reset_pc_registry, get_pc_registry
-from bugsink.period_counter import TL_DAY
+from bugsink.period_counter import PeriodCounter, TL_DAY
 
 from .models import Issue, IssueStateManager
 from .regressions import is_regression, is_regression_2, issue_is_regression
@@ -264,7 +264,7 @@ seen as an undo rather than anything else.
 """
 
 
-class UnmuteTestCase(TestCase):
+class MuteUnmuteTestCase(TestCase):
     """
     Somewhat of an integration test. The unit-under-test here is the whole of
     * the pc_registry
@@ -292,6 +292,22 @@ class UnmuteTestCase(TestCase):
 
     def tearDown(self):
         reset_pc_registry()
+
+    def test_mute_with_already_satisfied_mute_condition(self):
+        registry = get_pc_registry()
+        project = Project.objects.create()
+
+        issue = Issue.objects.create(
+            project=project,
+            unmute_on_volume_based_conditions='[{"period": "day", "nr_of_periods": 1, "volume": 1}]',
+            is_muted=True,
+        )
+
+        pc = registry.by_issue[issue.id] = PeriodCounter()
+        pc.inc(datetime.now(timezone.utc))
+
+        with self.assertRaises(Exception):
+            IssueStateManager.mute(issue, "[{\"period\": \"day\", \"nr_of_periods\": 1, \"volume\": 1}]")
 
     @patch("issues.models.send_unmute_alert")
     def test_unmute_simple_case(self, send_unmute_alert):

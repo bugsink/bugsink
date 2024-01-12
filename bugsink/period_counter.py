@@ -149,6 +149,8 @@ class PeriodCounter(object):
         self.event_listeners[tl][(nr_of_periods, gte_threshold)] = \
             EventListener(when_becomes_true, when_becomes_false, purpose, initial_event_state)
 
+        return initial_event_state
+
     def remove_event_listener(self, purpose):
         """
         Remove all event listeners with the given purpose. The purpose is a string that can be used to identify the
