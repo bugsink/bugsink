@@ -293,6 +293,26 @@ class MuteUnmuteTestCase(TestCase):
     def tearDown(self):
         reset_pc_registry()
 
+    def test_mute_no_vbc_for_unmute(self):
+        project = Project.objects.create()
+
+        issue = Issue.objects.create(project=project)
+        IssueStateManager.mute(issue, "[]")
+        issue.save()
+
+        registry = get_pc_registry()
+        self.assertEquals(0, len(registry.by_issue[issue.id].event_listeners[TL_DAY]))
+
+    def test_mute_simple_case(self):
+        project = Project.objects.create()
+
+        issue = Issue.objects.create(project=project)
+        IssueStateManager.mute(issue, "[{\"period\": \"day\", \"nr_of_periods\": 1, \"volume\": 1}]")
+        issue.save()
+
+        registry = get_pc_registry()
+        self.assertEquals((1, 1), list(registry.by_issue[issue.id].event_listeners[TL_DAY].keys())[0])
+
     def test_mute_with_already_satisfied_mute_condition(self):
         registry = get_pc_registry()
         project = Project.objects.create()
