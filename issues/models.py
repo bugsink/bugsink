@@ -117,43 +117,13 @@ class IssueStateManager(object):
 
     @staticmethod
     def mute(issue, unmute_on_volume_based_conditions="[]"):
-        from bugsink.registry import get_pc_registry, UNMUTE_PURPOSE  # avoid circular import
-
+        from bugsink.registry import get_pc_registry  # avoid circular import
         now = datetime.now(timezone.utc)  # NOTE: clock-reading going on here... should it be passed-in?
 
         issue.is_muted = True
         issue.unmute_on_volume_based_conditions = unmute_on_volume_based_conditions
 
-        # NOTE The below is copied almost verbatim from load_from_scratch() in registry.py; it should be factored out.
-        issue_pc = get_pc_registry().by_issue[issue.id]
-
-        unmute_vbcs = [
-            VolumeBasedCondition.from_dict(vbc_s)
-            for vbc_s in json.loads(issue.unmute_on_volume_based_conditions)
-        ]
-
-        for vbc in unmute_vbcs:
-            initial_state = issue_pc.add_event_listener(
-                period_name=vbc.period,
-                nr_of_periods=vbc.nr_of_periods,
-                gte_threshold=vbc.volume,
-                when_becomes_true=create_unmute_issue_handler(issue.id),
-                tup=now.timetuple(),
-                purpose=UNMUTE_PURPOSE,
-            )
-            if initial_state:
-                # What do you really mean when passing an unmute-condition that is immediately true? Probably: not what
-                # you asked for (you asked for muting, but provided a condition that would immediately unmute).
-                #
-                # We guard for this also because in our implementation, having passed the "become true" point means that
-                # in fact the condition will only become true _after_ it has become false once. (i.e. the opposite of
-                # what you'd expect).
-                #
-                # Whether to raise an Exception (rather than e.g. validate, or warn, or whatever) is an open question.
-                # For now we do it to avoid surprises.
-                #
-                # One alternative implementation would be: immediately unmute (but that's surprising too!)
-                raise Exception("The unmute condition is already true")
+        IssueStateManager.set_unmute_handlers(get_pc_registry().by_issue, issue, now)
 
     @staticmethod
     def unmute(issue, implicitly_called=False):
@@ -185,6 +155,39 @@ class IssueStateManager(object):
                 # which case no more unmuting happens)
                 if issue.project.alert_on_unmute:
                     send_unmute_alert.delay(issue.id)
+
+    @staticmethod
+    def set_unmute_handlers(by_issue, issue, now):
+        from bugsink.registry import UNMUTE_PURPOSE  # avoid circular import
+        issue_pc = by_issue[issue.id]
+
+        unmute_vbcs = [
+            VolumeBasedCondition.from_dict(vbc_s)
+            for vbc_s in json.loads(issue.unmute_on_volume_based_conditions)
+        ]
+
+        for vbc in unmute_vbcs:
+            initial_state = issue_pc.add_event_listener(
+                period_name=vbc.period,
+                nr_of_periods=vbc.nr_of_periods,
+                gte_threshold=vbc.volume,
+                when_becomes_true=create_unmute_issue_handler(issue.id),
+                tup=now.timetuple(),
+                purpose=UNMUTE_PURPOSE,
+            )
+            if initial_state:
+                # What do you really mean when passing an unmute-condition that is immediately true? Probably: not what
+                # you asked for (you asked for muting, but provided a condition that would immediately unmute).
+                #
+                # We guard for this also because in our implementation, having passed the "become true" point means that
+                # in fact the condition will only become true _after_ it has become false once. (i.e. the opposite of
+                # what you'd expect).
+                #
+                # Whether to raise an Exception (rather than e.g. validate, or warn, or whatever) is an open question.
+                # For now we do it to avoid surprises.
+                #
+                # One alternative implementation would be: immediately unmute (but that's surprising too!)
+                raise Exception("The unmute condition is already true")
 
 
 def create_unmute_issue_handler(issue_id):

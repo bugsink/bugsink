@@ -1,12 +1,10 @@
-import json
 from datetime import datetime, timezone
 
 from projects.models import Project
 from events.models import Event
-from issues.models import Issue, create_unmute_issue_handler
+from issues.models import Issue, IssueStateManager
 
 from .period_counter import PeriodCounter
-from .volume_based_condition import VolumeBasedCondition
 
 
 _registry = None
@@ -48,22 +46,7 @@ class PeriodCounterRegistry(object):
         # 1. we don't actually want to trigger anything on-load and
         # 2. this is much faster.
         for issue in issues.filter(is_muted=True):
-            issue_pc = by_issue[issue.id]
-
-            unmute_vbcs = [
-                VolumeBasedCondition.from_dict(vbc_s)
-                for vbc_s in json.loads(issue.unmute_on_volume_based_conditions)
-            ]
-
-            for vbc in unmute_vbcs:
-                issue_pc.add_event_listener(
-                    period_name=vbc.period,
-                    nr_of_periods=vbc.nr_of_periods,
-                    gte_threshold=vbc.volume,
-                    when_becomes_true=create_unmute_issue_handler(issue.id),
-                    tup=now.timetuple(),
-                    purpose=UNMUTE_PURPOSE,
-                )
+            IssueStateManager.set_unmute_handlers(by_issue, issue, now)
 
         return by_project, by_issue
 
