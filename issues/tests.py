@@ -265,6 +265,12 @@ seen as an undo rather than anything else.
 
 
 class UnmuteTestCase(TestCase):
+    """
+    Somewhat of an integration test. The unit-under-test here is the whole of
+    * the pc_registry
+    * PeriodCounter (counting, event listeners)
+    * IssueStateManager.unmute
+    """
 
     def setUp(self):
         """

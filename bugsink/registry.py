@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from projects.models import Project
 from events.models import Event
-from issues.models import Issue
+from issues.models import Issue, create_unmute_issue_handler
 
 from .period_counter import PeriodCounter
 from .volume_based_condition import VolumeBasedCondition
@@ -11,14 +11,6 @@ from .volume_based_condition import VolumeBasedCondition
 
 _registry = None
 UNMUTE_PURPOSE = "unmute"
-
-
-def create_unmute_issue_handler(issue_id):
-    def unmute():
-        issue = Issue.objects.get(id=issue_id)
-        issue.unmute()
-
-    return unmute
 
 
 class PeriodCounterRegistry(object):

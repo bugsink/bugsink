@@ -1,9 +1,12 @@
+from datetime import datetime, timezone
 import json
 import uuid
 
 from django.db import models
 
 from alerts.tasks import send_unmute_alert
+
+from bugsink.volume_based_condition import VolumeBasedCondition
 
 
 class Issue(models.Model):
@@ -72,35 +75,13 @@ class Issue(models.Model):
     def occurs_in_last_release(self):
         return False  # TODO actually implement (and then: implement in a performant manner)
 
-    def unmute(self):
-        from bugsink.registry import get_pc_registry, UNMUTE_PURPOSE  # avoid circular import
-
-        if self.is_muted:
-            # we check on is_muted explicitly: it may be so that multiple unmute conditions happens simultaneously (and
-            # not just in "funny configurations"). i.e. a single event could push you past more than 3 events per day or
-            # 100 events per year. We don't want 2 "unmuted" alerts being sent in that case.
-
-            self.is_muted = False
-
-            self.unmute_on_volume_based_conditions = "[]"
-            self.save()
-
-            # We keep the pc_registry and the value of self.unmute_on_volume_based_conditions in-sync to avoid going
-            # mad (in general). A specific case that I can think of off the top of my head that goes wrong if you
-            # wouldn't do this, even given the fact that we check on is_muted in the above: you might re-mute but with
-            # different unmute conditions, and in that case you don't want your old outdated conditions triggering
-            # anything. (Side note: I'm not sure how I feel about reaching out to the global registry here; the
-            # alternative would be to pass this along.)
-            get_pc_registry().by_issue[self.id].remove_event_listener(UNMUTE_PURPOSE)
-
-            # (note: we can expect project to be set, because it will be None only when projects are deleted in
-            # which case no more unmuting happens)
-            if self.project.alert_on_unmute:
-                send_unmute_alert.delay(self.id)
-
 
 class IssueStateManager(object):
     """basically: a namespace; with static methods that combine field-setting in a single place"""
+
+    # NOTE I'm not so sure about the exact responsibilities of this thingie yet. In particular:
+    # * save() is now done outside;
+    # * alerts are sent from inside.
 
     @staticmethod
     def resolve(issue):
@@ -109,19 +90,19 @@ class IssueStateManager(object):
         # an issue cannot be both resolved and muted; muted means "the problem persists but don't tell me about it
         # (or maybe unless some specific condition happens)" and resolved means "the problem is gone". Hence, resolving
         # an issue means unmuting it.
-        IssueStateManager.unmute(issue)
+        IssueStateManager.unmute(issue, implicitly_called=True)
 
     @staticmethod
     def resolve_by_latest(issue):
         issue.is_resolved = True
         issue.add_fixed_at(issue.project.get_latest_release())
-        IssueStateManager.unmute(issue)  # as in IssueStateManager.resolve()
+        IssueStateManager.unmute(issue, implicitly_called=True)  # as in IssueStateManager.resolve()
 
     @staticmethod
     def resolve_by_next(issue):
         issue.is_resolved = True
         issue.is_resolved_by_next_release = True
-        IssueStateManager.unmute(issue)  # as in IssueStateManager.resolve()
+        IssueStateManager.unmute(issue, implicitly_called=True)  # as in IssueStateManager.resolve()
 
     @staticmethod
     def reopen(issue):
@@ -132,12 +113,71 @@ class IssueStateManager(object):
         # as in IssueStateManager.resolve(), but not because a reopened issue cannot be muted (we could mute it soon
         # after reopening) but because when reopening an issue you're doing this from a resolved state; calling unmute()
         # here is done as a consistency-enforcement after the fact.
-        IssueStateManager.unmute(issue)
+        IssueStateManager.unmute(issue, implicitly_called=True)
 
     @staticmethod
-    def unmute(issue):
-        issue.is_muted = False
-        issue.unmute_on_volume_based_conditions = "[]"
-        # TODO keep the pc_registry and the value of self.unmute_on_volume_based_conditions in-sync
-        # (maybe use an if-statement on is_muted/unmute_on_volume_based_conditions to figure out if there's any work to
-        # do here at all)
+    def mute(issue, unmute_on_volume_based_conditions="[]"):
+        from bugsink.registry import get_pc_registry, UNMUTE_PURPOSE  # avoid circular import
+
+        now = datetime.now(timezone.utc)  # NOTE: clock-reading going on here... should it be passed-in?
+
+        issue.is_muted = True
+        issue.unmute_on_volume_based_conditions = unmute_on_volume_based_conditions
+
+        # NOTE The below is copied almost verbatim from load_from_scratch() in registry.py; it should be factored out.
+        issue_pc = get_pc_registry().by_issue[issue.id]
+
+        unmute_vbcs = [
+            VolumeBasedCondition.from_dict(vbc_s)
+            for vbc_s in json.loads(issue.unmute_on_volume_based_conditions)
+        ]
+
+        for vbc in unmute_vbcs:
+            issue_pc.add_event_listener(
+                period_name=vbc.period,
+                nr_of_periods=vbc.nr_of_periods,
+                gte_threshold=vbc.volume,
+                when_becomes_true=create_unmute_issue_handler(issue.id),
+                tup=now.timetuple(),
+                purpose=UNMUTE_PURPOSE,
+            )
+
+    @staticmethod
+    def unmute(issue, implicitly_called=False):
+        # implicitly_called is used to avoid sending an unmute alert when the unmute is triggered by one of the other
+        # methods in this class.
+
+        from bugsink.registry import get_pc_registry, UNMUTE_PURPOSE  # avoid circular import
+
+        if issue.is_muted:
+            # we check on is_muted explicitly: it may be so that multiple unmute conditions happens simultaneously (and
+            # not just in "funny configurations"). i.e. a single event could push you past more than 3 events per day or
+            # 100 events per year. We don't want 2 "unmuted" alerts being sent in that case.
+
+            issue.is_muted = False
+            issue.unmute_on_volume_based_conditions = "[]"
+
+            # We keep the pc_registry and the value of issue.unmute_on_volume_based_conditions in-sync to avoid going
+            # mad (in general). A specific case that I can think of off the top of my head that goes wrong if you
+            # wouldn't do this, even given the fact that we check on is_muted in the above: you might re-mute but with
+            # different unmute conditions, and in that case you don't want your old outdated conditions triggering
+            # anything. (Side note: I'm not sure how I feel about reaching out to the global registry here; the
+            # alternative would be to pass this along.)
+            # (NOTE: upon rereading the above, it seems kind of trivial: a cache should simply be in-sync, no further
+            # thinking is needed)
+            get_pc_registry().by_issue[issue.id].remove_event_listener(UNMUTE_PURPOSE)
+
+            if not implicitly_called:
+                # (note: we can expect project to be set, because it will be None only when projects are deleted, in
+                # which case no more unmuting happens)
+                if issue.project.alert_on_unmute:
+                    send_unmute_alert.delay(issue.id)
+
+
+def create_unmute_issue_handler(issue_id):
+    def unmute():
+        issue = Issue.objects.get(id=issue_id)
+        IssueStateManager.unmute(issue)
+        issue.save()
+
+    return unmute
