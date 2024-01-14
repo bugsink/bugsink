@@ -47,22 +47,25 @@ persists. e.g.
 
 ## Personal Notification Settings
 
-Personal notification settings exist both globally and per project. 
+Personal notification settings exist both globally (i.e. configured per User) and per Project. 
 
 Reasons for per-project settings include scenarios where someone is involved in the project but not to the extent of
 needing constant updates (e.g., consulting members or certain leads). 
 
 However, these settings are limited to a single toggle: yes/no/(default). That is, you can't choose specific rules to
-follow for a project.
+follow for a project (e.g. just on unmute, or just on regressions)
 
-Configuration of alerting rules is project-centered. The idea is that the 2 main variables that control when alerts
-should be sent are project-centric (not member-centric), namely:
+More detailed configuration of alerting rules is project-centered. The idea is that the 2 main variables that control
+when alerts should be sent are dictated by the nature of the project, not the preferences of the member, namely:
 
 * how broken the project is (how many errors are generated)
 * how important brokenness is
 
 I.e. there is a single (configurable) threshold per project for what constitues "worth alerting about but avoiding
 swamping in false positives" which you can then subscribe to or not.
+
+(Note that the thoughts in this section are already less necessary to make explicit, because most of the volume-based
+alerting has (for now) been chosen not to implement in favor of vbc-unmute-rules (which are by definition not per user)
 
 ## Chat-Ops
 

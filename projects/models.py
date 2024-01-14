@@ -22,6 +22,8 @@ class Project(models.Model):
     # "public" key is public, and if you can help it it's always better to keep it private.
     sentry_key = models.UUIDField(editable=False, default=uuid.uuid4)
 
+    users = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, through="ProjectMembership")
+
     # We don't implement private_key because as of late 2023 the Sentry documentation says the following:
     # > The secret part of the DSN is optional and effectively deprecated. While clients will still honor it, if
     # > supplied, future versions of Sentry will entirely ignore it.
@@ -53,3 +55,17 @@ class Project(models.Model):
         # TODO perfomance considerations... this can be denormalized/cached at the project level
         from releases.models import ordered_releases
         return list(ordered_releases(project=self))[-1]
+
+
+class ProjectMembership(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+
+    # TODO inheriting True/False for None from either Organization (which we also don't have yet) or directly from
+    # User(Profile) is something we'll do later. At that point we'll probably implement it as denormalized here, so
+    # we'll just have to shift the currently existing field into send_email_alerts_denormalized and create a 3-way
+    # field.
+    send_email_alerts = models.BooleanField(default=True)
+
+    # TODO this will come
+    # role = models.CharField(max_length=255, blank=False, null=False)
