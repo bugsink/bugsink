@@ -92,6 +92,9 @@ class BaseIngestAPIView(APIView):
         # event_data is passed explicitly to avoid re-parsing something that may be availabe anyway; we'll come up with
         # a better signature later if this idea sticks
 
+        # leave this at the top -- it may involve reading from the DB which should come before any DB writing
+        pc_registry = get_pc_registry()
+
         hash_ = get_hash_for_data(event_data)
         issue, issue_created = Issue.objects.get_or_create(
             project=ingested_event.project,
@@ -118,7 +121,7 @@ class BaseIngestAPIView(APIView):
             IssueStateManager.reopen(issue)
 
         if issue.id not in get_pc_registry().by_issue:
-            get_pc_registry().by_issue[issue.id] = PeriodCounter()
+            pc_registry.by_issue[issue.id] = PeriodCounter()
 
         issue_pc = get_pc_registry().by_issue[issue.id]
         issue_pc.inc(ingested_event.timestamp)
