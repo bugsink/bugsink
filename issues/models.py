@@ -187,6 +187,8 @@ class IssueStateManager(object):
                 # For now we do it to avoid surprises.
                 #
                 # One alternative implementation would be: immediately unmute (but that's surprising too!)
+                # (All of the above applies equally well to at-unmute as it does for load_from_scratch (at which point
+                # we also just expect unmute conditions to only be set when they can still be triggered)
                 raise Exception("The unmute condition is already true")
 
 
