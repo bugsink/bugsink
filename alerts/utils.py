@@ -3,12 +3,12 @@ from django.template import Context
 from django.template.loader import get_template
 
 
-def send_rendered_email(subject, html_template_name, text_template_name, recipient_list, context=None):
+def send_rendered_email(subject, base_template_name, recipient_list, context=None):
     if context is None:
         context = {}
 
-    html_content = get_template(html_template_name).render(Context(context))
-    text_content = get_template(text_template_name).render(Context(context))
+    html_content = get_template(base_template_name + ".html").render(Context(context))
+    text_content = get_template(base_template_name + ".txt").render(Context(context))
 
     # Configure and send an EmailMultiAlternatives
     msg = EmailMultiAlternatives(

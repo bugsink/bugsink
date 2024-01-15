@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.urls import include, path
 
 from .views import home, trigger_error, favicon
+from alerts.views import debug_email
 
 
 urlpatterns = [
@@ -21,5 +22,6 @@ urlpatterns = [
 
 if settings.DEBUG:
     urlpatterns += [
+        path('debug-email-alerts/<str:template_name>/', debug_email),
         path('trigger-error/', trigger_error),
     ]

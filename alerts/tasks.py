@@ -3,7 +3,7 @@ from celery import shared_task
 from projects.models import ProjectMembership
 from issues.models import Issue
 
-from .utils import send_html_email_with_images
+from .utils import send_rendered_email
 
 
 def _get_users_for_email_alert(issue):
@@ -15,10 +15,9 @@ def _get_users_for_email_alert(issue):
 def send_new_issue_alert(issue_id):
     issue = Issue.objects.get(id=issue_id)
     for membership in _get_users_for_email_alert(issue):
-        send_html_email_with_images(
+        send_rendered_email(
             subject=f"New issue: {issue.title()}",
-            html_template_name="alerts/new_issue.html",
-            text_template_name="alerts/new_issue.txt",
+            base_template_name="alerts/new_issue",
             recipient_list=[membership.user.email],
             context={
                 "issue": issue,
