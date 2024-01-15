@@ -30,7 +30,7 @@ class Issue(models.Model):
 
     def parsed_data(self):
         # TEMP solution; won't scale
-        return json.loads(self.events.first().data)
+        return json.loads(self.event_set.first().data)
 
     def get_main_exception(self):
         # TODO: refactor (its usages) to a (filled-on-create) field
@@ -48,7 +48,7 @@ class Issue(models.Model):
         #    although you may also care about the root cause. (In fact, sometimes you care more about the root cause,
         #    but I'd say you'll have to yak-shave your way there).
 
-        parsed_data = json.loads(self.events.first().data)
+        parsed_data = json.loads(self.event_set.first().data)
         exc = parsed_data.get("exception", {"values": []})
         values = exc["values"]  # required by the json spec, so can be done safely
         return values[-1] if values else {}

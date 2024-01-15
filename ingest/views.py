@@ -112,11 +112,11 @@ class BaseIngestAPIView(APIView):
 
         if issue_created:
             if ingested_event.project.alert_on_new_issue:
-                send_new_issue_alert.delay(issue)
+                send_new_issue_alert.delay(issue.id)
 
         elif issue_is_regression(issue, event.release):  # new issues cannot be regressions by definition, hence 'else'
             if ingested_event.project.alert_on_regression:
-                send_regression_alert.delay(issue)
+                send_regression_alert.delay(issue.id)
 
             IssueStateManager.reopen(issue)
 
@@ -171,5 +171,5 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         """
 
         event = request.data[2]
-        self.process_event(event, request, project)
+        self.process_event(event, project, request)
         return Response()

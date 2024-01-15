@@ -22,5 +22,5 @@ class IssueAdmin(admin.ModelAdmin):
     ]
 
     def event_count(self, obj):
-        return str(obj.events.count())
+        return str(obj.event_set.count())
     event_count.short_description = "Event count"

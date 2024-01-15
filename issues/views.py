@@ -21,7 +21,7 @@ def issue_list(request, project_id):
 
 def issue_last_event(request, issue_pk):
     issue = get_object_or_404(Issue, pk=issue_pk)
-    last_event = issue.events.order_by("timestamp").last()
+    last_event = issue.event_set.order_by("timestamp").last()
 
     return redirect(issue_event_detail, issue_pk=issue_pk, event_pk=last_event.pk)
 
