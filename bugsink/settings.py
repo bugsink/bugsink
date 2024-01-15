@@ -163,7 +163,7 @@ if SENTRY_DSN is not None:
         traces_sample_rate=0,
     )
 
-BASE_URL = "http://glitchtip:9000"  # no trailing slash
+BASE_URL = "http://bugsink:9000"  # no trailing slash
 
 
 CELERY_BROKER_URL = 'amqp://bugsink:bugsink@localhost/'
