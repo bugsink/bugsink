@@ -169,3 +169,13 @@ SITE_NAME = "Bugsink"  # you can customize this as e.g. "My Bugsink" or "Bugsink
 
 CELERY_BROKER_URL = 'amqp://bugsink:bugsink@localhost/'
 CELERY_TASK_ALWAYS_EAGER = True
+
+POSTMARK_API_KEY = os.getenv('POSTMARK_API_KEY')
+
+EMAIL_HOST = 'smtp.postmarkapp.com'
+EMAIL_HOST_USER = POSTMARK_API_KEY
+EMAIL_HOST_PASSWORD = POSTMARK_API_KEY
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+
+SERVER_EMAIL = DEFAULT_FROM_EMAIL = 'Klaas van Schelven <klaas@vanschelven.com>'
