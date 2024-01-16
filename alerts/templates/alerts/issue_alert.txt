@@ -1,0 +1,10 @@
+{# note: order of text here is adapted for legibility when there is no layout, i.e. it's different from the html version on purpose #}There is {{ alert_article }} {{ alert_reason }} issue on project "{{ project_name }}".
+
+The issue title is:
+{{ issue_title|truncatechars:100 }}
+
+View it on {{ site_name }}:
+{{ issue_url }}
+
+Manage notification settings:
+{{ settings_url }}
