@@ -11,7 +11,9 @@
 	<body>
         <div id="content">
             <div class="flex pl-4 bg-slate-200">
-                <a href="/issues/1/"><div class="p-4 hover:bg-slate-400">My first project</div></a>  {# or, if you're single-org, or single-project, just show that #}
+                {% for project in user_projects %}  {# or, maybe, if you're single-org, or single-project, just show that #}
+                    <a href="/issues/{{ project.id }}/"><div class="p-4 hover:bg-slate-400">{{ project.name }}</div></a>
+                {% endfor %}
                 {# <div class="p-4 hover:bg-slate-400">Settings</div>#}
                 <a href="/admin/"><div class="p-4 hover:bg-slate-400">Admin</div></a>
             </div>
