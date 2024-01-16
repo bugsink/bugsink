@@ -76,6 +76,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
 
+                'bugsink.context_processors.useful_settings_processor',
                 'projects.context_processors.user_projects_processor',
             ],
         },
