@@ -3,7 +3,7 @@
 The issue title is:
 {{ issue_title|truncatechars:100 }}
 
-View it on {{ site_name }}:
+View it on {{ site_title }}:
 {{ issue_url }}
 
 Manage notification settings:

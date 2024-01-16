@@ -3,7 +3,7 @@ from django.conf import settings
 
 DEBUG_CONTEXTS = {
     "issue_alert": {
-        "site_name": settings.SITE_NAME,
+        "site_title": settings.SITE_TITLE,
         "base_url": settings.BASE_URL + "/",
         "issue_title": "AttributeError: 'NoneType' object has no attribute 'data'",
         "project_name": "My first project",

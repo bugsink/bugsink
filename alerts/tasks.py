@@ -38,7 +38,7 @@ def _send_alert(issue_id, subject_prefix, alert_article, alert_reason):
             base_template_name="alerts/issue_alert",
             recipient_list=[membership.user.email],
             context={
-                "site_name": settings.SITE_NAME,
+                "site_title": settings.SITE_TITLE,
                 "base_url": settings.BASE_URL + "/",
                 "issue_title": issue.title(),
                 "project_name": issue.project.name,

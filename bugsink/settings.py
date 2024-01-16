@@ -164,7 +164,7 @@ if SENTRY_DSN is not None:
     )
 
 BASE_URL = "http://bugsink:9000"  # no trailing slash
-SITE_NAME = "Bugsink"  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
+SITE_TITLE = "Bugsink"  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 
 
 CELERY_BROKER_URL = 'amqp://bugsink:bugsink@localhost/'
