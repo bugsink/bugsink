@@ -2,11 +2,15 @@ from django.shortcuts import render
 from django.conf import settings
 
 DEBUG_CONTEXTS = {
-    "new_issue": {
+    "issue_alert": {
+        "site_name": settings.SITE_NAME,
         "base_url": settings.BASE_URL + "/",
         "issue_title": "AttributeError: 'NoneType' object has no attribute 'data'",
         "project_name": "My first project",
+        "alert_article": "a",
+        "alert_reason": "NEW",
         "issue_url": settings.BASE_URL + "/issues/issue/00000000-0000-0000-0000-000000000000/",
+        "settings_url": settings.BASE_URL + "/",  # TODO
     },
 }
 

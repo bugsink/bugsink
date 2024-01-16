@@ -1,5 +1,4 @@
 from django.core.mail import EmailMultiAlternatives
-from django.template import Context
 from django.template.loader import get_template
 
 
@@ -7,8 +6,8 @@ def send_rendered_email(subject, base_template_name, recipient_list, context=Non
     if context is None:
         context = {}
 
-    html_content = get_template(base_template_name + ".html").render(Context(context))
-    text_content = get_template(base_template_name + ".txt").render(Context(context))
+    html_content = get_template(base_template_name + ".html").render(context)
+    text_content = get_template(base_template_name + ".txt").render(context)
 
     # Configure and send an EmailMultiAlternatives
     msg = EmailMultiAlternatives(

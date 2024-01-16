@@ -5,6 +5,7 @@ import uuid
 from django.db import models
 
 from bugsink.volume_based_condition import VolumeBasedCondition
+from alerts.tasks import send_unmute_alert
 
 
 class Issue(models.Model):
@@ -129,7 +130,6 @@ class IssueStateManager(object):
         # methods in this class.
 
         from bugsink.registry import get_pc_registry, UNMUTE_PURPOSE  # avoid circular import
-        from alerts.tasks import send_unmute_alert
 
         if issue.is_muted:
             # we check on is_muted explicitly: it may be so that multiple unmute conditions happens simultaneously (and
