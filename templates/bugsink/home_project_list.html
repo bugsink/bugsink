@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}Projects · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+
+<div class="m-4">
+<h1 class="text-4xl mt-4">Projects</h1>
+
+{% for project in user_projects %}
+    <a href="/issues/{{ project.id }}/"><div class="p-4 hover:bg-slate-400">{{ project.name }}</div></a>
+{% endfor %}
+
+</div>
+
+{% endblock %}
