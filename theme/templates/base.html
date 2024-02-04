@@ -11,6 +11,7 @@
 	<body>
         <div id="content">
             <div class="flex pl-4 bg-slate-200">
+                <img src="{% static 'images/bugsink-logo.png' %}" class="p-2 h-12 w-12">
                 {% for project in user_projects %}  {# or, maybe, if you're single-org, or single-project, just show that #}
                     <a href="/issues/{{ project.id }}/"><div class="p-4 hover:bg-slate-400">{{ project.name }}</div></a>
                 {% endfor %}
