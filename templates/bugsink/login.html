@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{# from https://docs.djangoproject.com/en/5.0/topics/auth/default/#django.contrib.auth.views.LoginView #}
+
+{% block title %}Log in · {{ site_title }}{% endblock %}
+
+{% block content %}
+<div class="m-4">
+<h1 class="text-4xl mt-4">{{ site_title }} Log in</h1>
+
+{% if form.errors %}
+<p>Your username and password didn't match. Please try again.</p>
+{% endif %}
+
+{% if next %}
+    {% if user.is_authenticated %}
+    <p>Your account doesn't have access to this page. To proceed, please login with an account that has access.</p>
+    {% else %}
+    <p>Please login to see this page.</p>
+    {% endif %}
+{% endif %}
+
+<form method="post" action="{% url 'login' %}">
+{% csrf_token %}
+<table>
+<tr>
+    <td>{{ form.username.label_tag }}</td>
+    <td>{{ form.username }}</td>
+</tr>
+<tr>
+    <td>{{ form.password.label_tag }}</td>
+    <td>{{ form.password }}</td>
+</tr>
+</table>
+
+<input type="submit" value="login">
+<input type="hidden" name="next" value="{{ next }}">
+</form>
+
+</div>
+{% endblock %}

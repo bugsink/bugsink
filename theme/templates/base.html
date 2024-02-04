@@ -14,8 +14,8 @@
                 {% for project in user_projects %}  {# or, maybe, if you're single-org, or single-project, just show that #}
                     <a href="/issues/{{ project.id }}/"><div class="p-4 hover:bg-slate-400">{{ project.name }}</div></a>
                 {% endfor %}
-                {# <div class="p-4 hover:bg-slate-400">Settings</div>#}
                 <a href="/admin/"><div class="p-4 hover:bg-slate-400">Admin</div></a>
+                <a href="/accounts/logout/" class="ml-auto"><div class="p-4 hover:bg-slate-400">{{ logged_in_user.username }} (logout)</div></a>
             </div>
             <div>
                 {% block content %}{% endblock %}

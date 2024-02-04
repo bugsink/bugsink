@@ -54,6 +54,9 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+
+    'bugsink.middleware.LoginRequiredMiddleware',
+
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
@@ -77,6 +80,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
 
                 'bugsink.context_processors.useful_settings_processor',
+                'bugsink.context_processors.logged_in_user_processor',
                 'projects.context_processors.user_projects_processor',
             ],
         },
