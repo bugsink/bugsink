@@ -5,6 +5,8 @@
  * https://unpkg.com/browse/tailwindcss@latest/stubs/defaultConfig.stub.js
  */
 
+const defaultTheme = require("tailwindcss/defaultTheme");
+
 module.exports = {
     content: [
         /**
@@ -42,7 +44,18 @@ module.exports = {
         // '../../**/*.py'
     ],
     theme: {
-        extend: {},
+      extend: {
+        fontFamily: {
+          sans: [
+            '"IBM Plex Sans"',
+            ...defaultTheme.fontFamily.sans,
+          ],
+          mono: [
+            '"IBM Plex Mono"',
+            ...defaultTheme.fontFamily.mono,
+          ],
+        },
+      },
     },
     plugins: [
         /**
