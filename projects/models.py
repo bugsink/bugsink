@@ -72,3 +72,6 @@ class ProjectMembership(models.Model):
 
     def __str__(self):
         return f"{self.user} membership of {self.project}"
+
+    class Meta:
+        unique_together = ("project", "user")
