@@ -17,11 +17,13 @@ from issues.models import Issue, IssueStateManager
 from issues.utils import get_hash_for_data
 from issues.regressions import issue_is_regression
 
+import sentry_sdk_extensions
 from events.models import Event
 from releases.models import create_release_if_needed
 from bugsink.registry import get_pc_registry
 from bugsink.period_counter import PeriodCounter
 from alerts.tasks import send_new_issue_alert, send_regression_alert
+
 
 from .negotiation import IgnoreClientContentNegotiation
 from .parsers import EnvelopeParser
@@ -147,11 +149,11 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
         if len(request.data) != 3:
             # multi-part envelopes trigger an error too
-            print("!= 3")
+            sentry_sdk_extensions.capture_stacktrace("Invalid envelope (not 3 parts)")
             return Response({"message": "Missing headers / unsupported type"}, status=status.HTTP_501_NOT_IMPLEMENTED)
 
         if request.data[1].get("type") != "event":
-            print("!= event")
+            sentry_sdk_extensions.capture_stacktrace("Invalid envelope (not an event)")
             return Response({"message": "Only events are supported"}, status=status.HTTP_501_NOT_IMPLEMENTED)
 
         # TODO think about a good order to handle this in. Namely: if no project Header is provided, you are basically
