@@ -77,6 +77,11 @@ class BaseIngestAPIView(APIView):
 
     @classmethod
     def ingest_event(cls, now, event_data, request, project):
+        # JIT-creation of the PeriodCounter for the project; alternatively we could monitor the project creation and
+        # create the PeriodCounter there.
+        if project.id not in get_pc_registry().by_project:
+            get_pc_registry().by_project[project.id] = PeriodCounter()
+
         project_pc = get_pc_registry().by_project[project.id]
         project_pc.inc(now)
 
