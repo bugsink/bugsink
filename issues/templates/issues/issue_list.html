@@ -41,7 +41,9 @@ https://flowbite.com/docs/forms/floating-label/
 
             <tr class="bg-white border-slate-300 border-l-2 border-r-2">
             <td>
-                <input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4"/>
+                <div class="m-1 rounded-full hover:bg-slate-100 cursor-pointer" onclick="toggleContainedCheckbox(this); matchIssueCheckboxesStateToMain(this)">
+                    <input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4 cursor-pointer" onclick="event.stopPropagation(); matchIssueCheckboxesStateToMain(this.parentNode)"/>  {# TODO stopPropagation #}
+                </div>
             </td>
             <td class="w-full ml-0 pb-4 pt-4 pr-4">
                 <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md">Resolve</button>
@@ -65,7 +67,7 @@ https://flowbite.com/docs/forms/floating-label/
             <tr class="bg-slate-50 border-slate-300 border-2 ">
             <td>
                 <div class="m-1 rounded-full hover:bg-slate-100 cursor-pointer" onclick="toggleContainedCheckbox(this)">
-                    <input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4 cursor-pointer" onclick="event.stopPropagation(){# prevent the container's handler from undoing the default action #}"/>
+                    <input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4 cursor-pointer js-issue-checkbox" onclick="event.stopPropagation(){# prevent the container's handler from undoing the default action #}"/>
                 </div>
             </td>
             <td class="w-full ml-0 pb-4 pt-4 pr-4">
