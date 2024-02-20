@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Issues · {{ project.name }} · {{ site_title }}{% endblock %}
 
@@ -62,7 +63,7 @@ https://flowbite.com/docs/forms/floating-label/
       <tbody>
             {% for issue in issue_list %}
             <tr class="bg-slate-50 border-slate-300 border-2 ">
-            <td>
+            <td class="cursor-pointer" onclick="toggleContainedCheckbox(this)">
                 <input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4"/>
             </td>
             <td class="w-full ml-0 pb-4 pt-4 pr-4">
@@ -97,4 +98,8 @@ https://flowbite.com/docs/forms/floating-label/
 
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'js/issue_list.js' %}"></script>
 {% endblock %}
