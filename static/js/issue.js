@@ -71,9 +71,9 @@ function expandSection(element) {
   element.style.height = explicitlySetValue;
 
   // when the next css transition finishes (which should be the one we just triggered)
-  const foo = function(e) {
+  const onTransitioned = function(e) {
     // remove this event listener so it only gets triggered once
-    element.removeEventListener('transitionend', foo);
+    element.removeEventListener('transitionend', onTransitioned);
     
     // remove "height" from the element's inline styles, so it can return to its initial value
     if (element.style.height == explicitlySetValue) {
@@ -81,7 +81,7 @@ function expandSection(element) {
     }
   }
 
-  element.addEventListener('transitionend', foo);
+  element.addEventListener('transitionend', onTransitioned);
 
   // mark the section as "currently not collapsed"
   element.setAttribute('data-collapsed', 'false');
