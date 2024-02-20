@@ -15,6 +15,11 @@ class Issue(models.Model):
         "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
     hash = models.CharField(max_length=32, blank=False, null=False)
 
+    # denormalized fields:
+    last_seen = models.DateTimeField(blank=False, null=False)
+    first_seen = models.DateTimeField(blank=False, null=False)
+    event_count = models.IntegerField(blank=False, null=False)
+
     # fields related to resolution:
     # what does this mean for the release-based use cases? it means what you filter on.
     # it also simply means: it was "marked as resolved" after the last regression (if any)
@@ -23,6 +28,7 @@ class Issue(models.Model):
     fixed_at = models.TextField(blank=False, null=False, default='[]')
     events_at = models.TextField(blank=False, null=False, default='[]')
 
+    # fields related to muting:
     is_muted = models.BooleanField(default=False)
     unmute_on_volume_based_conditions = models.TextField(blank=False, null=False, default="[]")  # json string
 
@@ -73,6 +79,12 @@ class Issue(models.Model):
 
     def occurs_in_last_release(self):
         return False  # TODO actually implement (and then: implement in a performant manner)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["first_seen"]),
+            models.Index(fields=["last_seen"]),
+        ]
 
 
 class IssueStateManager(object):

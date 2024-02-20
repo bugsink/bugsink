@@ -50,11 +50,11 @@ https://flowbite.com/docs/forms/floating-label/
             </td>
 
             <td class="text-right font-bold p-4">
-                FOO
+                {# FOO #}
             </td>
 
             <td class="text-right font-bold p-4">
-                BAR
+                {# BAR #}
             </td>
 
             </tr>
@@ -69,24 +69,22 @@ https://flowbite.com/docs/forms/floating-label/
                 <div>
                     <a href="/issues/issue/{{ issue.id }}/event/last/" class="text-cyan-500 font-bold">{{ issue.title|truncatechars:100 }}</a>
                 </div>
-                <div class="text-sm">from <b>8 Nov 12:33</b> | last <b>8 Nov 12:39</b> | with <b>3</b> events
+                <div class="text-sm">from <b>{{ issue.first_seen|date:"d M G:i" }}</b> | last <b>{{ issue.last_seen|date:"d M G:i" }}</b> | with <b>{{ issue.event_count }}</b> events
                     {% if issue.parsed_data.transaction %}| <span class="font-bold">{{ issue.parsed_data.transaction }} </span>{% endif %}
                 </div>
             </td>
 
             {% comment %}
             [ ] first release (or commit), last release (or commit)
-            [ ] first seen
-            [ ] last seen.
             [ ] assigned to
             [ ] n.r. of events?
             {% endcomment %}
             <td class="text-right p-4">
-                ABC
+                {# ABC #} 
             </td>
 
             <td class="text-right p-4">
-                123
+                {# 123 #}
             </td>
 
             </tr>

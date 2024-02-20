@@ -106,6 +106,11 @@ class BaseIngestAPIView(APIView):
         issue, issue_created = Issue.objects.get_or_create(
             project=ingested_event.project,
             hash=hash_,
+            defaults={
+                "first_seen": ingested_event.timestamp,
+                "last_seen": ingested_event.timestamp,
+                "event_count": 1,
+            },
         )
 
         event, event_created = Event.from_ingested(ingested_event, issue, event_data)
@@ -121,11 +126,17 @@ class BaseIngestAPIView(APIView):
             if ingested_event.project.alert_on_new_issue:
                 send_new_issue_alert.delay(issue.id)
 
-        elif issue_is_regression(issue, event.release):  # new issues cannot be regressions by definition, hence 'else'
-            if ingested_event.project.alert_on_regression:
-                send_regression_alert.delay(issue.id)
+        else:
+            # new issues cannot be regressions by definition, hence this is in the 'else' branch
+            if issue_is_regression(issue, event.release):
+                if ingested_event.project.alert_on_regression:
+                    send_regression_alert.delay(issue.id)
 
-            IssueStateManager.reopen(issue)
+                IssueStateManager.reopen(issue)
+
+            # update the denormalized fields
+            issue.last_seen = ingested_event.timestamp
+            issue.event_count += 1
 
         if issue.id not in get_pc_registry().by_issue:
             pc_registry.by_issue[issue.id] = PeriodCounter()

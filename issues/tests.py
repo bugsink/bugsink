@@ -10,6 +10,7 @@ from bugsink.period_counter import PeriodCounter, TL_DAY
 
 from .models import Issue, IssueStateManager
 from .regressions import is_regression, is_regression_2, issue_is_regression
+from .factories import denormalized_issue_fields
 
 
 def fresh(obj):
@@ -164,7 +165,7 @@ class RegressionIssueTestCase(DjangoTestCase):
         project = Project.objects.create()
 
         # new issue is not a regression
-        issue = Issue.objects.create(project=project)
+        issue = Issue.objects.create(project=project, **denormalized_issue_fields())
         self.assertFalse(issue_is_regression(fresh(issue), "anything"))
 
         # resolve the issue, a reoccurrence is a regression
@@ -185,7 +186,7 @@ class RegressionIssueTestCase(DjangoTestCase):
         create_release_if_needed(project, "2.0.0")
 
         # new issue is not a regression
-        issue = Issue.objects.create(project=project)
+        issue = Issue.objects.create(project=project, **denormalized_issue_fields())
         self.assertFalse(issue_is_regression(fresh(issue), "anything"))
 
         # resolve the by latest, reoccurrences of older releases are not regressions but occurrences by latest are
@@ -212,7 +213,7 @@ class RegressionIssueTestCase(DjangoTestCase):
         create_release_if_needed(project, "2.0.0")
 
         # new issue is not a regression
-        issue = Issue.objects.create(project=project)
+        issue = Issue.objects.create(project=project, **denormalized_issue_fields())
         self.assertFalse(issue_is_regression(fresh(issue), "anything"))
 
         # resolve the by next, reoccurrences of any existing releases are not regressions
@@ -296,7 +297,7 @@ class MuteUnmuteTestCase(TestCase):
     def test_mute_no_vbc_for_unmute(self):
         project = Project.objects.create()
 
-        issue = Issue.objects.create(project=project)
+        issue = Issue.objects.create(project=project, **denormalized_issue_fields())
         IssueStateManager.mute(issue, "[]")
         issue.save()
 
@@ -306,7 +307,7 @@ class MuteUnmuteTestCase(TestCase):
     def test_mute_simple_case(self):
         project = Project.objects.create()
 
-        issue = Issue.objects.create(project=project)
+        issue = Issue.objects.create(project=project, **denormalized_issue_fields())
         IssueStateManager.mute(issue, "[{\"period\": \"day\", \"nr_of_periods\": 1, \"volume\": 1}]")
         issue.save()
 
@@ -321,6 +322,7 @@ class MuteUnmuteTestCase(TestCase):
             project=project,
             unmute_on_volume_based_conditions='[{"period": "day", "nr_of_periods": 1, "volume": 1}]',
             is_muted=True,
+            **denormalized_issue_fields(),
         )
 
         pc = registry.by_issue[issue.id] = PeriodCounter()
@@ -337,6 +339,7 @@ class MuteUnmuteTestCase(TestCase):
             project=project,
             unmute_on_volume_based_conditions='[{"period": "day", "nr_of_periods": 1, "volume": 1}]',
             is_muted=True,
+            **denormalized_issue_fields(),
         )
 
         # because we create our objects before getting the lazy registry, event-listeners will be correctly set by
@@ -362,6 +365,7 @@ class MuteUnmuteTestCase(TestCase):
     {"period": "month", "nr_of_periods": 1, "volume": 1}
 ]''',
             is_muted=True,
+            **denormalized_issue_fields(),
         )
 
         # because we create our objects before getting the lazy registry, event-listeners will be correctly set by

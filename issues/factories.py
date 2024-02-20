@@ -19,6 +19,7 @@ def get_or_create_issue(project=None, event_data=None):
     issue, issue_created = Issue.objects.get_or_create(
         project=project,
         hash=hash_,
+        defaults=denormalized_issue_fields(),
     )
     return issue, issue_created
 
@@ -30,4 +31,13 @@ def create_event_data():
         "event_id": uuid.uuid4().hex,
         "timestamp": timezone.now().isoformat(),
         "platform": "python",
+    }
+
+
+def denormalized_issue_fields():
+    """return a dict of fields that are expected to be denormalized on Issue; for testing purposes"""
+    return {
+        "first_seen": timezone.now(),
+        "last_seen": timezone.now(),
+        "event_count": 1,
     }

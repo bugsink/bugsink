@@ -10,7 +10,7 @@ from .models import Issue, IssueStateManager
 
 
 def issue_list(request, project_id):
-    issue_list = Issue.objects.filter(project_id=project_id)
+    issue_list = Issue.objects.filter(project_id=project_id).order_by("-last_seen")
     project = get_object_or_404(Project, pk=project_id)
 
     return render(request, "issues/issue_list.html", {

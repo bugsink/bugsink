@@ -5,6 +5,7 @@ from django.test import TestCase as DjangoTestCase
 
 from projects.models import Project
 from issues.models import Issue
+from issues.factories import denormalized_issue_fields
 from events.models import Event
 from events.factories import create_event
 
@@ -180,6 +181,7 @@ class PCRegistryTestCase(DjangoTestCase):
             project=project,
             is_muted=True,
             unmute_on_volume_based_conditions='[{"period": "day", "nr_of_periods": 1, "volume": 100}]',
+            **denormalized_issue_fields(),
         )
 
         create_event(project, issue)
