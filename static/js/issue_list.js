@@ -12,3 +12,29 @@ function matchIssueCheckboxesStateToMain(elementContainingMainCheckbox) {
         checkboxes[i].checked = mainCheckbox.checked;
     }
 }
+
+function matchMainCheckboxStateToIssueCheckboxes() {
+    const checkboxes = document.querySelectorAll(".js-issue-checkbox");
+    let allChecked = true;
+    let allUnchecked = true;
+
+    for (let i = 0; i < checkboxes.length; i++) {
+        if (checkboxes[i].checked) {
+            allUnchecked = false;
+        }
+        if (!checkboxes[i].checked) {
+            allChecked = false;
+        }
+        if (!allChecked && !allUnchecked) {
+            break;
+        }
+    }
+
+    const mainCheckbox = document.querySelector(".js-main-checkbox");
+    if (allChecked) {
+        mainCheckbox.checked = true;
+    }
+    if (allUnchecked) {
+        mainCheckbox.checked = false;
+    }
+}
