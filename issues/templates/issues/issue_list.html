@@ -63,8 +63,10 @@ https://flowbite.com/docs/forms/floating-label/
       <tbody>
             {% for issue in issue_list %}
             <tr class="bg-slate-50 border-slate-300 border-2 ">
-            <td class="cursor-pointer" onclick="toggleContainedCheckbox(this)">
-                <input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4"/>
+            <td>
+                <div class="m-1 rounded-full hover:bg-slate-100 cursor-pointer" onclick="toggleContainedCheckbox(this)">
+                    <input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4 cursor-pointer" onclick="event.stopPropagation(){# prevent the container's handler from undoing the default action #}"/>
+                </div>
             </td>
             <td class="w-full ml-0 pb-4 pt-4 pr-4">
                 <div>
