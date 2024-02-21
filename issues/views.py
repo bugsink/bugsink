@@ -9,13 +9,24 @@ from .utils import get_issue_grouper_for_data
 from .models import Issue, IssueStateManager
 
 
-def issue_list(request, project_id):
-    issue_list = Issue.objects.filter(project_id=project_id).order_by("-last_seen")
+def issue_list(request, project_id, state_filter="unresolved"):
+    d_state_filter = {
+        "unresolved": lambda qs: qs.filter(is_resolved=False),
+        "resolved": lambda qs: qs.filter(is_resolved=True),
+        "muted": lambda qs: qs.filter(is_muted=True),
+        "all": lambda qs: qs,
+    }
+
+    issue_list = d_state_filter[state_filter](
+        Issue.objects.filter(project_id=project_id)
+    ).order_by("-last_seen")
+
     project = get_object_or_404(Project, pk=project_id)
 
     return render(request, "issues/issue_list.html", {
         "project": project,
         "issue_list": issue_list,
+        "state_filter": state_filter,
     })
 
 
