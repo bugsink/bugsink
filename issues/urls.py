@@ -2,7 +2,6 @@ from django.urls import path
 
 from .views import issue_list, issue_event_detail, issue_last_event, issue_event_list
 
-app_name = "issues"
 urlpatterns = [
     path('<int:project_id>/', issue_list, {"state_filter": "unresolved"}, name="issue_list_unresolved"),
     path('<int:project_id>/resolved/', issue_list, {"state_filter": "resolved"}, name="issue_list_resolved"),
