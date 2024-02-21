@@ -23,6 +23,10 @@
 </div>
 
     <div>
+
+      <form action="" method="post">
+      {% csrf_token %}
+
       <table class="w-full">
       <thead>
 
@@ -46,8 +50,8 @@ https://flowbite.com/docs/forms/floating-label/
                 </div>
             </td>
             <td class="w-full ml-0 pb-4 pt-4 pr-4">
-                <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-s-md">Resolve</button><button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-e-md">...</button>
-                <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-s-md">Mute</button><button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 active:ring rounded-e-md">...</button>
+                <button name="action" value="resolve_foo" class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-s-md">Resolve</button><button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-e-md">...</button>
+                <button name="action" value="mute_bar" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-s-md">Mute</button><button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 active:ring rounded-e-md">...</button>
                 {# only for resolved/muted items <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Reopen</button> #}
 
             </td>
@@ -67,7 +71,7 @@ https://flowbite.com/docs/forms/floating-label/
             <tr class="bg-slate-50 border-slate-300 border-2 ">
             <td>
                 <div class="m-1 rounded-full hover:bg-slate-100 cursor-pointer" onclick="toggleContainedCheckbox(this); matchMainCheckboxStateToIssueCheckboxes()">
-                    <input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4 cursor-pointer js-issue-checkbox" onclick="event.stopPropagation(); {# prevent the container's handler from undoing the default action #} matchMainCheckboxStateToIssueCheckboxes()"/>
+                    <input type="checkbox" name="issue_ids[]" value="{{ issue.id }}" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4 cursor-pointer js-issue-checkbox" onclick="event.stopPropagation(); {# prevent the container's handler from undoing the default action #} matchMainCheckboxStateToIssueCheckboxes()"/>
                 </div>
             </td>
             <td class="w-full ml-0 pb-4 pt-4 pr-4">
@@ -96,6 +100,8 @@ https://flowbite.com/docs/forms/floating-label/
             {% endfor %}
         </tbody>
         </table>
+
+        </form>
 
     </div>
 

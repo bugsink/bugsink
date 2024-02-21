@@ -10,6 +10,10 @@ from .models import Issue, IssueStateManager
 
 
 def issue_list(request, project_id, state_filter="unresolved"):
+    if request.method == "POST":
+        issue_ids = request.POST.getlist('issue_ids[]')
+        raise NotImplementedError("TODO: bulk actions")
+
     d_state_filter = {
         "unresolved": lambda qs: qs.filter(is_resolved=False),
         "resolved": lambda qs: qs.filter(is_resolved=True),
