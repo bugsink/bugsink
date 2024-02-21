@@ -71,10 +71,11 @@ class Issue(models.Model):
     def get_events_at(self):
         return json.loads(self.events_at)
 
-    def add_fixed_at(self, release):
+    def add_fixed_at(self, release_version):
+        # release_version: str
         fixed_at = self.get_fixed_at()
-        if release.version not in fixed_at:
-            fixed_at.append(release.version)
+        if release_version not in fixed_at:
+            fixed_at.append(release_version)
             self.fixed_at = json.dumps(fixed_at)
 
     def occurs_in_last_release(self):
@@ -105,8 +106,16 @@ class IssueStateManager(object):
 
     @staticmethod
     def resolve_by_latest(issue):
+        # NOTE: currently unused; we may soon reintroduce it though so I left it in.
         issue.is_resolved = True
-        issue.add_fixed_at(issue.project.get_latest_release())
+        issue.add_fixed_at(issue.project.get_latest_release().version)
+        IssueStateManager.unmute(issue, implicitly_called=True)  # as in IssueStateManager.resolve()
+
+    @staticmethod
+    def resolve_by_release(issue, release_version):
+        # release_version: str
+        issue.is_resolved = True
+        issue.add_fixed_at(release_version)
         IssueStateManager.unmute(issue, implicitly_called=True)  # as in IssueStateManager.resolve()
 
     @staticmethod

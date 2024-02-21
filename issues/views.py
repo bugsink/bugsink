@@ -32,8 +32,9 @@ def issue_event_detail(request, issue_pk, event_pk):
     if request.method == "POST":
         if request.POST["action"] == "resolved":
             IssueStateManager.resolve(issue)
-        elif request.POST["action"] == "resolved_latest":
-            IssueStateManager.resolve_by_latest(issue)
+        elif request.POST["action"].startswith("resolved_release:"):
+            release_version = request.POST["action"].split(":", 1)[1]
+            IssueStateManager.resolve_by_release(issue, release_version)
         elif request.POST["action"] == "resolved_next":
             IssueStateManager.resolve_by_next(issue)
         elif request.POST["action"] == "reopen":
