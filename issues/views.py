@@ -12,7 +12,24 @@ from .models import Issue, IssueStateManager
 def issue_list(request, project_id, state_filter="unresolved"):
     if request.method == "POST":
         issue_ids = request.POST.getlist('issue_ids[]')
-        raise NotImplementedError("TODO: bulk actions")
+        for issue_id in issue_ids:
+            # naive approach, just do the issues one by one. This is obviously O(n) slow, but at least the cost is
+            # amortized (i.e. if you do this for 100 issues each time you do this, you're 1/100 as likely to do it).
+            # still, we could revisit this later.
+            # note also that this is a 100% copy/paste from the issue_detail (refactor later).
+            issue = Issue.objects.get(pk=issue_id)
+            if request.POST["action"] == "resolve":
+                IssueStateManager.resolve(issue)
+            elif request.POST["action"].startswith("resolved_release:"):
+                release_version = request.POST["action"].split(":", 1)[1]
+                IssueStateManager.resolve_by_release(issue, release_version)
+            elif request.POST["action"] == "resolved_next":
+                IssueStateManager.resolve_by_next(issue)
+            elif request.POST["action"] == "reopen":
+                IssueStateManager.reopen(issue)
+            elif request.POST["action"] == "mute":
+                IssueStateManager.mute(issue)
+            issue.save()
 
     d_state_filter = {
         "unresolved": lambda qs: qs.filter(is_resolved=False),
