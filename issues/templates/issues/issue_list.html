@@ -69,19 +69,24 @@ https://flowbite.com/docs/forms/floating-label/
 
                 {% endspaceless %}
 
-                <button name="action" value="mute_bar" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-s-md">Mute</button><button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 active:ring rounded-e-md">...</button>
+                {% spaceless %}{# needed to avoid whitespace between the looks-like-one-buttons #}
+                <button name="action" value="mute_bar" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-s-md">Mute</button>
+
+                <div class="dropdown">
+                    <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 active:ring rounded-e-md">Mute for/until&nbsp;&nbsp;&nbsp;🞃</button>
+
+                    <div class="dropdown-content flex-col">
+                        <button name="action" value="mute_bar" class="block self-stretch font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white hover:bg-slate-200 active:ring text-left whitespace-nowrap">1 day</button>
+                        <button name="action" value="mute_bar" class="block self-stretch font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white hover:bg-slate-200 active:ring text-left whitespace-nowrap">1 week</button>
+                        <button name="action" value="mute_bar" class="block self-stretch font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white hover:bg-slate-200 active:ring text-left whitespace-nowrap">1 month</button>
+                        <button name="action" value="mute_bar" class="block self-stretch font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white hover:bg-slate-200 active:ring text-left whitespace-nowrap">5 events per day</button>
+                        <button name="action" value="mute_bar" class="block self-stretch font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white hover:bg-slate-200 active:ring text-left whitespace-nowrap">100 events per day</button>
+                    </div>
+                </div> 
+                {% endspaceless %}
 
                 {# TODO "reopen" ... we don't do that currently, see notes in issue_detail #}
                 {# only for resolved/muted items <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Reopen</button> #}
-
-                <div class="dropdown">
-                   <button class="dropbtn">Dropdown</button>
-                       <div class="dropdown-content">
-                           <a href="#">Link 1</a>
-                           <a href="#">Link 2</a>
-                           <a href="#">Link 3</a>
-                       </div>
-                 </div> 
 
             </td>
 
