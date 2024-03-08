@@ -62,11 +62,12 @@ class BaseIngestAPIView(APIView):
         return get_object_or_404(Project, pk=project_id, sentry_key=sentry_key)
 
     @classmethod
-    def process_event(cls, event_data, project, request):
-        # because we want to count events before having created event objects (quota may block the latter) we cannot
-        # depend on event.timestamp; instead, we look on the clock once here, and then use that for both the project
-        # and issue period counters.
-        now = datetime.now(timezone.utc)
+    def process_event(cls, event_data, project, request, now=None):
+        if now is None:  # now is not-None in tests
+            # because we want to count events before having created event objects (quota may block the latter) we cannot
+            # depend on event.timestamp; instead, we look on the clock once here, and then use that for both the project
+            # and issue period counters.
+            now = datetime.now(timezone.utc)
 
         # note: we may want to skip saving the raw data in a setup where we have integrated ingest/digest, but for now
         # we just always save it; note that even for the integrated setup a case can be made for saving the raw data
@@ -134,13 +135,26 @@ class BaseIngestAPIView(APIView):
 
                 IssueStateManager.reopen(issue)
 
+            # note that while digesting we _only_ care about .is_muted to determine whether unmuting (and alerting about
+            # unmuting) should happen, whether as a result of a VBC or 'after time'. Somewhat counter-intuitively, a
+            # 'muted' issue is thus not treated as something to more deeply ignore than an unresolved issue (and in
+            # fact, conversely, it may be more loud when the for/until condition runs out). This is in fact analogous to
+            # "resolved" issues which are _also_ treated with more "suspicion" than their unresolved counterparts.
+            if issue.is_muted and issue.unmute_after is not None and ingested_event.timestamp > issue.unmute_after:
+                # note that unmuting on-ingest implies that issues that no longer occur stay muted. I'd say this is what
+                # you want: things that no longer happen should _not_ draw your attention, and if you've nicely moved
+                # some issue away from the "Open" tab it should not reappear there if a certain amount of time happens.
+                # Thus, unmute_after should more completely be called unmute_until_events_happen_after but that's a bit
+                # long. Phrased slightly differently: you basically click the button saying "I suppose this issue will
+                # self-resolve in x time; notify me if this is not the case"
+                IssueStateManager.unmute(issue)
+
             # update the denormalized fields
             issue.last_seen = ingested_event.timestamp
             issue.event_count += 1
 
         if issue.id not in get_pc_registry().by_issue:
             pc_registry.by_issue[issue.id] = PeriodCounter()
-
         issue_pc = get_pc_registry().by_issue[issue.id]
         issue_pc.inc(ingested_event.timestamp)
 

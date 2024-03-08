@@ -26,6 +26,9 @@ def is_regression(sorted_releases, fixed_at, events_at, current_event_at):
 
 
 def issue_is_regression(issue, current_event_at):
+    # note that we don't check for is_muted anywhere in this file; this is because issues that are muted are unresolved
+    # (the combination of muted & resolved is illegal and we enforce this elsewhere) and the is_resolved == False case
+    # is basically the trivial case.
     if not issue.is_resolved:
         return False
 

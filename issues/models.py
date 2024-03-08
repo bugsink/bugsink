@@ -176,6 +176,7 @@ class IssueStateManager(object):
 
             issue.is_muted = False
             issue.unmute_on_volume_based_conditions = "[]"
+            issue.unmute_after = None
 
             # We keep the pc_registry and the value of issue.unmute_on_volume_based_conditions in-sync to avoid going
             # mad (in general). A specific case that I can think of off the top of my head that goes wrong if you

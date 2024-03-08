@@ -103,7 +103,7 @@ class IngestViewTestCase(TestCase):
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
     @patch("issues.models.send_unmute_alert")
-    def test_ingest_view_unmute_alert(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
+    def test_ingest_view_unmute_alert_for_vbc(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
         event_data = create_event_data()
 
         issue, _ = get_or_create_issue(self.loud_project, event_data)
@@ -117,6 +117,29 @@ class IngestViewTestCase(TestCase):
             event_data,
             self.loud_project,
             request,
+        )
+        self.assertFalse(send_new_issue_alert.delay.called)
+        self.assertFalse(send_regression_alert.delay.called)
+        self.assertTrue(send_unmute_alert.delay.called)
+
+    @patch("ingest.views.send_new_issue_alert")
+    @patch("ingest.views.send_regression_alert")
+    @patch("issues.models.send_unmute_alert")
+    def test_ingest_view_unmute_alert_after_time(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
+        event_data = create_event_data()
+
+        issue, _ = get_or_create_issue(self.loud_project, event_data)
+
+        IssueStateManager.mute(issue, unmute_after_tuple=(1, "day"))
+        issue.save()
+
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().process_event(
+            event_data,
+            self.loud_project,
+            request,
+            now=timezone.now() + datetime.timedelta(days=2),
         )
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertFalse(send_regression_alert.delay.called)
