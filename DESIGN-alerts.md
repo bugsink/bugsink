@@ -37,7 +37,7 @@ symmetry/tracability between what's going on in the UI and the alerts that are g
 
 ## "Later": more than first-time-only
 
-(The below only works if you let go of the idea that auto-mute is the only way you get volume-based alerts).
+(The below only works if you let go of the idea that the only way you get volume-based alerts is when some unmute-condition occurs).
 
 Rather than just having first-time only rules, you could have alerting rules that are triggered when a condition
 persists. e.g.
@@ -70,7 +70,8 @@ alerting has (for now) been chosen not to implement in favor of vbc-unmute-rules
 ## Chat-Ops
 
 You may configure any number of chat-ops endpoints (mattermost/slack channels). These are not connected to individual
-users. There's likely a default setting at the organization level.
+users. There's likely a default setting at the organization level. But it's also well imaginable that some project-based
+settings are necessary, e.g. when each project has its own channel.
 
 The chat-ops channels always receive the per-project configured set of notifications, i.e. the threshold cannot be
 changed per chat-op-channel (as with users).
