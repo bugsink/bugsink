@@ -26,7 +26,7 @@ GLOBAL_MUTE_OPTIONS = [
 ]
 
 
-def issue_list(request, project_id, state_filter="unresolved"):
+def issue_list(request, project_id, state_filter="open"):
     if request.method == "POST":
         issue_ids = request.POST.getlist('issue_ids[]')
         for issue_id in issue_ids:
@@ -64,6 +64,7 @@ def issue_list(request, project_id, state_filter="unresolved"):
             issue.save()
 
     d_state_filter = {
+        "open": lambda qs: qs.filter(is_resolved=False, is_muted=False),
         "unresolved": lambda qs: qs.filter(is_resolved=False),
         "resolved": lambda qs: qs.filter(is_resolved=True),
         "muted": lambda qs: qs.filter(is_muted=True),
