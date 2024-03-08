@@ -892,6 +892,10 @@ select {
   height: 100vh;
 }
 
+.h-6 {
+  height: 1.5rem;
+}
+
 .w-1\/4 {
   width: 25%;
 }
@@ -914,6 +918,10 @@ select {
 
 .w-full {
   width: 100%;
+}
+
+.w-6 {
+  width: 1.5rem;
 }
 
 .border-collapse {
@@ -1264,6 +1272,10 @@ select {
 .text-slate-800 {
   --tw-text-opacity: 1;
   color: rgb(30 41 59 / var(--tw-text-opacity));
+}
+
+.line-through {
+  text-decoration-line: line-through;
 }
 
 .filter {

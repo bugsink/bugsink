@@ -115,7 +115,9 @@ https://flowbite.com/docs/forms/floating-label/
             </td>
             <td class="w-full ml-0 pb-4 pt-4 pr-4">
                 <div>
-                    <a href="/issues/issue/{{ issue.id }}/event/last/" class="text-cyan-500 font-bold">{{ issue.title|truncatechars:100 }}</a>
+                    <a href="/issues/issue/{{ issue.id }}/event/last/" class="text-cyan-500 font-bold {% if issue.is_resolved %}line-through{% endif %}">{% if issue.is_muted %}<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 inline">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 9.75 19.5 12m0 0 2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6 4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" />
+</svg>&nbsp;&nbsp;{% endif %}{{ issue.title|truncatechars:100 }}</a>
                 </div>
                 <div class="text-sm">from <b>{{ issue.first_seen|date:"d M G:i" }}</b> | last <b>{{ issue.last_seen|date:"d M G:i" }}</b> | with <b>{{ issue.event_count }}</b> events
                     {% if issue.parsed_data.transaction %}| <span class="font-bold">{{ issue.parsed_data.transaction }} </span>{% endif %}
