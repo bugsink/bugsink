@@ -1,3 +1,4 @@
+from collections import namedtuple
 import json
 from django.shortcuts import render, get_object_or_404, redirect
 
@@ -7,6 +8,22 @@ from projects.models import Project
 
 from .utils import get_issue_grouper_for_data
 from .models import Issue, IssueStateManager
+
+
+MuteOption = namedtuple("MuteOption", ["for_or_until", "period_name", "nr_of_periods", "gte_threshold"])
+
+# I imagine that we may make this configurable at the installation, organization and/or project level, but for now we
+# just have a global constant.
+GLOBAL_MUTE_OPTIONS = [
+    MuteOption("for", "day", 1, None),
+    MuteOption("for", "week", 1, None),
+    MuteOption("for", "month", 1, None),
+    MuteOption("for", "month", 3, None),
+
+    MuteOption("until", "hour", 1, 5),
+    MuteOption("until", "hour", 24, 5),
+    MuteOption("until", "hour", 24, 100),
+]
 
 
 def issue_list(request, project_id, state_filter="unresolved"):
@@ -48,6 +65,7 @@ def issue_list(request, project_id, state_filter="unresolved"):
         "project": project,
         "issue_list": issue_list,
         "state_filter": state_filter,
+        "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
 
