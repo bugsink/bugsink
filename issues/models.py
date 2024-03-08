@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import json
 import uuid
+from dateutil.relativedelta import relativedelta
 
 from django.db import models
 
@@ -31,6 +32,7 @@ class Issue(models.Model):
     # fields related to muting:
     is_muted = models.BooleanField(default=False)
     unmute_on_volume_based_conditions = models.TextField(blank=False, null=False, default="[]")  # json string
+    unmute_after = models.DateTimeField(blank=True, null=True)
 
     def get_absolute_url(self):
         return f"/issues/issue/{ self.id }/event/last/"
@@ -88,6 +90,17 @@ class Issue(models.Model):
         ]
 
 
+def add_periods_to_datetime(dt, nr_of_periods, period_name):
+    dateutil_kwargs_map = {
+        "year": "years",
+        "month": "months",
+        "day": "days",
+        "hour": "hours",
+        "minute": "minutes",
+    }
+    return dt + relativedelta(**{dateutil_kwargs_map[period_name]: nr_of_periods})
+
+
 class IssueStateManager(object):
     """basically: a namespace; with static methods that combine field-setting in a single place"""
 
@@ -136,7 +149,7 @@ class IssueStateManager(object):
         IssueStateManager.unmute(issue, implicitly_called=True)
 
     @staticmethod
-    def mute(issue, unmute_on_volume_based_conditions="[]"):
+    def mute(issue, unmute_on_volume_based_conditions="[]", unmute_after_tuple=(None, None)):
         from bugsink.registry import get_pc_registry  # avoid circular import
         now = datetime.now(timezone.utc)  # NOTE: clock-reading going on here... should it be passed-in?
 
@@ -144,6 +157,10 @@ class IssueStateManager(object):
         issue.unmute_on_volume_based_conditions = unmute_on_volume_based_conditions
 
         IssueStateManager.set_unmute_handlers(get_pc_registry().by_issue, issue, now)
+
+        nr_of_periods, period_name = unmute_after_tuple
+        if nr_of_periods is not None and period_name is not None:
+            issue.unmute_after = add_periods_to_datetime(now, nr_of_periods, period_name)
 
     @staticmethod
     def unmute(issue, implicitly_called=False):

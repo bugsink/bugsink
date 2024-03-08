@@ -49,7 +49,7 @@ def issue_list(request, project_id, state_filter="open"):
             elif request.POST["action"].startswith("mute_for:"):
                 mute_for_params = request.POST["action"].split(":", 1)[1]
                 period_name, nr_of_periods, _ = mute_for_params.split(",")
-                raise NotImplementedError("mute_for not implemented")
+                IssueStateManager.mute(issue, unmute_after_tuple=(int(nr_of_periods), period_name))
 
             elif request.POST["action"].startswith("mute_until:"):
                 mute_for_params = request.POST["action"].split(":", 1)[1]
