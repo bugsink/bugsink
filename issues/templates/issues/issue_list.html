@@ -60,9 +60,15 @@ https://flowbite.com/docs/forms/floating-label/
 
                 {# note that an if-statement ("issue.occurs_in_last_release") is missing here, because we're not on the level of a single issue #} 
                 {# handling of that question (but per-issue, and after-click) is left as a TODO on the view #}
-                <button name="action" value="resolved_release:{{ project.get_latest_release.version }}" class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-s-md">Resolved in {{ project.get_latest_release.get_short_version }}</button> {# TODO push in pull-down #}
 
-                <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-e-md">...</button>
+                <div class="dropdown">
+                    <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 hover:bg-slate-200 active:ring rounded-e-md">🞃</button>
+
+                    <div class="dropdown-content flex-col">
+                        <button name="action" value="resolved_release:{{ project.get_latest_release.version }}" class="block self-stretch font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white hover:bg-slate-200 active:ring text-left whitespace-nowrap">Resolved in latest ({{ project.get_latest_release.get_short_version }})</button>
+                    </div>
+                </div> 
+
                 {% else %}
                 <button name="action" value="resolved" class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-s-md">Resolved</button>  {# TODO check layout; it should be a single round button but it probably isn't #}
                 {% endif %}
