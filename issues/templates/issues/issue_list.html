@@ -77,14 +77,14 @@ https://flowbite.com/docs/forms/floating-label/
                 {% endspaceless %}
 
                 {% spaceless %}{# needed to avoid whitespace between the looks-like-one-buttons #}
-                <button name="action" value="mute_bar" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-s-md">Mute</button>
+                <button name="action" value="mute" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-s-md">Mute</button>
 
                 <div class="dropdown">
                     <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 active:ring rounded-e-md">Mute for/until&nbsp;&nbsp;&nbsp;🞃</button>
 
                     <div class="dropdown-content flex-col">
                         {% for mute_option in mute_options %}
-                            <button name="action" value="mute_bar" class="block self-stretch font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white hover:bg-slate-200 active:ring text-left whitespace-nowrap">{% if mute_option.for_or_until == "for" %}{{ mute_option.nr_of_periods }} {{ mute_option.period_name }}{% if mute_option.nr_of_periods != 1 %}s{% endif %}{% else %}{{ mute_option.gte_threshold }} events per {% if mute_option.nr_of_periods != 1%} {{ mute_option.nr_of_periods }} {{ mute_option.period_name }}s{% else %} {{ mute_option.period_name }}{% endif %}{% endif %}</button>
+                            <button name="action" value="mute_{{ mute_option.for_or_until }}:{{ mute_option.period_name }},{{ mute_option.nr_of_periods }},{{ mute_option.gte_threshold }}" class="block self-stretch font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white hover:bg-slate-200 active:ring text-left whitespace-nowrap">{% if mute_option.for_or_until == "for" %}{{ mute_option.nr_of_periods }} {{ mute_option.period_name }}{% if mute_option.nr_of_periods != 1 %}s{% endif %}{% else %}{{ mute_option.gte_threshold }} events per {% if mute_option.nr_of_periods != 1%} {{ mute_option.nr_of_periods }} {{ mute_option.period_name }}s{% else %} {{ mute_option.period_name }}{% endif %}{% endif %}</button>
                         {% endfor %}
                     </div>
                 </div> 

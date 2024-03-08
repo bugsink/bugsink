@@ -46,6 +46,21 @@ def issue_list(request, project_id, state_filter="unresolved"):
                 IssueStateManager.reopen(issue)
             elif request.POST["action"] == "mute":
                 IssueStateManager.mute(issue)
+            elif request.POST["action"].startswith("mute_for:"):
+                mute_for_params = request.POST["action"].split(":", 1)[1]
+                period_name, nr_of_periods, _ = mute_for_params.split(",")
+                raise NotImplementedError("mute_for not implemented")
+
+            elif request.POST["action"].startswith("mute_until:"):
+                mute_for_params = request.POST["action"].split(":", 1)[1]
+                period_name, nr_of_periods, gte_threshold = mute_for_params.split(",")
+
+                IssueStateManager.mute(issue, json.dumps([{
+                    "period": period_name,
+                    "nr_of_periods": int(nr_of_periods),
+                    "volume": int(gte_threshold),
+                }]))
+
             issue.save()
 
     d_state_filter = {
