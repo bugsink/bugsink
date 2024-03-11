@@ -888,12 +888,12 @@ select {
   height: 1.25rem;
 }
 
-.h-screen {
-  height: 100vh;
-}
-
 .h-6 {
   height: 1.5rem;
+}
+
+.h-screen {
+  height: 100vh;
 }
 
 .w-1\/4 {
@@ -916,12 +916,12 @@ select {
   width: 1.25rem;
 }
 
-.w-full {
-  width: 100%;
-}
-
 .w-6 {
   width: 1.5rem;
+}
+
+.w-full {
+  width: 100%;
 }
 
 .border-collapse {
@@ -1452,8 +1452,9 @@ select {
 .dropdown-content {
   display: none;
   position: absolute;
-  left: -2px;
   z-index: 1;
+  margin-left: auto;
+  right: 0;
 }
 
 /* Show the dropdown menu on hover */

@@ -84,8 +84,9 @@
 .dropdown-content {
   display: none;
   position: absolute;
-  left: -2px;
   z-index: 1;
+  margin-left: auto;
+  right: 0;
 }
 
 /* Show the dropdown menu on hover */
