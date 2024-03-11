@@ -6,8 +6,6 @@ from django.views.decorators.cache import cache_control
 from django.http import FileResponse, HttpRequest, HttpResponse
 from django.shortcuts import render
 
-from issues.views import issue_list
-
 from bugsink.decorators import login_exempt
 
 
@@ -19,7 +17,7 @@ def home(request):
 
     elif project_count == 1:
         project = request.user.project_set.get()
-        return redirect(issue_list, project_id=project.id)
+        return redirect("issue_list_open", project_id=project.id)
 
     return render(request, "bugsink/home_project_list.html", {
         # user_projecs is in the context_processor, we don't need to pass it here
