@@ -9,6 +9,10 @@ from bugsink.volume_based_condition import VolumeBasedCondition
 from alerts.tasks import send_unmute_alert
 
 
+class IncongruentStateException(Exception):
+    pass
+
+
 class Issue(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
@@ -114,28 +118,30 @@ class IssueStateManager(object):
 
         # an issue cannot be both resolved and muted; muted means "the problem persists but don't tell me about it
         # (or maybe unless some specific condition happens)" and resolved means "the problem is gone". Hence, resolving
-        # an issue means unmuting it.
-        IssueStateManager.unmute(issue, implicitly_called=True)
+        # an issue means unmuting it. Note that resolve-after-mute is implemented as an override but mute-after-resolve
+        # is implemented as an Exception; this is because from a usage perspective saying "I don't care about this" but
+        # then solving it anyway is a realistic scenario and the reverse is not.
+        IssueStateManager.unmute(issue)
 
     @staticmethod
     def resolve_by_latest(issue):
         # NOTE: currently unused; we may soon reintroduce it though so I left it in.
         issue.is_resolved = True
         issue.add_fixed_at(issue.project.get_latest_release().version)
-        IssueStateManager.unmute(issue, implicitly_called=True)  # as in IssueStateManager.resolve()
+        IssueStateManager.unmute(issue)  # as in IssueStateManager.resolve()
 
     @staticmethod
     def resolve_by_release(issue, release_version):
         # release_version: str
         issue.is_resolved = True
         issue.add_fixed_at(release_version)
-        IssueStateManager.unmute(issue, implicitly_called=True)  # as in IssueStateManager.resolve()
+        IssueStateManager.unmute(issue)  # as in IssueStateManager.resolve()
 
     @staticmethod
     def resolve_by_next(issue):
         issue.is_resolved = True
         issue.is_resolved_by_next_release = True
-        IssueStateManager.unmute(issue, implicitly_called=True)  # as in IssueStateManager.resolve()
+        IssueStateManager.unmute(issue)  # as in IssueStateManager.resolve()
 
     @staticmethod
     def reopen(issue):
@@ -146,11 +152,14 @@ class IssueStateManager(object):
         # as in IssueStateManager.resolve(), but not because a reopened issue cannot be muted (we could mute it soon
         # after reopening) but because when reopening an issue you're doing this from a resolved state; calling unmute()
         # here is done as a consistency-enforcement after the fact.
-        IssueStateManager.unmute(issue, implicitly_called=True)
+        IssueStateManager.unmute(issue)
 
     @staticmethod
     def mute(issue, unmute_on_volume_based_conditions="[]", unmute_after_tuple=(None, None)):
         from bugsink.registry import get_pc_registry  # avoid circular import
+        if issue.is_resolved:
+            raise IncongruentStateException("Cannot mute a resolved issue")
+
         now = datetime.now(timezone.utc)  # NOTE: clock-reading going on here... should it be passed-in?
 
         issue.is_muted = True
@@ -163,10 +172,7 @@ class IssueStateManager(object):
             issue.unmute_after = add_periods_to_datetime(now, nr_of_periods, period_name)
 
     @staticmethod
-    def unmute(issue, implicitly_called=False):
-        # implicitly_called is used to avoid sending an unmute alert when the unmute is triggered by one of the other
-        # methods in this class.
-
+    def unmute(issue, triggered_by_event=False):
         from bugsink.registry import get_pc_registry, UNMUTE_PURPOSE  # avoid circular import
 
         if issue.is_muted:
@@ -188,7 +194,7 @@ class IssueStateManager(object):
             # thinking is needed)
             get_pc_registry().by_issue[issue.id].remove_event_listener(UNMUTE_PURPOSE)
 
-            if not implicitly_called:
+            if triggered_by_event:
                 # (note: we can expect project to be set, because it will be None only when projects are deleted, in
                 # which case no more unmuting happens)
                 if issue.project.alert_on_unmute:
@@ -233,7 +239,7 @@ class IssueStateManager(object):
 def create_unmute_issue_handler(issue_id):
     def unmute():
         issue = Issue.objects.get(id=issue_id)
-        IssueStateManager.unmute(issue)
+        IssueStateManager.unmute(issue, triggered_by_event=True)
         issue.save()
 
     return unmute

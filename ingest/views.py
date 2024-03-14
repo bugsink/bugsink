@@ -147,7 +147,7 @@ class BaseIngestAPIView(APIView):
                 # Thus, unmute_after should more completely be called unmute_until_events_happen_after but that's a bit
                 # long. Phrased slightly differently: you basically click the button saying "I suppose this issue will
                 # self-resolve in x time; notify me if this is not the case"
-                IssueStateManager.unmute(issue)
+                IssueStateManager.unmute(issue, triggered_by_event=True)
 
             # update the denormalized fields
             issue.last_seen = ingested_event.timestamp

@@ -332,6 +332,23 @@ class MuteUnmuteTestCase(TestCase):
             IssueStateManager.mute(issue, "[{\"period\": \"day\", \"nr_of_periods\": 1, \"volume\": 1}]")
 
     @patch("issues.models.send_unmute_alert")
+    def test_unmute_alerts_should_not_be_sent_when_users_click_unmute(self, send_unmute_alert):
+        project = Project.objects.create()
+
+        issue = Issue.objects.create(
+            project=project,
+            unmute_on_volume_based_conditions='[]',
+            is_muted=True,
+            **denormalized_issue_fields(),
+        )
+
+        IssueStateManager.unmute(issue)
+        issue.save()
+
+        self.assertFalse(Issue.objects.get(id=issue.id).is_muted)
+        self.assertEquals(0, send_unmute_alert.delay.call_count)
+
+    @patch("issues.models.send_unmute_alert")
     def test_unmute_simple_case(self, send_unmute_alert):
         project = Project.objects.create()
 
