@@ -105,9 +105,22 @@ def issue_event_detail(request, issue_pk, event_pk):
             IssueStateManager.resolve_by_next(issue)
         elif request.POST["action"] == "reopen":
             IssueStateManager.reopen(issue)
-
         elif request.POST["action"] == "mute":
-            ...
+            IssueStateManager.mute(issue)
+        elif request.POST["action"].startswith("mute_for:"):
+            mute_for_params = request.POST["action"].split(":", 1)[1]
+            period_name, nr_of_periods, _ = mute_for_params.split(",")
+            IssueStateManager.mute(issue, unmute_after_tuple=(int(nr_of_periods), period_name))
+
+        elif request.POST["action"].startswith("mute_until:"):
+            mute_for_params = request.POST["action"].split(":", 1)[1]
+            period_name, nr_of_periods, gte_threshold = mute_for_params.split(",")
+
+            IssueStateManager.mute(issue, json.dumps([{
+                "period": period_name,
+                "nr_of_periods": int(nr_of_periods),
+                "volume": int(gte_threshold),
+            }]))
 
         issue.save()
         return redirect(issue_event_detail, issue_pk=issue_pk, event_pk=event_pk)
@@ -136,6 +149,7 @@ def issue_event_detail(request, issue_pk, event_pk):
         "parsed_data": parsed_data,
         "exceptions": exceptions,
         "issue_grouper": get_issue_grouper_for_data(parsed_data),
+        "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
 

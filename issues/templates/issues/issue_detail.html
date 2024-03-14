@@ -16,21 +16,49 @@
             {# see issues/tests.py for why this is turned off ATM #}
             {# <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" name="action" value="reopen">Reopen</button> #}
         {% else %}
-            {% if issue.project.has_releases %}
-                {# 'by next' is even if 'by current' is also shown: just because you haven't seen 'by current' doesn't mean it's actually already solved; and in fact we show this option first precisely because we can always show it #} 
-                <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" name="action" value="resolved_next">Resolved in next release</button>
+            {% spaceless %}{# needed to avoid whitespace between the looks-like-one-buttons #}
 
-                {% if not issue.occurs_in_last_release %}
-                    {# As an alternative to 'resolved in get_latest' I briefly considered 'resolved in first-after-last-seen'. I settled on "who cares, it's in the margin anyway" #}
-                    {# and if you, as a user, really insist on getting this 100% right you can always be explicit by setting up your CLI integrations #}
-                    <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-cyan-400 active:ring rounded-md" name="action" value="resolved_release:{{ issue.project.get_latest_release.version }}">Resolved in {{ issue.project.get_latest_release.get_short_version }}</button>
-                {% endif %}
+            {% if issue.project.has_releases %}
+                {# 'by next' is shown even if 'by current' is also shown: just because you haven't seen 'by current' doesn't mean it's actually already solved; and in fact we show this option first precisely because we can always show it #} 
+                <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-s-md" name="action" value="resolved_next">Resolved in next release</button>
+
+                <div class="dropdown">
+                    <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 hover:bg-slate-200 active:ring rounded-e-md">🞃</button>
+
+                    {# note that we can depend on get_latest_release being available, because we're in the 'project.has_releases' branch #}
+                    <div class="dropdown-content flex-col pl-2">
+
+                        {% if not issue.occurs_in_last_release %}
+                            <button name="action" value="resolved_release:{{ issue.project.get_latest_release.version }}" class="block self-stretch font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white hover:bg-slate-200 active:ring text-left whitespace-nowrap">Resolved in latest ({{ issue.project.get_latest_release.get_short_version }})</button>
+                        {% else %}
+                            <button name="action" value="resolved_release:{{ issue.project.get_latest_release.version }}" disabled class="block self-stretch font-bold text-slate-300 border-slate-200 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white text-left whitespace-nowrap">Resolved in latest ({{ issue.project.get_latest_release.get_short_version }})</button>
+                        {% endif %}
+
+                    </div>
+                </div> 
+
+
             {% else %}
                 <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" name="action" value="resolved">Resolved</button>
             {% endif %}
+
+            {% endspaceless %}
         {% endif %}
 
-        <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md" name="action" value="mute">Mute</button>
+
+        {% spaceless %}{# needed to avoid whitespace between the looks-like-one-buttons #}
+        <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-s-md" name="action" value="mute">Mute</button>
+
+        <div class="dropdown">
+            <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 active:ring rounded-e-md">Mute for/until&nbsp;&nbsp;&nbsp;🞃</button>
+
+            <div class="dropdown-content flex-col">
+                {% for mute_option in mute_options %}
+                    <button name="action" value="mute_{{ mute_option.for_or_until }}:{{ mute_option.period_name }},{{ mute_option.nr_of_periods }},{{ mute_option.gte_threshold }}" class="block self-stretch font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white hover:bg-slate-200 active:ring text-left whitespace-nowrap">{% if mute_option.for_or_until == "for" %}{{ mute_option.nr_of_periods }} {{ mute_option.period_name }}{% if mute_option.nr_of_periods != 1 %}s{% endif %}{% else %}{{ mute_option.gte_threshold }} events per {% if mute_option.nr_of_periods != 1%} {{ mute_option.nr_of_periods }} {{ mute_option.period_name }}s{% else %} {{ mute_option.period_name }}{% endif %}{% endif %}</button>
+                {% endfor %}
+            </div>
+        </div> 
+        {% endspaceless %}
 
         </form>
     </div>
