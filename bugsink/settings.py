@@ -172,6 +172,14 @@ if SENTRY_DSN is not None:
         traces_sample_rate=0,
     )
 
+    # override that you might use for testing; I don't think I want to promote this "blunt axe" approach to something
+    # actually configurable (because why would anybody but me need this?). The blunt-axe-ness of this is because the
+    # sentry client "tries hard" to guess something. (and I couldn't be bothered to deeply study the docs -- perhaps
+    # there is actually a better thing than GLOBAL_HUB)
+
+    # from sentry_sdk.hub import GLOBAL_HUB
+    # GLOBAL_HUB.client.options['release'] = None
+
 BASE_URL = "http://bugsink:9000"  # no trailing slash
 SITE_TITLE = "Bugsink"  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 
