@@ -34,7 +34,7 @@ def _send_alert(issue_id, subject_prefix, alert_article, alert_reason):
     issue = Issue.objects.get(id=issue_id)
     for membership in _get_users_for_email_alert(issue):
         send_rendered_email(
-            subject=truncatechars(f"{subject_prefix} {issue.title()} in {issue.project.name}", 100),
+            subject=truncatechars(f'{subject_prefix} "{issue.title()}" in "{issue.project.name}"', 100),
             base_template_name="alerts/issue_alert",
             recipient_list=[membership.user.email],
             context={
