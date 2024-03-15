@@ -122,6 +122,9 @@ def issue_event_detail(request, issue_pk, event_pk):
                 "volume": int(gte_threshold),
             }]))
 
+        elif request.POST["action"] == "unmute":
+            IssueStateManager.unmute(issue)
+
         issue.save()
         return redirect(issue_event_detail, issue_pk=issue_pk, event_pk=event_pk)
 
