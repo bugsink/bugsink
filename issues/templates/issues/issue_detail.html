@@ -46,14 +46,14 @@
         {% endif %}
 
         {% spaceless %}{# needed to avoid whitespace between the looks-like-one-buttons #}
-        {% if not issue.is_muted %}
+        {% if not issue.is_muted and not issue.is_resolved %}
             <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-s-md" name="action" value="mute">Mute</button>
         {% else %}
             <button class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-s-md" disabled name="action" value="mute">Mute</button>
         {% endif %}
 
         <div class="dropdown">
-            {% if not issue.is_muted %}
+            {% if not issue.is_muted and not issue.is_resolved %}
                 <button disabled {# disabled b/c clicking the dropdown does nothing - we have hover for that #} class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 active:ring">Mute for/until&nbsp;&nbsp;&nbsp;🞃</button>
 
                 {# we just hide the whole dropdown; this is the easiest implementation of not-showing the dropdown when the issue is already muted #}
@@ -67,7 +67,7 @@
             {% endif %}
         </div> 
 
-        {% if issue.is_muted %}
+        {% if issue.is_muted and not issue.is_resolved %}
             <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 active:ring rounded-e-md" name="action" value="unmute">Unmute</button>
         {% else %}
             <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 rounded-e-md" name="action" value="unmute">Unmute</button>
