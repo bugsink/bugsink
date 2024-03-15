@@ -75,6 +75,9 @@
                 </div>
             {% else %}
                 <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2">Mute for/until&nbsp;&nbsp;&nbsp;🞃</button>
+                {# note that when the issue is muted, no further muting is allowed. this is a design decision, I figured this is the easiest-to-understand UI, #}
+                {# both at the point-of-clicking and when displaying the when-will-this-be-unmuted in some place #}
+                {# (the alternative would be to allow multiple simulteneous reasons for unmuting to exist next to each other #}
                 {# we just hide the whole dropdown; this is the easiest implementation of not-showing the dropdown when the issue is already muted #}
             {% endif %}
         </div> 
