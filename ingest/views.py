@@ -177,12 +177,13 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
     def post(self, request, project_id=None):
         project = self.get_project(request, project_id)
 
-        if len(request.data) != 3:
+        data = request.data  # make this a local var to ensure it's sent as part of capture_stacktrace(..)
+        if len(data) != 3:
             # multi-part envelopes trigger an error too
             sentry_sdk_extensions.capture_stacktrace("Invalid envelope (not 3 parts)")
             return Response({"message": "Missing headers / unsupported type"}, status=status.HTTP_501_NOT_IMPLEMENTED)
 
-        if request.data[1].get("type") != "event":
+        if data[1].get("type") != "event":
             sentry_sdk_extensions.capture_stacktrace("Invalid envelope (not an event)")
             return Response({"message": "Only events are supported"}, status=status.HTTP_501_NOT_IMPLEMENTED)
 
@@ -194,14 +195,14 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         # KvS: this is presumably the path that is used for envelopes (and then also when the above are not provided)
         # TODO I'd much rather deal with that explicitly
         from urllib.parse import urlparse
-        if isinstance(request.data, list):
-            if data_first := next(iter(request.data), None):
+        if isinstance(data, list):
+            if data_first := next(iter(data), None):
                 if isinstance(data_first, dict):
                     dsn = urlparse(data_first.get("dsn"))
                     if dsn.username:
                         return dsn.username
         """
 
-        event = request.data[2]
+        event = data[2]
         self.process_event(event, project, request)
         return Response()
