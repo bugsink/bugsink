@@ -1,3 +1,5 @@
+import types
+
 from sentry_sdk.utils import current_stacktrace
 import sentry_sdk
 
@@ -50,19 +52,26 @@ def capture_stacktrace_using_logentry(message):
 
 def capture_stacktrace_using_exception(message):
     """
-    YOU DON'T WANT THIS EITHER
-    see: https://stackoverflow.com/questions/78172031/how-to-obtain-an-exception-with-a-traceback-attribute-that-contain
-
     Capture the current stacktrace and send it to Sentry _as an CapturedStacktrace with stacktrace context; the standard
     sentry_sdk does not provide this; it either allows for sending arbitrary messages (but without local variables on
     your stacktrace) or it allows for sending exceptions (but you have to raise an exception to capture the stacktrace).
 
-    Implemented by raise-then-capture, which has good support in all sentry-like servers.
+    Implemented by raise-then-capture, which has good support in all sentry-like servers. This should "probably" be
+    somewhat equivalent to capture_stacktrace (though it may in fact have more unnecessary tb info).
     """
     try:
-        # __traceback_hide__ = True
+        __traceback_hide__ = True  # noqa this magic variable is understood by the sentry sdk to hide the current frame
         raise CapturedStacktrace(message)
     except CapturedStacktrace as e:
+        # The captured exception does not actually have the traceback that we need. We have to construct it ourselves.
+        # https://stackoverflow.com/questions/78172031/how-to-obtain-an-exception-with-a-traceback-attribute-that-contai
+        tb = e.__traceback__
+        fb = tb.tb_frame.f_back
+        while fb:
+            tb = types.TracebackType(tb_next=tb, tb_frame=fb, tb_lasti=fb.f_lasti, tb_lineno=fb.f_lineno)
+            fb = tb.tb_frame.f_back
+
+        e.__traceback__ = tb
         sentry_sdk.capture_exception(e)
 
 
