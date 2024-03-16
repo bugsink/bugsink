@@ -178,10 +178,16 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         project = self.get_project(request, project_id)
 
         data = request.data  # make this a local var to ensure it's sent as part of capture_stacktrace(..)
-        if len(data) != 3:
-            # multi-part envelopes trigger an error too
-            sentry_sdk_extensions.capture_stacktrace("Invalid envelope (not 3 parts)")
+        if len(data) < 3:
+            # we expect at least a header, a type-decla, and a body; this enables us to deal with a good number of
+            # messages, however, a proper implementation of Envelope parsing, including parsing of the headers and the
+            # body (esp. if there multiple parts), using both the specification (if there is any) and the sentry
+            # codebase as a reference, is a TODO (such extra parts are currently silently ignored)
+            sentry_sdk_extensions.capture_stacktrace("Invalid envelope (< 3 parts)")
             return Response({"message": "Missing headers / unsupported type"}, status=status.HTTP_501_NOT_IMPLEMENTED)
+
+        if len(data) > 3:
+            sentry_sdk_extensions.capture_stacktrace("> 3 envelope parts, logged for understanding")  # i.e. no error
 
         if data[1].get("type") != "event":
             sentry_sdk_extensions.capture_stacktrace("Invalid envelope (not an event)")
