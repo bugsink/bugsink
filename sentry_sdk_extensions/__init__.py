@@ -1,13 +1,15 @@
-from sentry_sdk.utils import capture_internal_exceptions, current_stacktrace
+from sentry_sdk.utils import current_stacktrace
 import sentry_sdk
 
 
-class AdHocException(Exception):
+class CapturedStacktrace(Exception):
     pass
 
 
-def capture_stacktrace(message):
+def capture_stacktrace_using_logentry(message):
     """
+    YOU PROBABLY DON'T WANT THIS
+
     Capture the current stacktrace and send it to Sentry _as a log entry with stacktrace context; the standard
     sentry_sdk does not provide this; it either allows for sending arbitrary messages (but without local variables on
     your stacktrace) or it allows for sending exceptions (but you have to raise an exception to capture the stacktrace).
@@ -46,15 +48,19 @@ def capture_stacktrace(message):
     sentry_sdk.capture_event(event)
 
 
-def capture_stacktrace_2(message):
+def capture_stacktrace(message):
     """
-    Capture the current stacktrace and send it to Sentry. Like capture_stacktrace, but using an "Ad Hoc" Exception.
-    This allows us to use the standard sentry_sdk.capture_exception function, and our stacktrace to show up as an
-    exception on the server-side.
+    YOU DON'T WANT THIS EITHER
+    see: https://stackoverflow.com/questions/78172031/how-to-obtain-an-exception-with-a-traceback-attribute-that-contain
 
-    In good old Python tradition, we've just tacked a "_2" onto the end of the function name.
+    Capture the current stacktrace and send it to Sentry _as a log entry with stacktrace context; the standard
+    sentry_sdk does not provide this; it either allows for sending arbitrary messages (but without local variables on
+    your stacktrace) or it allows for sending exceptions (but you have to raise an exception to capture the stacktrace).
+
+    Implemented by raise-then-capture, which has good support in all sentry-like servers.
     """
     try:
-        raise AdHocException(message)
-    except AdHocException as e:
+        # __traceback_hide__ = True
+        raise CapturedStacktrace(message)
+    except CapturedStacktrace as e:
         sentry_sdk.capture_exception(e)
