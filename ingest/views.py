@@ -179,11 +179,11 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
         if len(request.data) != 3:
             # multi-part envelopes trigger an error too
-            sentry_sdk_extensions.capture_stacktrace_2("Invalid envelope (not 3 parts)")
+            sentry_sdk_extensions.capture_stacktrace("Invalid envelope (not 3 parts)")
             return Response({"message": "Missing headers / unsupported type"}, status=status.HTTP_501_NOT_IMPLEMENTED)
 
         if request.data[1].get("type") != "event":
-            sentry_sdk_extensions.capture_stacktrace_2("Invalid envelope (not an event)")
+            sentry_sdk_extensions.capture_stacktrace("Invalid envelope (not an event)")
             return Response({"message": "Only events are supported"}, status=status.HTTP_501_NOT_IMPLEMENTED)
 
         # TODO think about a good order to handle this in. Namely: if no project Header is provided, you are basically
