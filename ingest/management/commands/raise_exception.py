@@ -16,7 +16,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if options["no_release"]:
             # The sentry client "tries hard" to get the release from the environment (including git); I have found the
-            # following to be a workable way to set the release to None
+            # following to be a workable way to set the release to None. (But I have checked that, in the absence of
+            # .git, the release is set to None by default by the Python sentry sdk.)
             GLOBAL_HUB.client.options['release'] = None
 
         try:
