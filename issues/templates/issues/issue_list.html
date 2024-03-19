@@ -15,7 +15,7 @@
     <a href="{% url "issue_list_open" project_id=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 {% if state_filter == "open" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">Open</div></a>
     <a href="{% url "issue_list_unresolved" project_id=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 {% if state_filter == "unresolved" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">Unresolved</div></a>
     <a href="{% url "issue_list_muted" project_id=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 {% if state_filter == "muted" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 hover:border-slate-400 hover:border-b-4{% endif %}">Muted</div></a>
-    <a href="{% url "issue_list_resolved" project_id=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 {% if state_filter == "resolved" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-slate-400 hover:border-b-4{% endif %}">Resolve</div></a>
+    <a href="{% url "issue_list_resolved" project_id=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 {% if state_filter == "resolved" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-slate-400 hover:border-b-4{% endif %}">Resolved</div></a>
     <a href="{% url "issue_list_all" project_id=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 {% if state_filter == "all" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 hover:border-slate-400 hover:border-b-4{% endif %}">All</div></a>
     </div>
     <div class="ml-auto p-2">
