@@ -12,7 +12,7 @@
     <div class="ml-auto">
         <form action="" method="post">
         {% csrf_token %}
-        {% if issue.is_resolved %}
+        {% if issue.is_resolved %}{# i.e. buttons disabled #}
             {# see issues/tests.py for why this is turned off ATM #}
             {# <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" name="action" value="reopen">Reopen</button> #}
 
@@ -21,13 +21,13 @@
                 <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-s-md" name="action" value="resolved_next">Resolved in next release</button>
 
                 <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 rounded-e-md">🞃</button>
-                {# we just hide the whole dropdown; this is the easiest implementation of not-showing the dropdown when the issue is already muted #}
+                {# we just hide the whole dropdown; this is the easiest implementation of not-showing the dropdown #}
             {% else %}
                 <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-md" name="action" value="resolved">Resolve</button>
             {% endif %}
             {% endspaceless %}
 
-        {% else %}
+        {% else %}{# not resolved, i.e. buttons enabled #}
             {% spaceless %}{# needed to avoid whitespace between the looks-like-one-buttons #}
 
             {% if issue.project.has_releases %}
@@ -55,13 +55,13 @@
             {% endif %}
 
             {% endspaceless %}
-        {% endif %}
+        {% endif %}{# end of the resolved/not-resolved branch; (which implies disabled/enabled) #}
 
         {% spaceless %}{# needed to avoid whitespace between the looks-like-one-buttons #}
         {% if not issue.is_muted and not issue.is_resolved %}
             <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-s-md" name="action" value="mute">Mute</button>
         {% else %}
-            <button class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-s-md" disabled name="action" value="mute">Mute</button>
+            <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-s-md" name="action" value="mute">Mute</button>
         {% endif %}
 
         <div class="dropdown">

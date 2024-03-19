@@ -60,6 +60,8 @@ def issue_list(request, project_id, state_filter="open"):
                     "nr_of_periods": int(nr_of_periods),
                     "volume": int(gte_threshold),
                 }]))
+            elif request.POST["action"] == "unmute":
+                IssueStateManager.unmute(issue)
 
             issue.save()
 
@@ -82,6 +84,12 @@ def issue_list(request, project_id, state_filter="open"):
         "issue_list": issue_list,
         "state_filter": state_filter,
         "mute_options": GLOBAL_MUTE_OPTIONS,
+
+        # design decision: we statically determine some disabledness (i.e. choices that will never make sense are
+        # disallowed), but we don't have any dynamic disabling based on the selected issues.
+        "disable_resolve_buttons": state_filter in ("resolved"),
+        "disable_mute_buttons": state_filter in ("resolved", "muted"),
+        "disable_unmute_buttons": state_filter in ("resolved", "open"),
     })
 
 
