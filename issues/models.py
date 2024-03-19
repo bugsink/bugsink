@@ -115,6 +115,7 @@ class IssueStateManager(object):
     @staticmethod
     def resolve(issue):
         issue.is_resolved = True
+        issue.add_fixed_at("")  # i.e. fixed in the no-release-info-available release
 
         # an issue cannot be both resolved and muted; muted means "the problem persists but don't tell me about it
         # (or maybe unless some specific condition happens)" and resolved means "the problem is gone". Hence, resolving

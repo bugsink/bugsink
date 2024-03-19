@@ -163,21 +163,39 @@ class RegressionIssueTestCase(DjangoTestCase):
 
     def test_issue_is_regression_no_releases(self):
         project = Project.objects.create()
+        create_release_if_needed(project, "")
 
         # new issue is not a regression
         issue = Issue.objects.create(project=project, **denormalized_issue_fields())
-        self.assertFalse(issue_is_regression(fresh(issue), "anything"))
+        self.assertFalse(issue_is_regression(fresh(issue), ""))
 
         # resolve the issue, a reoccurrence is a regression
         IssueStateManager.resolve(issue)
         issue.save()
-        self.assertTrue(issue_is_regression(fresh(issue), "anything"))
+        self.assertTrue(issue_is_regression(fresh(issue), ""))
 
         # reopen the issue (as is done when a real regression is seen; or as would be done manually); nothing is a
         # regression once the issue is open
         IssueStateManager.reopen(issue)
         issue.save()
-        self.assertFalse(issue_is_regression(fresh(issue), "anything"))
+        self.assertFalse(issue_is_regression(fresh(issue), ""))
+
+    def test_issue_had_no_releases_but_now_does(self):
+        project = Project.objects.create()
+        create_release_if_needed(project, "")
+
+        # new issue is not a regression
+        issue = Issue.objects.create(project=project, **denormalized_issue_fields())
+        self.assertFalse(issue_is_regression(fresh(issue), ""))
+
+        # resolve the issue, a reoccurrence is a regression
+        IssueStateManager.resolve(issue)
+        issue.save()
+
+        # a new release happens
+        create_release_if_needed(project, "1.0.0")
+
+        self.assertTrue(issue_is_regression(fresh(issue), "1.0.0"))
 
     def test_issue_is_regression_with_releases_resolve_by_latest(self):
         project = Project.objects.create()

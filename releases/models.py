@@ -85,8 +85,13 @@ class Release(models.Model):
 
 
 def create_release_if_needed(project, version):
+    if version is None:
+        # it is the empty string in practice because we pull this from Issue.release, which is non-nullable
+        raise ValueError('The None-like version must be the empty string')
+
     # NOTE: we even create a Release for the empty release here; we need the associated info (date_released) if a
     # real release is ever created later.
+
     release, release_created = Release.objects.get_or_create(project=project, version=version)
     if release_created and version != "":
         if not project.has_releases:
