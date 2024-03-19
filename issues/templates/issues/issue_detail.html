@@ -23,7 +23,7 @@
                 <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 rounded-e-md">🞃</button>
                 {# we just hide the whole dropdown; this is the easiest implementation of not-showing the dropdown when the issue is already muted #}
             {% else %}
-                <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-md" name="action" value="resolved">Resolved</button>
+                <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-md" name="action" value="resolved">Resolve</button>
             {% endif %}
             {% endspaceless %}
 
@@ -51,7 +51,7 @@
 
 
             {% else %}
-                <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" name="action" value="resolved">Resolved</button>
+                <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" name="action" value="resolved">Resolve</button>
             {% endif %}
 
             {% endspaceless %}
