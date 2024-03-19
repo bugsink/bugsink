@@ -134,7 +134,7 @@ def create_release_if_needed(project, version):
 #   humans will find it much easier to pronounce/reason about versions.
 # * Any non-semver versions will be ordered by date. The typical use-case would be commit-hashes, but since the ordering
 #   is by date and there is no special handling for commit hashes it really doesn't matter.
-# * Any charachters up to the last at-sign (@) will be interpreted as a package name and ignored (this is exclusively
+# * Any characters up to the last at-sign (@) will be interpreted as a package name and ignored (this is exclusively
 #   for compatability with existing Sentry setups; since bugsink releases are per-project package info is not needed)
 #
 # Note: When transitioning between version schemes, bugsink will "Just Work". In particular, releases detected by
