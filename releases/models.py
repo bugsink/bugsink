@@ -94,6 +94,7 @@ def create_release_if_needed(project, version):
             project.save()
 
         if release == project.get_latest_release():
+            # bnr means By Next Release
             for bnr_issue in Issue.objects.filter(project=project, is_resolved_by_next_release=True):
                 bnr_issue.add_fixed_at(release.version)
                 bnr_issue.is_resolved_by_next_release = False
