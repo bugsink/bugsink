@@ -98,7 +98,7 @@ function toggleFrameVisibility(frameHeader) {
 }
 
 
-function showAllFrames(frameHeader) {
+function showAllFrames() {
     document.querySelectorAll(".js-frame-details").forEach((frameDetails) => {
         expandSection(frameDetails);
     });
@@ -107,7 +107,7 @@ function showAllFrames(frameHeader) {
     });
 }
 
-function showInAppFrames(frameHeader) {
+function showInAppFrames() {
     document.querySelectorAll(".js-frame-details").forEach((frameDetails) => {
         if (frameDetails.classList.contains("js-in-app")) {
             expandSection(frameDetails);
@@ -119,7 +119,7 @@ function showInAppFrames(frameHeader) {
     });
 }
 
-function hideAllFrames(frameHeader) {
+function hideAllFrames() {
     document.querySelectorAll(".js-frame-details").forEach((frameDetails) => {
         collapseSection(frameDetails);
     });
