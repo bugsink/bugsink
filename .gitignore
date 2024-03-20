@@ -22,4 +22,4 @@ db.*.sqlite3
 
 # node (tailwind)
 node_modules
-package*
+/package*
