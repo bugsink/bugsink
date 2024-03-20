@@ -26,6 +26,36 @@ GLOBAL_MUTE_OPTIONS = [
 ]
 
 
+def _apply_action(issue, action):
+    if action == "resolve":
+        IssueStateManager.resolve(issue)
+    elif action.startswith("resolved_release:"):
+        release_version = action.split(":", 1)[1]
+        IssueStateManager.resolve_by_release(issue, release_version)
+    elif action == "resolved_next":
+        IssueStateManager.resolve_by_next(issue)
+    elif action == "reopen":
+        IssueStateManager.reopen(issue)
+    elif action == "mute":
+        IssueStateManager.mute(issue)
+    elif action.startswith("mute_for:"):
+        mute_for_params = action.split(":", 1)[1]
+        period_name, nr_of_periods, _ = mute_for_params.split(",")
+        IssueStateManager.mute(issue, unmute_after_tuple=(int(nr_of_periods), period_name))
+
+    elif action.startswith("mute_until:"):
+        mute_for_params = action.split(":", 1)[1]
+        period_name, nr_of_periods, gte_threshold = mute_for_params.split(",")
+
+        IssueStateManager.mute(issue, json.dumps([{
+            "period": period_name,
+            "nr_of_periods": int(nr_of_periods),
+            "volume": int(gte_threshold),
+        }]))
+    elif action == "unmute":
+        IssueStateManager.unmute(issue)
+
+
 def issue_list(request, project_id, state_filter="open"):
     if request.method == "POST":
         issue_ids = request.POST.getlist('issue_ids[]')
@@ -35,33 +65,7 @@ def issue_list(request, project_id, state_filter="open"):
             # still, we could revisit this later.
             # note also that this is a 100% copy/paste from the issue_detail (refactor later).
             issue = Issue.objects.get(pk=issue_id)
-            if request.POST["action"] == "resolve":
-                IssueStateManager.resolve(issue)
-            elif request.POST["action"].startswith("resolved_release:"):
-                release_version = request.POST["action"].split(":", 1)[1]
-                IssueStateManager.resolve_by_release(issue, release_version)
-            elif request.POST["action"] == "resolved_next":
-                IssueStateManager.resolve_by_next(issue)
-            elif request.POST["action"] == "reopen":
-                IssueStateManager.reopen(issue)
-            elif request.POST["action"] == "mute":
-                IssueStateManager.mute(issue)
-            elif request.POST["action"].startswith("mute_for:"):
-                mute_for_params = request.POST["action"].split(":", 1)[1]
-                period_name, nr_of_periods, _ = mute_for_params.split(",")
-                IssueStateManager.mute(issue, unmute_after_tuple=(int(nr_of_periods), period_name))
-
-            elif request.POST["action"].startswith("mute_until:"):
-                mute_for_params = request.POST["action"].split(":", 1)[1]
-                period_name, nr_of_periods, gte_threshold = mute_for_params.split(",")
-
-                IssueStateManager.mute(issue, json.dumps([{
-                    "period": period_name,
-                    "nr_of_periods": int(nr_of_periods),
-                    "volume": int(gte_threshold),
-                }]))
-            elif request.POST["action"] == "unmute":
-                IssueStateManager.unmute(issue)
+            _apply_action(issue, request.POST["action"])
 
             issue.save()
 
@@ -104,35 +108,7 @@ def issue_event_detail(request, issue_pk, event_pk):
     issue = get_object_or_404(Issue, pk=issue_pk)
 
     if request.method == "POST":
-        if request.POST["action"] == "resolved":
-            IssueStateManager.resolve(issue)
-        elif request.POST["action"].startswith("resolved_release:"):
-            release_version = request.POST["action"].split(":", 1)[1]
-            IssueStateManager.resolve_by_release(issue, release_version)
-        elif request.POST["action"] == "resolved_next":
-            IssueStateManager.resolve_by_next(issue)
-        elif request.POST["action"] == "reopen":
-            IssueStateManager.reopen(issue)
-        elif request.POST["action"] == "mute":
-            IssueStateManager.mute(issue)
-        elif request.POST["action"].startswith("mute_for:"):
-            mute_for_params = request.POST["action"].split(":", 1)[1]
-            period_name, nr_of_periods, _ = mute_for_params.split(",")
-            IssueStateManager.mute(issue, unmute_after_tuple=(int(nr_of_periods), period_name))
-
-        elif request.POST["action"].startswith("mute_until:"):
-            mute_for_params = request.POST["action"].split(":", 1)[1]
-            period_name, nr_of_periods, gte_threshold = mute_for_params.split(",")
-
-            IssueStateManager.mute(issue, json.dumps([{
-                "period": period_name,
-                "nr_of_periods": int(nr_of_periods),
-                "volume": int(gte_threshold),
-            }]))
-
-        elif request.POST["action"] == "unmute":
-            IssueStateManager.unmute(issue)
-
+        _apply_action(issue, request.POST["action"])
         issue.save()
         return redirect(issue_event_detail, issue_pk=issue_pk, event_pk=event_pk)
 
