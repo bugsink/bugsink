@@ -10,6 +10,12 @@
 <div class="m-4">
 <h1 class="text-4xl mt-4 font-bold">{{ project.name }} - Issues</h1>
 
+{% if unapplied_issue_ids %}
+<div class="bg-red-100 w-full mt-2 mb-2 p-4 border-red-800 border-2">
+    The chosen action is not applicable to all selected issues. Issues for which it has not been applied have been left with checkboxes 'on' so that you can try again with another action.
+</div>
+{% endif %}
+
 <div class="flex bg-slate-50 border-b-2 mt-4 items-end">
     <div class="flex">
     <a href="{% url "issue_list_open" project_id=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 {% if state_filter == "open" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">Open</div></a>
@@ -138,7 +144,7 @@ https://flowbite.com/docs/forms/floating-label/
             <tr class="bg-slate-50 border-slate-300 border-2 ">
             <td>
                 <div class="m-1 rounded-full hover:bg-slate-100 cursor-pointer" onclick="toggleContainedCheckbox(this); matchMainCheckboxStateToIssueCheckboxes()">
-                    <input type="checkbox" name="issue_ids[]" value="{{ issue.id }}" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4 cursor-pointer js-issue-checkbox" onclick="event.stopPropagation(); {# prevent the container's handler from undoing the default action #} matchMainCheckboxStateToIssueCheckboxes()"/>
+                    <input type="checkbox" {% if issue.id in unapplied_issue_ids %}checked{% endif %} name="issue_ids[]" value="{{ issue.id }}" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4 cursor-pointer js-issue-checkbox" onclick="event.stopPropagation(); {# prevent the container's handler from undoing the default action #} matchMainCheckboxStateToIssueCheckboxes()"/>
                 </div>
             </td>
             <td class="w-full ml-0 pb-4 pt-4 pr-4">
