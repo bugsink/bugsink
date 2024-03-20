@@ -175,8 +175,8 @@
     {# </div> #} {# per-exception div in the multi-exception case #}
 
     {% if not forloop.last %}
-        <div class="italic pt-4">During handling of the above exception, another exception occurred:</div>
-        {# note: the above is specific to Python. In Python there's also "The above exception was the direct cause of the following exception:" (raise ... from) but we cannot distinguish those at this level because the info is lost #}
+        <div class="italic pt-4">During handling of the above exception, another exception occurred <span class="not-italic">or</span> the above exception was the direct cause of the following exception:</div>
+        {# note: the above is specific to Python. We cannot distinguish between Python's 2 types of chained exceptions because the info is not sent by the client #}
     {% endif %}
 
 {% endfor %}
