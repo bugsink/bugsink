@@ -7,7 +7,7 @@ from events.models import Event
 from projects.models import Project
 
 from .utils import get_issue_grouper_for_data
-from .models import Issue, IssueStateManager
+from .models import Issue, IssueQuerysetStateManager, IssueStateManager
 
 
 MuteOption = namedtuple("MuteOption", ["for_or_until", "period_name", "nr_of_periods", "gte_threshold"])
@@ -26,48 +26,41 @@ GLOBAL_MUTE_OPTIONS = [
 ]
 
 
-def _apply_action(issue, action):
+def _apply_action(manager, issue_or_qs, action):
     if action == "resolve":
-        IssueStateManager.resolve(issue)
+        manager.resolve(issue_or_qs)
     elif action.startswith("resolved_release:"):
         release_version = action.split(":", 1)[1]
-        IssueStateManager.resolve_by_release(issue, release_version)
+        manager.resolve_by_release(issue_or_qs, release_version)
     elif action == "resolved_next":
-        IssueStateManager.resolve_by_next(issue)
-    elif action == "reopen":
-        IssueStateManager.reopen(issue)
+        manager.resolve_by_next(issue_or_qs)
+    # elif action == "reopen":  # not allowed from the UI
+    #     manager.reopen(issue_or_qs)
     elif action == "mute":
-        IssueStateManager.mute(issue)
+        manager.mute(issue_or_qs)
     elif action.startswith("mute_for:"):
         mute_for_params = action.split(":", 1)[1]
         period_name, nr_of_periods, _ = mute_for_params.split(",")
-        IssueStateManager.mute(issue, unmute_after_tuple=(int(nr_of_periods), period_name))
+        manager.mute(issue_or_qs, unmute_after_tuple=(int(nr_of_periods), period_name))
 
     elif action.startswith("mute_until:"):
         mute_for_params = action.split(":", 1)[1]
         period_name, nr_of_periods, gte_threshold = mute_for_params.split(",")
 
-        IssueStateManager.mute(issue, json.dumps([{
+        manager.mute(issue_or_qs, json.dumps([{
             "period": period_name,
             "nr_of_periods": int(nr_of_periods),
             "volume": int(gte_threshold),
         }]))
     elif action == "unmute":
-        IssueStateManager.unmute(issue)
+        manager.unmute(issue_or_qs)
 
 
 def issue_list(request, project_id, state_filter="open"):
     if request.method == "POST":
         issue_ids = request.POST.getlist('issue_ids[]')
-        for issue_id in issue_ids:
-            # naive approach, just do the issues one by one. This is obviously O(n) slow, but at least the cost is
-            # amortized (i.e. if you do this for 100 issues each time you do this, you're 1/100 as likely to do it).
-            # still, we could revisit this later.
-            # note also that this is a 100% copy/paste from the issue_detail (refactor later).
-            issue = Issue.objects.get(pk=issue_id)
-            _apply_action(issue, request.POST["action"])
-
-            issue.save()
+        issue_qs = Issue.objects.filter(pk__in=issue_ids)
+        _apply_action(IssueQuerysetStateManager, issue_qs, request.POST["action"])
 
     d_state_filter = {
         "open": lambda qs: qs.filter(is_resolved=False, is_muted=False),
@@ -108,7 +101,7 @@ def issue_event_detail(request, issue_pk, event_pk):
     issue = get_object_or_404(Issue, pk=issue_pk)
 
     if request.method == "POST":
-        _apply_action(issue, request.POST["action"])
+        _apply_action(IssueStateManager, issue, request.POST["action"])
         issue.save()
         return redirect(issue_event_detail, issue_pk=issue_pk, event_pk=event_pk)
 

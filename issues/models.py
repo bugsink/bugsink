@@ -4,11 +4,12 @@ import uuid
 from dateutil.relativedelta import relativedelta
 
 from django.db import models
+from django.db.models import F, Value
 
 from bugsink.volume_based_condition import VolumeBasedCondition
 from alerts.tasks import send_unmute_alert
 
-from .utils import parse_lines, serialize_lines
+from .utils import parse_lines, serialize_lines, filter_qs_for_fixed_at, exclude_qs_for_fixed_at
 
 
 class IncongruentStateException(Exception):
@@ -112,7 +113,7 @@ class IssueStateManager(object):
     """basically: a namespace; with static methods that combine field-setting in a single place"""
 
     # NOTE I'm not so sure about the exact responsibilities of this thingie yet. In particular:
-    # * save() is now done outside;
+    # * save() is now done outside;  (I'm not sure it's "right", but it's shorter because we do this for each action)
     # * alerts are sent from inside.
 
     @staticmethod
@@ -238,6 +239,125 @@ class IssueStateManager(object):
                 # (All of the above applies equally well to at-unmute as it does for load_from_scratch (at which point
                 # we also just expect unmute conditions to only be set when they can still be triggered)
                 raise Exception("The unmute condition is already true")
+
+
+class IssueQuerysetStateManager(object):
+    """
+    This is exaclty the same as IssueStateManager, but it works on querysets instead of single objects.
+    The reason we do this as a copy/pasta (and not by just passing a queryset with a single element) is twofold:
+
+    * the qs-approach is harder to comprehend; understanding can be aided by referring back to the simple approach
+    * performance: the qs-approach may take a few queries to deal with a whole set; but when working on a single object
+        a single .save() is enough.
+    """
+
+    # NOTE I'm not so sure about the exact responsibilities of this thingie yet. In particular:
+    # * alerts are sent from inside.
+
+    # NOTE: the methods in this class work on issue_qs; this allows us to do database operations over multiple objects
+    # as a single query (but for our hand-made in-python operations, we obviously still just loop over the elements)
+
+    def _resolve_at(issue_qs, release_version):
+        filter_qs_for_fixed_at(issue_qs, release_version).update(
+            is_resolved=True,
+        )
+        exclude_qs_for_fixed_at(issue_qs, "").update(
+            is_resolved=True,
+            fixed_at=F("fixed_at") + Value(release_version + "\n"),
+        )
+
+        # release_version: str
+        issue_qs.update(
+            fixed_at=F("fixed_at") + Value(release_version + "\n"),
+        )
+
+    @staticmethod
+    def resolve(issue_qs):
+        IssueQuerysetStateManager._resolve_at(issue_qs, "")  # i.e. fixed in the no-release-info-available release
+
+        # an issue cannot be both resolved and muted; muted means "the problem persists but don't tell me about it
+        # (or maybe unless some specific condition happens)" and resolved means "the problem is gone". Hence, resolving
+        # an issue means unmuting it. Note that resolve-after-mute is implemented as an override but mute-after-resolve
+        # is implemented as an Exception; this is because from a usage perspective saying "I don't care about this" but
+        # then solving it anyway is a realistic scenario and the reverse is not.
+        IssueQuerysetStateManager.unmute(issue_qs)
+
+    @staticmethod
+    def resolve_by_latest(issue_qs):
+        # NOTE: currently unused; we may soon reintroduce it though so I left it in.
+        # However, since it's unused, I'm not going to fix the line below, which doesn't work because issue.project is
+        # not available; (we might consider adding the restriction that project is always the same; or pass it in
+        # explicitly)
+
+        raise NotImplementedError("resolve_by_latest is not implemented - see comments above")
+        # the solution is along these lines, but with the project passed in:
+        # IssueQuerysetStateManager._resolve_at(issue_qs, issue.project.get_latest_release().version)
+        # IssueQuerysetStateManager.unmute(issue_qs)  # as in IssueQuerysetStateManager.resolve()
+
+    @staticmethod
+    def resolve_by_release(issue_qs, release_version):
+        # release_version: str
+        IssueQuerysetStateManager._resolve_at(issue_qs, release_version)
+        IssueQuerysetStateManager.unmute(issue_qs)  # as in IssueQuerysetStateManager.resolve()
+
+    @staticmethod
+    def resolve_by_next(issue_qs):
+        issue_qs.update(
+            is_resolved=True,
+            is_resolved_by_next_release=True,
+        )
+
+        IssueQuerysetStateManager.unmute(issue_qs)  # as in IssueQuerysetStateManager.resolve()
+
+    @staticmethod
+    def reopen(issue_qs):
+        # we don't need reopen() over a queryset (yet); reason being that we don't allow reopening of issues from the UI
+        # and hence not in bulk.
+        raise NotImplementedError("reopen is not implemented - see comments above")
+
+    @staticmethod
+    def mute(issue_qs, unmute_on_volume_based_conditions="[]", unmute_after_tuple=(None, None)):
+        from bugsink.registry import get_pc_registry  # avoid circular import
+        if issue_qs.filter(is_resolved=True).exists():
+            # we might remove this check for performance reasons later (it's more expensive here than in the non-bulk
+            # case because we have to do a query to check for it). For now we leave it in to avoid surprises while we're
+            # still heavily in development.
+            raise IncongruentStateException("Cannot mute a resolved issue")
+
+        now = datetime.now(timezone.utc)  # NOTE: clock-reading going on here... should it be passed-in?
+
+        issue_qs.update(
+            is_muted=True,
+            unmute_on_volume_based_conditions=unmute_on_volume_based_conditions,
+        )
+
+        IssueQuerysetStateManager.set_unmute_handlers(get_pc_registry().by_issue, issue_qs, now)
+
+        nr_of_periods, period_name = unmute_after_tuple
+        if nr_of_periods is not None and period_name is not None:
+            issue_qs.update(
+                unmute_after=add_periods_to_datetime(now, nr_of_periods, period_name),
+            )
+
+    @staticmethod
+    def unmute(issue_qs, triggered_by_event=False):
+        issue_qs.update(
+            is_muted=False,
+            unmute_on_volume_based_conditions="[]",
+            unmute_after=None,
+        )
+
+        # for the rest of this method there's no fancy queryset based stuff (we don't actually do updates on the DB)
+        # we resist the temptation to add filter(is_muted=True) in the below because that would actually add a query
+        for issue in issue_qs:
+            IssueStateManager.unmute(issue, triggered_by_event)
+
+    @staticmethod
+    def set_unmute_handlers(by_issue, issue_qs, now):
+        # in this method there's no fancy queryset based stuff (we don't actually do updates on the DB)
+
+        for issue in issue_qs:
+            IssueStateManager.set_unmute_handlers(by_issue, issue, now)
 
 
 def create_unmute_issue_handler(issue_id):

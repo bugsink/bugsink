@@ -52,3 +52,11 @@ def parse_lines(s):
 
 def serialize_lines(l):
     return "".join([e + "\n" for e in l])
+
+
+def filter_qs_for_fixed_at(qs, release):
+    return qs.filter(fixed_at__contains=release + "\n")
+
+
+def exclude_qs_for_fixed_at(qs, release):
+    return qs.exclude(fixed_at__contains=release + "\n")
