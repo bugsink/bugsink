@@ -102,6 +102,7 @@ def add_periods_to_datetime(dt, nr_of_periods, period_name):
     dateutil_kwargs_map = {
         "year": "years",
         "month": "months",
+        "week": "weeks",
         "day": "days",
         "hour": "hours",
         "minute": "minutes",
