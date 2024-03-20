@@ -8,6 +8,8 @@ from django.db import models
 from bugsink.volume_based_condition import VolumeBasedCondition
 from alerts.tasks import send_unmute_alert
 
+from .utils import parse_bracketless, serialize_bracketless
+
 
 class IncongruentStateException(Exception):
     pass
@@ -30,8 +32,8 @@ class Issue(models.Model):
     # it also simply means: it was "marked as resolved" after the last regression (if any)
     is_resolved = models.BooleanField(default=False)
     is_resolved_by_next_release = models.BooleanField(default=False)
-    fixed_at = models.TextField(blank=False, null=False, default='[]')
-    events_at = models.TextField(blank=False, null=False, default='[]')
+    fixed_at = models.TextField(blank=False, null=False, default='')
+    events_at = models.TextField(blank=False, null=False, default='')
 
     # fields related to muting:
     is_muted = models.BooleanField(default=False)
@@ -72,17 +74,17 @@ class Issue(models.Model):
         return main_exception.get("type", "none") + ": " + main_exception.get("value", "none")
 
     def get_fixed_at(self):
-        return json.loads(self.fixed_at)
+        return parse_bracketless(self.fixed_at)
 
     def get_events_at(self):
-        return json.loads(self.events_at)
+        return parse_bracketless(self.events_at)
 
     def add_fixed_at(self, release_version):
         # release_version: str
         fixed_at = self.get_fixed_at()
         if release_version not in fixed_at:
             fixed_at.append(release_version)
-            self.fixed_at = json.dumps(fixed_at)
+            self.fixed_at = serialize_bracketless(fixed_at)
 
     def occurs_in_last_release(self):
         return False  # TODO actually implement (and then: implement in a performant manner)

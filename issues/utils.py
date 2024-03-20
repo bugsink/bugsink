@@ -1,3 +1,4 @@
+import json
 import hashlib
 from typing import List, Optional
 
@@ -40,3 +41,11 @@ def get_hash_for_data(data):
     # NOTE: issue_grouper should be renamed to what it _is_ (hash is accidental, 'grouper', or 'key' maybe?
     issue_grouper = get_issue_grouper_for_data(data)
     return hashlib.md5(issue_grouper.encode()).hexdigest()
+
+
+def parse_bracketless(s):
+    return json.loads(f"[{s}]")
+
+
+def serialize_bracketless(l):
+    return json.dumps(l)[1:-1]
