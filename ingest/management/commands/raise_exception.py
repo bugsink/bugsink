@@ -26,10 +26,10 @@ class Command(BaseCommand):
             # self.raise_exception("An 'accident' happened while handling the exception")
             self.raise_exception_from("We intentionally translated this into the exception", e)
 
-    def raise_exception(self, s):
-        raise Exception(s)
+    def raise_exception(self, msg):
+        raise Exception(msg)
 
-    def raise_exception_from(self, s, e):
+    def raise_exception_from(self, msg, e):
         s = "foo"
         l = ["bar", 1, None, ["bar", 1, None]]
         d = {
@@ -42,4 +42,4 @@ class Command(BaseCommand):
                 "snu": None,
             },
         }
-        raise Exception(s) from e
+        raise Exception(msg) from e
