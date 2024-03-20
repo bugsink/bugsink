@@ -1,4 +1,3 @@
-import json
 import hashlib
 from typing import List, Optional
 
@@ -43,9 +42,13 @@ def get_hash_for_data(data):
     return hashlib.md5(issue_grouper.encode()).hexdigest()
 
 
-def parse_bracketless(s):
-    return json.loads(f"[{s}]")
+# utilities related to storing and retrieving release-versions; we use the fact that sentry (and we've adopted their
+# limitation) disallows the use of newlines in release-versions, so we can use newlines as a separator
+
+def parse_lines(s):
+    # Remove the last element, which is an empty string because of the trailing newline (\n as terminator not separator)
+    return s.split("\n")[:-1]
 
 
-def serialize_bracketless(l):
-    return json.dumps(l)[1:-1]
+def serialize_lines(l):
+    return "".join([e + "\n" for e in l])
