@@ -50,7 +50,8 @@ https://flowbite.com/docs/forms/floating-label/
                     <input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4 cursor-pointer js-main-checkbox" onclick="event.stopPropagation(); matchIssueCheckboxesStateToMain(this.parentNode)"/>
                 </div>
             </td>
-            <td class="w-full ml-0 pb-4 pt-4 pr-4">
+            <td class="w-full ml-0 pb-4 pt-4 pr-4 flex">
+                <div class="ml-auto">
 
                 {% if disable_resolve_buttons %}
                     {# see issues/tests.py for why this is turned off ATM #}
@@ -127,14 +128,7 @@ https://flowbite.com/docs/forms/floating-label/
                 {# TODO "reopen" ... we don't do that currently, see notes in issue_detail #}
                 {# only for resolved/muted items <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Reopen</button> #}
 
-            </td>
-
-            <td class="text-right font-bold p-4">
-                {# FOO #}
-            </td>
-
-            <td class="text-right font-bold p-4">
-                {# BAR #}
+            </div>
             </td>
 
             </tr>
@@ -156,19 +150,6 @@ https://flowbite.com/docs/forms/floating-label/
                 <div class="text-sm">from <b>{{ issue.first_seen|date:"d M G:i" }}</b> | last <b>{{ issue.last_seen|date:"d M G:i" }}</b> | with <b>{{ issue.event_count }}</b> events
                     {% if issue.parsed_data.transaction %}| <span class="font-bold">{{ issue.parsed_data.transaction }} </span>{% endif %}
                 </div>
-            </td>
-
-            {% comment %}
-            [ ] first release (or commit), last release (or commit)
-            [ ] assigned to
-            [ ] n.r. of events?
-            {% endcomment %}
-            <td class="text-right p-4">
-                {# ABC #} 
-            </td>
-
-            <td class="text-right p-4">
-                {# 123 #}
             </td>
 
             </tr>
