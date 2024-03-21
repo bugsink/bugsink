@@ -193,6 +193,7 @@ def issue_event_stacktrace(request, issue_pk, event_pk):
         "tab": "stacktrace",
         "issue": issue,
         "event": event,
+        "is_event_page": True,
         "parsed_data": parsed_data,
         "exceptions": exceptions,
         "issue_grouper": get_issue_grouper_for_data(parsed_data),
@@ -211,6 +212,7 @@ def issue_event_details(request, issue_pk, event_pk):
         "tab": "event-details",
         "issue": issue,
         "event": event,
+        "is_event_page": True,
     })
 
 
@@ -223,6 +225,7 @@ def issue_history(request, issue_pk):
         "tab": "history",
         "issue": issue,
         "event": issue.event_set.order_by("timestamp").last(),  # the template needs this for the tabs, we pick the last
+        "is_event_page": False,
     })
 
 
@@ -235,6 +238,7 @@ def issue_grouping(request, issue_pk):
         "tab": "grouping",
         "issue": issue,
         "event": issue.event_set.order_by("timestamp").last(),  # the template needs this for the tabs, we pick the last
+        "is_event_page": False,
     })
 
 
@@ -250,4 +254,5 @@ def issue_event_list(request, issue_pk):
         "issue": issue,
         "event": issue.event_set.order_by("timestamp").last(),  # the template needs this for the tabs, we pick the last
         "event_list": event_list,
+        "is_event_page": False,
     })
