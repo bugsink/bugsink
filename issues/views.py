@@ -3,6 +3,7 @@ import json
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import Q
+from django.http import HttpResponseRedirect
 
 from events.models import Event
 
@@ -148,24 +149,27 @@ def issue_last_event(request, issue_pk):
     issue = get_object_or_404(Issue, pk=issue_pk)
     last_event = issue.event_set.order_by("timestamp").last()
 
-    return redirect(issue_event_detail, issue_pk=issue_pk, event_pk=last_event.pk)
+    return redirect(issue_event_stacktrace, issue_pk=issue_pk, event_pk=last_event.pk)
 
 
-def issue_event_detail(request, issue_pk, event_pk):
+def _handle_post(request, issue):
+    if _is_valid_action(request.POST["action"], issue):
+        _apply_action(IssueStateManager, issue, request.POST["action"])
+        issue.save()
+
+    # note that if the action is not valid, we just ignore it (i.e. we don't show any error message or anything)
+    # this is probably what you want, because the most common case of action-not-valid is 'it already happened
+    # through some other UI path'. The only case I can think of where this is not the case is where you try to
+    # resolve an issue for a specific release, and while you where thinking about that, it occurred for that
+    # release. In that case it will probably stand out that your buttons don't become greyed out, and that the
+    # dropdown no longer functions.
+    return HttpResponseRedirect(request.path_info)
+
+
+def issue_event_stacktrace(request, issue_pk, event_pk):
     issue = get_object_or_404(Issue, pk=issue_pk)
-
     if request.method == "POST":
-        if _is_valid_action(request.POST["action"], issue):
-            _apply_action(IssueStateManager, issue, request.POST["action"])
-            issue.save()
-
-        # note that if the action is not valid, we just ignore it (i.e. we don't show any error message or anything)
-        # this is probably what you want, because the most common case of action-not-valid is 'it already happened
-        # through some other UI path'. The only case I can think of where this is not the case is where you try to
-        # resolve an issue for a specific release, and while you where thinking about that, it occurred for that
-        # release. In that case it will probably stand out that your buttons don't become greyed out, and that the
-        # dropdown no longer functions.
-        return redirect(issue_event_detail, issue_pk=issue_pk, event_pk=event_pk)
+        return _handle_post(request, issue)
 
     event = get_object_or_404(Event, pk=event_pk)
 
@@ -185,7 +189,7 @@ def issue_event_detail(request, issue_pk, event_pk):
                 else:
                     logentry["formatted"] = logentry["message"].format(logentry["params"])
 
-    return render(request, "issues/issue_detail.html", {
+    return render(request, "issues/issue_stacktrace.html", {
         "tab": "stacktrace",
         "issue": issue,
         "event": event,
@@ -196,15 +200,54 @@ def issue_event_detail(request, issue_pk, event_pk):
     })
 
 
-def issue_event_list(request, issue_pk):
-    # TODO un-uglify
+def issue_event_details(request, issue_pk, event_pk):
+    issue = get_object_or_404(Issue, pk=issue_pk)
+    if request.method == "POST":
+        return _handle_post(request, issue)
 
-    issue = Issue.objects.get(pk=issue_pk)
+    event = get_object_or_404(Event, pk=event_pk)
+
+    return render(request, "issues/issue_event_details.html", {
+        "tab": "event-details",
+        "issue": issue,
+        "event": event,
+    })
+
+
+def issue_history(request, issue_pk):
+    issue = get_object_or_404(Issue, pk=issue_pk)
+    if request.method == "POST":
+        return _handle_post(request, issue)
+
+    return render(request, "issues/issue_history.html", {
+        "tab": "history",
+        "issue": issue,
+        "event": issue.event_set.order_by("timestamp").last(),  # the template needs this for the tabs, we pick the last
+    })
+
+
+def issue_grouping(request, issue_pk):
+    issue = get_object_or_404(Issue, pk=issue_pk)
+    if request.method == "POST":
+        return _handle_post(request, issue)
+
+    return render(request, "issues/issue_grouping.html", {
+        "tab": "grouping",
+        "issue": issue,
+        "event": issue.event_set.order_by("timestamp").last(),  # the template needs this for the tabs, we pick the last
+    })
+
+
+def issue_event_list(request, issue_pk):
+    issue = get_object_or_404(Issue, pk=issue_pk)
+    if request.method == "POST":
+        return _handle_post(request, issue)
 
     event_list = issue.event_set.all()
 
     return render(request, "issues/issue_event_list.html", {
         "tab": "event-list",
         "issue": issue,
+        "event": issue.event_set.order_by("timestamp").last(),  # the template needs this for the tabs, we pick the last
         "event_list": event_list,
     })

@@ -1,0 +1,26 @@
+{% extends "issues/base.html" %}
+{% load static %}
+
+{% block content %}
+{{ block.super }}
+
+<div class="p-4 bg-slate-50">
+
+grouping
+
+</div> {# the inner issue-block #}
+<div class="flex p-4 bg-slate-200 border-b-2">
+    <div>Event ... {# TODO #} out of {{ issue.event_set.count }}{# TODO denormalize #} which occured at <span class="font-bold">{{ event.timestamp }}</span></div>
+    <div class="ml-auto pr-4 font-bold text-slate-500">
+        <a href="/admin/issues/issue/{{ issue.id }}/change/">Issue Admin</a>
+        | <a href="/admin/events/event/{{ event.id }}/change/">Event Admin</a>
+        | <a href="/events/event/{{ event.id }}/download/">Download</a>
+        | <a href="/events/event/{{ event.id }}/raw/" >Raw</a>
+    </div>
+</div>
+</div>  {# the border #}
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'js/issue.js' %}"></script>
+{% endblock %}
