@@ -3,12 +3,8 @@
 {% block content %}
 {{ block.super }}
 
-<h1>Events for issue {{ issue.id }}</h1>
-
 {% for event in event_list %}
-
     <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/">{{ event.id }}</a><br>
-
 {% endfor %}
 
 {% include "issues/_bottom_nav_bar.html" %}
