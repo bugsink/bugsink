@@ -186,6 +186,7 @@ def issue_event_detail(request, issue_pk, event_pk):
                     logentry["formatted"] = logentry["message"].format(logentry["params"])
 
     return render(request, "issues/issue_detail.html", {
+        "tab": "stacktrace",
         "issue": issue,
         "event": event,
         "parsed_data": parsed_data,
@@ -196,13 +197,14 @@ def issue_event_detail(request, issue_pk, event_pk):
 
 
 def issue_event_list(request, issue_pk):
-    # TODO un-uglify, refactor the html somewhat.
+    # TODO un-uglify
 
     issue = Issue.objects.get(pk=issue_pk)
 
     event_list = issue.event_set.all()
 
     return render(request, "issues/issue_event_list.html", {
+        "tab": "event-list",
         "issue": issue,
         "event_list": event_list,
     })
