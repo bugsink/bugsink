@@ -200,9 +200,7 @@ def issue_event_list(request, issue_pk):
 
     issue = Issue.objects.get(pk=issue_pk)
 
-    # note: once we have "Event" (with parsed info) we'll point straight to Issue from there which reduces the nr of
-    # tables this join goes through by 1.
-    event_list = issue.events.all()
+    event_list = issue.event_set.all()
 
     return render(request, "issues/issue_event_list.html", {
         "issue": issue,
