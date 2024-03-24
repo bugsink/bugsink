@@ -1294,10 +1294,6 @@ select {
   font-style: italic;
 }
 
-.not-italic {
-  font-style: normal;
-}
-
 .leading-normal {
   line-height: 1.5;
 }

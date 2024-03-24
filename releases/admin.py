@@ -1,5 +1,6 @@
 from django.contrib import admin
 
+from projects.admin import ProjectFilter
 from .models import Release
 
 
@@ -14,5 +15,11 @@ class ReleaseAdmin(admin.ModelAdmin):
     ]
 
     list_filter = [
+        ProjectFilter,
+    ]
+
+    readonly_fields = [
         'project',
+        'is_semver',
+        'sort_epoch',
     ]

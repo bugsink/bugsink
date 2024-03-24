@@ -34,6 +34,7 @@ INSTALLED_APPS = [
 
     'tailwind',
     'theme',
+    'admin_auto_filters',
 
     'compat',
     'projects',

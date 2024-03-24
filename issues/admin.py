@@ -5,6 +5,20 @@ from .models import Issue
 
 @admin.register(Issue)
 class IssueAdmin(admin.ModelAdmin):
+    fields = [
+        'project',
+        'hash',
+        'last_seen',
+        'first_seen',
+        'is_resolved',
+        'fixed_at',
+        'events_at',
+        'is_muted',
+        'unmute_on_volume_based_conditions',
+        'unmute_after',
+        'event_count',
+    ]
+
     list_display = [
         "title",
         "hash",
@@ -18,6 +32,7 @@ class IssueAdmin(admin.ModelAdmin):
     exclude = ["events"]
 
     readonly_fields = [
+        'project',
         'event_count',
     ]
 

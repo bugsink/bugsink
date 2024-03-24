@@ -3,15 +3,25 @@ from django.contrib import admin
 
 import json
 
+from projects.admin import ProjectFilter
 from .models import DecompressedEvent
 
 
 @admin.register(DecompressedEvent)
 class DecompressedEventAdmin(admin.ModelAdmin):
-    list_display = ["timestamp", "project"]
+    list_filter = [
+        ProjectFilter,
+    ]
+
+    list_display = [
+        "timestamp",
+        "project",
+    ]
+
     exclude = ["data"]
 
     readonly_fields = [
+        'project',
         'pretty_data',
     ]
 

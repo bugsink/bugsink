@@ -5,3 +5,4 @@ django-tailwind==3.6.*
 jsonschema==4.19.*
 semver==3.0.*
 Celery[librabbitmq]
+django-admin-autocomplete-filter==0.7.*

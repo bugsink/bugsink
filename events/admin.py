@@ -3,6 +3,7 @@ from django.contrib import admin
 
 import json
 
+from projects.admin import ProjectFilter
 from .models import Event
 
 
@@ -22,7 +23,7 @@ class EventAdmin(admin.ModelAdmin):
     ]
 
     list_filter = [
-        'project',
+        ProjectFilter,
         'platform',
         'level',
         'sdk_name',
@@ -34,6 +35,9 @@ class EventAdmin(admin.ModelAdmin):
     exclude = ["data"]
 
     readonly_fields = [
+        'ingested_event',
+        'issue',
+        'project',
         'pretty_data',
     ]
 
