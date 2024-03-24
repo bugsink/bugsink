@@ -7,7 +7,11 @@ def items(value):
     """Just do value.items(); the reason to not just do value.items in the templatte that the latter will first do a
     dictionary lookup; if the dictionary contains an item with the key 'items', that will be returned which is
     definitely not what we want here. """
-    return value.items()
+    try:
+        return value.items()
+    except AttributeError:
+        # we still replicate the Django behavior of returning None if the value is not a dictionary
+        return None
 
 
 # the general version below doesn't work, because we don't auto-append function-execution for callables and possibly a
