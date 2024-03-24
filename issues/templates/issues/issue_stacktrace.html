@@ -1,5 +1,6 @@
 {% extends "issues/base.html" %}
 {% load static %}
+{% load stricter_templates %}
 
 {% block content %}
 {{ block.super }}
@@ -59,12 +60,14 @@
                         <div class="w-1/4 pt-2 pl-2 font-bold border-b-2 border-slate-500">Variable</div>
                         <div class="w-3/4 pt-2 font-bold border-b-2 border-slate-500">Value</div>
                     </div>
-                    {% for var, value in frame.vars.items %}
-                    <div class="flex {% if forloop.last %}mb-4{% endif %}">
-                        <div class="w-1/4 pl-2 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ var }}</div>
-                        <div class="w-3/4 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ value }}</div>
-                    </div>
-                    {% endfor %} 
+                    {% if frame.vars %}
+                        {% for var, value in frame.vars|items %}
+                        <div class="flex {% if forloop.last %}mb-4{% endif %}">
+                            <div class="w-1/4 pl-2 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ var }}</div>
+                            <div class="w-3/4 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ value }}</div>
+                        </div>
+                        {% endfor %}
+                    {% endif %} 
                 </div>
 
                 </div>
@@ -101,14 +104,16 @@
 
         <div class="mt-4 mb-12 p-4 bg-white">
             
-            {% for request_key, request_value in parsed_data.request.items %}
-            {% if request_key != "headers" and request_key != "env" %}{# we deal with these below #}
-            <div class="flex">
-                <div class="w-1/4 pl-2 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ request_key }}</div>
-                <div class="w-3/4 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ request_value }}</div>
-            </div>
+            {% if parsed_data.request %}
+                {% for request_key, request_value in parsed_data.request|items %}
+                {% if request_key != "headers" and request_key != "env" %}{# we deal with these below #}
+                <div class="flex">
+                    <div class="w-1/4 pl-2 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ request_key }}</div>
+                    <div class="w-3/4 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ request_value }}</div>
+                </div>
+                {% endif %}
+                {% endfor %}
             {% endif %}
-            {% endfor %}
 
             <h3 class="text-2xl mt-4">Request headers</h1>
 
