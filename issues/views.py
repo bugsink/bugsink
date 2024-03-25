@@ -6,8 +6,7 @@ from django.db.models import Q
 from django.http import HttpResponseRedirect
 
 from events.models import Event
-
-from projects.models import Project
+from bugsink.decorators import project_membership_required, issue_membership_required
 
 from .utils import get_issue_grouper_for_data
 from .models import Issue, IssueQuerysetStateManager, IssueStateManager
@@ -101,7 +100,8 @@ def _apply_action(manager, issue_or_qs, action):
         manager.unmute(issue_or_qs)
 
 
-def issue_list(request, project_id, state_filter="open"):
+@project_membership_required
+def issue_list(request, project, state_filter="open"):
     if request.method == "POST":
         issue_ids = request.POST.getlist('issue_ids[]')
         issue_qs = Issue.objects.filter(pk__in=issue_ids)
@@ -124,10 +124,8 @@ def issue_list(request, project_id, state_filter="open"):
     }
 
     issue_list = d_state_filter[state_filter](
-        Issue.objects.filter(project_id=project_id)
+        Issue.objects.filter(project=project)
     ).order_by("-last_seen")
-
-    project = get_object_or_404(Project, pk=project_id)
 
     return render(request, "issues/issue_list.html", {
         "project": project,
@@ -145,11 +143,11 @@ def issue_list(request, project_id, state_filter="open"):
     })
 
 
-def issue_last_event(request, issue_pk):
-    issue = get_object_or_404(Issue, pk=issue_pk)
+@issue_membership_required
+def issue_last_event(request, issue):
     last_event = issue.event_set.order_by("timestamp").last()
 
-    return redirect(issue_event_stacktrace, issue_pk=issue_pk, event_pk=last_event.pk)
+    return redirect(issue_event_stacktrace, issue_pk=issue.pk, event_pk=last_event.pk)
 
 
 def _handle_post(request, issue):
@@ -166,8 +164,8 @@ def _handle_post(request, issue):
     return HttpResponseRedirect(request.path_info)
 
 
-def issue_event_stacktrace(request, issue_pk, event_pk):
-    issue = get_object_or_404(Issue, pk=issue_pk)
+@issue_membership_required
+def issue_event_stacktrace(request, issue, event_pk):
     if request.method == "POST":
         return _handle_post(request, issue)
 
@@ -201,8 +199,8 @@ def issue_event_stacktrace(request, issue_pk, event_pk):
     })
 
 
-def issue_event_details(request, issue_pk, event_pk):
-    issue = get_object_or_404(Issue, pk=issue_pk)
+@issue_membership_required
+def issue_event_details(request, issue, event_pk):
     if request.method == "POST":
         return _handle_post(request, issue)
 
@@ -216,8 +214,8 @@ def issue_event_details(request, issue_pk, event_pk):
     })
 
 
-def issue_history(request, issue_pk):
-    issue = get_object_or_404(Issue, pk=issue_pk)
+@issue_membership_required
+def issue_history(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
@@ -229,8 +227,8 @@ def issue_history(request, issue_pk):
     })
 
 
-def issue_grouping(request, issue_pk):
-    issue = get_object_or_404(Issue, pk=issue_pk)
+@issue_membership_required
+def issue_grouping(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
@@ -242,8 +240,8 @@ def issue_grouping(request, issue_pk):
     })
 
 
-def issue_event_list(request, issue_pk):
-    issue = get_object_or_404(Issue, pk=issue_pk)
+@issue_membership_required
+def issue_event_list(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 

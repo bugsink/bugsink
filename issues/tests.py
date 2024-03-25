@@ -4,7 +4,7 @@ from django.test import TestCase as DjangoTestCase
 from django.contrib.auth.models import User
 from datetime import datetime, timezone
 
-from projects.models import Project
+from projects.models import Project, ProjectMembership
 from releases.models import create_release_if_needed
 from bugsink.registry import reset_pc_registry, get_pc_registry
 from bugsink.period_counter import PeriodCounter, TL_DAY
@@ -424,6 +424,7 @@ class ViewTests(DjangoTestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='test', password='test')
         self.project = Project.objects.create()
+        ProjectMembership.objects.create(project=self.project, user=self.user)
         self.issue = Issue.objects.create(project=self.project, **denormalized_issue_fields())
         self.event = create_event(self.project, self.issue)
         self.client.force_login(self.user)
