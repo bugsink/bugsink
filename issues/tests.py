@@ -1,12 +1,14 @@
 from unittest import TestCase
 from unittest.mock import patch
 from django.test import TestCase as DjangoTestCase
+from django.contrib.auth.models import User
 from datetime import datetime, timezone
 
 from projects.models import Project
 from releases.models import create_release_if_needed
 from bugsink.registry import reset_pc_registry, get_pc_registry
 from bugsink.period_counter import PeriodCounter, TL_DAY
+from events.factories import create_event
 
 from .models import Issue, IssueStateManager
 from .regressions import is_regression, is_regression_2, issue_is_regression
@@ -414,3 +416,39 @@ class MuteUnmuteTestCase(TestCase):
         self.assertEquals({}, registry.by_issue[issue.id].event_listeners[TL_DAY])
 
         self.assertEquals(1, send_unmute_alert.delay.call_count)
+
+
+class ViewTests(DjangoTestCase):
+    # we start with minimal "does this show something and not fully crash" tests and will expand from there.
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='test', password='test')
+        self.project = Project.objects.create()
+        self.issue = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        self.event = create_event(self.project, self.issue)
+        self.client.force_login(self.user)
+
+    def test_issue_list_view(self):
+        response = self.client.get(f"/issues/{self.project.id}/")
+        self.assertContains(response, self.issue.title())
+
+    def test_issue_stacktrace(self):
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/")
+        self.assertContains(response, self.issue.title())
+
+    def test_issue_details(self):
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/details/")
+        self.assertContains(response, self.issue.title())
+
+    def test_issue_history(self):
+        response = self.client.get(f"/issues/issue/{self.issue.id}/history/")
+        self.assertContains(response, self.issue.title())
+
+    def test_issue_last_event(self):
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/last/")
+        self.assertEquals(302, response.status_code)
+        self.assertTrue(str(self.event.id) in response.url)
+
+    def test_issue_event_list(self):
+        response = self.client.get(f"/issues/issue/{self.issue.id}/events/")
+        self.assertContains(response, self.issue.title())
