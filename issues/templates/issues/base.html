@@ -8,7 +8,7 @@
         <h1 class="text-4xl font-bold">{{ issue.get_main_exception.type }}</h1>
         <div class="text-xl">{{ issue.get_main_exception.value }}</div>
         {% if parsed_data.request %}<div class="italic mt-4">{{ parsed_data.request.method }} {{ parsed_data.request.url }}</div>{% endif %}
-        <div><span class="font-bold">TODO ingest.management.commands.raise_exception</span> in <span class="font-bold">TODO raise_exception</span></div>
+        <div>{% with issue.get_main_exception.stacktrace.frames|last as last_frame %}<span class="font-bold">{{ last_frame.module}}</span> in <span class="font-bold">{{ last_frame.function }}</span>{% endwith %}</div>
     </div>
     <div class="ml-auto">
         <form action="" method="post">
