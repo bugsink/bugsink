@@ -16,6 +16,8 @@ def login_exempt(view):
 def project_membership_required(function):
     @wraps(function)
     def wrapper(request, *args, **kwargs):
+        if "project_id" not in kwargs:
+            raise TypeError("project_id must be passed as a keyword argument")
         project_id = kwargs.pop("project_id")
         project = get_object_or_404(Project, pk=project_id)
         kwargs["project"] = project
@@ -30,6 +32,8 @@ def project_membership_required(function):
 def issue_membership_required(function):
     @wraps(function)
     def wrapper(request, *args, **kwargs):
+        if "issue_pk" not in kwargs:
+            raise TypeError("issue_pk must be passed as a keyword argument")
         issue_pk = kwargs.pop("issue_pk")
         issue = get_object_or_404(Issue, pk=issue_pk)
         kwargs["issue"] = issue
@@ -44,6 +48,8 @@ def issue_membership_required(function):
 def event_membership_required(function):
     @wraps(function)
     def wrapper(request, *args, **kwargs):
+        if "event_pk" not in kwargs:
+            raise TypeError("event_pk must be passed as a keyword argument")
         event_pk = kwargs.pop("event_pk")
         event = get_object_or_404(Event, pk=event_pk)
         kwargs["event"] = event
