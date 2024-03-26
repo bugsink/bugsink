@@ -34,7 +34,7 @@
 
             <div class="flex pl-4 pt-2 pb-2 border-b-2 {% if forloop.first %}border-t-2{% endif %} {% if frame.in_app %}bg-slate-300 border-slate-500{% else %}bg-white border-slate-300{% endif %} cursor-pointer" onclick="toggleFrameVisibility(this)">
                 <div>
-                    <span class="font-bold">{{ frame.filename }}</span> in <span class="font-bold">{{ frame.function }}</span> line <span class="font-bold">{{ frame.lineno }}</span>.
+                    <span class="font-bold">{{ frame.filename }}</span>{% if frame.function %} in <span class="font-bold">{{ frame.function }}</span>{% endif %} line <span class="font-bold">{{ frame.lineno }}</span>.
                 </div>
                 <div class="ml-auto pr-4">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 js-chevron transition-all {% if forloop.parentloop.last and forloop.last %}rotate-180{% endif %}">
