@@ -16,13 +16,13 @@ def login_exempt(view):
 def project_membership_required(function):
     @wraps(function)
     def wrapper(request, *args, **kwargs):
-        if request.user.is_superuser:
-            return function(request, *args, **kwargs)
         if "project_pk" not in kwargs:
             raise TypeError("project_pk must be passed as a keyword argument")
         project_pk = kwargs.pop("project_pk")
         project = get_object_or_404(Project, pk=project_pk)
         kwargs["project"] = project
+        if request.user.is_superuser:
+            return function(request, *args, **kwargs)
         if project.users.filter(pk=request.user.pk).exists():
             return function(request, *args, **kwargs)
 
@@ -34,13 +34,13 @@ def project_membership_required(function):
 def issue_membership_required(function):
     @wraps(function)
     def wrapper(request, *args, **kwargs):
-        if request.user.is_superuser:
-            return function(request, *args, **kwargs)
         if "issue_pk" not in kwargs:
             raise TypeError("issue_pk must be passed as a keyword argument")
         issue_pk = kwargs.pop("issue_pk")
         issue = get_object_or_404(Issue, pk=issue_pk)
         kwargs["issue"] = issue
+        if request.user.is_superuser:
+            return function(request, *args, **kwargs)
         if issue.project.users.filter(pk=request.user.pk).exists():
             return function(request, *args, **kwargs)
 
@@ -52,13 +52,13 @@ def issue_membership_required(function):
 def event_membership_required(function):
     @wraps(function)
     def wrapper(request, *args, **kwargs):
-        if request.user.is_superuser:
-            return function(request, *args, **kwargs)
         if "event_pk" not in kwargs:
             raise TypeError("event_pk must be passed as a keyword argument")
         event_pk = kwargs.pop("event_pk")
         event = get_object_or_404(Event, pk=event_pk)
         kwargs["event"] = event
+        if request.user.is_superuser:
+            return function(request, *args, **kwargs)
         if event.project.users.filter(pk=request.user.pk).exists():
             return function(request, *args, **kwargs)
 
