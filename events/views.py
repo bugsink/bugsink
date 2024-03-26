@@ -1,19 +1,20 @@
 import json
 
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 from django.utils.http import content_disposition_header
 
-from issues.utils import get_hash_for_data, get_issue_grouper_for_data
+from issues.utils import get_hash_for_data
 
 from .models import Event
+from bugsink.decorators import event_membership_required
 
 
-def event_download(request, pk, as_attachment=False):
-    obj = get_object_or_404(Event, pk=pk)
-    result = HttpResponse(obj.data, content_type="application/json")
+@event_membership_required
+def event_download(request, event, as_attachment=False):
+    result = HttpResponse(event.data, content_type="application/json")
     result["Content-Disposition"] = content_disposition_header(
-        as_attachment=as_attachment, filename=obj.id.hex + ".json")
+        as_attachment=as_attachment, filename=event.id.hex + ".json")
     return result
 
 

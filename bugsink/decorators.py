@@ -5,6 +5,7 @@ from django.core.exceptions import PermissionDenied
 
 from projects.models import Project
 from issues.models import Issue
+from events.models import Event
 
 
 def login_exempt(view):
@@ -33,6 +34,20 @@ def issue_membership_required(function):
         issue = get_object_or_404(Issue, pk=issue_pk)
         kwargs["issue"] = issue
         if issue.project.users.filter(pk=request.user.pk).exists():
+            return function(request, *args, **kwargs)
+
+        raise PermissionDenied("You don't have permission to access this project")
+
+    return wrapper
+
+
+def event_membership_required(function):
+    @wraps(function)
+    def wrapper(request, *args, **kwargs):
+        event_pk = kwargs.pop("event_pk")
+        event = get_object_or_404(Event, pk=event_pk)
+        kwargs["event"] = event
+        if event.project.users.filter(pk=request.user.pk).exists():
             return function(request, *args, **kwargs)
 
         raise PermissionDenied("You don't have permission to access this project")
