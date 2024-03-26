@@ -16,10 +16,10 @@ def login_exempt(view):
 def project_membership_required(function):
     @wraps(function)
     def wrapper(request, *args, **kwargs):
-        if "project_id" not in kwargs:
-            raise TypeError("project_id must be passed as a keyword argument")
-        project_id = kwargs.pop("project_id")
-        project = get_object_or_404(Project, pk=project_id)
+        if "project_pk" not in kwargs:
+            raise TypeError("project_pk must be passed as a keyword argument")
+        project_pk = kwargs.pop("project_pk")
+        project = get_object_or_404(Project, pk=project_pk)
         kwargs["project"] = project
         if project.users.filter(pk=request.user.pk).exists():
             return function(request, *args, **kwargs)

@@ -54,12 +54,12 @@ class BaseIngestAPIView(APIView):
         raise exceptions.NotAuthenticated("Unable to find authentication information")
 
     @classmethod
-    def get_project(cls, request, project_id):
+    def get_project(cls, request, project_pk):
         # NOTE this gives a 404 for non-properly authorized. Is this really something we care about, i.e. do we want to
         # raise NotAuthenticated? In that case we need to get the project first, and then do a constant-time-comp on the
         # sentry_key
         sentry_key = cls.get_sentry_key_for_request(request)
-        return get_object_or_404(Project, pk=project_id, sentry_key=sentry_key)
+        return get_object_or_404(Project, pk=project_pk, sentry_key=sentry_key)
 
     @classmethod
     def process_event(cls, event_data, project, request, now=None):
@@ -164,8 +164,8 @@ class BaseIngestAPIView(APIView):
 
 class IngestEventAPIView(BaseIngestAPIView):
 
-    def post(self, request, project_id=None):
-        project = self.get_project(request, project_id)
+    def post(self, request, project_pk=None):
+        project = self.get_project(request, project_pk)
 
         self.process_event(request.data, project, request)
         return Response()
@@ -174,8 +174,8 @@ class IngestEventAPIView(BaseIngestAPIView):
 class IngestEnvelopeAPIView(BaseIngestAPIView):
     parser_classes = [EnvelopeParser]
 
-    def post(self, request, project_id=None):
-        project = self.get_project(request, project_id)
+    def post(self, request, project_pk=None):
+        project = self.get_project(request, project_pk)
 
         data = request.data  # make this a local var to ensure it's sent as part of capture_stacktrace(..)
         if len(data) < 3:
