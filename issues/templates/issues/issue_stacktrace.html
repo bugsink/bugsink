@@ -41,9 +41,9 @@
 
             <div class="js-frame-details {% if frame.in_app %}js-in-app{% endif %} {% if not frame.in_app %}border-slate-300{% endif %} overflow-hidden transition-all"
                 {% if not forloop.parentloop.last or not forloop.last %}data-collapsed="true" style="height: 0px"{% endif %}>
-                <div class="border-b-2 xl:flex border-slate-300">
+                <div class="border-b-2 border-slate-300">
 
-                <div class="xl:w-1/2">
+                <div>
                     <ol class="list-decimal ml-16 mt-6 mb-6" start="100">
                     {% for line in frame.pre_context %}<li><div class="whitespace-pre w-full">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
                     <li><div class="whitespace-pre font-bold bg-slate-300 w-full">{{ frame.context_line }} {# leave space to avoid collapse #}</div></li>
@@ -51,7 +51,7 @@
                     </ol>
                 </div>
 
-                <div class="xl:w-1/2">
+                <div>
                     <div class="flex">
                         <div class="w-1/4 pt-2 pl-2 font-bold border-b-2 border-slate-500">Variable</div>
                         <div class="w-3/4 pt-2 font-bold border-b-2 border-slate-500">Value</div>
