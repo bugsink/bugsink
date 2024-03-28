@@ -39,32 +39,32 @@
                 </div>
             </div>
 
-            <div class="js-frame-details {% if frame.in_app %}js-in-app{% endif %} {% if not frame.in_app %}border-slate-300{% endif %} overflow-hidden transition-all"
+            <div class="pl-8 pr-8 js-frame-details {% if frame.in_app %}js-in-app{% endif %} {% if not frame.in_app %}border-slate-300{% endif %} overflow-hidden transition-all"
                 {% if not forloop.parentloop.last or not forloop.last %}data-collapsed="true" style="height: 0px"{% endif %}>
-                <div class="border-b-2 border-slate-300">
 
-                <div class="pl-2 pr-2">
-                    <ol class="list-decimal mt-6 mb-6 overflow-x-auto list-inside" start="100">
-                    {% for line in frame.pre_context %}<li><div class="whitespace-pre w-full inline">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
-                    <li><div class="whitespace-pre font-bold bg-slate-300 w-full inline">{{ frame.context_line }} {# leave space to avoid collapse #}</div></li>
-                    {% for line in frame.post_context %}<li><div class="whitespace-pre w-full inline">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
-                    </ol>
-                </div>
-
-                <div>
-                    <div class="flex">
-                        <div class="w-1/4 pt-2 pl-2 font-bold border-b-2 border-slate-500">Variable</div>
-                        <div class="w-3/4 pt-2 font-bold border-b-2 border-slate-500">Value</div>
+                <div class="pt-8">
+                    <div class="bg-slate-50">{# code listing #}
+                        <ol class="list-decimal overflow-x-auto list-inside pt-6 pb-6" start="100">
+                        {% for line in frame.pre_context %}<li class="pl-6"><div class="whitespace-pre w-full inline pr-6">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
+                        <li class="pl-6 bg-slate-200 font-bold"><div class="whitespace-pre w-full inline pr-6">{{ frame.context_line }} {# leave space to avoid collapse #}</div></li>
+                        {% for line in frame.post_context %}<li class="pl-6"><div class="whitespace-pre w-full inline pr-6">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
+                        </ol>
                     </div>
-                    {% for var, value in frame.vars|items %}
-                    <div class="flex {% if forloop.last %}mb-4{% endif %}">
-                        <div class="w-1/4 pl-2 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ var }}</div>
-                        <div class="w-3/4 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ value }}</div>
+
+                    <div class="pt-4 pb-8">{# variables #}
+                        <div class="flex">
+                            <div class="w-1/4 pt-2 font-bold border-b-2 border-slate-500">Variable</div>
+                            <div class="w-3/4 pt-2 font-bold border-b-2 border-slate-500">Value</div>
+                        </div>
+                        {% for var, value in frame.vars|items %}
+                        <div class="flex">
+                            <div class="w-1/4 border-b-2 border-dotted border-slate-300">{{ var }}</div>
+                            <div class="w-3/4 border-b-2 border-dotted border-slate-300">{{ value }}</div>
+                        </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
                 </div>
 
-                </div>
             </div>
 
         </div>
