@@ -45,6 +45,9 @@ module.exports = {
     ],
     theme: {
       extend: {
+        spacing: {
+          '128': '32rem',
+        },
         fontFamily: {
           sans: [
             '"IBM Plex Sans"',

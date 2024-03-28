@@ -95,33 +95,62 @@
     </div>
 </div>
 
-<div class="ml-4 mb-4 mr-4 border-2"><!-- the whole of the big tabbed view-->
+<div class="flex flex-row"><!-- flex container for the 2 'windows' in this page' -->
+    <div class="ml-4 mb-4 mr-4 border-2 flex-auto"><!-- the whole of the big tabbed view-->
+        <div class="flex bg-slate-50 border-b-2"><!-- container for the actual tab buttons -->
+            <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "stacktrace" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Stacktrace</div></a>
+            <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/details/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "event-details" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Event&nbsp;Details</div></a>
+            <a href="/issues/issue/{{ issue.id }}/events/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "event-list" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Event&nbsp;List</div></a>
+            <a href="/issues/issue/{{ issue.id }}/history/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "history" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">History</div></a>
+            <a href="/issues/issue/{{ issue.id }}/grouping/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "grouping" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Grouping</div></a>
+        </div>
 
-<div class="flex bg-slate-50 border-b-2"><!-- container for the actual tab buttons -->
-    <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "stacktrace" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Stacktrace</div></a>
-    <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/details/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "event-details" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Event&nbsp;Details</div></a>
-    <a href="/issues/issue/{{ issue.id }}/events/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "event-list" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Event&nbsp;List</div></a>
-    <a href="/issues/issue/{{ issue.id }}/history/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "history" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">History</div></a>
-    <a href="/issues/issue/{{ issue.id }}/grouping/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "grouping" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Grouping</div></a>
+        <div class="p-4"><!-- div for tab_content -->
+        {% block tab_content %}
+        {% endblock %}
+        </div>
+
+        <div class="flex p-4 bg-slate-200 border-b-2"><!-- bottom nav bar -->
+            {% if is_event_page %}<div>Event ... {# TODO #} out of {{ issue.event_set.count }}{# TODO denormalize #} which occured at <span class="font-bold">{{ event.timestamp }}</span></div>{% endif %}
+            <div class="ml-auto pr-4 font-bold text-slate-500">
+                <a href="/admin/issues/issue/{{ issue.id }}/change/">Issue Admin</a>
+                {% if is_event_page %}
+                | <a href="/admin/events/event/{{ event.id }}/change/">Event Admin</a>
+                | <a href="/events/event/{{ event.id }}/download/">Download</a>
+                | <a href="/events/event/{{ event.id }}/raw/" >Raw</a>
+                {% endif %}
+            </div>
+        </div>{# bottom nav bar #}
+    </div>{# the whole of the big tabbed view #}
+
+    <div class="w-128 hidden 2xl:flex flex-col grow-0 shrink-0">{# RHS container for multiple stacked boxes #}
+
+        <div class="border-2 mb-4 mr-4"><!-- "issue: key info" box -->
+            <div class="bg-slate-50 font-bold border-b-2">
+                <div class="border-2 p-4 border-slate-50 text-slate-500"> {# div-in-div to match the spacing of the tabs, which is caused by the hover-thick-line; we use border-2 on both sides rather than border-b-4 to get the text aligned centeredly #}
+                Key info
+                </div>
+            </div>
+            <div class="p-4">
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus blandit laoreet risus vel tempus. Nulla elit lacus, molestie vel mattis et, suscipit quis ipsum. Duis pharetra vel erat eu tincidunt. Phasellus congue, odio a consectetur volutpat, ligula magna molestie massa, eu placerat sem lectus eu diam. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Nullam pellentesque odio nunc, sit amet convallis sem tincidunt ac. Vivamus risus sem, mattis nec risus ac, volutpat porttitor erat. Proin quam nunc, condimentum a diam eget, aliquam maximus felis. Aenean mollis mi non blandit dictum. Vestibulum vitae risus at lorem aliquet auctor. Proin vitae lobortis sem. Vestibulum ullamcorper libero vel nunc tempus, in finibus tortor varius. Nunc ligula nulla, condimentum id enim sit amet, fringilla vehicula mauris. Nam pellentesque fermentum feugiat. Etiam dapibus bibendum dapibus.
+            </div>
+        </div>
+
+        <div class="border-2 mb-4 mr-4"><!-- "issue: key info" box -->
+            <div class="bg-slate-50 font-bold border-b-2">
+                <div class="border-2 p-4 border-slate-50 text-slate-500"> {# div-in-div to match the spacing of the tabs, which is caused by the hover-thick-line; we use border-2 on both sides rather than border-b-4 to get the text aligned centeredly #}
+                More key info
+                </div>
+            </div>
+            <div class="p-4">
+             Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam ut tincidunt ante. Nam semper purus at convallis placerat. Vestibulum hendrerit, sapien id consequat rutrum, ipsum neque ullamcorper lectus, id vulputate eros quam quis est. Proin in congue tortor, in fringilla felis. Duis rhoncus neque non lacus sollicitudin, sit amet facilisis sem pellentesque. Vivamus vestibulum rutrum euismod. Morbi dapibus ex urna. Fusce non dolor ac nisi euismod mollis. Aliquam fringilla mauris enim, quis eleifend nisi rhoncus eu. Morbi fringilla nulla sem, vitae pellentesque nulla tristique ut. Vivamus commodo non dolor ut hendrerit.
+
+Pellentesque vehicula venenatis lectus, id dictum magna iaculis ac. Vivamus a ante feugiat, consectetur lacus at, aliquet odio. Aliquam maximus ut ligula et mattis. Sed lobortis cursus felis sed pellentesque. Nullam luctus tempus nunc, eget lacinia nibh viverra vel. Sed vitae neque gravida, rutrum ante ut, mattis elit. Nam tristique consectetur ipsum, a venenatis felis dapibus vel. Phasellus nec orci risus. Cras sit amet vulputate leo. Aliquam vitae sapien sed massa tempus tempor non at nibh.
+            </div>
+        </div>
+
+    </div>{# RHS container #}
 </div>
-
-<div class="p-4 bg-slate-50"><!-- div for tab_content -->
-{% block tab_content %}
-{% endblock %}
-</div>
-
-<div class="flex p-4 bg-slate-200 border-b-2"><!-- bottom nav bar -->
-    {% if is_event_page %}<div>Event ... {# TODO #} out of {{ issue.event_set.count }}{# TODO denormalize #} which occured at <span class="font-bold">{{ event.timestamp }}</span></div>{% endif %}
-    <div class="ml-auto pr-4 font-bold text-slate-500">
-        <a href="/admin/issues/issue/{{ issue.id }}/change/">Issue Admin</a>
-        {% if is_event_page %}
-        | <a href="/admin/events/event/{{ event.id }}/change/">Event Admin</a>
-        | <a href="/events/event/{{ event.id }}/download/">Download</a>
-        | <a href="/events/event/{{ event.id }}/raw/" >Raw</a>
-        {% endif %}
-    </div>
-    </div>
-</div>  {# the border #}
 
 {% endblock %}{# block content #}
 
