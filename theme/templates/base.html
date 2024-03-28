@@ -32,7 +32,9 @@
                      
                     <div class="dropdown-content-left flex-col">
                         {% for loop_project in user_projects %}  
-                            <a href="/issues/{{ loop_project.id }}/"><div class="bg-slate-200 hover:bg-slate-400 p-4 whitespace-nowrap {% if project == loop_project %}font-bold{% endif %}">{% if project == loop_project %}{{ project.name }} &lt;{% else %}{{ loop_project.name }}{% endif %}</div></a>
+                            {% if loop_project != project %}
+                                <a href="/issues/{{ loop_project.id }}/"><div class="bg-slate-200 hover:bg-slate-400 p-4 whitespace-nowrap">{{ loop_project.name }}</div></a>
+                            {% endif %}
                         {% endfor %}
                     </div>
                 </div> 
