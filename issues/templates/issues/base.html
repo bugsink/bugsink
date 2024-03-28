@@ -39,7 +39,7 @@
                     <button disabled {# disabled b/c clicking the dropdown does nothing - we have hover for that #} class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 hover:bg-slate-200 active:ring rounded-e-md">🞃</button>
 
                     {# note that we can depend on get_latest_release being available, because we're in the 'project.has_releases' branch #}
-                    <div class="dropdown-content flex-col pl-2">
+                    <div class="dropdown-content-right flex-col pl-2">
 
                         {% if not issue.occurs_in_last_release %}
                             <button name="action" value="resolved_release:{{ issue.project.get_latest_release.version }}" class="block self-stretch font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white hover:bg-slate-200 active:ring text-left whitespace-nowrap">Resolved in latest ({{ issue.project.get_latest_release.get_short_version }})</button>
@@ -69,7 +69,7 @@
             {% if not issue.is_muted and not issue.is_resolved %}
                 <button disabled {# disabled b/c clicking the dropdown does nothing - we have hover for that #} class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 active:ring">Mute for/until&nbsp;&nbsp;&nbsp;🞃</button>
 
-                <div class="dropdown-content flex-col">
+                <div class="dropdown-content-right flex-col">
                     {% for mute_option in mute_options %}
                         <button name="action" value="mute_{{ mute_option.for_or_until }}:{{ mute_option.period_name }},{{ mute_option.nr_of_periods }},{{ mute_option.gte_threshold }}" class="block self-stretch font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white hover:bg-slate-200 active:ring text-left whitespace-nowrap">{% if mute_option.for_or_until == "for" %}{{ mute_option.nr_of_periods }} {{ mute_option.period_name }}{% if mute_option.nr_of_periods != 1 %}s{% endif %}{% else %}{{ mute_option.gte_threshold }} events per {% if mute_option.nr_of_periods != 1%} {{ mute_option.nr_of_periods }} {{ mute_option.period_name }}s{% else %} {{ mute_option.period_name }}{% endif %}{% endif %}</button>
                     {% endfor %}

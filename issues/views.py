@@ -189,6 +189,7 @@ def issue_event_stacktrace(request, issue, event_pk):
 
     return render(request, "issues/issue_stacktrace.html", {
         "tab": "stacktrace",
+        "project": issue.project,
         "issue": issue,
         "event": event,
         "is_event_page": True,
@@ -208,6 +209,7 @@ def issue_event_details(request, issue, event_pk):
 
     return render(request, "issues/issue_event_details.html", {
         "tab": "event-details",
+        "project": issue.project,
         "issue": issue,
         "event": event,
         "is_event_page": True,
@@ -221,6 +223,7 @@ def issue_history(request, issue):
 
     return render(request, "issues/issue_history.html", {
         "tab": "history",
+        "project": issue.project,
         "issue": issue,
         "event": issue.event_set.order_by("timestamp").last(),  # the template needs this for the tabs, we pick the last
         "is_event_page": False,
@@ -234,6 +237,7 @@ def issue_grouping(request, issue):
 
     return render(request, "issues/issue_grouping.html", {
         "tab": "grouping",
+        "project": issue.project,
         "issue": issue,
         "event": issue.event_set.order_by("timestamp").last(),  # the template needs this for the tabs, we pick the last
         "is_event_page": False,
@@ -249,6 +253,7 @@ def issue_event_list(request, issue):
 
     return render(request, "issues/issue_event_list.html", {
         "tab": "event-list",
+        "project": issue.project,
         "issue": issue,
         "event": issue.event_set.order_by("timestamp").last(),  # the template needs this for the tabs, we pick the last
         "event_list": event_list,

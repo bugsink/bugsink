@@ -1507,7 +1507,7 @@ select {
 
 /* Dropdown Content (Hidden by Default) */
 
-.dropdown-content {
+.dropdown-content-right {
   display: none;
   position: absolute;
   z-index: 1;
@@ -1515,9 +1515,18 @@ select {
   right: 0;
 }
 
+/* Dropdown Content (Hidden by Default) */
+
+.dropdown-content-left {
+  display: none;
+  position: absolute;
+  z-index: 1;
+  left: 0;
+}
+
 /* Show the dropdown menu on hover */
 
-.dropdown:hover .dropdown-content {
+.dropdown:hover .dropdown-content-left, .dropdown:hover .dropdown-content-right {
   display: flex;
 }
 
