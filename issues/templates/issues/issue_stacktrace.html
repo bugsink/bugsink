@@ -49,7 +49,9 @@
                         {# the spread-out pX-6 in this code is intentional to ensure the padding is visible when scrolling to the right, and not visible when scrolling is possible (i.e. the text is cut-off awkwardly to hint at scrolling #}
                         <ol class="list-decimal overflow-x-auto list-inside pt-6 pb-6" start="100">
                         {% for line in frame.pre_context %}<li class="pl-6"><div class="whitespace-pre w-full inline pr-6">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
-                        <li class="pl-6 bg-slate-200 font-bold"><div class="whitespace-pre w-full inline pr-6">{{ frame.context_line }} {# leave space to avoid collapse #}</div></li>
+                        {# the gradient is a workaround, because I can't get a full-width elem going here inside the overflow #}
+                        {# when some other line is overflowing. Using the gradient hides this fact (it happens to also look good) #}
+                        <li class="pl-6 bg-gradient-to-r from-slate-300 font-bold w-full"><div class="whitespace-pre w-full inline pr-6">{{ frame.context_line }} {# leave space to avoid collapse #}</div></li>
                         {% for line in frame.post_context %}<li class="pl-6"><div class="whitespace-pre w-full inline pr-6">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
                         </ol>
                     </div>
