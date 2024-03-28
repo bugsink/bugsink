@@ -43,11 +43,11 @@
                 {% if not forloop.parentloop.last or not forloop.last %}data-collapsed="true" style="height: 0px"{% endif %}>
                 <div class="border-b-2 border-slate-300">
 
-                <div>
-                    <ol class="list-decimal ml-16 mt-6 mb-6" start="100">
-                    {% for line in frame.pre_context %}<li><div class="whitespace-pre w-full">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
-                    <li><div class="whitespace-pre font-bold bg-slate-300 w-full">{{ frame.context_line }} {# leave space to avoid collapse #}</div></li>
-                    {% for line in frame.post_context %}<li><div class="whitespace-pre w-full">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
+                <div class="pl-2 pr-2">
+                    <ol class="list-decimal mt-6 mb-6 overflow-x-auto list-inside" start="100">
+                    {% for line in frame.pre_context %}<li><div class="whitespace-pre w-full inline">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
+                    <li><div class="whitespace-pre font-bold bg-slate-300 w-full inline">{{ frame.context_line }} {# leave space to avoid collapse #}</div></li>
+                    {% for line in frame.post_context %}<li><div class="whitespace-pre w-full inline">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
                     </ol>
                 </div>
 
