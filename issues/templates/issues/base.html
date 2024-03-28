@@ -96,7 +96,9 @@
 </div>
 
 <div class="flex items-start"><!-- flex container for the 2 'windows' in this page' -->
-    <div class="ml-4 mb-4 mr-4 border-2 overflow-x-auto{# overflow-x-auto is needed at the level of the flex item such that it works at the level where we need it (the code listings)#}"><!-- the whole of the big tabbed view-->
+
+    {# overflow-x-auto is needed at the level of the flex item such that it works at the level where we need it (the code listings)#}
+    <div class="ml-4 mb-4 mr-4 border-2 overflow-x-auto flex-[2_1_96rem]"><!-- the whole of the big tabbed view--> {# 96rem is 1536px, which matches the 2xl class; this is no "must" but eyeballing revealed: good result #}
         <div class="flex bg-slate-50 border-b-2"><!-- container for the actual tab buttons -->
             <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "stacktrace" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Stacktrace</div></a>
             <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/details/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "event-details" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Event&nbsp;Details</div></a>
@@ -123,7 +125,7 @@
         </div>{# bottom nav bar #}
     </div>{# the whole of the big tabbed view #}
 
-    <div class="w-128 hidden 2xl:flex flex-col grow-0 shrink-0">{# RHS container for multiple stacked boxes #}
+    <div class="w-128 hidden 2xl:flex flex-auto flex-col">{# RHS container for multiple stacked boxes #}
 
         <div class="border-2 mb-4 mr-4"><!-- "issue: key info" box -->
             <div class="bg-slate-50 font-bold border-b-2">
