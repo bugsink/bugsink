@@ -41,10 +41,10 @@
                 </div>
             </div> {# per frame header div #}
 
-            <div class="pl-8 pr-8 js-frame-details {% if frame.in_app %}js-in-app{% endif %} {% if not frame.in_app %}border-slate-300{% endif %} overflow-hidden transition-all" 
+            <div class="js-frame-details {% if frame.in_app %}js-in-app{% endif %} {% if not frame.in_app %}border-slate-300{% endif %} overflow-hidden transition-all" 
                 {% if not forloop.parentloop.last or not forloop.last %}data-collapsed="true" style="height: 0px"{% endif %}> {# collapsable part #}
 
-                <div class="pt-8 border-b-2">{# convience div for padding & border #}
+                <div class="pl-8 pr-8 pt-8 border-b-2">{# convience div for padding & border #}
                     <div class="bg-slate-50">{# code listing #}
                         {# the spread-out pX-6 in this code is intentional to ensure the padding is visible when scrolling to the right, and not visible when scrolling is possible (i.e. the text is cut-off awkwardly to hint at scrolling #}
                         <ol class="list-decimal overflow-x-auto list-inside pt-6 pb-6" start="100">
@@ -57,13 +57,13 @@
                     {% if frame.vars %}
                     <div class="pt-4 pb-8">{# variables #}
                         <div class="flex">
-                            <div class="w-1/4 pt-2 font-bold border-b-2 border-slate-500">Variable</div>
-                            <div class="w-3/4 pt-2 font-bold border-b-2 border-slate-500">Value</div>
+                            <div class="w-1/4 pt-2 font-bold border-b-2 border-slate-500 pl-4">Variable</div>
+                            <div class="w-3/4 pt-2 font-bold border-b-2 border-slate-500 pr-4">Value</div>
                         </div>
                         {% for var, value in frame.vars|items %}
                         <div class="flex">
-                            <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ var }}</div>
-                            <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %}">{{ value }}</div>
+                            <div class="w-1/4 pl-4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ var }}</div>
+                            <div class="w-3/4 pr-4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %}">{{ value }}</div>
                         </div>
                         {% endfor %}
                     </div>
