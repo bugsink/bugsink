@@ -3,14 +3,14 @@
 {% block title %}{{ issue.title }}{# note: dubious: should perhaps be event.title... #} · {{ block.super }}{% endblock %}
 
 {% block content %}
-<div class="m-4 flex">
-    <div>
+<div class="m-4 flex"><!-- container for the white bit (issue title, buttons) at the top of the page -->
+    <div><!-- top, LHS (various texts) -->
         <h1 class="text-4xl font-bold">{{ issue.get_main_exception.type }}</h1>
         <div class="text-xl">{{ issue.get_main_exception.value }}</div>
         {% if parsed_data.request %}<div class="italic mt-4">{{ parsed_data.request.method }} {{ parsed_data.request.url }}</div>{% endif %}
         <div>{% with issue.get_main_exception.stacktrace.frames|last as last_frame %}<span class="font-bold">{% if last_frame.module %}{{ last_frame.module}}{% else %}{{ last_frame.filename }}{% endif %}</span>{% if last_frame.function %} in <span class="font-bold">{{ last_frame.function }}</span>{% endif %}{% endwith %}</div>
     </div>
-    <div class="ml-auto">
+    <div class="ml-auto"><!-- top, RHS (buttons) -->
         <form action="" method="post">
         {% csrf_token %}
         {% if issue.is_resolved %}{# i.e. buttons disabled #}
@@ -95,9 +95,9 @@
     </div>
 </div>
 
-<div class="ml-4 mb-4 mr-4 border-2">
+<div class="ml-4 mb-4 mr-4 border-2"><!-- the whole of the big tabbed view-->
 
-<div class="flex bg-slate-50 border-b-2">
+<div class="flex bg-slate-50 border-b-2"><!-- container for the actual tab buttons -->
     <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "stacktrace" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Stacktrace</div></a>
     <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/details/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "event-details" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Event&nbsp;Details</div></a>
     <a href="/issues/issue/{{ issue.id }}/events/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "event-list" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Event&nbsp;List</div></a>
@@ -105,11 +105,23 @@
     <a href="/issues/issue/{{ issue.id }}/grouping/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "grouping" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Grouping</div></a>
 </div>
 
-<div class="p-4 bg-slate-50">
+<div class="p-4 bg-slate-50"><!-- div for tab_content -->
 {% block tab_content %}
 {% endblock %}
-</div> {# the inner issue-block #}
-{% include "issues/_bottom_nav_bar.html" %}
+</div>
+
+<div class="flex p-4 bg-slate-200 border-b-2"><!-- bottom nav bar -->
+    {% if is_event_page %}<div>Event ... {# TODO #} out of {{ issue.event_set.count }}{# TODO denormalize #} which occured at <span class="font-bold">{{ event.timestamp }}</span></div>{% endif %}
+    <div class="ml-auto pr-4 font-bold text-slate-500">
+        <a href="/admin/issues/issue/{{ issue.id }}/change/">Issue Admin</a>
+        {% if is_event_page %}
+        | <a href="/admin/events/event/{{ event.id }}/change/">Event Admin</a>
+        | <a href="/events/event/{{ event.id }}/download/">Download</a>
+        | <a href="/events/event/{{ event.id }}/raw/" >Raw</a>
+        {% endif %}
+    </div>
+    </div>
+</div>  {# the border #}
 
 {% endblock %}{# block content #}
 
