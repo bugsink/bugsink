@@ -104,7 +104,14 @@
     <a href="/issues/issue/{{ issue.id }}/history/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "history" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">History</div></a>
     <a href="/issues/issue/{{ issue.id }}/grouping/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "grouping" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Grouping</div></a>
 </div>
+
+<div class="p-4 bg-slate-50">
+{% block tab_content %}
 {% endblock %}
+</div> {# the inner issue-block #}
+{% include "issues/_bottom_nav_bar.html" %}
+
+{% endblock %}{# block content #}
 
 {% block extra_js %}
     <script src="{% static 'js/issue.js' %}"></script>

@@ -1,19 +1,10 @@
 {% extends "issues/base.html" %}
 {% load static %}
 
-{% block content %}
-{{ block.super }}
-
-<div class="p-4 bg-slate-50">
-
+{% block tab_content %}
 <h1 class="text-3xl mt-4">Grouper</h1>
 
-
 Issue grouper: <span class="font-mono whitespace-pre">"{{ issue_grouper }}"</span>
-
-</div> {# the inner issue-block #}
-
-{% include "issues/_bottom_nav_bar.html" %}
 {% endblock %}
 
 {% block extra_js %}

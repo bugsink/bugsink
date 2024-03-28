@@ -2,11 +2,7 @@
 {% load static %}
 {% load stricter_templates %}
 
-{% block content %}
-{{ block.super }}
-
-<div class="p-4 bg-slate-50">
-
+{% block tab_content %}
 {# <div class="font-bold">Stacktrace:</div> I think this is obvious?#}
 {% for exception in exceptions %}
     {# option: make multi-exception stacktraces more clear <div class="border-l-4 border-cyan-500 pl-4"> }#}
@@ -134,11 +130,6 @@
 
 {% endif %}
 
-
-
-</div> {# the inner issue-block #}
-
-{% include "issues/_bottom_nav_bar.html" %}
 {% endblock %}
 
 {% block extra_js %}

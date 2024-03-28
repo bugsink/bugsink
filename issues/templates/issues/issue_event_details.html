@@ -1,17 +1,8 @@
 {% extends "issues/base.html" %}
 {% load static %}
 
-{% block content %}
-{{ block.super }}
-
-<div class="p-4 bg-slate-50">
-
+{% block tab_content %}
 details
-
-
-</div> {# the inner issue-block #}
-
-{% include "issues/_bottom_nav_bar.html" %}
 {% endblock %}
 
 {% block extra_js %}

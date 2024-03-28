@@ -1,11 +1,7 @@
 {% extends "issues/base.html" %}
 
-{% block content %}
-{{ block.super }}
-
+{% block tab_content %}
 {% for event in event_list %}
     <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/">{{ event.id }}</a><br>
 {% endfor %}
-
-{% include "issues/_bottom_nav_bar.html" %}
 {% endblock %}
