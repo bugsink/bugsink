@@ -95,7 +95,7 @@
     </div>
 </div>
 
-<div class="flex flex-row"><!-- flex container for the 2 'windows' in this page' -->
+<div class="flex items-start"><!-- flex container for the 2 'windows' in this page' -->
     <div class="ml-4 mb-4 mr-4 border-2 flex-auto"><!-- the whole of the big tabbed view-->
         <div class="flex bg-slate-50 border-b-2"><!-- container for the actual tab buttons -->
             <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "stacktrace" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Stacktrace</div></a>
