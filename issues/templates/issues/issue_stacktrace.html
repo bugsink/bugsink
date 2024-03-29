@@ -26,6 +26,7 @@
     </div>
 
     {% for frame in exception.stacktrace.frames %}
+        {% with frame=frame|pygmentize %}
         
         <div class="bg-white w-full font-mono"> {# per frame div #}
 
@@ -47,8 +48,6 @@
 
                 <div class="pl-6 pr-6 pt-8 {% if not forloop.last %}border-b-2{% endif %}">{# convience div for padding & border; the border is basically the top-border of the next header #}
                     <div class="bg-slate-50 syntax-coloring">{# code listing #}
-                        {{ frame|pygmentize }}
-                        {% comment %}
                         {# the spread-out pX-6 in this code is intentional to ensure the padding is visible when scrolling to the right, and not visible when scrolling is possible (i.e. the text is cut-off awkwardly to hint at scrolling #}
                         <ol class="list-decimal overflow-x-auto list-inside pt-6 pb-6" start="{{ frame|firstlineno }}">
                         {% for line in frame.pre_context %}<li class="pl-6"><div class="whitespace-pre w-full inline pr-6">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
@@ -57,7 +56,6 @@
                         <li class="pl-6 bg-gradient-to-r from-slate-300 font-bold w-full"><div class="whitespace-pre w-full inline pr-6">{{ frame.context_line }} {# leave space to avoid collapse #}</div></li>
                         {% for line in frame.post_context %}<li class="pl-6"><div class="whitespace-pre w-full inline pr-6">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
                         </ol>
-                        {% endcomment %}
                     </div>
 
                     {% if frame.vars %}
@@ -80,6 +78,7 @@
 
         </div> {# per frame div #}
 
+        {% endwith %}
     {% endfor %} {# frame #}
     {# </div> #} {# per-exception div in the multi-exception case #}
 
