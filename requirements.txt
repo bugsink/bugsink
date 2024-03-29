@@ -6,3 +6,4 @@ jsonschema==4.19.*
 semver==3.0.*
 Celery[librabbitmq]
 django-admin-autocomplete-filter==0.7.*
+pygments==2.16.*
