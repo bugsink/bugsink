@@ -46,7 +46,7 @@ class Event(models.Model):
     # https://develop.sentry.dev/sdk/event-payloads/ (supposedly more human-readable)
     # https://develop.sentry.dev/sdk/event-payloads/types/ (more up-to-date and complete)
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)  # This ID is internal to bugsink
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, help_text="Bugsink-internal")
 
     # null=True reveals our doubts about "should this always be set, or even be done at all?"
     ingested_event = models.ForeignKey("ingest.DecompressedEvent", null=True, on_delete=models.SET_NULL)
@@ -59,7 +59,7 @@ class Event(models.Model):
     # > Required. Hexadecimal string representing a uuid4 value. The length is exactly 32 characters. Dashes are not
     # > allowed. Has to be lowercase.
     # Not a primary key: events may be duplicated across projects
-    event_id = models.UUIDField(primary_key=False, null=False, editable=False)  # As per the sent data
+    event_id = models.UUIDField(primary_key=False, null=False, editable=False, help_text="As per the sent data")
     project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
 
     data = models.TextField(blank=False, null=False)
