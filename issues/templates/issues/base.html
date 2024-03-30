@@ -4,13 +4,13 @@
 
 {% block content %}
 <div class="m-4 flex"><!-- container for the white bit (issue title, buttons) at the top of the page -->
-    <div><!-- top, LHS (various texts) -->
-        <h1 class="text-4xl font-bold">{{ issue.get_main_exception.type }}</h1>
-        <div class="text-xl">{{ issue.get_main_exception.value }}</div>
+    <div class="overflow-hidden"><!-- top, LHS (various texts) -->
+        <h1 class="text-4xl font-bold text-ellipsis whitespace-nowrap overflow-hidden">{{ issue.get_main_exception.type }}</h1>
+        <div class="text-xl text-ellipsis whitespace-nowrap overflow-hidden">{{ issue.get_main_exception.value }}</div>
         {% if parsed_data.request %}<div class="italic mt-4">{{ parsed_data.request.method }} {{ parsed_data.request.url }}</div>{% endif %}
-        <div>{% with issue.get_main_exception.stacktrace.frames|last as last_frame %}<span class="font-bold">{% if last_frame.module %}{{ last_frame.module}}{% else %}{{ last_frame.filename }}{% endif %}</span>{% if last_frame.function %} in <span class="font-bold">{{ last_frame.function }}</span>{% endif %}{% endwith %}</div>
+        <div class="text-ellipsis whitespace-nowrap overflow-hidden">{% with issue.get_main_exception.stacktrace.frames|last as last_frame %}<span class="font-bold">{% if last_frame.module %}{{ last_frame.module}}{% else %}{{ last_frame.filename }}{% endif %}</span>{% if last_frame.function %} in <span class="font-bold">{{ last_frame.function }}</span>{% endif %}{% endwith %}</div>
     </div>
-    <div class="ml-auto"><!-- top, RHS (buttons) -->
+    <div class="ml-auto flex-none"><!-- top, RHS (buttons) -->
         <form action="" method="post">
         {% csrf_token %}
         {% if issue.is_resolved %}{# i.e. buttons disabled #}

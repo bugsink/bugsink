@@ -966,6 +966,10 @@ select {
   flex: 1 1 auto;
 }
 
+.flex-none {
+  flex: none;
+}
+
 .border-collapse {
   border-collapse: collapse;
 }
@@ -1050,6 +1054,10 @@ select {
 
 .overflow-x-auto {
   overflow-x: auto;
+}
+
+.text-ellipsis {
+  text-overflow: ellipsis;
 }
 
 .whitespace-nowrap {
