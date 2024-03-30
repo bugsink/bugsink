@@ -128,20 +128,35 @@
     <div class="w-128 hidden lg:flex flex-auto flex-col">{# RHS container for multiple stacked boxes #}
 
         <div class="border-2 mb-4 mr-4"><!-- "issue: key info" box -->
-            <div class="bg-slate-50 font-bold border-b-2">
-                <div class="border-2 p-4 border-slate-50 text-slate-500"> {# div-in-div to match the spacing of the tabs, which is caused by the hover-thick-line; we use border-2 on both sides rather than border-b-4 to get the text aligned centeredly #}
-                Key info
-                </div>
-            </div>
             <div class="p-4">
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus blandit laoreet risus vel tempus. Nulla elit lacus, molestie vel mattis et, suscipit quis ipsum. Duis pharetra vel erat eu tincidunt. Phasellus congue, odio a consectetur volutpat, ligula magna molestie massa, eu placerat sem lectus eu diam. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Nullam pellentesque odio nunc, sit amet convallis sem tincidunt ac. Vivamus risus sem, mattis nec risus ac, volutpat porttitor erat. Proin quam nunc, condimentum a diam eget, aliquam maximus felis. Aenean mollis mi non blandit dictum. Vestibulum vitae risus at lorem aliquet auctor. Proin vitae lobortis sem. Vestibulum ullamcorper libero vel nunc tempus, in finibus tortor varius. Nunc ligula nulla, condimentum id enim sit amet, fringilla vehicula mauris. Nam pellentesque fermentum feugiat. Etiam dapibus bibendum dapibus.
+                <div class="mb-4">
+                    <div class="text-sm font-bold text-slate-500">Issue #</div>
+                    <div>LOCAL-BUGSINK-9001-1</div> {# TODO #}
+                </div>
+
+                <div class="mb-4">
+                    <div class="text-sm font-bold text-slate-500">Nr. of events</div>
+                    <div>1</div> {# TODO #}
+                </div>
+
+                <div class="mb-4">
+                    <div class="text-sm font-bold text-slate-500">First seen</div>
+                    <div>March 24, 2024, 7:19 a.m.</div> {# TODO #}
+                </div>
+
+                <div>
+                    <div class="text-sm font-bold text-slate-500">Last seen</div>
+                    <div>March 24, 2024, 7:19 a.m.</div> {# TODO #}
+                </div>
+
             </div>
         </div>
 
+        {% comment %} {# for now I don't actually think that 'tags' are key enough to get such a prominent position #}
         <div class="border-2 mb-4 mr-4"><!-- "issue: key info" box -->
             <div class="bg-slate-50 font-bold border-b-2">
                 <div class="border-2 p-4 border-slate-50 text-slate-500"> {# div-in-div to match the spacing of the tabs, which is caused by the hover-thick-line; we use border-2 on both sides rather than border-b-4 to get the text aligned centeredly #}
-                More key info
+                Tags {# (?) #}
                 </div>
             </div>
             <div class="p-4">
@@ -150,6 +165,7 @@
 Pellentesque vehicula venenatis lectus, id dictum magna iaculis ac. Vivamus a ante feugiat, consectetur lacus at, aliquet odio. Aliquam maximus ut ligula et mattis. Sed lobortis cursus felis sed pellentesque. Nullam luctus tempus nunc, eget lacinia nibh viverra vel. Sed vitae neque gravida, rutrum ante ut, mattis elit. Nam tristique consectetur ipsum, a venenatis felis dapibus vel. Phasellus nec orci risus. Cras sit amet vulputate leo. Aliquam vitae sapien sed massa tempus tempor non at nibh.
             </div>
         </div>
+        {% endcomment %}
 
     </div>{# RHS container #}
 </div>
