@@ -34,8 +34,8 @@ class Issue(models.Model):
     is_resolved = models.BooleanField(default=False)
     is_resolved_by_next_release = models.BooleanField(default=False)
 
-    fixed_at = models.TextField(blank=False, null=False, default='')  # line-separated list
-    events_at = models.TextField(blank=False, null=False, default='')  # line-separated list
+    fixed_at = models.TextField(blank=True, null=False, default='')  # line-separated list
+    events_at = models.TextField(blank=True, null=False, default='')  # line-separated list
 
     # fields related to muting:
     is_muted = models.BooleanField(default=False)
