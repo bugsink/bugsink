@@ -17,9 +17,10 @@
         {% if forloop.counter0 == 0 %}
         <div class="ml-auto flex-none">
             <div class="flex place-content-end">
-                <button class="font-bold text-slate-500 border-slate-300 pl-2 pr-2 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="showAllFrames()">Show all</button>
-                <button class="font-bold text-slate-500 border-slate-300 pl-2 pr-2 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="showInAppFrames()">Show in-app</button>
-                <button class="font-bold text-slate-500 border-slate-300 pl-2 pr-2 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="hideAllFrames()">Hide all</button>
+                <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="showAllFrames()">Show all</button>
+                <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="showInAppFrames()">Show in-app</button>
+                <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="showRaisingFrame()">Show raise</button>
+                <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="hideAllFrames()">Hide all</button>
             </div>
         </div>
         {% endif %}
@@ -47,7 +48,7 @@
                 </div>
             </div> {# per frame header div #}
 
-            <div class="js-frame-details {% if frame.in_app %}js-in-app{% endif %} border-slate-400 overflow-hidden transition-all" 
+            <div class="js-frame-details {% if frame.in_app %}js-in-app{% endif %} border-slate-400 overflow-hidden transition-all {% if forloop.parentloop.last and forloop.last %}js-raising-frame{% endif %}" 
                 {% if not forloop.parentloop.last or not forloop.last %}data-collapsed="true" style="height: 0px"{% endif %}> {# collapsable part #}
 
                 <div class="pl-6 pr-6 pt-8 {% if not forloop.last %}border-b-2 border-slate-400{% endif %}">{# convience div for padding & border; the border is basically the top-border of the next header #}

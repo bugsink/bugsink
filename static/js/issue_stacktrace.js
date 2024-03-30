@@ -119,6 +119,18 @@ function showInAppFrames() {
     });
 }
 
+function showRaisingFrame() {
+    document.querySelectorAll(".js-frame-details").forEach((frameDetails) => {
+        if (frameDetails.classList.contains("js-raising-frame")) {
+            expandSection(frameDetails);
+            frameDetails.parentNode.querySelector(".js-chevron").classList.add("rotate-180");
+        } else {
+            collapseSection(frameDetails);
+            frameDetails.parentNode.querySelector(".js-chevron").classList.remove("rotate-180");
+        }
+    });
+}
+
 function hideAllFrames() {
     document.querySelectorAll(".js-frame-details").forEach((frameDetails) => {
         collapseSection(frameDetails);
