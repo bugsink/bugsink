@@ -171,6 +171,7 @@ if SENTRY_DSN is not None:
         integrations=[DjangoIntegration()],
         auto_session_tracking=False,
         traces_sample_rate=0,
+        send_default_pii=True,
     )
 
 BASE_URL = "http://bugsink:9000"  # no trailing slash
