@@ -1,0 +1,6 @@
+{% autoescape off %}Traceback (most recent call last):{% for exception in exceptions %}{% for frame in exception.stacktrace.frames %}
+  File {{ frame.filename }}, line {{ frame.lineno }}{% if frame.function %}, in {{ frame.function }}{% endif %}
+    {{ frame.context_line.strip }}{% endfor %}{% if not forloop.last %}
+
+During handling of the above exception another exception occurred or was intentionally reraised:{% endif %}
+{% endfor %}{% endautoescape %}

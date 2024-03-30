@@ -29,3 +29,8 @@ class ViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/json')
         self.assertTrue("platform" in response.json())
+
+    def test_event_plaintext(self):
+        response = self.client.get(f"/events/event/{self.event.pk}/plain/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/plain')
