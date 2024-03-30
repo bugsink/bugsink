@@ -32,11 +32,37 @@ class EventAdmin(admin.ModelAdmin):
         'has_logentry',
     ]
 
-    exclude = ["data"]
+    fields = [
+        'id',
+        'event_id',
+        'ingested_event',
+        'server_side_timestamp',
+        'issue',
+        'project',
+        'timestamp',
+        'platform',
+        'level',
+        'logger',
+        'transaction',
+        'server_name',
+        'release',
+        'dist',
+        'environment',
+        'sdk_name',
+        'sdk_version',
+        'has_exception',
+        'has_logentry',
+        'debug_info',
+        'pretty_data',
+    ]
 
     readonly_fields = [
+        'id',
+        'event_id',
         'ingested_event',
+        'server_side_timestamp',
         'issue',
+        'timestamp',
         'project',
         'pretty_data',
     ]
