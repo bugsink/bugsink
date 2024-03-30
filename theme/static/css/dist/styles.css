@@ -1114,6 +1114,10 @@ select {
   border-top-width: 2px;
 }
 
+.border-dashed {
+  border-style: dashed;
+}
+
 .border-dotted {
   border-style: dotted;
 }
@@ -1200,6 +1204,11 @@ select {
 .bg-white {
   --tw-bg-opacity: 1;
   background-color: rgb(255 255 255 / var(--tw-bg-opacity));
+}
+
+.bg-slate-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(241 245 249 / var(--tw-bg-opacity));
 }
 
 .bg-gradient-to-r {
