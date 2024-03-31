@@ -1,0 +1,39 @@
+{% extends "issues/base.html" %}
+{% load static %}
+{% load stricter_templates %}
+{% load issues %}
+
+{% block tab_content %}
+
+<table class="w-full">
+{# <thead> </thead> #}
+<tbody>
+{% for breadcrumb in parsed_data.breadcrumbs.values %}
+    <tr class="border-slate-200 border-2 ">
+
+    <td class="p-4 font-bold text-slate-500 align-top">
+        {{ breadcrumb.category }}
+    </td>
+
+    {% comment %}
+    {# not _that_ useful 
+    <td class="ml-0 pb-4 pt-4 pr-4">
+        {{ breadcrumb.type }}
+    </td>
+    {% endcomment %}
+
+    <td class="w-full p-4 font-mono">
+        {{ breadcrumb.message }}
+    </td>
+    <td class="p-4 font-bold text-slate-500 align-top">
+        {{ breadcrumb.timestamp }}
+        {# {{ breadcrumb.timestamp|date:"G:i" and milis  }} #}
+    </td>
+
+    </tr>
+    {% endfor %}
+</tbody>
+</table>
+
+
+{% endblock %}

@@ -201,6 +201,26 @@ def issue_event_stacktrace(request, issue, event_pk):
 
 
 @issue_membership_required
+def issue_event_breadcrumbs(request, issue, event_pk):
+    if request.method == "POST":
+        return _handle_post(request, issue)
+
+    event = get_object_or_404(Event, pk=event_pk)
+
+    parsed_data = json.loads(event.data)
+
+    return render(request, "issues/issue_breadcrumbs.html", {
+        "tab": "breadcrumbs",
+        "project": issue.project,
+        "issue": issue,
+        "event": event,
+        "is_event_page": True,
+        "parsed_data": parsed_data,
+        "mute_options": GLOBAL_MUTE_OPTIONS,
+    })
+
+
+@issue_membership_required
 def issue_event_details(request, issue, event_pk):
     if request.method == "POST":
         return _handle_post(request, issue)
