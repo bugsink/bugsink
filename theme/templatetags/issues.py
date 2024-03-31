@@ -62,7 +62,7 @@ def pygmentize(value):
     pre_context, context_lines, post_context = _split(lines, lengths)
 
     value['pre_context'] = [mark_safe(s) for s in pre_context]
-    value['context_line'] = mark_safe(context_lines[0])
+    value['context_line'] = mark_safe(context_lines[0] if len(context_lines) > 0 else None)
     value['post_context'] = [mark_safe(s) for s in post_context]
 
     return value
