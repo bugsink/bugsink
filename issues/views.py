@@ -226,6 +226,7 @@ def issue_event_details(request, issue, event_pk):
         return _handle_post(request, issue)
 
     event = get_object_or_404(Event, pk=event_pk)
+    parsed_data = json.loads(event.data)
 
     return render(request, "issues/issue_event_details.html", {
         "tab": "event-details",
@@ -233,6 +234,7 @@ def issue_event_details(request, issue, event_pk):
         "issue": issue,
         "event": event,
         "is_event_page": True,
+        "parsed_data": parsed_data,
     })
 
 
