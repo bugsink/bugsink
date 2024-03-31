@@ -52,9 +52,10 @@ def _pygmentize_lines(lines):
 
 @register.filter
 def pygmentize(value):
-    lengths = [len(value['pre_context']), 1, len(value['post_context'])]
+    context_lines = [value['context_line']] if value['context_line'] is not None else []
 
-    code_as_list = value['pre_context'] + [value['context_line']] + value['post_context']
+    code_as_list = value['pre_context'] + context_lines + value['post_context']
+    lengths = [len(value['pre_context']), len(context_lines), len(value['post_context'])]
 
     lines = _pygmentize_lines(code_as_list)
 
