@@ -117,7 +117,7 @@
         </div>
 
         <div class="flex p-4 bg-slate-200 border-b-2"><!-- bottom nav bar -->
-            {% if is_event_page %}<div>Event ... {# TODO #} out of {{ issue.event_set.count }}{# TODO denormalize #} which occured at <span class="font-bold">{{ event.timestamp }}</span></div>{% endif %}
+            {% if is_event_page %}<div>Event ... {# TODO #} out of {{ issue.event_set.count }}{# TODO denormalize #} which occured at <span class="font-bold">{{ event.timestamp|date:"d M G:i" }}</span></div>{% endif %}
             <div class="ml-auto pr-4 font-bold text-slate-500">
                 <a href="/admin/issues/issue/{{ issue.id }}/change/">Issue Admin</a>
                 {% if is_event_page %}
@@ -141,18 +141,25 @@
 
                 <div class="mb-4">
                     <div class="text-sm font-bold text-slate-500">Nr. of events</div>
-                    <div>1</div> {# TODO #}
+                    <div>{{ issue.event_count }}</div>
                 </div>
 
+                {% if issue.event_count > 1 %}
                 <div class="mb-4">
                     <div class="text-sm font-bold text-slate-500">First seen</div>
-                    <div>March 24, 2024, 7:19 a.m.</div> {# TODO #}
+                    <div>{{ issue.first_seen|date:"d M G:i" }}</div>
                 </div>
 
                 <div>
                     <div class="text-sm font-bold text-slate-500">Last seen</div>
-                    <div>March 24, 2024, 7:19 a.m.</div> {# TODO #}
+                    <div>{{ issue.last_seen|date:"d M G:i" }}</div>
                 </div>
+                {% else %}
+                <div>
+                    <div class="text-sm font-bold text-slate-500">Seen at</div>
+                    <div>{{ issue.first_seen|date:"d M G:i" }}</div>
+                </div>
+                {% endif %}
 
             </div>
         </div>
