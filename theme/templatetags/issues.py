@@ -43,7 +43,7 @@ def _pygmentize_lines(lines):
     # lines. However, we have seen cases where newlines are present in the code, e.g. in the case of the sentry_sdk's
     # integration w/ Django giving a TemplateSyntaxError (see assets/sentry-sdk-issues/django-templates.md).
     # we also add a space to the empty lines to make sure that they are not removed by the pygments formatter
-    lines = [" " if line == "" else line.replace("\n", "") for line in lines]
+    lines = [" " if line == "" else line for line in [l.replace("\n", "") for l in lines]]
     code = "\n".join(lines)
     result = _core_pygments(code).split('\n')[:-1]  # remove the last empty line, which is a result of split()
     assert len(lines) == len(result), "%s != %s" % (len(lines), len(result))

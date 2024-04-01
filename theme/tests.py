@@ -49,3 +49,6 @@ class TestIssuesTemplateTags(TestCase):
 
     def test_pygmentize_lines_newline_in_code(self):
         _pygmentize_lines(["print('hello world')\n"])
+
+    def test_pygmentize_lines_newline_on_otherwise_empty_line(self):
+        _pygmentize_lines(["\n", "\n", "\n"])
