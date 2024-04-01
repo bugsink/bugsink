@@ -5,6 +5,7 @@
 {% block tab_content %}
 
 <div>User: {{ parsed_data.user }}</div>
+<div>Runtime: {{ parsed_data.contexts.runtime.name}}</div> {# sentry gives this prime location (even a picture)... but why... it's kinda obvious what you're working in right? Maybe I could put it at the top of the modules list instead. And check if there's any other relevant info in that runtime context (RTFM) #}
 
 {% if parsed_data.logentry %}
 
@@ -33,6 +34,7 @@
             {% endfor %}
 
             <h3 class="text-2xl mt-4">Request headers</h1>
+            {# TODO the user's browser and OS can be deduced from the request headers. Perhaps that info should go near the headers #}
 
             {% for header_key, header_value in parsed_data.request.headers.items %}
             <div class="flex">
