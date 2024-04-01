@@ -24,8 +24,8 @@ class Issue(models.Model):
     hash = models.CharField(max_length=32, blank=False, null=False)
 
     # denormalized fields:
-    last_seen = models.DateTimeField(blank=False, null=False)
-    first_seen = models.DateTimeField(blank=False, null=False)
+    last_seen = models.DateTimeField(blank=False, null=False)  # based on event.server_side_timestamp
+    first_seen = models.DateTimeField(blank=False, null=False)  # based on event.server_side_timestamp
     event_count = models.IntegerField(blank=False, null=False)
 
     # fields related to resolution:
