@@ -243,12 +243,14 @@ def issue_history(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
+    last_event = issue.event_set.order_by("timestamp").last()  # the template needs this for the tabs, we pick the last
     return render(request, "issues/issue_history.html", {
         "tab": "history",
         "project": issue.project,
         "issue": issue,
-        "event": issue.event_set.order_by("timestamp").last(),  # the template needs this for the tabs, we pick the last
+        "event": last_event,
         "is_event_page": False,
+        "parsed_data": json.loads(last_event.data),
     })
 
 
@@ -257,12 +259,14 @@ def issue_grouping(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
+    last_event = issue.event_set.order_by("timestamp").last()  # the template needs this for the tabs, we pick the last
     return render(request, "issues/issue_grouping.html", {
         "tab": "grouping",
         "project": issue.project,
         "issue": issue,
-        "event": issue.event_set.order_by("timestamp").last(),  # the template needs this for the tabs, we pick the last
+        "event": last_event,
         "is_event_page": False,
+        "parsed_data": json.loads(last_event.data),
     })
 
 
@@ -273,11 +277,13 @@ def issue_event_list(request, issue):
 
     event_list = issue.event_set.all()
 
+    last_event = issue.event_set.order_by("timestamp").last()  # the template needs this for the tabs, we pick the last
     return render(request, "issues/issue_event_list.html", {
         "tab": "event-list",
         "project": issue.project,
         "issue": issue,
-        "event": issue.event_set.order_by("timestamp").last(),  # the template needs this for the tabs, we pick the last
+        "event": last_event,
         "event_list": event_list,
         "is_event_page": False,
+        "parsed_data": json.loads(last_event.data),
     })
