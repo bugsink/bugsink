@@ -96,55 +96,6 @@
 {% endfor %}
 
 
-{% if parsed_data.logentry %}
-
-    <h1 class="text-3xl mt-4">{{ parsed_data.logentry.formatted }}</h1>
-    <div>this is a log entry (I intend to make this clear in some other way)</div>
-
-    {% if parsed_data.logger %}
-    Emitted by {{ parsed_data.logger }}
-    {% endif %}
-
-{% endif %}
-
-{% if parsed_data.request %}
-
-    <h1 class="text-3xl mt-4">Request</h1>
-
-        <div class="mt-4 mb-12 p-4 bg-white">
-            
-            {% for request_key, request_value in parsed_data.request|items %}
-            {% if request_key != "headers" and request_key != "env" %}{# we deal with these below #}
-            <div class="flex">
-                <div class="w-1/4 pl-2 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ request_key }}</div>
-                <div class="w-3/4 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ request_value }}</div>
-            </div>
-            {% endif %}
-            {% endfor %}
-
-            <h3 class="text-2xl mt-4">Request headers</h1>
-
-            {% for header_key, header_value in parsed_data.request.headers.items %}
-            <div class="flex">
-                <div class="w-1/4 pl-2 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ header_key }}</div>
-                <div class="w-3/4 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ header_value }}</div>
-            </div>
-            {% endfor %}
-
-            <h3 class="text-2xl mt-4">Request env</h1>
-
-            {% for env_key, env_value in parsed_data.request.env.items %}
-            <div class="flex">
-                <div class="w-1/4 pl-2 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ env_key }}</div>
-                <div class="w-3/4 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ env_value }}</div>
-            </div>
-            {% endfor %} 
-
-        </div>
-
-
-{% endif %}
-
 {% endblock %}
 
 {% block extra_js %}
