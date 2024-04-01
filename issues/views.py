@@ -235,6 +235,7 @@ def issue_event_details(request, issue, event_pk):
         "event": event,
         "is_event_page": True,
         "parsed_data": parsed_data,
+        "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
 
@@ -251,6 +252,7 @@ def issue_history(request, issue):
         "event": last_event,
         "is_event_page": False,
         "parsed_data": json.loads(last_event.data),
+        "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
 
@@ -267,6 +269,7 @@ def issue_grouping(request, issue):
         "event": last_event,
         "is_event_page": False,
         "parsed_data": json.loads(last_event.data),
+        "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
 
@@ -286,4 +289,5 @@ def issue_event_list(request, issue):
         "event_list": event_list,
         "is_event_page": False,
         "parsed_data": json.loads(last_event.data),
+        "mute_options": GLOBAL_MUTE_OPTIONS,
     })
