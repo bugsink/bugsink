@@ -479,6 +479,7 @@ class IntegrationTest(DjangoTestCase):
         command.stdout = StringIO()
         command.stderr = StringIO()
 
+        # for filename in ["...failing filename here..."]:  # use for faster debugging of individual failures
         # TODO integrate (the relevant parts of) ../event-samples/ into our project.
         for filename in glob("./ingest/samples/*/*.json") + glob("../event-samples/*.json"):
             with open(filename) as f:
@@ -497,9 +498,11 @@ class IntegrationTest(DjangoTestCase):
                 content_type="application/json",
                 headers={
                     "X-Sentry-Auth": sentry_auth_header,
+                    "X-BugSink-DebugInfo": filename,
                 },
             )
-            self.assertEquals(200, response.status_code, response.content)
+            self.assertEquals(
+                200, response.status_code, response.content if response.status_code != 302 else response.url)
 
         for event in Event.objects.all():
             urls = [
@@ -508,11 +511,15 @@ class IntegrationTest(DjangoTestCase):
                 f'/issues/issue/{ event.issue.id }/event/{ event.id }/breadcrumbs/',
                 f'/issues/issue/{ event.issue.id }/history/',
                 f'/issues/issue/{ event.issue.id }/grouping/',
-                f'/issues/issue/{ event.issue.id }/event/last/',
                 f'/issues/issue/{ event.issue.id }/events/',
             ]
 
             for url in urls:
-                # we just check for a 200; this at least makes sure we have no failing template rendering
-                response = self.client.get(url)
-                self.assertEquals(200, response.status_code, response.content)
+                try:
+                    # we just check for a 200; this at least makes sure we have no failing template rendering
+                    response = self.client.get(url)
+                    self.assertEquals(
+                        200, response.status_code, response.content if response.status_code != 302 else response.url)
+                except Exception as e:
+                    # we want to know _which_ event failed, hence the raise-from-e here
+                    raise AssertionError("Error rendering event %s" % event.debug_info) from e

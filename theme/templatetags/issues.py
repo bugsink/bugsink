@@ -52,10 +52,10 @@ def _pygmentize_lines(lines):
 
 @register.filter
 def pygmentize(value):
-    context_lines = [value['context_line']] if value['context_line'] is not None else []
+    context_lines = [value.get('context_line')] if value.get('context_line') is not None else []
 
-    code_as_list = value['pre_context'] + context_lines + value['post_context']
-    lengths = [len(value['pre_context']), len(context_lines), len(value['post_context'])]
+    code_as_list = value.get('pre_context', []) + context_lines + value.get('post_context', [])
+    lengths = [len(value.get('pre_context', [])), len(context_lines), len(value.get('post_context', []))]
 
     lines = _pygmentize_lines(code_as_list)
 
@@ -70,4 +70,6 @@ def pygmentize(value):
 
 @register.filter(name='firstlineno')
 def firstlineno(value):
-    return value['lineno'] - len(value['pre_context'])
+    if value.get("lineno") is None:
+        return None
+    return value['lineno'] - len(value.get('pre_context', []))
