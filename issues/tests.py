@@ -1,14 +1,23 @@
+import json
+import time
+from io import StringIO
+from glob import glob
 from unittest import TestCase
 from unittest.mock import patch
+from datetime import datetime, timezone
+
 from django.test import TestCase as DjangoTestCase
 from django.contrib.auth.models import User
-from datetime import datetime, timezone
+from django.test import tag
 
 from projects.models import Project, ProjectMembership
 from releases.models import create_release_if_needed
 from bugsink.registry import reset_pc_registry, get_pc_registry
 from bugsink.period_counter import PeriodCounter, TL_DAY
 from events.factories import create_event
+from ingest.management.commands.send_json import Command as SendJsonCommand
+from compat.dsn import get_header_value
+from events.models import Event
 
 from .models import Issue, IssueStateManager
 from .regressions import is_regression, is_regression_2, issue_is_regression
@@ -453,3 +462,57 @@ class ViewTests(DjangoTestCase):
     def test_issue_event_list(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/events/")
         self.assertContains(response, self.issue.title())
+
+
+@tag("integration")
+class IntegrationTest(DjangoTestCase):
+    def test_many_issues_ingest_and_show(self):
+        user = User.objects.create_user(username='test', password='test')
+        project = Project.objects.create(name="test")
+        ProjectMembership.objects.create(project=project, user=user)
+        self.client.force_login(user)
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        # first, we ingest many issues
+        command = SendJsonCommand()
+        command.stdout = StringIO()
+        command.stderr = StringIO()
+
+        # TODO integrate (the relevant parts of) ../event-samples/ into our project.
+        for filename in glob("./ingest/samples/*/*.json") + glob("../event-samples/*.json"):
+            with open(filename) as f:
+                data = json.loads(f.read())
+
+            if "timestamp" not in data:
+                # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
+                data["timestamp"] = time.time()
+
+            if not command.is_valid(data, filename):
+                continue
+
+            response = self.client.post(
+                f"/api/{ project.id }/store/",
+                json.dumps(data),
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                },
+            )
+            self.assertEquals(200, response.status_code, response.content)
+
+        for event in Event.objects.all():
+            urls = [
+                f'/issues/issue/{ event.issue.id }/event/{ event.id }/',
+                f'/issues/issue/{ event.issue.id }/event/{ event.id }/details/',
+                f'/issues/issue/{ event.issue.id }/event/{ event.id }/breadcrumbs/',
+                f'/issues/issue/{ event.issue.id }/history/',
+                f'/issues/issue/{ event.issue.id }/grouping/',
+                f'/issues/issue/{ event.issue.id }/event/last/',
+                f'/issues/issue/{ event.issue.id }/events/',
+            ]
+
+            for url in urls:
+                # we just check for a 200; this at least makes sure we have no failing template rendering
+                response = self.client.get(url)
+                self.assertEquals(200, response.status_code, response.content)
