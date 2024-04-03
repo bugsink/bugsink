@@ -52,7 +52,7 @@
                 {% if not forloop.parentloop.last or not forloop.last %}data-collapsed="true" style="height: 0px"{% endif %}> {# collapsable part #}
 
                 <div class="pl-6 pr-6 pt-8 {% if not forloop.last %}border-b-2 border-slate-400{% endif %}">{# convience div for padding & border; the border is basically the top-border of the next header #}
-                    {% if context_line in frame %}
+                    {% if "context_line" in frame and frame.context_line is not None %}
                     <div class="bg-slate-50 syntax-coloring">{# code listing #}
                         {# the spread-out pX-6 in this code is intentional to ensure the padding is visible when scrolling to the right, and not visible when scrolling is possible (i.e. the text is cut-off awkwardly to hint at scrolling #}
                         <ol class="list-decimal overflow-x-auto list-inside pt-6 pb-6 {% if frame|firstlineno is None %}list-none{% endif %}" start="{{ frame|firstlineno }}">

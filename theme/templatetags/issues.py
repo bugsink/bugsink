@@ -52,17 +52,19 @@ def _pygmentize_lines(lines):
 
 @register.filter
 def pygmentize(value):
-    context_lines = [value.get('context_line')] if value.get('context_line') is not None else []
+    if value.get('context_line') is None:
+        # when there is no code to pygmentize we just return as-is
+        return value
 
-    code_as_list = value.get('pre_context', []) + context_lines + value.get('post_context', [])
-    lengths = [len(value.get('pre_context', [])), len(context_lines), len(value.get('post_context', []))]
+    code_as_list = value.get('pre_context', []) + [value['context_line']] + value.get('post_context', [])
+    lengths = [len(value.get('pre_context', [])), 1, len(value.get('post_context', []))]
 
     lines = _pygmentize_lines(code_as_list)
 
     pre_context, context_lines, post_context = _split(lines, lengths)
 
     value['pre_context'] = [mark_safe(s) for s in pre_context]
-    value['context_line'] = mark_safe(context_lines[0] if len(context_lines) > 0 else None)
+    value['context_line'] = mark_safe(context_lines[0])
     value['post_context'] = [mark_safe(s) for s in post_context]
 
     return value
