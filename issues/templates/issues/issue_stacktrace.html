@@ -54,7 +54,7 @@
                 <div class="pl-6 pr-6 pt-8 {% if not forloop.last %}border-b-2 border-slate-400{% endif %}">{# convience div for padding & border; the border is basically the top-border of the next header #}
                     <div class="bg-slate-50 syntax-coloring">{# code listing #}
                         {# the spread-out pX-6 in this code is intentional to ensure the padding is visible when scrolling to the right, and not visible when scrolling is possible (i.e. the text is cut-off awkwardly to hint at scrolling #}
-                        <ol class="list-decimal overflow-x-auto list-inside pt-6 pb-6" start="{{ frame|firstlineno }}">
+                        <ol class="list-decimal overflow-x-auto list-inside pt-6 pb-6 {% if frame|firstlineno is None %}list-none{% endif %}" start="{{ frame|firstlineno }}">
                         {% for line in frame.pre_context %}<li class="pl-6"><div class="whitespace-pre w-full inline pr-6">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
                         {# the gradient is a workaround, because I can't get a full-width elem going here inside the overflow #}
                         {# when some other line is overflowing. Using the gradient hides this fact (it happens to also look good) #}
