@@ -51,9 +51,9 @@
             <div class="js-frame-details {% if frame.in_app %}js-in-app{% endif %} border-slate-400 overflow-hidden transition-all {% if forloop.parentloop.last and forloop.last %}js-raising-frame{% endif %}" 
                 {% if not forloop.parentloop.last or not forloop.last %}data-collapsed="true" style="height: 0px"{% endif %}> {# collapsable part #}
 
-                <div class="pl-6 pr-6 pt-8 {% if not forloop.last %}border-b-2 border-slate-400{% endif %}">{# convience div for padding & border; the border is basically the top-border of the next header #}
+                <div class="pl-6 pr-6 {% if not forloop.last %}border-b-2 border-slate-400{% endif %}">{# convience div for padding & border; the border is basically the top-border of the next header #}
                     {% if "context_line" in frame and frame.context_line is not None %}
-                    <div class="bg-slate-50 syntax-coloring">{# code listing #}
+                    <div class="bg-slate-50 syntax-coloring mt-6 mb-6">{# code listing #}
                         {# the spread-out pX-6 in this code is intentional to ensure the padding is visible when scrolling to the right, and not visible when scrolling is possible (i.e. the text is cut-off awkwardly to hint at scrolling #}
                         <ol class="list-decimal overflow-x-auto list-inside pt-6 pb-6 {% if frame|firstlineno is None %}list-none{% endif %}" start="{{ frame|firstlineno }}">
                         {% for line in frame.pre_context %}<li class="pl-6"><div class="whitespace-pre w-full inline pr-6">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
@@ -66,7 +66,7 @@
                     {% endif %}
 
                     {% if frame.vars %}
-                    <div class="pt-4 pb-6">{# variables #}
+                    <div class="mt-4 mb-4">{# variables #}
                         <div class="flex">
                             <div class="w-1/4 pt-2 font-bold border-b-2 border-slate-500 pl-4">Variable</div>
                             <div class="w-3/4 pt-2 font-bold border-b-2 border-slate-500 pr-4">Value</div>
@@ -79,6 +79,13 @@
                         {% endfor %}
                     </div>
                     {% endif %}
+
+                    {% if "context_line" not in frame or frame.context_line is None %}{% if not frame.vars %}{# nested ifs as a subsitute for brackets-in-templates #}
+                    <div class="mt-6 mb-6 text-center italic">
+                        No code context or variables available.
+                    </div>
+                    {% endif %}{% endif %}
+
                 </div>
 
             </div> {# collapsable part #}
