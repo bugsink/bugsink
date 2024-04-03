@@ -23,7 +23,7 @@ from releases.models import create_release_if_needed
 from bugsink.registry import get_pc_registry
 from bugsink.period_counter import PeriodCounter
 from alerts.tasks import send_new_issue_alert, send_regression_alert
-
+from bugsink.exceptions import ViolatedExpectation
 
 from .negotiation import IgnoreClientContentNegotiation
 from .parsers import EnvelopeParser
@@ -119,6 +119,17 @@ class BaseIngestAPIView(APIView):
             # note: previously we created the event before the issue, which allowed for one less query. I don't see
             # straight away how we can reproduce that now that we create issue-before-event (since creating the issue
             # first is needed to be able to set the FK in one go)
+
+            if issue_created:
+                # this is a weird case that "should not happen" (but can happen in practice). Namely, when some client
+                # sends events with the same event_id (leading to no new event), but different-enough actual data that
+                # they lead to new issue-creation. I've already run into this while debugging (and this may in fact be
+                # the only realistic scenario): manually editing some sample event but not updating the event_id (nor
+                # running send_json with --fresh-id). We raise an exception after cleaning up, to at least avoid getting
+                # into an inconsistent state in the DB.
+                issue.delete()
+                raise ViolatedExpectation("no event created, but issue created")
+
             return
 
         create_release_if_needed(ingested_event.project, event.release)
