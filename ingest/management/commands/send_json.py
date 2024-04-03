@@ -111,7 +111,7 @@ class Command(BaseCommand):
             data["timestamp"] = time.time()
 
         if options["fresh_id"]:
-            data["id"] = uuid.uuid4().hex
+            data["event_id"] = uuid.uuid4().hex
 
         if options["valid_only"] and not self.is_valid(data, identifier):
             return False
