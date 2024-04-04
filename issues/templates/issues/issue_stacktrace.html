@@ -35,9 +35,9 @@
 
                 <div> {# filename, function, lineno #}
                     {% if frame.in_app %}
-                        <span class="font-bold">{{ frame.filename }}</span>{% if frame.function %} in <span class="font-bold">{{ frame.function }}</span>{% endif %} line <span class="font-bold">{{ frame.lineno }}</span>.
+                        <span class="font-bold">{{ frame.filename }}</span>{% if frame.function %} in <span class="font-bold">{{ frame.function }}</span>{% endif %}{% if frame.lineno %} line <span class="font-bold">{{ frame.lineno }}</span>{% endif %}.
                     {% else %}
-                        <span class="italic">{{ frame.filename }}{% if frame.function %} in {{ frame.function }}{% endif %} line {{ frame.lineno }}.</span>
+                        <span class="italic">{{ frame.filename }}{% if frame.function %} in {{ frame.function }}{% endif %}{% if frame.lineno%} line {{ frame.lineno }}{% endif %}.</span>
                     {% endif %}
                 </div>
 
