@@ -9,6 +9,8 @@ from .models import Event
 
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
+    ordering = ['-timestamp']
+
     list_display = [
         'timestamp',
         # 'project',

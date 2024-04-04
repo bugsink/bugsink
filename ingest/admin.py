@@ -9,6 +9,8 @@ from .models import DecompressedEvent
 
 @admin.register(DecompressedEvent)
 class DecompressedEventAdmin(admin.ModelAdmin):
+    ordering = ['-timestamp']
+
     list_filter = [
         ProjectFilter,
     ]
