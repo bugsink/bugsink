@@ -139,7 +139,7 @@
             {# note: the above is specific to Python. We cannot distinguish between Python's 2 types of chained exceptions because the info is not sent by the client #}
             {# we could try to infer this from the stacktrace, but parsing potentially arbitrarily formatted partial code is brittle #}
         {% else %}
-            <div class="italic pt-4">The above exception was caused by (occurred or was intentially reraised during the handling of) the following exception:</div>
+            <div class="italic pt-4">The above exception was caused by or intentially reraised during the handling of the following exception:</div>
         {% endif %}
     {% endif %}
 
