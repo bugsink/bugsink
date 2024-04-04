@@ -1,3 +1,4 @@
+import uuid
 import json
 import time
 from io import StringIO
@@ -484,6 +485,8 @@ class IntegrationTest(DjangoTestCase):
         for filename in glob("./ingest/samples/*/*.json") + glob("../event-samples/*.json"):
             with open(filename) as f:
                 data = json.loads(f.read())
+
+            data["event_id"] = uuid.uuid4().hex
 
             if "timestamp" not in data:
                 # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")

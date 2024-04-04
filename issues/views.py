@@ -177,6 +177,25 @@ def issue_event_stacktrace(request, issue, event_pk):
     # the list of exceptions, but we don't aim for endless backwards compat (yet) so we don't.
     exceptions = parsed_data["exception"]["values"] if "exception" in parsed_data else None
 
+    # NOTE: I considered making this a clickable button of some sort, but decided against it in the end. Getting the UI
+    # right is quite hard (https://ux.stackexchange.com/questions/1318) but more generally I would assume that having
+    # your whole screen turned upside down is not something you do willy-nilly. Better to just have good defaults and
+    # (possibly later) have this as something that is configurable at the user level.
+    stack_of_plates = event.platform != "python"  # Python is the only platform that has chronological stacktraces
+
+    if exceptions is not None and len(exceptions) > 0:
+        if exceptions[-1].get('stacktrace') and exceptions[-1]['stacktrace'].get('frames'):
+            exceptions[-1]['stacktrace']['frames'][-1]['raise_point'] = True
+
+        if stack_of_plates:
+            # NOTE manipulation of parsed_data going on here, this could be a trap if other parts depend on it
+            # (e.g. grouper)
+            exceptions = [e for e in reversed(exceptions)]
+            for exception in exceptions:
+                if not exception.get('stacktrace'):
+                    continue
+                exception['stacktrace']['frames'] = [f for f in reversed(exception['stacktrace']['frames'])]
+
     if "logentry" in parsed_data:
         logentry = parsed_data["logentry"]
         if "formatted" not in logentry:
@@ -195,7 +214,7 @@ def issue_event_stacktrace(request, issue, event_pk):
         "is_event_page": True,
         "parsed_data": parsed_data,
         "exceptions": exceptions,
-        "issue_grouper": get_issue_grouper_for_data(parsed_data),
+        "stack_of_plates": stack_of_plates,
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
@@ -262,6 +281,7 @@ def issue_grouping(request, issue):
         return _handle_post(request, issue)
 
     last_event = issue.event_set.order_by("timestamp").last()  # the template needs this for the tabs, we pick the last
+    parsed_data = json.loads(last_event.data)  # should this not just be saved on the Issue??
     return render(request, "issues/issue_grouping.html", {
         "tab": "grouping",
         "project": issue.project,
@@ -269,6 +289,7 @@ def issue_grouping(request, issue):
         "event": last_event,
         "is_event_page": False,
         "parsed_data": json.loads(last_event.data),
+        "issue_grouper": get_issue_grouper_for_data(parsed_data),
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 

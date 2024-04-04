@@ -42,31 +42,41 @@
                 </div>
 
                 <div class="ml-auto pr-4">{# indicator for frame's position in stacktrace #}
-                    {% if forloop.last %}
-                        {% if forloop.parentloop.last %}
+                    {% if stack_of_plates and forloop.first or not stack_of_plates and forloop.last %}
+                        {% if stack_of_plates and forloop.parentloop.first or not stack_of_plates and forloop.parentloop.last %}
                             <span class="bg-slate-200 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">raise {{ exception.type }}</span>
                         {% else %}
-                            <span class="bg-slate-200 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">raise (handled)</span>
+                            <span class="bg-slate-200 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">raise {{ exception.type }} (handled)</span>
                         {% endif %}
-                    {% elif forloop.first %} {# strictly speaking, not actually "else", but to avoid clutter we hide 'outermost' info when this is also the raise-point #}
-                        {% if forloop.parentloop.last %}
-                            <span class="bg-slate-200 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">→ outermost</span>
+                    {% elif stack_of_plates and forloop.last or not stack_of_plates and forloop.first %} {# strictly speaking, not actually "else", but to avoid clutter we hide 'outermost' info when this is also the raise-point #}
+                        {% if stack_of_plates and forloop.parentloop.first or not stack_of_plates and forloop.parentloop.last %}
+                            <span class="bg-slate-200 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">→ begin</span>
                         {% else %}
-                            <span class="bg-slate-200 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">outermost (handled)</span>
+                            {% comment %}I find it (quite too) hard to come up with a good name for this type of frame that is both short and clear. Thoughts so fare were:
+                            * try...
+                            * start try
+                            * start failing try (handled)
+                            * "begin handled" ()
+                            * "begin handled" {{ exception.type }}
+                            * "outermost handled"
+                            * "divergence w/ main exception"
+                            * first unique frame
+                            {% endcomment %}
+                            <span class="bg-slate-200 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">try…</span>
                         {% endif %}
 
                     {% endif %}
                 </div>
 
                 <div class="pr-4">{# chevron #}
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 js-chevron transition-all {% if forloop.parentloop.last and forloop.last %}rotate-180{% endif %}">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 js-chevron transition-all {% if frame.raise_point %}rotate-180{% endif %}">
                         <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
                     </svg>
                 </div>
             </div> {# per frame header div #}
 
-            <div class="js-frame-details {% if frame.in_app %}js-in-app{% endif %} border-slate-400 overflow-hidden transition-all {% if forloop.parentloop.last and forloop.last %}js-raising-frame{% endif %}" 
-                {% if not forloop.parentloop.last or not forloop.last %}data-collapsed="true" style="height: 0px"{% endif %}> {# collapsable part #}
+            <div class="js-frame-details {% if frame.in_app %}js-in-app{% endif %} border-slate-400 overflow-hidden transition-all {% if stack_of_plates and forloop.parentloop.first and forloop.first or not stack_of_plates and forloop.parentloop.last and forloop.last %}js-raising-frame{% endif %}" 
+                {% if not frame.raise_point %}data-collapsed="true" style="height: 0px"{% endif %}> {# collapsable part #}
 
                 <div class="pl-6 pr-6 {% if not forloop.last %}border-b-2 border-slate-400{% endif %}">{# convience div for padding & border; the border is basically the top-border of the next header #}
                     {% if "context_line" in frame and frame.context_line is not None %}
@@ -114,9 +124,13 @@
     {# </div> #} {# per-exception div in the multi-exception case #}
 
     {% if not forloop.last %}
-        <div class="italic pt-4">During handling of the above exception another exception occurred or was intentionally reraised:</div>
-        {# note: the above is specific to Python. We cannot distinguish between Python's 2 types of chained exceptions because the info is not sent by the client #}
-        {# we could try to infer this from the stacktrace, but parsing potentially arbitrarily formatted partial code is brittle #}
+        {% if not stack_of_plates %}
+            <div class="italic pt-4">During handling of the above exception another exception occurred or was intentionally reraised:</div>
+            {# note: the above is specific to Python. We cannot distinguish between Python's 2 types of chained exceptions because the info is not sent by the client #}
+            {# we could try to infer this from the stacktrace, but parsing potentially arbitrarily formatted partial code is brittle #}
+        {% else %}
+            <div class="italic pt-4">The above exception was caused by (occurred or was intentially reraised during the handling of) the following exception:</div>
+        {% endif %}
     {% endif %}
 
 {% endfor %}
