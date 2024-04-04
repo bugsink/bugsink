@@ -41,7 +41,24 @@
                     {% endif %}
                 </div>
 
-                <div class="ml-auto pr-4">{# chevron #}
+                <div class="ml-auto pr-4">{# indicator for frame's position in stacktrace #}
+                    {% if forloop.last %}
+                        {% if forloop.parentloop.last %}
+                            <span class="bg-slate-200 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">raise {{ exception.type }}</span>
+                        {% else %}
+                            <span class="bg-slate-200 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">raise (handled)</span>
+                        {% endif %}
+                    {% elif forloop.first %} {# strictly speaking, not actually "else", but to avoid clutter we hide 'outermost' info when this is also the raise-point #}
+                        {% if forloop.parentloop.last %}
+                            <span class="bg-slate-200 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">→ outermost</span>
+                        {% else %}
+                            <span class="bg-slate-200 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">outermost (handled)</span>
+                        {% endif %}
+
+                    {% endif %}
+                </div>
+
+                <div class="pr-4">{# chevron #}
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 js-chevron transition-all {% if forloop.parentloop.last and forloop.last %}rotate-180{% endif %}">
                         <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
                     </svg>
