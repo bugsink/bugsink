@@ -108,8 +108,8 @@
                     {% endif %}
 
                     {% if "context_line" not in frame or frame.context_line is None %}{% if not frame.vars %}{# nested ifs as a subsitute for brackets-in-templates #}
-                    <div class="mt-6 mb-6 text-center italic">
-                        No code context or variables available.
+                    <div class="mt-6 mb-6 italic">
+                        No code context or variables available for this frame.
                     </div>
                     {% endif %}{% endif %}
 
