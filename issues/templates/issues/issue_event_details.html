@@ -5,7 +5,7 @@
 {% block tab_content %}
 
 {# replace this {% if not foo %} #}
-{% if not parsed_data.top_levels and not parsed_data.user and not parsed_data.request  and not parsed_data.contexts.runtime and not parsed_data.contexts.trace and not parsed_data.modules and not parsed_data.sdk and not parsed_data.extra %}
+{% if not parsed_data.top_levels and not parsed_data.tags and not parsed_data.user and not parsed_data.request  and not parsed_data.contexts.runtime and not parsed_data.contexts.trace and not parsed_data.modules and not parsed_data.sdk and not parsed_data.extra %}
 
     <div class="mt-6 mb-6 italic">
         No detail information available for this event.
@@ -19,6 +19,19 @@
             
     <div class="mb-4">
         {% for key, value in parsed_data.top_levels %}
+            <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% if parsed_data.tags %}
+    <h1 class="text-2xl font-bold mt-4"><a name="tags">Tags</a></h1>
+            
+    <div class="mb-4">
+        {% for key, value in parsed_data.tags|items %}
             <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
                 <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
                 <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>

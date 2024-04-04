@@ -14,6 +14,10 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        from sentry_sdk import set_tag
+        set_tag("foo", "bar")
+        set_tag("baz", 1)
+
         if options["no_release"]:
             # The sentry client "tries hard" to get the release from the environment (including git); I have found the
             # following to be a workable way to set the release to None. (But I have checked that, in the absence of
