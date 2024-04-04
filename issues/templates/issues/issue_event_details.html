@@ -17,7 +17,7 @@
 {% if parsed_data.top_levels %}
     <h1 class="text-2xl font-bold mt-4"><a name="deployment">Deployment</a></h1>
             
-    <div class="mb-4">
+    <div class="mb-6">
         {% for key, value in parsed_data.top_levels %}
             <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
                 <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
@@ -30,7 +30,7 @@
 {% if parsed_data.tags %}
     <h1 class="text-2xl font-bold mt-4"><a name="tags">Tags</a></h1>
             
-    <div class="mb-4">
+    <div class="mb-6">
         {% for key, value in parsed_data.tags|items %}
             <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
                 <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
@@ -43,7 +43,7 @@
 {% if parsed_data.user %}
     <h1 class="text-2xl font-bold mt-4"><a name="user">User</a></h1>
             
-    <div class="mb-4">
+    <div class="mb-6">
         {% for key, value in parsed_data.user|items %}
             <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
                 <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
@@ -56,6 +56,7 @@
 {% if parsed_data.request %}
 
     <h1 class="text-2xl font-bold mt-4"><a name="request">Request</a></h1>
+    <div class="mb-6">
             
     <div>
         {% for key, value in parsed_data.request|items %}
@@ -96,6 +97,7 @@
 
     </div>
     {% endif %} {# end if parsed_data.request.env #}
+    </div>
 
 
 {% endif %}
@@ -105,7 +107,7 @@
     {# sentry gives this prime location (even a picture)... but why... it's kinda obvious what you're working in right? Maybe I could put it at the top of the modules list instead. And check if there's any other relevant info in that runtime context (RTFM) #}
     <h1 class="text-2xl font-bold mt-4"><a name="runtime">Runtime</a></h1>
             
-    <div class="mb-4">
+    <div class="mb-6">
         {% for key, value in parsed_data.contexts.runtime|items %}
             <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
                 <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
@@ -118,7 +120,7 @@
 {% if parsed_data.contexts.trace %}
     <h1 class="text-2xl font-bold mt-4"><a name="trace">Trace</a></h1>
             
-    <div class="mb-4">
+    <div class="mb-6">
         {% for key, value in parsed_data.contexts.trace|items %}
             <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
                 <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
@@ -132,7 +134,7 @@
 {% if parsed_data.modules %}
     <h1 class="text-2xl font-bold mt-4"><a name="modules">Modules</a></h1>
             
-    <div class="mb-4">
+    <div class="mb-6">
         {# we have observed that (emperically) the keys in most of the above are sorted in some kind of meaningful way from important to non-important #}
         {# however, for modules I'd rather just have an alphabetical list. #}
         {% for key, value in parsed_data.modules|sorted_items %}
@@ -147,7 +149,7 @@
 {% if parsed_data.sdk %}
     <h1 class="text-2xl font-bold mt-4"><a name="sdk">SDK</a></h1>
             
-    <div class="mb-4">
+    <div class="mb-6">
         {% for key, value in parsed_data.sdk|items %}
             <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
                 <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
@@ -160,7 +162,7 @@
 {% if parsed_data.extra %}
     <h1 class="text-2xl font-bold mt-4"><a name="extra">Extra</a></h1>
             
-    <div class="mb-4">
+    <div class="mb-6">
         {% for key, value in parsed_data.extra|items %}
             <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
                 <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
