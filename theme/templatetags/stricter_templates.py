@@ -14,6 +14,15 @@ def items(value):
         return None
 
 
+@register.filter(name='sorted_items')
+def sorted_items(value):
+    """As above, but return the items sorted by key."""
+    try:
+        return sorted(value.items())
+    except AttributeError:
+        return None
+
+
 # the general version below doesn't work, because we don't auto-append function-execution for callables and possibly a
 # whole bunch of other magic that Django does and we don't think about by default. I left it in as a starting point for
 # a possible future, but for now I'm going with the thing we actually need (above)

@@ -4,8 +4,31 @@
 
 {% block tab_content %}
 
-<div>User: {{ parsed_data.user }}</div>
-<div>Runtime: {{ parsed_data.contexts.runtime.name}}</div> {# sentry gives this prime location (even a picture)... but why... it's kinda obvious what you're working in right? Maybe I could put it at the top of the modules list instead. And check if there's any other relevant info in that runtime context (RTFM) #}
+{% if parsed_data.top_levels %}
+    <h1 class="text-2xl font-bold mt-4">Deployment</h1>
+            
+    <div class="mb-4">
+        {% for key, value in parsed_data.top_levels %}
+            <div class="flex {% if forloop.first %}border-slate-500 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% if parsed_data.user %}
+    <h1 class="text-2xl font-bold mt-4">User</h1>
+            
+    <div class="mb-4">
+        {% for key, value in parsed_data.user|items %}
+            <div class="flex {% if forloop.first %}border-slate-500 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
 
 {% if parsed_data.logentry %}
 
@@ -16,45 +39,123 @@
     Emitted by {{ parsed_data.logger }}
     {% endif %}
 
-{% endif %}
+{% endif %} {# parsed_data.logentry #}
 
 {% if parsed_data.request %}
 
-    <h1 class="text-3xl mt-4">Request</h1>
-
-        <div class="mt-4 mb-12 p-4 bg-white">
+    <h1 class="text-2xl font-bold mt-4">Request</h1>
             
-            {% for request_key, request_value in parsed_data.request|items %}
-            {% if request_key != "headers" and request_key != "env" %}{# we deal with these below #}
-            <div class="flex">
-                <div class="w-1/4 pl-2 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ request_key }}</div>
-                <div class="w-3/4 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ request_value }}</div>
-            </div>
+    <div>
+        {% for key, value in parsed_data.request|items %}
+            {% if key != "headers" and key != "env" %}{# we deal with these below #}
+                <div class="flex {% if forloop.first %}border-slate-500 border-t-2{% endif %}">
+                    <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+                    <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>{# forloop.last doesn't work given the if-statement; we can fix that by pre-processing in the view #}
+                </div>
             {% endif %}
-            {% endfor %}
+        {% endfor %}
+    </div>
 
-            <h3 class="text-2xl mt-4">Request headers</h1>
-            {# TODO the user's browser and OS can be deduced from the request headers. Perhaps that info should go near the headers #}
+    {% if parsed_data.request.headers %}
+    <h3 class="font-bold mt-2">REQUEST HEADERS</h3>
+    <div>
+    {# TODO the user's browser and OS can be deduced from the request headers. Perhaps that info should go near the headers #}
 
-            {% for header_key, header_value in parsed_data.request.headers.items %}
-            <div class="flex">
-                <div class="w-1/4 pl-2 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ header_key }}</div>
-                <div class="w-3/4 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ header_value }}</div>
+    {% for key, value in parsed_data.request.headers.items %}
+    <div class="flex {% if forloop.first %}border-slate-500 border-t-2{% endif %} border-dotted">
+        <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+        <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+    </div>
+    {% endfor %}
+
+    </div>
+    {% endif %} {# end if parsed_data.request.headers #}
+
+    {% if parsed_data.request.env %}
+    <h3 class="font-bold mt-2">REQUEST ENV</h3>
+    <div>
+
+    {% for key, value in parsed_data.request.env.items %}
+    <div class="flex {% if forloop.first %}border-slate-500 border-t-2{% endif %} border-dotted">
+        <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+        <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+    </div>
+    {% endfor %}
+
+    </div>
+    {% endif %} {# end if parsed_data.request.env #}
+
+
+{% endif %}
+
+
+{% if parsed_data.contexts.runtime %}
+    {# sentry gives this prime location (even a picture)... but why... it's kinda obvious what you're working in right? Maybe I could put it at the top of the modules list instead. And check if there's any other relevant info in that runtime context (RTFM) #}
+    <h1 class="text-2xl font-bold mt-4">Runtime</h1>
+            
+    <div class="mb-4">
+        {% for key, value in parsed_data.contexts.runtime|items %}
+            <div class="flex {% if forloop.first %}border-slate-500 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
             </div>
-            {% endfor %}
+        {% endfor %}
+    </div>
+{% endif %}
 
-            <h3 class="text-2xl mt-4">Request env</h1>
-
-            {% for env_key, env_value in parsed_data.request.env.items %}
-            <div class="flex">
-                <div class="w-1/4 pl-2 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ env_key }}</div>
-                <div class="w-3/4 {% if not forloop.counter|divisibleby:2 %}bg-slate-200{% endif %}">{{ env_value }}</div>
+{% if parsed_data.contexts.trace %}
+    <h1 class="text-2xl font-bold mt-4">Trace</h1>
+            
+    <div class="mb-4">
+        {% for key, value in parsed_data.contexts.trace|items %}
+            <div class="flex {% if forloop.first %}border-slate-500 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
             </div>
-            {% endfor %} 
+        {% endfor %}
+    </div>
+{% endif %}
 
-        </div>
 
+{% if parsed_data.modules %}
+    <h1 class="text-2xl font-bold mt-4">Modules</h1>
+            
+    <div class="mb-4">
+        {# we have observed that (emperically) the keys in most of the above are sorted in some kind of meaningful way from important to non-important #}
+        {# however, for modules I'd rather just have an alphabetical list. #}
+        {% for key, value in parsed_data.modules|sorted_items %}
+            <div class="flex {% if forloop.first %}border-slate-500 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
 
+{% if parsed_data.sdk %}
+    <h1 class="text-2xl font-bold mt-4">SDK</h1>
+            
+    <div class="mb-4">
+        {% for key, value in parsed_data.sdk|items %}
+            <div class="flex {% if forloop.first %}border-slate-500 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div> {# the actual value may be a dict/list, but we'll just print it as a string; this is plenty of space for something as (hopefully) irrelevant as the SDK #}
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% if parsed_data.extra %}
+    <h1 class="text-2xl font-bold mt-4">Extra</h1>
+            
+    <div class="mb-4">
+        {% for key, value in parsed_data.extra|items %}
+            <div class="flex {% if forloop.first %}border-slate-500 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div> {# the actual value may be a dict/list, but we'll just print it as a string; this is plenty of space for something as (hopefully) irrelevant #}
+            </div>
+        {% endfor %}
+    </div>
 {% endif %}
 
 

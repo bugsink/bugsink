@@ -247,6 +247,11 @@ def issue_event_details(request, issue, event_pk):
     event = get_object_or_404(Event, pk=event_pk)
     parsed_data = json.loads(event.data)
 
+    parsed_data["top_levels"] = \
+        ([("release", parsed_data["release"])] if "release" in parsed_data else []) + \
+        ([("environment", parsed_data["environment"])] if "environment" in parsed_data else []) + \
+        ([("server_name", parsed_data["server_name"])] if "server_name" in parsed_data else [])
+
     return render(request, "issues/issue_event_details.html", {
         "tab": "event-details",
         "project": issue.project,
