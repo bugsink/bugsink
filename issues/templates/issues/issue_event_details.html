@@ -4,6 +4,16 @@
 
 {% block tab_content %}
 
+{# replace this {% if not foo %} #}
+{% if not parsed_data.top_levels and not parsed_data.user and not parsed_data.request  and not parsed_data.contexts.runtime and not parsed_data.contexts.trace and not parsed_data.modules and not parsed_data.sdk and not parsed_data.extra %}
+
+    <div class="mt-6 mb-6 italic">
+        No detail information available for this event.
+    </div>
+
+{% endif %}
+
+
 {% if parsed_data.top_levels %}
     <h1 class="text-2xl font-bold mt-4"><a name="deployment">Deployment</a></h1>
             

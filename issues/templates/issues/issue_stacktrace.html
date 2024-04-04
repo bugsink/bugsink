@@ -4,7 +4,14 @@
 {% load issues %}
 
 {% block tab_content %}
-{# <div class="font-bold">Stacktrace:</div> I think this is obvious?#}
+
+{% if not exceptions %}
+    <div class="mt-6 mb-6 italic">
+        No stacktrace available for this event.
+    </div>
+{% endif %}
+
+
 {% for exception in exceptions %}
     {# option: make multi-exception stacktraces more clear <div class="border-l-4 border-cyan-500 pl-4"> }#}
 
@@ -136,8 +143,7 @@
         {% endif %}
     {% endif %}
 
-{% endfor %}
-
+{% endfor %} {# for exception in exceptions #}
 
 {% endblock %}
 
