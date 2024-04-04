@@ -11,6 +11,8 @@ from .models import Event
 class EventAdmin(admin.ModelAdmin):
     ordering = ['-timestamp']
 
+    search_fields = ['event_id', 'debug_info']
+
     list_display = [
         'timestamp',
         # 'project',
