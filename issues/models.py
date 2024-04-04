@@ -72,6 +72,18 @@ class Issue(models.Model):
 
     def title(self):
         # TODO: refactor to a (filled-on-create) field
+
+        first_event = self.event_set.first()
+        if first_event.has_logentry:
+            parsed_data = json.loads(first_event.data)
+            logentry = parsed_data.get("logentry", {})
+            formatted = logentry.get("formatted", logentry.get("message", ""))
+
+            result = "Log Message" + \
+                (" (" + parsed_data["level"].upper() + ")" if parsed_data.get("level") else "") + \
+                (": " + formatted if formatted else "")
+            return result
+
         main_exception = self.get_main_exception()
         return main_exception.get("type", "none") + ": " + main_exception.get("value", "none")
 

@@ -30,17 +30,6 @@
     </div>
 {% endif %}
 
-{% if parsed_data.logentry %}
-
-    <h1 class="text-3xl mt-4">{{ parsed_data.logentry.formatted }}</a></h1>
-    <div>this is a log entry (I intend to make this clear in some other way)</div>
-
-    {% if parsed_data.logger %}
-    Emitted by {{ parsed_data.logger }}
-    {% endif %}
-
-{% endif %} {# parsed_data.logentry #}
-
 {% if parsed_data.request %}
 
     <h1 class="text-2xl font-bold mt-4"><a name="request">Request</a></h1>

@@ -122,9 +122,6 @@ class Event(models.Model):
     # > A list of strings used to dictate the deduplication of this event.
     # fingerprint
 
-    # exception = models.ForeignKey(...)
-    # has_logentry =
-
     # > Information about the Sentry SDK that generated this event.
     # max_length: In current (late 2023) Sentry this is implemented as an Interface (data TextField) so no real max
     sdk_name = models.CharField(max_length=255, blank=True, null=False, default="")
