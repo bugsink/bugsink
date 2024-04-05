@@ -5,9 +5,18 @@
 
 {% block tab_content %}
 
+{% if not parsed_data.breadcrumbs or not parsed_data.breadcrumbs.values %}
+
+    <div class="mt-6 mb-6 italic">
+        No detail information available for this event.
+    </div>
+
+{% else %}
+
 <table class="w-full">
 {# <thead> </thead> #}
 <tbody>
+
 {% for breadcrumb in parsed_data.breadcrumbs.values %}
     <tr class="border-slate-200 border-2 ">
 
@@ -35,5 +44,6 @@
 </tbody>
 </table>
 
+{% endif %}
 
 {% endblock %}
