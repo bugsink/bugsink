@@ -1,0 +1,5 @@
+Thoughts on breadcrumbs
+
+I think it is only a moderately useful functionality; it seems like an idea they once had, but which was never _really_ followed through on. Perhaps you as a user can make it more useful by making more aggressive choices on the client side. But how to (e.g.) disable it in the Django Integration is not easy to find, and disabling useless things is always important if you really want to take something in hand.  What happens with the logging integration is something I still have to read up. i.e. do certain logs just always become breadcrumbs? and how does that relate to logs that are automatically translated into events? (also read what I wrote about this in sentry-stfu)
+
+ And all those types and categories are only half thought through and defined, at least as far as the documentation is concerned. If I want to show such images it is a bit of reverse engineering (in combination with RTFM). It could be that in the JavaScript world, and combined with transactions, there is something more useful. I should see that then. As with log messages: we need some support for it, because the clients support this.
