@@ -37,7 +37,6 @@ def get_issue_grouper_for_data(data):
 
 def get_hash_for_data(data):
     """Generate hash used for grouping issues (note: not a cryptographically secure hash)"""
-    # NOTE: issue_grouper should be renamed to what it _is_ (hash is accidental, 'grouper', or 'key' maybe?
     issue_grouper = get_issue_grouper_for_data(data)
     return hashlib.md5(issue_grouper.encode()).hexdigest()
 
