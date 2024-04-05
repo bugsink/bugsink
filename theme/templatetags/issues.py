@@ -2,6 +2,8 @@ from django import template
 from pygments import highlight
 from pygments.lexers import PythonLexer
 from pygments.formatters import HtmlFormatter
+from pygments.lexers import guess_lexer_for_filename
+
 from django.utils.safestring import mark_safe
 
 
@@ -19,10 +21,12 @@ def _split(joined, lengths):
     return result
 
 
-def _core_pygments(code):
+def _core_pygments(code, filename=None):
     # PythonLexer(stripnl=False) does not actually work; we work around it by inserting a space in the empty lines
     # before calling this function.
-    result = highlight(code, PythonLexer(), HtmlFormatter(nowrap=True))
+    lexer = guess_lexer_for_filename(filename, code) if filename else PythonLexer()
+
+    result = highlight(code, lexer, HtmlFormatter(nowrap=True))
 
     # I can't actually get the assertion below to work stably on the level of _core_pygments(code), so it is commented
     # out. This is because at the present level we have to deal with both pygments' funnyness, and the fact that "what
@@ -34,7 +38,7 @@ def _core_pygments(code):
     return result
 
 
-def _pygmentize_lines(lines):
+def _pygmentize_lines(lines, filename=None):
     if lines == []:
         # special case; sending the empty string to pygments will result in one newline too many
         return []
@@ -45,13 +49,15 @@ def _pygmentize_lines(lines):
     # we also add a space to the empty lines to make sure that they are not removed by the pygments formatter
     lines = [" " if line == "" else line for line in [l.replace("\n", "") for l in lines]]
     code = "\n".join(lines)
-    result = _core_pygments(code).split('\n')[:-1]  # remove the last empty line, which is a result of split()
+    result = _core_pygments(code, filename=filename).split('\n')[:-1]  # remove the last empty line, a result of split()
     assert len(lines) == len(result), "%s != %s" % (len(lines), len(result))
     return result
 
 
 @register.filter
 def pygmentize(value):
+    filename = value.get('filename')
+
     if value.get('context_line') is None:
         # when there is no code to pygmentize we just return as-is
         return value
@@ -59,7 +65,7 @@ def pygmentize(value):
     code_as_list = value.get('pre_context', []) + [value['context_line']] + value.get('post_context', [])
     lengths = [len(value.get('pre_context', [])), 1, len(value.get('post_context', []))]
 
-    lines = _pygmentize_lines(code_as_list)
+    lines = _pygmentize_lines(code_as_list, filename=filename)
 
     pre_context, context_lines, post_context = _split(lines, lengths)
 
