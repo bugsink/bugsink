@@ -5,21 +5,21 @@ from sentry.eventtypes.base import DefaultEvent
 from sentry.eventtypes.error import ErrorEvent
 
 
-def default_issue_grouper(title: str, culprit: str, type_) -> str:
-    return title + " ⋄ " + culprit + " ⋄ " + type_
+def default_issue_grouper(title: str, transaction: str, type_) -> str:
+    return title + " ⋄ " + transaction + " ⋄ " + type_
 
 
-def generate_issue_grouper(title: str, culprit: str, type_, extra: Optional[List[str]] = None) -> str:
+def generate_issue_grouper(title: str, transaction: str, type_, extra: Optional[List[str]] = None) -> str:
     if extra:
         return "".join(
             [
-                default_issue_grouper(title, culprit, type_)
+                default_issue_grouper(title, transaction, type_)
                 if part == "{{ default }}"
                 else part
                 for part in extra
             ]
         )
-    return default_issue_grouper(title, culprit, type_)
+    return default_issue_grouper(title, transaction, type_)
 
 
 def get_issue_grouper_for_data(data):
@@ -31,8 +31,8 @@ def get_issue_grouper_for_data(data):
     metadata = eventtype.get_metadata(data)
 
     title = eventtype.get_title(metadata)
-    culprit = eventtype.get_location(data)
-    return generate_issue_grouper(title, culprit, type(eventtype).__name__, data.get("fingerprint"))
+    transaction = eventtype.get_location(data)
+    return generate_issue_grouper(title, transaction, type(eventtype).__name__, data.get("fingerprint"))
 
 
 def get_hash_for_data(data):
