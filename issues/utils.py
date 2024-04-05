@@ -22,7 +22,7 @@ def get_issue_grouper_for_data(data):
     event_type_name = type(eventtype).__name__
 
     if fingerprint:
-        return "".join([
+        return " ⋄ ".join([
             default_issue_grouper(title, transaction, event_type_name) if part == "{{ default }}" else part
             for part in fingerprint
         ])

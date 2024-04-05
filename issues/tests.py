@@ -643,9 +643,9 @@ class GroupingUtilsTestCase(DjangoTestCase):
         }}))
 
     def test_simple_fingerprint(self):
-        self.assertEquals("fixed string", get_issue_grouper_for_data({"fingerprint": "fixed string"}))
+        self.assertEquals("fixed string", get_issue_grouper_for_data({"fingerprint": ["fixed string"]}))
 
     def test_fingerprint_with_default(self):
-        self.assertEquals("<unlabeled event> ⋄  ⋄ DefaultEventfixed string", get_issue_grouper_for_data({
+        self.assertEquals("<unlabeled event> ⋄  ⋄ DefaultEvent ⋄ fixed string", get_issue_grouper_for_data({
             "fingerprint": ["{{ default }}", "fixed string"],
         }))
