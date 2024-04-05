@@ -4,8 +4,6 @@ from sentry.stacktraces.functions import get_function_name_for_frame
 from sentry.stacktraces.processing import get_crash_frame_from_event_data
 from sentry.utils.safe import get_path, trim, truncatechars
 
-from .base import BaseEvent
-
 
 def get_crash_location(data):
     frame = get_crash_frame_from_event_data(
@@ -18,7 +16,7 @@ def get_crash_location(data):
         return frame.get("filename") or frame.get("abs_path"), func
 
 
-class ErrorEvent(BaseEvent):
+class ErrorEvent:
     key = "error"
 
     def get_metadata(self, data):

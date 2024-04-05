@@ -4,20 +4,7 @@ from sentry.utils.safe import get_path
 from sentry.utils.strings import strip, truncatechars
 
 
-class BaseEvent:
-    id = None
-
-    def get_metadata(self, data):
-        raise NotImplementedError
-
-    def get_title(self, metadata):
-        raise NotImplementedError
-
-    def get_location(self, data):
-        return None
-
-
-class DefaultEvent(BaseEvent):
+class DefaultEvent:
     key = "default"
 
     def get_metadata(self, data):
