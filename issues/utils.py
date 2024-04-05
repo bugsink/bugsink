@@ -1,25 +1,13 @@
 import hashlib
-from typing import List, Optional
 
 from sentry.eventtypes.base import DefaultEvent
 from sentry.eventtypes.error import ErrorEvent
 
-
-def default_issue_grouper(title: str, transaction: str, type_) -> str:
-    return title + " ⋄ " + transaction + " ⋄ " + type_
+from django.utils.encoding import force_str
 
 
-def generate_issue_grouper(title: str, transaction: str, type_, extra: Optional[List[str]] = None) -> str:
-    if extra:
-        return "".join(
-            [
-                default_issue_grouper(title, transaction, type_)
-                if part == "{{ default }}"
-                else part
-                for part in extra
-            ]
-        )
-    return default_issue_grouper(title, transaction, type_)
+def default_issue_grouper(title: str, transaction: str, event_type_name: str) -> str:
+    return title + " ⋄ " + transaction + " ⋄ " + event_type_name
 
 
 def get_issue_grouper_for_data(data):
@@ -28,11 +16,18 @@ def get_issue_grouper_for_data(data):
     else:
         eventtype = DefaultEvent()
 
-    metadata = eventtype.get_metadata(data)
+    title = eventtype.get_title(data)
+    transaction = force_str(data.get("transaction") or "")
+    fingerprint = data.get("fingerprint")
+    event_type_name = type(eventtype).__name__
 
-    title = eventtype.get_title(metadata)
-    transaction = eventtype.get_location(data)
-    return generate_issue_grouper(title, transaction, type(eventtype).__name__, data.get("fingerprint"))
+    if fingerprint:
+        return "".join([
+            default_issue_grouper(title, transaction, event_type_name) if part == "{{ default }}" else part
+            for part in fingerprint
+        ])
+
+    return default_issue_grouper(title, transaction, event_type_name)
 
 
 def get_hash_for_data(data):
