@@ -16,44 +16,33 @@ def get_crash_location(data):
 
 class ErrorEvent:
 
-    def _get_summary(self, data):
-        """Fetches some key info from the event data that is used as an input in title-generation and returns this as
-        a dict of possible keys: "type", "value", "function"."""
-
+    def get_title(self, data):
         if isinstance(data.get("exception"), list):
             if len(data["exception"]) == 0:
-                return {}
+                return "<unknown>"
 
         exception = get_path(data, "exception", "values", -1)
         if not exception:
-            return {}
+            return "<unknown>"
 
-        rv = {"value": trim(get_path(exception, "value", default=""), 1024)}
+        value = trim(get_path(exception, "value", default=""), 1024)
 
-        # If the exception mechanism indicates a synthetic exception we do not want to record the type and value into
-        # the summary.
-        if not get_path(exception, "mechanism", "synthetic"):
-            rv["type"] = trim(get_path(exception, "type", default="Error"), 128)
+        # From the sentry docs:
+        # > An optional flag indicating that this error is synthetic. Synthetic errors are errors that carry little
+        # > meaning by themselves.
+        # If this flag is set, we ignored the Exception's type and used the function name instead (if available).
+        if get_path(exception, "mechanism", "synthetic"):
+            _, function = get_crash_location(data)
+            if function:
+                return function
+            return "<unknown>"
 
-        # Attach crash location if available
-        _, function = get_crash_location(data)
-        if function:
-            rv["function"] = function
+        type_ = trim(get_path(exception, "type", default="Error"), 128)
 
-        return rv
-
-    def get_title(self, data):
-        summary = self._get_summary(data)
-
-        type_ = summary.get("type")
-
-        if type_ is None:
-            return summary.get("function") or "<unknown>"
-
-        if not summary.get("value"):
+        if not value:
             return type_
 
-        if not isinstance(summary["value"], str):
-            summary["value"] = str(summary["value"])
+        if not isinstance(value, str):
+            value = str(value)
 
-        return "{}: {}".format(type_, truncatechars(summary["value"].splitlines()[0]))
+        return "{}: {}".format(type_, truncatechars(value.splitlines()[0]))
