@@ -23,6 +23,7 @@ from events.models import Event
 from .models import Issue, IssueStateManager
 from .regressions import is_regression, is_regression_2, issue_is_regression
 from .factories import denormalized_issue_fields
+from .utils import get_issue_grouper_for_data
 
 
 def fresh(obj):
@@ -526,3 +527,125 @@ class IntegrationTest(DjangoTestCase):
                 except Exception as e:
                     # we want to know _which_ event failed, hence the raise-from-e here
                     raise AssertionError("Error rendering event %s" % event.debug_info) from e
+
+
+class GroupingUtilsTestCase(DjangoTestCase):
+
+    def test_empty_data(self):
+        self.assertEquals("<unlabeled event> ⋄  ⋄ DefaultEvent", get_issue_grouper_for_data({}))
+
+    def test_logentry_message_takes_precedence(self):
+        self.assertEquals("msg: ? ⋄  ⋄ DefaultEvent", get_issue_grouper_for_data({"logentry": {
+            "message": "msg: ?",
+            "formatted": "msg: foobar",
+        }}))
+
+    def test_logentry_with_formatted_only(self):
+        self.assertEquals("msg: foobar ⋄  ⋄ DefaultEvent", get_issue_grouper_for_data({"logentry": {
+            "formatted": "msg: foobar",
+        }}))
+
+    def test_logentry_with_transaction(self):
+        self.assertEquals("msg ⋄ transaction ⋄ DefaultEvent", get_issue_grouper_for_data({
+            "logentry": {
+                "message": "msg",
+            },
+            "transaction": "transaction",
+        }))
+
+    def test_exception_empty_trace(self):
+        self.assertEquals("<unknown> ⋄  ⋄ ErrorEvent", get_issue_grouper_for_data({"exception": {
+            "values": [],
+        }}))
+
+    def test_exception_trace_no_data(self):
+        self.assertEquals("<unknown> ⋄  ⋄ ErrorEvent", get_issue_grouper_for_data({"exception": {
+            "values": [{}],
+        }}))
+
+    def test_exception_value_only(self):
+        self.assertEquals("Error: exception message ⋄  ⋄ ErrorEvent", get_issue_grouper_for_data({"exception": {
+            "values": [{"value": "exception message"}],
+        }}))
+
+    def test_exception_type_only(self):
+        self.assertEquals("KeyError ⋄  ⋄ ErrorEvent", get_issue_grouper_for_data({"exception": {
+            "values": [{"type": "KeyError"}],
+        }}))
+
+    def test_exception_type_value(self):
+        self.assertEquals("KeyError: exception message ⋄  ⋄ ErrorEvent", get_issue_grouper_for_data({"exception": {
+            "values": [{"type": "KeyError", "value": "exception message"}],
+        }}))
+
+    def test_exception_multiple_frames(self):
+        self.assertEquals("KeyError: exception message ⋄  ⋄ ErrorEvent", get_issue_grouper_for_data({"exception": {
+            "values": [{}, {}, {}, {"type": "KeyError", "value": "exception message"}],
+        }}))
+
+    def test_exception_transaction(self):
+        self.assertEquals("KeyError ⋄ transaction ⋄ ErrorEvent", get_issue_grouper_for_data({
+            "transaction": "transaction",
+            "exception": {
+                "values": [{"type": "KeyError"}],
+            }
+        }))
+
+    def test_exception_function_is_ignored_unless_specifically_synthetic(self):
+        # I make no value-judgement here on whether this is something we want to replicate in the future; as it stands
+        # this test just documents the somewhat surprising behavior that we inherited from GlitchTip/Sentry.
+        self.assertEquals("Error ⋄  ⋄ ErrorEvent", get_issue_grouper_for_data({
+            "exception": {
+                "values": [{
+                    "stacktrace": {
+                        "frames": [{"function": "foo"}],
+                    },
+                }],
+            },
+        }))
+
+    def test_synthetic_exception_only(self):
+        self.assertEquals("<unknown> ⋄  ⋄ ErrorEvent", get_issue_grouper_for_data({
+            "exception": {
+                "values": [{
+                    "mechanism": {"synthetic": True},
+                }],
+            },
+        }))
+
+    def test_synthetic_exception_ignores_value(self):
+        self.assertEquals("<unknown> ⋄  ⋄ ErrorEvent", get_issue_grouper_for_data({
+            "exception": {
+                "values": [{
+                    "mechanism": {"synthetic": True},
+                    "value": "the ignored value",
+                }],
+            },
+        }))
+
+    def test_exception_uses_function_when_top_level_exception_is_synthetic(self):
+        self.assertEquals("foo ⋄  ⋄ ErrorEvent", get_issue_grouper_for_data({
+            "exception": {
+                "values": [{
+                    "mechanism": {"synthetic": True},
+                    "stacktrace": {
+                        "frames": [{"function": "foo"}],
+                    },
+                }],
+            },
+        }))
+
+    def test_exception_with_non_string_value(self):
+        # In the GlitchTip code there is a mention of value sometimes containing a non-string value. Whether this
+        # happens in practice is unknown to me, but let's build something that can handle it.
+        self.assertEquals("KeyError: 123 ⋄  ⋄ ErrorEvent", get_issue_grouper_for_data({"exception": {
+            "values": [{"type": "KeyError", "value": 123}],
+        }}))
+
+    def test_simple_fingerprint(self):
+        self.assertEquals("fixed string", get_issue_grouper_for_data({"fingerprint": "fixed string"}))
+
+    def test_fingerprint_with_default(self):
+        self.assertEquals("<unlabeled event> ⋄  ⋄ DefaultEventfixed string", get_issue_grouper_for_data({
+            "fingerprint": ["{{ default }}", "fixed string"],
+        }))
