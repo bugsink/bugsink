@@ -131,6 +131,8 @@ class BaseIngestAPIView(APIView):
             issue = grouping.issue
             issue_created = False
 
+        # NOTE: an event always has a single (automatically calculated) Grouping associated with it. Since we have that
+        # information available here, we could add it to the Event model.
         event, event_created = Event.from_ingested(ingested_event, issue, event_data, calculated_type, calculated_value)
         if not event_created:
             # note: previously we created the event before the issue, which allowed for one less query. I don't see

@@ -8,7 +8,6 @@ from django.http import HttpResponseRedirect
 from events.models import Event
 from bugsink.decorators import project_membership_required, issue_membership_required
 
-from .utils import get_issue_grouper_for_data
 from .models import Issue, IssueQuerysetStateManager, IssueStateManager
 
 
@@ -286,7 +285,6 @@ def issue_grouping(request, issue):
         return _handle_post(request, issue)
 
     last_event = issue.event_set.order_by("timestamp").last()  # the template needs this for the tabs, we pick the last
-    parsed_data = json.loads(last_event.data)  # should this not just be saved on the Issue??
     return render(request, "issues/issue_grouping.html", {
         "tab": "grouping",
         "project": issue.project,
@@ -294,7 +292,6 @@ def issue_grouping(request, issue):
         "event": last_event,
         "is_event_page": False,
         "parsed_data": json.loads(last_event.data),
-        "issue_grouper": get_issue_grouper_for_data(parsed_data),
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 

@@ -2,7 +2,12 @@
 {% load static %}
 
 {% block tab_content %}
-<h1 class="text-3xl mt-4">Grouper</h1>
+<h1 class="text-2xl font-bold {% if forloop.counter0 > 0 %}mt-4{% endif %} text-ellipsis whitespace-nowrap overflow-hidden">Issue Grouping:</h1>
 
-Issue grouper: <span class="font-mono whitespace-pre">"{{ issue_grouper }}"</span>
+<div>The following automatically determined groupers are part of this issue:{# I think a better text can be devised #}</div>
+<ol class="font-mono">
+{% for grouper in issue.grouping_set.all %}
+<li>{{ grouper.grouping_key }}</li>
+{% endfor %}
+</ol>
 {% endblock %}
