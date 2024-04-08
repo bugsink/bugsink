@@ -1,7 +1,66 @@
-from sentry.eventtypes.base import DefaultEvent
-from sentry.eventtypes.error import ErrorEvent
-
 from django.utils.encoding import force_str
+from django.template.defaultfilters import truncatechars
+
+from sentry.stacktraces.functions import get_function_name_for_frame
+from sentry.stacktraces.processing import get_crash_frame_from_event_data
+from sentry.utils.safe import get_path, trim
+
+from sentry.utils.strings import strip
+
+
+def get_type_and_value(data):
+    if "exception" in data and data["exception"]:
+        return get_exception_type_and_value_for_exception(data)
+    return get_exception_type_and_value_for_logmessage(data)
+
+
+def get_exception_type_and_value_for_logmessage(data):
+    message = strip(
+        get_path(data, "logentry", "message")
+        or get_path(data, "logentry", "formatted")
+    )
+
+    if message:
+        return "Log Message", truncatechars(message.splitlines()[0], 100)
+
+    return "Log Message", "<no log message>"
+
+
+def get_crash_location(data):
+    frame = get_crash_frame_from_event_data(
+        data,
+        frame_filter=lambda x: x.get("function") not in (None, "<redacted>", "<unknown>"),
+    )
+    if frame is not None:
+        func = get_function_name_for_frame(frame, data.get("platform"))
+        return frame.get("filename") or frame.get("abs_path"), func
+    return None, None
+
+
+def get_exception_type_and_value_for_exception(data):
+    if isinstance(data.get("exception"), list):
+        if len(data["exception"]) == 0:
+            return "<unknown>", ""
+
+    exception = get_path(data, "exception", "values", -1)
+    if not exception:
+        return "<unknown>", ""
+
+    value = trim(get_path(exception, "value", default=""), 1024)
+
+    # From the sentry docs:
+    # > An optional flag indicating that this error is synthetic. Synthetic errors are errors that carry little
+    # > meaning by themselves.
+    # If this flag is set, we ignored the Exception's type and used the function name instead (if available).
+    if get_path(exception, "mechanism", "synthetic"):
+        _, function = get_crash_location(data)
+        if function:
+            return function, ""
+        return "<unknown>", ""
+
+    type_ = trim(get_path(exception, "type", default="Error"), 128)
+
+    return type_, value
 
 
 def default_issue_grouper(title: str, transaction: str) -> str:
@@ -9,14 +68,9 @@ def default_issue_grouper(title: str, transaction: str) -> str:
 
 
 def get_issue_grouper_for_data(data):
-    if "exception" in data and data["exception"]:
-        eventtype = ErrorEvent()
-    else:
-        eventtype = DefaultEvent()
-
-    type_, value = eventtype.get_exception_type_and_value(data)
+    type_, value = get_type_and_value(data)
     title = get_title_for_exception_type_and_value(type_, value)
-    transaction = force_str(data.get("transaction") or "")
+    transaction = force_str(data.get("transaction") or "<no transaction>")
     fingerprint = data.get("fingerprint")
 
     if fingerprint:
