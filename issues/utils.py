@@ -4,8 +4,8 @@ from sentry.eventtypes.error import ErrorEvent
 from django.utils.encoding import force_str
 
 
-def default_issue_grouper(title: str, transaction: str, event_type_name: str) -> str:
-    return title + " ⋄ " + transaction + " ⋄ " + event_type_name
+def default_issue_grouper(title: str, transaction: str) -> str:
+    return title + " ⋄ " + transaction
 
 
 def get_issue_grouper_for_data(data):
@@ -18,15 +18,14 @@ def get_issue_grouper_for_data(data):
     title = get_title_for_exception_type_and_value(type_, value)
     transaction = force_str(data.get("transaction") or "")
     fingerprint = data.get("fingerprint")
-    event_type_name = type(eventtype).__name__
 
     if fingerprint:
         return " ⋄ ".join([
-            default_issue_grouper(title, transaction, event_type_name) if part == "{{ default }}" else part
+            default_issue_grouper(title, transaction) if part == "{{ default }}" else part
             for part in fingerprint
         ])
 
-    return default_issue_grouper(title, transaction, event_type_name)
+    return default_issue_grouper(title, transaction)
 
 
 def get_title_for_exception_type_and_value(type_, value):
