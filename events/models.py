@@ -134,6 +134,10 @@ class Event(models.Model):
     # this is a temporary(?), bugsink-specific value;
     debug_info = models.CharField(max_length=255, blank=True, null=False, default="")
 
+    # denormalized/cached fields:
+    calculated_type = models.CharField(max_length=255, blank=True, null=False, default="")
+    calculated_value = models.CharField(max_length=255, blank=True, null=False, default="")
+
     class Meta:
         unique_together = (("project", "event_id"),)
         # index_together = (("group_id", "datetime"),)  TODO seriously think about indexes
@@ -150,7 +154,7 @@ class Event(models.Model):
         return "/events/event/%s/download/" % self.id
 
     @classmethod
-    def from_ingested(cls, ingested_event, issue, parsed_data):
+    def from_ingested(cls, ingested_event, issue, parsed_data, calculated_type, calculated_value):
         # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
         # objects etc).
@@ -184,6 +188,9 @@ class Event(models.Model):
                 'has_logentry': "logentry" in parsed_data,
 
                 'debug_info': ingested_event.debug_info,
+
+                'calculated_type': calculated_type,
+                'calculated_value': calculated_value,
             }
         )
         return event, created

@@ -8,7 +8,7 @@ from sentry.utils.safe import get_path, trim
 from sentry.utils.strings import strip
 
 
-def get_type_and_value(data):
+def get_type_and_value_for_data(data):
     if "exception" in data and data["exception"]:
         return get_exception_type_and_value_for_exception(data)
     return get_exception_type_and_value_for_logmessage(data)
@@ -67,9 +67,12 @@ def default_issue_grouper(title: str, transaction: str) -> str:
     return title + " ⋄ " + transaction
 
 
-def get_issue_grouper_for_data(data):
-    type_, value = get_type_and_value(data)
-    title = get_title_for_exception_type_and_value(type_, value)
+def get_issue_grouper_for_data(data, calculated_type=None, calculated_value=None):
+    if calculated_type is None and calculated_value is None:
+        # convenience for calling code from tests, when digesting we don't do this because we already have this info
+        calculated_type, calculated_value = get_type_and_value_for_data(data)
+
+    title = get_title_for_exception_type_and_value(calculated_type, calculated_value)
     transaction = force_str(data.get("transaction") or "<no transaction>")
     fingerprint = data.get("fingerprint")
 

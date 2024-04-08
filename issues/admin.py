@@ -16,6 +16,8 @@ class GroupingInline(admin.TabularInline):
 class IssueAdmin(admin.ModelAdmin):
     fields = [
         'project',
+        'calculated_type',
+        'calculated_value',
         'last_seen',
         'first_seen',
         'is_resolved',
@@ -44,6 +46,8 @@ class IssueAdmin(admin.ModelAdmin):
 
     readonly_fields = [
         'project',
+        'calculated_type',
+        'calculated_value',
         'event_count',
     ]
 

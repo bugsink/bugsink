@@ -90,20 +90,10 @@
     </div> {# top, RHS (buttons) #}
 
     <div class="overflow-hidden"><!-- top, LHS (various texts) -->
-        {% if event.has_exception %}
-        <h1 class="text-4xl font-bold text-ellipsis whitespace-nowrap overflow-hidden pb-1 {# needed for descenders of 'g' #}">{{ issue.get_main_exception.type }}</h1>
-        <div class="text-xl text-ellipsis whitespace-nowrap overflow-hidden">{{ issue.get_main_exception.value }}</div>
+        <h1 class="text-4xl font-bold text-ellipsis whitespace-nowrap overflow-hidden pb-1 {# needed for descenders of 'g' #}">{{ issue.calculated_type }}</h1>
+        <div class="text-xl text-ellipsis whitespace-nowrap overflow-hidden">{{ issue.calculated_value }}</div>
         {% if parsed_data.request %}<div class="italic mt-4">{{ parsed_data.request.method }} {{ parsed_data.request.url }}</div>{% endif %}
         <div class="text-ellipsis whitespace-nowrap overflow-hidden">{% with issue.get_main_exception.stacktrace.frames|last as last_frame %}<span class="font-bold">{% if last_frame.module %}{{ last_frame.module}}{% else %}{{ last_frame.filename }}{% endif %}</span>{% if last_frame.function %} in <span class="font-bold">{{ last_frame.function }}</span>{% endif %}{% endwith %}</div>
-        {% elif event.has_logentry %}
-        <h1 class="text-4xl font-bold text-ellipsis whitespace-nowrap overflow-hidden pb-1 {# needed for descenders of 'g' #}">Log Message {% if parsed_data.level %}({{ parsed_data.level|upper }}){% endif %}</h1>
-        <div class="text-xl text-ellipsis whitespace-nowrap overflow-hidden">{% if parsed_data.logentry.formatted %}{{ parsed_data.logentry.formatted }}{% else %}{{ parsed_data.logentry.message }}{% endif %} </div>  {# what if no message at all? #}
-        {% if parsed_data.request %}<div class="italic mt-4">{{ parsed_data.request.method }} {{ parsed_data.request.url }}</div>{% endif %}
-        <div class="text-ellipsis whitespace-nowrap overflow-hidden"><span class="font-bold">{{ parsed_data.logger }}</span></div>
-
-        {% else %}
-            <h1 class="text-4xl font-bold text-ellipsis whitespace-nowrap overflow-hidden">??? TOOD</h1>
-        {% endif %}
     </div> {# top, LHS (various texts) #}
 
 </div>

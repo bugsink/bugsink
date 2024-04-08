@@ -9,7 +9,9 @@ from django.db.models import F, Value
 from bugsink.volume_based_condition import VolumeBasedCondition
 from alerts.tasks import send_unmute_alert
 
-from .utils import parse_lines, serialize_lines, filter_qs_for_fixed_at, exclude_qs_for_fixed_at
+from .utils import (
+    parse_lines, serialize_lines, filter_qs_for_fixed_at, exclude_qs_for_fixed_at,
+    get_title_for_exception_type_and_value)
 
 
 class IncongruentStateException(Exception):
@@ -27,10 +29,12 @@ class Issue(models.Model):
     project = models.ForeignKey(
         "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
 
-    # denormalized fields:
+    # denormalized/cached fields:
     last_seen = models.DateTimeField(blank=False, null=False)  # based on event.server_side_timestamp
     first_seen = models.DateTimeField(blank=False, null=False)  # based on event.server_side_timestamp
     event_count = models.IntegerField(blank=False, null=False)
+    calculated_type = models.CharField(max_length=255, blank=True, null=False, default="")
+    calculated_value = models.CharField(max_length=255, blank=True, null=False, default="")
 
     # fields related to resolution:
     # what does this mean for the release-based use cases? it means what you filter on.
@@ -75,21 +79,7 @@ class Issue(models.Model):
         return values[-1] if values else {}
 
     def title(self):
-        # TODO: refactor to a (filled-on-create) field
-
-        first_event = self.event_set.first()
-        if first_event.has_logentry:
-            parsed_data = json.loads(first_event.data)
-            logentry = parsed_data.get("logentry", {})
-            formatted = logentry.get("formatted", logentry.get("message", ""))
-
-            result = "Log Message" + \
-                (" (" + parsed_data["level"].upper() + ")" if parsed_data.get("level") else "") + \
-                (": " + formatted if formatted else "")
-            return result
-
-        main_exception = self.get_main_exception()
-        return main_exception.get("type", "none") + ": " + main_exception.get("value", "none")
+        return get_title_for_exception_type_and_value(self.calculated_type, self.calculated_value)
 
     def get_fixed_at(self):
         return parse_lines(self.fixed_at)
