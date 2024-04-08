@@ -36,7 +36,7 @@ class IssueAdmin(admin.ModelAdmin):
     list_display = [
         "title",
         "project",
-        "event_count",  # expensive operation as written now (query in loop)
+        "event_count",
     ]
     list_filter = [
         "project",
@@ -50,7 +50,3 @@ class IssueAdmin(admin.ModelAdmin):
         'calculated_value',
         'event_count',
     ]
-
-    def event_count(self, obj):
-        return str(obj.event_set.count())
-    event_count.short_description = "Event count"
