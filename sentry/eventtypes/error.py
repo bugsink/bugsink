@@ -1,6 +1,8 @@
+from django.template.defaultfilters import truncatechars
+
 from sentry.stacktraces.functions import get_function_name_for_frame
 from sentry.stacktraces.processing import get_crash_frame_from_event_data
-from sentry.utils.safe import get_path, trim, truncatechars
+from sentry.utils.safe import get_path, trim
 
 
 def get_crash_location(data):

@@ -1,5 +1,6 @@
 from sentry.utils.safe import get_path
-from sentry.utils.strings import strip, truncatechars
+from sentry.utils.strings import strip
+from django.template.defaultfilters import truncatechars
 
 
 class DefaultEvent:

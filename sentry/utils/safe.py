@@ -2,8 +2,8 @@ import collections
 import json
 
 from django.utils.encoding import force_str
+from django.template.defaultfilters import truncatechars
 
-from sentry.utils.strings import truncatechars
 
 SENTRY_MAX_VARIABLE_SIZE = 512
 
