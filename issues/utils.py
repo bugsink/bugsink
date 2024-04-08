@@ -1,5 +1,3 @@
-import hashlib
-
 from sentry.eventtypes.base import DefaultEvent
 from sentry.eventtypes.error import ErrorEvent
 
@@ -28,12 +26,6 @@ def get_issue_grouper_for_data(data):
         ])
 
     return default_issue_grouper(title, transaction, event_type_name)
-
-
-def get_hash_for_data(data):
-    """Generate hash used for grouping issues (note: not a cryptographically secure hash)"""
-    issue_grouper = get_issue_grouper_for_data(data)
-    return hashlib.md5(issue_grouper.encode()).hexdigest()
 
 
 # utilities related to storing and retrieving release-versions; we use the fact that sentry (and we've adopted their

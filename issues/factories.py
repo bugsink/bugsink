@@ -4,8 +4,8 @@ from django.utils import timezone
 
 from projects.models import Project
 
-from .models import Issue
-from .utils import get_hash_for_data
+from .models import Issue, Grouping
+from .utils import get_issue_grouper_for_data
 
 
 def get_or_create_issue(project=None, event_data=None):
@@ -15,12 +15,26 @@ def get_or_create_issue(project=None, event_data=None):
     if project is None:
         project = Project.objects.create(name="Test project")
 
-    hash_ = get_hash_for_data(event_data)
-    issue, issue_created = Issue.objects.get_or_create(
-        project=project,
-        hash=hash_,
-        defaults=denormalized_issue_fields(),
-    )
+    grouping_key = get_issue_grouper_for_data(event_data)
+
+    if not Grouping.objects.filter(project=project, grouping_key=grouping_key).exists():
+        issue = Issue.objects.create(
+            project=project,
+            **denormalized_issue_fields(),
+        )
+        issue_created = True
+
+        grouping = Grouping.objects.create(
+            project=project,
+            grouping_key=grouping_key,
+            issue=issue,
+        )
+
+    else:
+        grouping = Grouping.objects.get(project=project, grouping_key=grouping_key)
+        issue = grouping.issue
+        issue_created = False
+
     return issue, issue_created
 
 

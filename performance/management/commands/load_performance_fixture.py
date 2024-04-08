@@ -8,7 +8,7 @@ from django.conf import settings
 
 from performance.bursty_data import generate_bursty_data, buckets_to_points_in_time
 from projects.models import Project
-from issues.models import Issue
+from issues.models import Issue, Grouping
 from events.models import Event
 
 
@@ -20,6 +20,7 @@ class Command(BaseCommand):
             raise ValueError("This command should only be run on the performance-test database")
 
         Project.objects.all().delete()
+        Grouping.objects.all().delete()
         Issue.objects.all().delete()
         Event.objects.all().delete()
 
@@ -31,7 +32,14 @@ class Command(BaseCommand):
         issues_by_project = {}
 
         for p in projects:
-            issues_by_project[p.id] = [Issue.objects.create(project=p, hash="hash %d" % i) for i in range(100)]
+            issues_by_project[p.id] = []
+            for i in range(100):
+                issues_by_project[p.id].append(Issue.objects.create(project=p))
+                Grouping.objects.create(
+                    project=p,
+                    grouping_key="grouping key %d" % i,
+                    issue=issues_by_project[p.id][i],
+                )
 
         # now we have 10 projects, each with 100 issues. let's create 10k events for each project.
         for p in projects:

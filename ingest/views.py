@@ -13,8 +13,8 @@ from rest_framework import exceptions
 from compat.auth import parse_auth_header_value
 
 from projects.models import Project
-from issues.models import Issue, IssueStateManager
-from issues.utils import get_hash_for_data
+from issues.models import Issue, IssueStateManager, Grouping
+from issues.utils import get_issue_grouper_for_data
 from issues.regressions import issue_is_regression
 
 import sentry_sdk_extensions
@@ -103,16 +103,30 @@ class BaseIngestAPIView(APIView):
         # leave this at the top -- it may involve reading from the DB which should come before any DB writing
         pc_registry = get_pc_registry()
 
-        hash_ = get_hash_for_data(event_data)
-        issue, issue_created = Issue.objects.get_or_create(
-            project=ingested_event.project,
-            hash=hash_,
-            defaults={
-                "first_seen": ingested_event.timestamp,
-                "last_seen": ingested_event.timestamp,
-                "event_count": 1,
-            },
-        )
+        grouping_key = get_issue_grouper_for_data(event_data)
+
+        if not Grouping.objects.filter(project=ingested_event.project, grouping_key=grouping_key).exists():
+            issue = Issue.objects.create(
+                project=ingested_event.project,
+                first_seen=ingested_event.timestamp,
+                last_seen=ingested_event.timestamp,
+                event_count=1,
+            )
+            # even though in our data-model a given grouping does not imply a single Issue (in fact, that's the whole
+            # point of groupings as a data-model), at-creation such implication does exist, because manual information
+            # ("this grouper is actually part of some other issue") can by definition not yet have been specified.
+            issue_created = True
+
+            grouping = Grouping.objects.create(
+                project=ingested_event.project,
+                grouping_key=grouping_key,
+                issue=issue,
+            )
+
+        else:
+            grouping = Grouping.objects.get(project=ingested_event.project, grouping_key=grouping_key)
+            issue = grouping.issue
+            issue_created = False
 
         event, event_created = Event.from_ingested(ingested_event, issue, event_data)
         if not event_created:

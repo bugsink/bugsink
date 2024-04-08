@@ -17,11 +17,15 @@ class IncongruentStateException(Exception):
 
 
 class Issue(models.Model):
+    """
+    An Issue models a group of similar events. In particular: it models the result of both automatic (client-side and
+    server-side) and manual ("merge") grouping.
+    """
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     project = models.ForeignKey(
         "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
-    hash = models.CharField(max_length=32, blank=False, null=False)
 
     # denormalized fields:
     last_seen = models.DateTimeField(blank=False, null=False)  # based on event.server_side_timestamp
@@ -108,6 +112,24 @@ class Issue(models.Model):
             models.Index(fields=["first_seen"]),
             models.Index(fields=["last_seen"]),
         ]
+
+
+class Grouping(models.Model):
+    """A Grouping models an automatically calculated grouping key (from the event data, with a key role for the SDK-side
+    fingerprint).
+    """
+    project = models.ForeignKey(
+        "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+
+    # NOTE: I don't want to have any principled maximum on the grouping key, nor do I want to prematurely optimize the
+    # lookup. If lookups are slow, we _could_ examine whether manually hashing these values and matching on the hash
+    # helps.
+    grouping_key = models.TextField(blank=False, null=False)
+
+    issue = models.ForeignKey("Issue", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+
+    def __str__(self):
+        return self.grouping_key
 
 
 def add_periods_to_datetime(dt, nr_of_periods, period_name):
