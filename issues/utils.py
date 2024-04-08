@@ -62,7 +62,8 @@ def get_exception_type_and_value_for_exception(data):
     return type_, value
 
 
-def default_issue_grouper(title: str, transaction: str) -> str:
+def default_issue_grouper(calculated_type, calculated_value, transaction):
+    title = get_title_for_exception_type_and_value(calculated_type, calculated_value)
     return title + " ⋄ " + transaction
 
 
@@ -71,17 +72,16 @@ def get_issue_grouper_for_data(data, calculated_type=None, calculated_value=None
         # convenience for calling code from tests, when digesting we don't do this because we already have this info
         calculated_type, calculated_value = get_type_and_value_for_data(data)
 
-    title = get_title_for_exception_type_and_value(calculated_type, calculated_value)
     transaction = force_str(data.get("transaction") or "<no transaction>")
     fingerprint = data.get("fingerprint")
 
     if fingerprint:
         return " ⋄ ".join([
-            default_issue_grouper(title, transaction) if part == "{{ default }}" else part
+            default_issue_grouper(calculated_type, calculated_value, transaction) if part == "{{ default }}" else part
             for part in fingerprint
         ])
 
-    return default_issue_grouper(title, transaction)
+    return default_issue_grouper(calculated_type, calculated_value, transaction)
 
 
 def get_title_for_exception_type_and_value(type_, value):
