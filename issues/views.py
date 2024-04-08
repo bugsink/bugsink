@@ -163,12 +163,21 @@ def _handle_post(request, issue):
     return HttpResponseRedirect(request.path_info)
 
 
+def _get_event(issue, event_pk, ingest_order):
+    if event_pk is not None:
+        return get_object_or_404(Event, pk=event_pk)
+    elif ingest_order is not None:
+        return get_object_or_404(Event, issue=issue, ingest_order=ingest_order)
+    else:
+        raise ValueError("either event_pk or ingest_order must be provided")
+
+
 @issue_membership_required
-def issue_event_stacktrace(request, issue, event_pk):
+def issue_event_stacktrace(request, issue, event_pk=None, ingest_order=None):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event = get_object_or_404(Event, pk=event_pk)
+    event = _get_event(issue, event_pk, ingest_order)
 
     parsed_data = json.loads(event.data)
 
@@ -207,6 +216,7 @@ def issue_event_stacktrace(request, issue, event_pk):
 
     return render(request, "issues/issue_stacktrace.html", {
         "tab": "stacktrace",
+        "this_view": "event_stacktrace",
         "project": issue.project,
         "issue": issue,
         "event": event,
@@ -219,16 +229,17 @@ def issue_event_stacktrace(request, issue, event_pk):
 
 
 @issue_membership_required
-def issue_event_breadcrumbs(request, issue, event_pk):
+def issue_event_breadcrumbs(request, issue, event_pk=None, ingest_order=None):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event = get_object_or_404(Event, pk=event_pk)
+    event = _get_event(issue, event_pk, ingest_order)
 
     parsed_data = json.loads(event.data)
 
     return render(request, "issues/issue_breadcrumbs.html", {
         "tab": "breadcrumbs",
+        "this_view": "event_breadcrumbs",
         "project": issue.project,
         "issue": issue,
         "event": event,
@@ -239,11 +250,11 @@ def issue_event_breadcrumbs(request, issue, event_pk):
 
 
 @issue_membership_required
-def issue_event_details(request, issue, event_pk):
+def issue_event_details(request, issue, event_pk=None, ingest_order=None):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event = get_object_or_404(Event, pk=event_pk)
+    event = _get_event(issue, event_pk, ingest_order)
     parsed_data = json.loads(event.data)
 
     parsed_data["top_levels"] = \
@@ -253,6 +264,7 @@ def issue_event_details(request, issue, event_pk):
 
     return render(request, "issues/issue_event_details.html", {
         "tab": "event-details",
+        "this_view": "event_details",
         "project": issue.project,
         "issue": issue,
         "event": event,

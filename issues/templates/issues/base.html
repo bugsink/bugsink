@@ -117,7 +117,7 @@
         </div>
 
         <div class="flex p-4 bg-slate-200 border-b-2"><!-- bottom nav bar -->
-            {% if is_event_page %}<div>Event ... {# TODO #} out of {{ issue.event_count}} which occured at <span class="font-bold">{{ event.server_side_timestamp|date:"j M G:i" }}</span></div>{% endif %}
+            {% if is_event_page %}<div>Event {{ event.ingest_order }} of {{ issue.event_count}} which occured at <span class="font-bold">{{ event.server_side_timestamp|date:"j M G:i" }}</span></div>{% endif %}
             <div class="ml-auto pr-4 font-bold text-slate-500">
                 <a href="/admin/issues/issue/{{ issue.id }}/change/">Issue Admin</a>
                 {% if is_event_page %}

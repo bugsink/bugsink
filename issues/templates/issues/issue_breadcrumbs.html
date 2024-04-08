@@ -5,6 +5,18 @@
 
 {% block tab_content %}
 
+<div class="flex">
+    <div class="overflow-hidden">
+        <div class="italic">{{ event.server_side_timestamp|date:"j M G:i" }} (Event {{ event.ingest_order }} of {{ issue.event_count }})</div>
+    </div>
+
+    <div class="ml-auto flex-none">
+        <div class="flex place-content-end">
+            {% include "issues/_event_nav.html" %}
+        </div>
+    </div>
+</div>
+
 {% if not parsed_data.breadcrumbs or not parsed_data.breadcrumbs.values %}
 
     <div class="mt-6 mb-6 italic">
@@ -13,6 +25,7 @@
 
 {% else %}
 
+<div class="pt-4">
 <table class="w-full">
 {# <thead> </thead> #}
 <tbody>
@@ -43,6 +56,7 @@
     {% endfor %}
 </tbody>
 </table>
+</div>
 
 {% endif %}
 

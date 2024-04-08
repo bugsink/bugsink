@@ -22,6 +22,7 @@ def create_event(project, issue, timestamp=None, event_data=None):
         has_exception=True,
         has_logentry=True,
         data=json.dumps(event_data),
+        ingest_order=0,
     )
 
 

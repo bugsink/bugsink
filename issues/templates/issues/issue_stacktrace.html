@@ -6,6 +6,19 @@
 {% block tab_content %}
 
 {% if not exceptions %}
+    {# event-nav only #}
+    <div class="flex">
+        <div class="overflow-hidden">
+            <div class="italic">{{ event.server_side_timestamp|date:"j M G:i" }} (Event {{ event.ingest_order }} of {{ issue.event_count }})</div>
+        </div>
+
+        <div class="ml-auto flex-none">
+            <div class="flex place-content-end">
+                {% include "issues/_event_nav.html" %}
+            </div>
+        </div>
+    </div>
+
     <div class="mt-6 mb-6 italic">
         No stacktrace available for this event.
     </div>
@@ -16,6 +29,9 @@
 
     <div class="flex">
         <div class="overflow-hidden">
+            {% if forloop.counter0 == 0 %}
+            <div class="italic">{{ event.server_side_timestamp|date:"j M G:i" }} (Event {{ event.ingest_order }} of {{ issue.event_count }})</div>
+            {% endif %}
             <h1 class="text-2xl font-bold {% if forloop.counter0 > 0 %}mt-4{% endif %} text-ellipsis whitespace-nowrap overflow-hidden">{{ exception.type }}</h1>
             <div class="text-lg mb-4 text-ellipsis whitespace-nowrap overflow-hidden">{{ exception.value }}</div>
 
@@ -27,6 +43,8 @@
                 <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="showInAppFrames()">Show in-app</button>
                 <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="showRaisingFrame()">Show raise</button>
                 <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="hideAllFrames()">Collapse all</button>
+
+                {% include "issues/_event_nav.html" %}
             </div>
         </div>
         {% endif %}

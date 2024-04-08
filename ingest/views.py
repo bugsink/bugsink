@@ -134,7 +134,15 @@ class BaseIngestAPIView(APIView):
 
         # NOTE: an event always has a single (automatically calculated) Grouping associated with it. Since we have that
         # information available here, we could add it to the Event model.
-        event, event_created = Event.from_ingested(ingested_event, issue, event_data, calculated_type, calculated_value)
+        event, event_created = Event.from_ingested(
+            ingested_event,
+            # the assymetry with + 1 is because the event_count is only incremented below for the not issue_created case
+            issue.event_count if issue_created else issue.event_count + 1,
+            issue,
+            event_data,
+            calculated_type,
+            calculated_value,
+        )
         if not event_created:
             # note: previously we created the event before the issue, which allowed for one less query. I don't see
             # straight away how we can reproduce that now that we create issue-before-event (since creating the issue

@@ -4,6 +4,19 @@
 
 {% block tab_content %}
 
+<div class="flex">
+    <div class="overflow-hidden">
+        <div class="italic">{{ event.server_side_timestamp|date:"j M G:i" }} (Event {{ event.ingest_order }} of {{ issue.event_count }})</div>
+    </div>
+
+    <div class="ml-auto flex-none">
+        <div class="flex place-content-end">
+            {% include "issues/_event_nav.html" %}
+        </div>
+    </div>
+</div>
+
+
 {# NOTE if we store event.grouper on the event, we could also show that here #}
 {% if not parsed_data.top_levels and not parsed_data.tags and not parsed_data.user and not parsed_data.request  and not parsed_data.contexts.runtime and not parsed_data.modules and not parsed_data.sdk and not parsed_data.extra %}{# and not parsed_data.contexts.trace #}
 
