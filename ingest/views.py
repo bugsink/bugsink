@@ -3,6 +3,7 @@ import json  # TODO consider faster APIs
 
 from django.shortcuts import get_object_or_404
 from django.conf import settings
+from django.template.defaultfilters import truncatechars
 
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -112,8 +113,8 @@ class BaseIngestAPIView(APIView):
                 first_seen=ingested_event.timestamp,
                 last_seen=ingested_event.timestamp,
                 event_count=1,
-                calculated_type=calculated_type,
-                calculated_value=calculated_value,
+                calculated_type=truncatechars(calculated_type, 255),
+                calculated_value=truncatechars(calculated_value, 255),
             )
             # even though in our data-model a given grouping does not imply a single Issue (in fact, that's the whole
             # point of groupings as a data-model), at-creation such implication does exist, because manual information

@@ -1,5 +1,4 @@
 from django.utils.encoding import force_str
-from django.template.defaultfilters import truncatechars
 
 from sentry.stacktraces.functions import get_function_name_for_frame
 from sentry.stacktraces.processing import get_crash_frame_from_event_data
@@ -21,7 +20,7 @@ def get_exception_type_and_value_for_logmessage(data):
     )
 
     if message:
-        return "Log Message", truncatechars(message.splitlines()[0], 100)
+        return "Log Message", message.splitlines()[0]
 
     return "Log Message", "<no log message>"
 
