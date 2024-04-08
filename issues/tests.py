@@ -532,21 +532,21 @@ class IntegrationTest(DjangoTestCase):
 class GroupingUtilsTestCase(DjangoTestCase):
 
     def test_empty_data(self):
-        self.assertEquals("<unlabeled event> ⋄  ⋄ DefaultEvent", get_issue_grouper_for_data({}))
+        self.assertEquals("Log Message: <no log message> ⋄  ⋄ DefaultEvent", get_issue_grouper_for_data({}))
 
     def test_logentry_message_takes_precedence(self):
-        self.assertEquals("msg: ? ⋄  ⋄ DefaultEvent", get_issue_grouper_for_data({"logentry": {
+        self.assertEquals("Log Message: msg: ? ⋄  ⋄ DefaultEvent", get_issue_grouper_for_data({"logentry": {
             "message": "msg: ?",
             "formatted": "msg: foobar",
         }}))
 
     def test_logentry_with_formatted_only(self):
-        self.assertEquals("msg: foobar ⋄  ⋄ DefaultEvent", get_issue_grouper_for_data({"logentry": {
+        self.assertEquals("Log Message: msg: foobar ⋄  ⋄ DefaultEvent", get_issue_grouper_for_data({"logentry": {
             "formatted": "msg: foobar",
         }}))
 
     def test_logentry_with_transaction(self):
-        self.assertEquals("msg ⋄ transaction ⋄ DefaultEvent", get_issue_grouper_for_data({
+        self.assertEquals("Log Message: msg ⋄ transaction ⋄ DefaultEvent", get_issue_grouper_for_data({
             "logentry": {
                 "message": "msg",
             },
@@ -646,6 +646,6 @@ class GroupingUtilsTestCase(DjangoTestCase):
         self.assertEquals("fixed string", get_issue_grouper_for_data({"fingerprint": ["fixed string"]}))
 
     def test_fingerprint_with_default(self):
-        self.assertEquals("<unlabeled event> ⋄  ⋄ DefaultEvent ⋄ fixed string", get_issue_grouper_for_data({
+        self.assertEquals("Log Message: <no log message> ⋄  ⋄ DefaultEvent ⋄ fixed string", get_issue_grouper_for_data({
             "fingerprint": ["{{ default }}", "fixed string"],
         }))

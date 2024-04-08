@@ -15,6 +15,6 @@ class DefaultEvent:
         )
 
         if message:
-            return truncatechars(message.splitlines()[0], 100), ""
+            return "Log Message", truncatechars(message.splitlines()[0], 100)
 
-        return "<unlabeled event>", ""
+        return "Log Message", "<no log message>"
