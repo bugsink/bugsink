@@ -14,7 +14,8 @@ def get_issue_grouper_for_data(data):
     else:
         eventtype = DefaultEvent()
 
-    title = eventtype.get_title(data)
+    type_, value = eventtype.get_exception_type_and_value(data)
+    title = get_title_for_exception_type_and_value(type_, value)
     transaction = force_str(data.get("transaction") or "")
     fingerprint = data.get("fingerprint")
     event_type_name = type(eventtype).__name__
@@ -26,6 +27,16 @@ def get_issue_grouper_for_data(data):
         ])
 
     return default_issue_grouper(title, transaction, event_type_name)
+
+
+def get_title_for_exception_type_and_value(type_, value):
+    if not value:
+        return type_
+
+    if not isinstance(value, str):
+        value = str(value)
+
+    return "{}: {}".format(type_, value.splitlines()[0])
 
 
 # utilities related to storing and retrieving release-versions; we use the fact that sentry (and we've adopted their

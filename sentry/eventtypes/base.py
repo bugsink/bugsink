@@ -8,13 +8,13 @@ class DefaultEvent:
     actually say that this is basically the LogMessageEvent.
     """
 
-    def get_title(self, data):
+    def get_exception_type_and_value(self, data):
         message = strip(
             get_path(data, "logentry", "message")
             or get_path(data, "logentry", "formatted")
         )
 
         if message:
-            return truncatechars(message.splitlines()[0], 100)
+            return truncatechars(message.splitlines()[0], 100), ""
 
-        return "<unlabeled event>"
+        return "<unlabeled event>", ""

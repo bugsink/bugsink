@@ -1,5 +1,3 @@
-from django.template.defaultfilters import truncatechars
-
 from sentry.stacktraces.functions import get_function_name_for_frame
 from sentry.stacktraces.processing import get_crash_frame_from_event_data
 from sentry.utils.safe import get_path, trim
@@ -18,14 +16,14 @@ def get_crash_location(data):
 
 class ErrorEvent:
 
-    def get_title(self, data):
+    def get_exception_type_and_value(self, data):
         if isinstance(data.get("exception"), list):
             if len(data["exception"]) == 0:
-                return "<unknown>"
+                return "<unknown>", ""
 
         exception = get_path(data, "exception", "values", -1)
         if not exception:
-            return "<unknown>"
+            return "<unknown>", ""
 
         value = trim(get_path(exception, "value", default=""), 1024)
 
@@ -36,15 +34,9 @@ class ErrorEvent:
         if get_path(exception, "mechanism", "synthetic"):
             _, function = get_crash_location(data)
             if function:
-                return function
-            return "<unknown>"
+                return function, ""
+            return "<unknown>", ""
 
         type_ = trim(get_path(exception, "type", default="Error"), 128)
 
-        if not value:
-            return type_
-
-        if not isinstance(value, str):
-            value = str(value)
-
-        return "{}: {}".format(type_, truncatechars(value.splitlines()[0]))
+        return type_, value
