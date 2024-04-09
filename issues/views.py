@@ -167,7 +167,12 @@ def _handle_post(request, issue):
 
 def _get_event(issue, event_pk, ingest_order):
     if event_pk is not None:
-        return get_object_or_404(Event, pk=event_pk)
+        # we match on both internal and external id, trying internal first
+        try:
+            return Event.objects.get(pk=event_pk)
+        except Event.DoesNotExist:
+            return get_object_or_404(Event, issue=issue, event_id=event_pk)
+
     elif ingest_order is not None:
         return get_object_or_404(Event, issue=issue, ingest_order=ingest_order)
     else:
