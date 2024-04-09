@@ -4,6 +4,7 @@ import json  # TODO consider faster APIs
 from django.shortcuts import get_object_or_404
 from django.conf import settings
 from django.template.defaultfilters import truncatechars
+from django.db.models import Max
 
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -108,7 +109,12 @@ class BaseIngestAPIView(APIView):
         grouping_key = get_issue_grouper_for_data(event_data, calculated_type, calculated_value)
 
         if not Grouping.objects.filter(project=ingested_event.project, grouping_key=grouping_key).exists():
+            # we don't have Project.issue_count here ('premature optimization') so we just do an aggregate instead.
+            issue_ingest_order = Issue.objects.filter(project=ingested_event.project).aggregate(
+                Max("ingest_order"))["ingest_order__max"] + 1
+
             issue = Issue.objects.create(
+                ingest_order=issue_ingest_order,
                 project=ingested_event.project,
                 first_seen=ingested_event.timestamp,
                 last_seen=ingested_event.timestamp,

@@ -2,6 +2,7 @@ import uuid
 
 from django.db import models
 from django.conf import settings
+from django.utils.text import slugify
 
 from compat.dsn import build_dsn
 
@@ -11,6 +12,7 @@ class Project(models.Model):
     # parser (we could also introduce a special field for that purpose but that's ugly too)
 
     name = models.CharField(max_length=255, blank=False, null=False)
+    slug = models.SlugField(max_length=50, blank=False, null=False)
 
     # sentry_key mirrors the "public" part of the sentry DSN. As of late 2023 Sentry's docs say the this about DSNs:
     #
@@ -55,6 +57,13 @@ class Project(models.Model):
         # TODO perfomance considerations... this can be denormalized/cached at the project level
         from releases.models import ordered_releases
         return list(ordered_releases(project=self))[-1]
+
+    def save(self, *args, **kwargs):
+        if self.slug is None:
+            # this is not guaranteeing uniqueness but it's enough to have something that makes our tests work.
+            # in realy usage slugs are provided properly on-creation.
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
 
 
 class ProjectMembership(models.Model):

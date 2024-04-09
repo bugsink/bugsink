@@ -29,6 +29,9 @@ class Issue(models.Model):
     project = models.ForeignKey(
         "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
 
+    # 1-based for the same reasons as Event.ingest_order
+    ingest_order = models.PositiveIntegerField(blank=False, null=False)
+
     # denormalized/cached fields:
     last_seen = models.DateTimeField(blank=False, null=False)  # based on event.server_side_timestamp
     first_seen = models.DateTimeField(blank=False, null=False)  # based on event.server_side_timestamp
@@ -49,6 +52,9 @@ class Issue(models.Model):
     is_muted = models.BooleanField(default=False)
     unmute_on_volume_based_conditions = models.TextField(blank=False, null=False, default="[]")  # json string
     unmute_after = models.DateTimeField(blank=True, null=True)
+
+    def friendly_id(self):
+        return f"{ self.project.slug.upper() }-{ self.ingest_order }"
 
     def get_absolute_url(self):
         return f"/issues/issue/{ self.id }/event/last/"
