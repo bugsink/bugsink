@@ -142,11 +142,13 @@ class Event(models.Model):
 
     # 1-based, because this is for human consumption only, and using 0-based internally when we don't actually do
     # anything with this value other than showing it to humans is super-confusing. Sorry Dijkstra!
-    ingest_order = models.IntegerField(blank=False, null=False)
+    ingest_order = models.PositiveIntegerField(blank=False, null=False)
 
     class Meta:
-        unique_together = (("project", "event_id"),)
-        # index_together = (("group_id", "datetime"),)  TODO seriously think about indexes
+        unique_together = [
+            ("project", "event_id"),
+            ("project", "ingest_order"),
+        ]
 
     def get_absolute_url(self):
         return f"/issues/issue/{ self.issue_id }/event/{ self.id }/"

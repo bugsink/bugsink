@@ -104,6 +104,9 @@ class Issue(models.Model):
         return False  # TODO actually implement (and then: implement in a performant manner)
 
     class Meta:
+        unique_together = [
+            ("project", "ingest_order"),
+        ]
         indexes = [
             models.Index(fields=["first_seen"]),
             models.Index(fields=["last_seen"]),
