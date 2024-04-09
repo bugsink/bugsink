@@ -6,6 +6,8 @@ from django.db import models
 from projects.models import Project
 from compat.timestamp import parse_timestamp
 
+from issues.utils import get_title_for_exception_type_and_value
+
 
 class Platform(models.TextChoices):
     AS3 = "as3"
@@ -156,6 +158,9 @@ class Event(models.Model):
     def get_download_link(self):
         # for the admin
         return "/events/event/%s/download/" % self.id
+
+    def title(self):
+        return get_title_for_exception_type_and_value(self.calculated_type, self.calculated_value)
 
     @classmethod
     def from_ingested(cls, ingested_event, ingest_order, issue, parsed_data, calculated_type, calculated_value):

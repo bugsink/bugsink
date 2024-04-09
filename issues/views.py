@@ -265,7 +265,8 @@ def issue_event_details(request, issue, event_pk=None, ingest_order=None):
     event = _get_event(issue, event_pk, ingest_order)
     parsed_data = json.loads(event.data)
 
-    ids = [
+    key_info = [
+        ("title", event.title()),
         ("event_id", event.event_id),
         ("bugsink_internal_id", event.id),
         ("issue_id", issue.id),
@@ -286,7 +287,7 @@ def issue_event_details(request, issue, event_pk=None, ingest_order=None):
         "event": event,
         "is_event_page": True,
         "parsed_data": parsed_data,
-        "ids": ids,
+        "key_info": key_info,
         "deployment_info": deployment_info,
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
