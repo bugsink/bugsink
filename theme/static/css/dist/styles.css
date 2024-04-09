@@ -922,10 +922,6 @@ select {
   height: 3rem;
 }
 
-.h-4 {
-  height: 1rem;
-}
-
 .h-5 {
   height: 1.25rem;
 }
@@ -956,10 +952,6 @@ select {
 
 .w-3\/4 {
   width: 75%;
-}
-
-.w-4 {
-  width: 1rem;
 }
 
 .w-5 {
@@ -1058,10 +1050,6 @@ select {
 
 .items-center {
   align-items: center;
-}
-
-.items-stretch {
-  align-items: stretch;
 }
 
 .justify-center {
@@ -1368,16 +1356,17 @@ select {
   line-height: 1.75rem;
 }
 
+.text-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
 .font-bold {
   font-weight: 700;
 }
 
 .italic {
   font-style: italic;
-}
-
-.leading-4 {
-  line-height: 1rem;
 }
 
 .leading-normal {

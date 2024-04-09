@@ -4,6 +4,8 @@ import json
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import Q
 from django.http import HttpResponseRedirect
+from django.utils.safestring import mark_safe
+from django.template.defaultfilters import date
 
 from events.models import Event
 from bugsink.decorators import project_membership_required, issue_membership_required
@@ -249,6 +251,12 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, ingest_order=None):
     })
 
 
+def _date_with_milis_html(timestamp):
+    return mark_safe(
+        date(timestamp, "j M G:i:s") + "." +
+        '<span class="text-xs">' + date(timestamp, "u")[:3] + '</span>')
+
+
 @issue_membership_required
 def issue_event_details(request, issue, event_pk=None, ingest_order=None):
     if request.method == "POST":
@@ -257,7 +265,15 @@ def issue_event_details(request, issue, event_pk=None, ingest_order=None):
     event = _get_event(issue, event_pk, ingest_order)
     parsed_data = json.loads(event.data)
 
-    parsed_data["top_levels"] = \
+    ids = [
+        ("event_id", event.event_id),
+        ("bugsink_internal_id", event.id),
+        ("issue_id", issue.id),
+        ("timestamp", _date_with_milis_html(event.timestamp)),
+        ("server_side_timestamp", _date_with_milis_html(event.server_side_timestamp)),
+    ]
+
+    deployment_info = \
         ([("release", parsed_data["release"])] if "release" in parsed_data else []) + \
         ([("environment", parsed_data["environment"])] if "environment" in parsed_data else []) + \
         ([("server_name", parsed_data["server_name"])] if "server_name" in parsed_data else [])
@@ -270,6 +286,8 @@ def issue_event_details(request, issue, event_pk=None, ingest_order=None):
         "event": event,
         "is_event_page": True,
         "parsed_data": parsed_data,
+        "ids": ids,
+        "deployment_info": deployment_info,
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
