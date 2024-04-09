@@ -33,4 +33,5 @@ if settings.DEBUG:
     urlpatterns += [
         path('debug-email-alerts/<str:template_name>/', debug_email),
         path('trigger-error/', trigger_error),
+        path("__debug__/", include("debug_toolbar.urls")),
     ]

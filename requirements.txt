@@ -10,3 +10,4 @@ pygments==2.16.*
 
 # testing/development only:
 requests
+django-debug-toolbar
