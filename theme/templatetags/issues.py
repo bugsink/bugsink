@@ -2,7 +2,7 @@ from django import template
 from pygments import highlight
 from pygments.lexers import PythonLexer
 from pygments.formatters import HtmlFormatter
-from pygments.lexers import guess_lexer_for_filename
+# from pygments.lexers import guess_lexer_for_filename
 
 from django.utils.safestring import mark_safe
 
@@ -24,7 +24,13 @@ def _split(joined, lengths):
 def _core_pygments(code, filename=None):
     # PythonLexer(stripnl=False) does not actually work; we work around it by inserting a space in the empty lines
     # before calling this function.
-    lexer = guess_lexer_for_filename(filename, code) if filename else PythonLexer()
+
+    # TODO guessing, as implemented here, takes the majority of time to render the page. For now I'm just turning it
+    # off, if (when) we want to turn this back on we could either [1] implement something more performant (preferred
+    # option), perhaps by giving a greater role to the filename or [2] cache the result of the guessing (or even of the
+    # whole of pygemtize() (but "caching is hard").
+    # lexer = guess_lexer_for_filename(filename, code) if filename else PythonLexer()
+    lexer = PythonLexer()
 
     result = highlight(code, lexer, HtmlFormatter(nowrap=True))
 
