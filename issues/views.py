@@ -211,16 +211,6 @@ def issue_event_stacktrace(request, issue, event_pk=None, ingest_order=None):
                     continue
                 exception['stacktrace']['frames'] = [f for f in reversed(exception['stacktrace']['frames'])]
 
-    if "logentry" in parsed_data:
-        logentry = parsed_data["logentry"]
-        if "formatted" not in logentry:
-            # TODO this is just a wild guess"
-            if "message" in logentry:
-                if "params" not in logentry:
-                    logentry["formatted"] = logentry["message"]
-                else:
-                    logentry["formatted"] = logentry["message"].format(logentry["params"])
-
     return render(request, "issues/issue_stacktrace.html", {
         "tab": "stacktrace",
         "this_view": "event_stacktrace",
