@@ -268,6 +268,8 @@ def issue_event_details(request, issue, event_pk=None, ingest_order=None):
         ("timestamp", _date_with_milis_html(event.timestamp)),
         ("server_side_timestamp", _date_with_milis_html(event.server_side_timestamp)),
     ]
+    if parsed_data.get("logger"):
+        key_info.append(("logger", parsed_data["logger"]))
 
     deployment_info = \
         ([("release", parsed_data["release"])] if "release" in parsed_data else []) + \
