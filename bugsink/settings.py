@@ -65,6 +65,8 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
     'sentry.middleware.proxy.DecompressBodyMiddleware',
+
+    'bugsink.middleware.PerformanceStatsMiddleware',
 ]
 
 ROOT_URLCONF = 'bugsink.urls'
