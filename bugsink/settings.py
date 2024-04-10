@@ -5,6 +5,8 @@ from pathlib import Path
 import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
 
+from debug_toolbar.middleware import show_toolbar
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -157,6 +159,17 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CELERY_IGNORE_RESULT = True  # we don't use the "result" part of celery
 CELERY_BROKER_CONNECTION_TIMEOUT = 2.5  # long enough for glitches, short enough to get notified about real problems
+
+
+def show_toolbar_for_queryparam(request):
+    if not request.GET.get("debug", ""):
+        return False
+    return show_toolbar(request)
+
+
+DEBUG_TOOLBAR_CONFIG = {
+    "SHOW_TOOLBAR_CALLBACK": show_toolbar_for_queryparam,
+}
 
 
 # ###################### SERVER-MODE SETTINGS #################
