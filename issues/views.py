@@ -211,7 +211,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, ingest_order=None):
                     continue
                 exception['stacktrace']['frames'] = [f for f in reversed(exception['stacktrace']['frames'])]
 
-    return render(request, "issues/issue_stacktrace.html", {
+    return render(request, "issues/stacktrace.html", {
         "tab": "stacktrace",
         "this_view": "event_stacktrace",
         "project": issue.project,
@@ -234,7 +234,7 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, ingest_order=None):
 
     parsed_data = json.loads(event.data)
 
-    return render(request, "issues/issue_breadcrumbs.html", {
+    return render(request, "issues/breadcrumbs.html", {
         "tab": "breadcrumbs",
         "this_view": "event_breadcrumbs",
         "project": issue.project,
@@ -276,7 +276,7 @@ def issue_event_details(request, issue, event_pk=None, ingest_order=None):
         ([("environment", parsed_data["environment"])] if "environment" in parsed_data else []) + \
         ([("server_name", parsed_data["server_name"])] if "server_name" in parsed_data else [])
 
-    return render(request, "issues/issue_event_details.html", {
+    return render(request, "issues/event_details.html", {
         "tab": "event-details",
         "this_view": "event_details",
         "project": issue.project,
@@ -296,7 +296,7 @@ def issue_history(request, issue):
         return _handle_post(request, issue)
 
     last_event = issue.event_set.order_by("timestamp").last()  # the template needs this for the tabs, we pick the last
-    return render(request, "issues/issue_history.html", {
+    return render(request, "issues/history.html", {
         "tab": "history",
         "project": issue.project,
         "issue": issue,
@@ -313,7 +313,7 @@ def issue_grouping(request, issue):
         return _handle_post(request, issue)
 
     last_event = issue.event_set.order_by("timestamp").last()  # the template needs this for the tabs, we pick the last
-    return render(request, "issues/issue_grouping.html", {
+    return render(request, "issues/grouping.html", {
         "tab": "grouping",
         "project": issue.project,
         "issue": issue,
@@ -332,7 +332,7 @@ def issue_event_list(request, issue):
     event_list = issue.event_set.all()
 
     last_event = issue.event_set.order_by("timestamp").last()  # the template needs this for the tabs, we pick the last
-    return render(request, "issues/issue_event_list.html", {
+    return render(request, "issues/event_list.html", {
         "tab": "event-list",
         "project": issue.project,
         "issue": issue,
