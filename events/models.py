@@ -147,7 +147,7 @@ class Event(models.Model):
     class Meta:
         unique_together = [
             ("project", "event_id"),
-            ("project", "ingest_order"),
+            ("issue", "ingest_order"),
         ]
 
     def get_absolute_url(self):
