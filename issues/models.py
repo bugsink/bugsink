@@ -38,6 +38,10 @@ class Issue(models.Model):
     event_count = models.IntegerField(blank=False, null=False)
     calculated_type = models.CharField(max_length=255, blank=True, null=False, default="")
     calculated_value = models.CharField(max_length=255, blank=True, null=False, default="")
+    transaction = models.CharField(max_length=200, blank=True, null=False, default="")
+    last_frame_filename = models.CharField(max_length=255, blank=True, null=False, default="")
+    last_frame_module = models.CharField(max_length=255, blank=True, null=False, default="")
+    last_frame_function = models.CharField(max_length=255, blank=True, null=False, default="")
 
     # fields related to resolution:
     # what does this mean for the release-based use cases? it means what you filter on.
@@ -53,36 +57,19 @@ class Issue(models.Model):
     unmute_on_volume_based_conditions = models.TextField(blank=False, null=False, default="[]")  # json string
     unmute_after = models.DateTimeField(blank=True, null=True)
 
+    def save(self, *args, **kwargs):
+        if self.ingest_order is None:
+            # testing-only; in production this should never happen and instead have been done in the ingest view.
+            max_current = self.ingest_order = Issue.objects.filter(project=self.project).aggregate(
+                models.Max("ingest_order"))["ingest_order__max"]
+            self.ingest_order = max_current + 1 if max_current is not None else 1
+        super().save(*args, **kwargs)
+
     def friendly_id(self):
         return f"{ self.project.slug.upper() }-{ self.ingest_order }"
 
     def get_absolute_url(self):
         return f"/issues/issue/{ self.id }/event/last/"
-
-    def parsed_data(self):
-        # TEMP solution; won't scale
-        return json.loads(self.event_set.first().data)
-
-    def get_main_exception(self):
-        # TODO: refactor (its usages) to a (filled-on-create) field
-
-        # Note: first event, last exception
-
-        # We call the last exception in the chain the main exception because it's the one you're most likely to care
-        # about. I'd roughly distinguish 2 cases for reraising:
-        #
-        # 1. intentionally rephrasing/retyping exceptions to more clearly express their meaning. In that case you
-        #    certainly care more about the rephrased thing than the original, that's the whole point.
-        #
-        # 2. actual "accidents" happening while error-handling. In that case you care about the accident first (bugsink
-        #    is a system to help you think about cases that you didn't properly think about in the first place),
-        #    although you may also care about the root cause. (In fact, sometimes you care more about the root cause,
-        #    but I'd say you'll have to yak-shave your way there).
-
-        parsed_data = json.loads(self.event_set.first().data)
-        exc = parsed_data.get("exception", {"values": []})
-        values = exc["values"]  # required by the json spec, so can be done safely
-        return values[-1] if values else {}
 
     def title(self):
         return get_title_for_exception_type_and_value(self.calculated_type, self.calculated_value)

@@ -154,7 +154,7 @@ https://flowbite.com/docs/forms/floating-label/
 </svg>&nbsp;&nbsp;{% endif %}{{ issue.title|truncatechars:100 }}</a>
                 </div>
                 <div class="text-sm">from <b>{{ issue.first_seen|date:"j M G:i" }}</b> | last <b>{{ issue.last_seen|date:"j M G:i" }}</b> | with <b>{{ issue.event_count }}</b> events
-                    {% if issue.parsed_data.transaction %}| <span class="font-bold">{{ issue.parsed_data.transaction }} </span>{% endif %}
+                    {% if issue.transaction %}| <span class="font-bold">{{ issue.transaction }} </span>{% endif %}
                 </div>
             </td>
 

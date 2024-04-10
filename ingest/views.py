@@ -3,7 +3,6 @@ import json  # TODO consider faster APIs
 
 from django.shortcuts import get_object_or_404
 from django.conf import settings
-from django.template.defaultfilters import truncatechars
 from django.db.models import Max
 
 from rest_framework import permissions, status
@@ -16,7 +15,7 @@ from compat.auth import parse_auth_header_value
 
 from projects.models import Project
 from issues.models import Issue, IssueStateManager, Grouping
-from issues.utils import get_type_and_value_for_data, get_issue_grouper_for_data
+from issues.utils import get_type_and_value_for_data, get_issue_grouper_for_data, get_denormalized_fields_for_data
 from issues.regressions import issue_is_regression
 
 import sentry_sdk_extensions
@@ -105,13 +104,22 @@ class BaseIngestAPIView(APIView):
         # leave this at the top -- it may involve reading from the DB which should come before any DB writing
         pc_registry = get_pc_registry()
 
+        # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
+        # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
+        # in an if-statement would require more rework (and possibly extra queries) than it's worth.
+        denormalized_fields = get_denormalized_fields_for_data(event_data)
+        # the 3 lines below are suggestive of a further inlining of the get_type_and_value_for_data function
         calculated_type, calculated_value = get_type_and_value_for_data(event_data)
+        denormalized_fields["calculated_type"] = calculated_type
+        denormalized_fields["calculated_value"] = calculated_value
+
         grouping_key = get_issue_grouper_for_data(event_data, calculated_type, calculated_value)
 
         if not Grouping.objects.filter(project=ingested_event.project, grouping_key=grouping_key).exists():
             # we don't have Project.issue_count here ('premature optimization') so we just do an aggregate instead.
-            issue_ingest_order = Issue.objects.filter(project=ingested_event.project).aggregate(
-                Max("ingest_order"))["ingest_order__max"] + 1
+            max_current = Issue.objects.filter(project=ingested_event.project).aggregate(
+                Max("ingest_order"))["ingest_order__max"]
+            issue_ingest_order = max_current + 1 if max_current is not None else 1
 
             issue = Issue.objects.create(
                 ingest_order=issue_ingest_order,
@@ -119,8 +127,7 @@ class BaseIngestAPIView(APIView):
                 first_seen=ingested_event.timestamp,
                 last_seen=ingested_event.timestamp,
                 event_count=1,
-                calculated_type=truncatechars(calculated_type, 255),
-                calculated_value=truncatechars(calculated_value, 255),
+                **denormalized_fields,
             )
             # even though in our data-model a given grouping does not imply a single Issue (in fact, that's the whole
             # point of groupings as a data-model), at-creation such implication does exist, because manual information
@@ -146,8 +153,7 @@ class BaseIngestAPIView(APIView):
             issue.event_count if issue_created else issue.event_count + 1,
             issue,
             event_data,
-            calculated_type,
-            calculated_value,
+            denormalized_fields,
         )
         if not event_created:
             # note: previously we created the event before the issue, which allowed for one less query. I don't see

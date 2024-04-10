@@ -139,6 +139,10 @@ class Event(models.Model):
     # denormalized/cached fields:
     calculated_type = models.CharField(max_length=255, blank=True, null=False, default="")
     calculated_value = models.CharField(max_length=255, blank=True, null=False, default="")
+    # transaction = models.CharField(max_length=200, blank=True, null=False, default="")  defined first-class above
+    last_frame_filename = models.CharField(max_length=255, blank=True, null=False, default="")
+    last_frame_module = models.CharField(max_length=255, blank=True, null=False, default="")
+    last_frame_function = models.CharField(max_length=255, blank=True, null=False, default="")
 
     # 1-based, because this is for human consumption only, and using 0-based internally when we don't actually do
     # anything with this value other than showing it to humans is super-confusing. Sorry Dijkstra!
@@ -165,7 +169,7 @@ class Event(models.Model):
         return get_title_for_exception_type_and_value(self.calculated_type, self.calculated_value)
 
     @classmethod
-    def from_ingested(cls, ingested_event, ingest_order, issue, parsed_data, calculated_type, calculated_value):
+    def from_ingested(cls, ingested_event, ingest_order, issue, parsed_data, denormalized_fields):
         # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
         # objects etc).
@@ -184,7 +188,7 @@ class Event(models.Model):
 
                 'level': maybe_empty(parsed_data.get("level", "")),
                 'logger': maybe_empty(parsed_data.get("logger", "")),
-                'transaction': maybe_empty(parsed_data.get("transaction", "")),
+                # 'transaction': maybe_empty(parsed_data.get("transaction", "")), passed as part of denormalized_fields
 
                 'server_name': maybe_empty(parsed_data.get("server_name", "")),
                 'release': maybe_empty(parsed_data.get("release", "")),
@@ -200,9 +204,9 @@ class Event(models.Model):
 
                 'debug_info': ingested_event.debug_info,
 
-                'calculated_type': calculated_type,
-                'calculated_value': calculated_value,
                 'ingest_order': ingest_order,
+
+                **denormalized_fields,
             }
         )
         return event, created

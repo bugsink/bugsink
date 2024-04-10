@@ -7,6 +7,11 @@ from sentry.utils.safe import get_path, trim
 from sentry.utils.strings import strip
 
 
+def maybe_empty(s):
+    # TODO deduplicate this with events/models.py
+    return "" if not s else s
+
+
 def get_type_and_value_for_data(data):
     if "exception" in data and data["exception"]:
         return get_exception_type_and_value_for_exception(data)
@@ -41,7 +46,17 @@ def get_exception_type_and_value_for_exception(data):
         if len(data["exception"]) == 0:
             return "<unknown>", ""
 
-    exception = get_path(data, "exception", "values", -1)
+    # We use the last exception in the chain because it's the one you're most likely to care about. I'd roughly
+    # distinguish 2 cases for reraising:
+    #
+    # 1. intentionally rephrasing/retyping exceptions to more clearly express their meaning. In that case you
+    #    certainly care more about the rephrased thing than the original, that's the whole point.
+    #
+    # 2. actual "accidents" happening while error-handling. In that case you care about the accident first (bugsink
+    #    is a system to help you think about cases that you didn't properly think about in the first place),
+    #    although you may also care about the root cause. (In fact, sometimes you care more about the root cause,
+    #    but I'd say you'll have to yak-shave your way there).
+    exception = get_path(data, "exception", "values", -1)  # .values is required by the json spec, so can be done safely
     if not exception:
         return "<unknown>", ""
 
@@ -92,6 +107,21 @@ def get_title_for_exception_type_and_value(type_, value):
         value = str(value)
 
     return "{}: {}".format(type_, value.splitlines()[0])
+
+
+def get_denormalized_fields_for_data(parsed_data):
+    last_frame = get_crash_frame_from_event_data(parsed_data) or {}
+
+    module = maybe_empty(last_frame.get("module", ""))
+    function = maybe_empty(get_function_name_for_frame(last_frame, parsed_data.get("platform")))
+    filename = maybe_empty(last_frame.get("filename", ""))
+
+    return {
+        "transaction": maybe_empty(parsed_data.get("transaction", ""))[:200],
+        "last_frame_filename": filename[:255],
+        "last_frame_module": module[:255],
+        "last_frame_function": function[:255],
+    }
 
 
 # utilities related to storing and retrieving release-versions; we use the fact that sentry (and we've adopted their
