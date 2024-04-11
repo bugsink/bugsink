@@ -165,7 +165,7 @@ CELERY_BROKER_CONNECTION_TIMEOUT = 2.5  # long enough for glitches, short enough
 
 
 def show_toolbar_for_queryparam(request):
-    if not request.GET.get("debug", ""):
+    if "__debug__" not in request.path and not request.GET.get("debug", ""):
         return False
     return show_toolbar(request)
 
