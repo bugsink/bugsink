@@ -1,9 +1,12 @@
+from copy import deepcopy
 import os
 
 from pathlib import Path
 
 import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
+
+from django.utils.log import DEFAULT_LOGGING
 
 from debug_toolbar.middleware import show_toolbar
 
@@ -169,6 +172,13 @@ def show_toolbar_for_queryparam(request):
 
 DEBUG_TOOLBAR_CONFIG = {
     "SHOW_TOOLBAR_CALLBACK": show_toolbar_for_queryparam,
+}
+
+
+LOGGING = deepcopy(DEFAULT_LOGGING)
+LOGGING['loggers']['bugsink'] = {
+    "level": "INFO",
+    "handlers": ["console"],
 }
 
 
