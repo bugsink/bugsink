@@ -6,6 +6,8 @@ from django.test import TestCase
 from django.utils import timezone
 from django.test.client import RequestFactory
 
+from rest_framework.exceptions import ValidationError
+
 from projects.models import Project
 from events.factories import create_event_data
 from issues.factories import get_or_create_issue
@@ -17,9 +19,9 @@ from .views import BaseIngestAPIView
 
 
 class IngestViewTestCase(TestCase):
-    # For now this test focusses on alert-sending, but it may evolve more generally to be about the IngestView.
 
     def setUp(self):
+        # the existence of loud/quiet reflect that parts of this test focusses on alert-sending
         self.request_factory = RequestFactory()
         self.loud_project = Project.objects.create(
             name="loud",
@@ -187,6 +189,28 @@ class IngestViewTestCase(TestCase):
                 request,
             )
             self.assertEquals(expected_called, send_unmute_alert.delay.called)
+
+    def test_deal_with_double_event_ids(self):
+        request = self.request_factory.post("/api/1/store/")
+
+        project = self.quiet_project
+
+        event_data = create_event_data()
+
+        # first time
+        BaseIngestAPIView().process_event(
+            event_data,
+            project,
+            request,
+        )
+
+        with self.assertRaises(ValidationError):
+            # second time
+            BaseIngestAPIView().process_event(
+                event_data,
+                project,
+                request,
+            )
 
 
 class TimeZoneTesCase(TestCase):

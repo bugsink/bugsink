@@ -9,6 +9,7 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import exceptions
+from rest_framework.exceptions import ValidationError
 
 # from projects.models import Project
 from compat.auth import parse_auth_header_value
@@ -75,6 +76,8 @@ class BaseIngestAPIView(APIView):
         # before proceeding because it may be useful for debugging errors in the digest process.
         ingested_event = cls.ingest_event(now, event_data, request, project)
         if settings.BUGSINK_DIGEST_IMMEDIATELY:
+            # NOTE once we implement the no-immediate case, we should do so in a way that catches ValidationErrors
+            # raised by digest_event
             cls.digest_event(ingested_event, event_data)
 
     @classmethod
@@ -170,7 +173,10 @@ class BaseIngestAPIView(APIView):
                 issue.delete()
                 raise ViolatedExpectation("no event created, but issue created")
 
-            return
+            # Validating by letting the DB raise an exception, and only after taking some other actions already, is not
+            # "by the book" (some book), but it's the most efficient way of doing it when your basic expectation is that
+            # multiple events with the same event_id "don't happen" (i.e. are the result of badly misbehaving clients)
+            raise ValidationError("Event already exists", code="event_already_exists")
 
         create_release_if_needed(ingested_event.project, event.release)
 

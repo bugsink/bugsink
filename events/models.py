@@ -1,7 +1,9 @@
+import re
 import json
 import uuid
 
 from django.db import models
+from django.db.utils import IntegrityError
 
 from projects.models import Project
 from compat.timestamp import parse_timestamp
@@ -174,39 +176,43 @@ class Event(models.Model):
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
         # objects etc).
 
-        event, created = cls.objects.get_or_create(  # NOTE immediate creation... is this what we want?
-            event_id=parsed_data["event_id"],
-            project=ingested_event.project,
-            defaults={
-                'ingested_event': ingested_event,  # <= thoughts about defaults v.s. check-as-part-of-get go here :-)
-                'issue': issue,
-                'server_side_timestamp': ingested_event.timestamp,
-                'data': json.dumps(parsed_data),
+        try:
+            event = cls.objects.create(
+                event_id=parsed_data["event_id"],
+                project=ingested_event.project,
+                ingested_event=ingested_event,  # <= thoughts about defaults v.s. check-as-part-of-get go here...
+                issue=issue,
+                server_side_timestamp=ingested_event.timestamp,
+                data=json.dumps(parsed_data),
 
-                'timestamp': parse_timestamp(parsed_data["timestamp"]),
-                'platform': parsed_data["platform"],
+                timestamp=parse_timestamp(parsed_data["timestamp"]),
+                platform=parsed_data["platform"],
 
-                'level': maybe_empty(parsed_data.get("level", "")),
-                'logger': maybe_empty(parsed_data.get("logger", "")),
-                # 'transaction': maybe_empty(parsed_data.get("transaction", "")), passed as part of denormalized_fields
+                level=maybe_empty(parsed_data.get("level", "")),
+                logger=maybe_empty(parsed_data.get("logger", "")),
+                # transaction=maybe_empty(parsed_data.get("transaction", "")), part of denormalized_fields
 
-                'server_name': maybe_empty(parsed_data.get("server_name", "")),
-                'release': maybe_empty(parsed_data.get("release", "")),
-                'dist': maybe_empty(parsed_data.get("dist", "")),
+                server_name=maybe_empty(parsed_data.get("server_name", "")),
+                release=maybe_empty(parsed_data.get("release", "")),
+                dist=maybe_empty(parsed_data.get("dist", "")),
 
-                'environment': maybe_empty(parsed_data.get("environment", "")),
+                environment=maybe_empty(parsed_data.get("environment", "")),
 
-                'sdk_name': maybe_empty(parsed_data.get("", {}).get("name", "")),
-                'sdk_version': maybe_empty(parsed_data.get("", {}).get("version", "")),
+                sdk_name=maybe_empty(parsed_data.get("", {}).get("name", "")),
+                sdk_version=maybe_empty(parsed_data.get("", {}).get("version", "")),
 
-                'has_exception': "exception" in parsed_data,
-                'has_logentry': "logentry" in parsed_data,
+                has_exception="exception" in parsed_data,
+                has_logentry="logentry" in parsed_data,
 
-                'debug_info': ingested_event.debug_info,
+                debug_info=ingested_event.debug_info,
 
-                'ingest_order': ingest_order,
+                ingest_order=ingest_order,
 
                 **denormalized_fields,
-            }
-        )
-        return event, created
+            )
+            created = True
+            return event, created
+        except IntegrityError as e:
+            assert re.match(
+                r".*unique constraint failed.*events_event.*project_id.*events_event.*event_id", str(e).lower())
+            return None, False
