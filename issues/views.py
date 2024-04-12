@@ -39,7 +39,7 @@ def _is_valid_action(action, issue):
 
     if action.startswith("resolved_release:"):
         release_version = action.split(":", 1)[1]
-        if issue.events_at.contains(release_version + "\n"):
+        if release_version + "\n" in issue.events_at:
             return False
 
     elif action.startswith("mute"):
