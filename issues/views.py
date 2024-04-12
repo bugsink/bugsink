@@ -46,6 +46,8 @@ def _is_valid_action(action, issue):
         if issue.is_muted:
             return False
 
+        # TODO muting with a VBC that is already met should be invalid. See 'Exception("The unmute condition is already'
+
     elif action == "unmute":
         if not issue.is_muted:
             return False
@@ -92,7 +94,7 @@ def _apply_action(manager, issue_or_qs, action):
         mute_for_params = action.split(":", 1)[1]
         period_name, nr_of_periods, gte_threshold = mute_for_params.split(",")
 
-        manager.mute(issue_or_qs, json.dumps([{
+        manager.mute(issue_or_qs, unmute_on_volume_based_conditions=json.dumps([{
             "period": period_name,
             "nr_of_periods": int(nr_of_periods),
             "volume": int(gte_threshold),
@@ -161,7 +163,7 @@ def _handle_post(request, issue):
     # through some other UI path'. The only case I can think of where this is not the case is where you try to
     # resolve an issue for a specific release, and while you where thinking about that, it occurred for that
     # release. In that case it will probably stand out that your buttons don't become greyed out, and that the
-    # dropdown no longer functions.
+    # dropdown no longer functions. already-true-vbc-unmute may be another exception to this rule.
     return HttpResponseRedirect(request.path_info)
 
 

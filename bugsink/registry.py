@@ -42,9 +42,9 @@ class PeriodCounterRegistry(object):
             issue_pc.inc(event.timestamp)
 
         # connect all volume-based conditions to their respective period counters' event listeners
-        # this is done after the events are loaded because:
-        # 1. we don't actually want to trigger anything on-load and
-        # 2. this is much faster.
+        # this is done after the events are loaded (as opposed to before they are loaded) because:
+        # 1. this ensures we don't trigger any events as a side effect of load_from_scratch
+        # 2. not having to evalutate the handlers each time is more performant
         for issue in issues.filter(is_muted=True):
             IssueStateManager.set_unmute_handlers(by_issue, issue, now)
 

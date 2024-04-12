@@ -200,7 +200,7 @@ class BaseIngestAPIView(APIView):
             if issue.is_muted and issue.unmute_after is not None and ingested_event.timestamp > issue.unmute_after:
                 # note that unmuting on-ingest implies that issues that no longer occur stay muted. I'd say this is what
                 # you want: things that no longer happen should _not_ draw your attention, and if you've nicely moved
-                # some issue away from the "Open" tab it should not reappear there if a certain amount of time happens.
+                # some issue away from the "Open" tab it should not reappear there if a certain amount of time passes.
                 # Thus, unmute_after should more completely be called unmute_until_events_happen_after but that's a bit
                 # long. Phrased slightly differently: you basically click the button saying "I suppose this issue will
                 # self-resolve in x time; notify me if this is not the case"

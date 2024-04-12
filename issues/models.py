@@ -210,14 +210,8 @@ class IssueStateManager(object):
             issue.unmute_on_volume_based_conditions = "[]"
             issue.unmute_after = None
 
-            # We keep the pc_registry and the value of issue.unmute_on_volume_based_conditions in-sync to avoid going
-            # mad (in general). A specific case that I can think of off the top of my head that goes wrong if you
-            # wouldn't do this, even given the fact that we check on is_muted in the above: you might re-mute but with
-            # different unmute conditions, and in that case you don't want your old outdated conditions triggering
-            # anything. (Side note: I'm not sure how I feel about reaching out to the global registry here; the
-            # alternative would be to pass this along.)
-            # (NOTE: upon rereading the above, it seems kind of trivial: a cache should simply be in-sync, no further
-            # thinking is needed)
+            # NOTE I'm not sure how I feel about reaching out to the global registry here; consider pass-along.
+            # Keep the pc_registry and the value of issue.unmute_on_volume_based_conditions in-sync:
             get_pc_registry().by_issue[issue.id].remove_event_listener(UNMUTE_PURPOSE)
 
             if triggered_by_event:
@@ -236,6 +230,11 @@ class IssueStateManager(object):
             for vbc_s in json.loads(issue.unmute_on_volume_based_conditions)
         ]
 
+        # remove_event_listener(UNMUTE_PURPOSE) is (given the current constraints in our UI) not needed here, because we
+        # can only reach this point for currently unmuted (and hence without listeners) issues. Somewhat related note
+        # about this for-loop: with our current UI this loop always contains 0 or 1 elements, adding another unmute
+        # condition for an already-muted issue is simply not possible. If the UI ever changes, we need to double-check
+        # whether this still holds up.
         for vbc in unmute_vbcs:
             initial_state = issue_pc.add_event_listener(
                 period_name=vbc.period,
