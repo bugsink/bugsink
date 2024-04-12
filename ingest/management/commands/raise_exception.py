@@ -31,7 +31,7 @@ class Command(BaseCommand):
             self.raise_exception_from("We intentionally translated this into the exception", e)
 
     def raise_exception(self, msg):
-        raise Exception(msg)
+        raise ValueError(msg)
 
     def raise_exception_from(self, msg, e):
         s = "foo"
@@ -46,4 +46,4 @@ class Command(BaseCommand):
                 "snu": None,
             },
         }
-        raise Exception(msg) from e
+        raise ValueError(msg) from e

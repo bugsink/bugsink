@@ -24,7 +24,7 @@ class callback(object):
     def __init__(self):
         self.calls = 0
 
-    def __call__(self):
+    def __call__(self, counted_entity):
         self.calls += 1
 
 
@@ -137,7 +137,7 @@ class PeriodCounterTestCase(TestCase):
             def __init__(self):
                 self.calls = 0
 
-            def __call__(self):
+            def __call__(self, counted_entity):
                 pc.remove_event_listener("foo")
                 self.calls += 1
 

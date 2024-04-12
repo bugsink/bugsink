@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Issue, Grouping
+from .models import Issue, Grouping, TurningPoint
 
 
 class GroupingInline(admin.TabularInline):
@@ -9,6 +9,26 @@ class GroupingInline(admin.TabularInline):
     exclude = ['project']
     readonly_fields = [
         'grouping_key',
+    ]
+
+
+class TurningPointInline(admin.TabularInline):
+    model = TurningPoint
+    extra = 0
+    exclude = ['project']
+    fields = [
+        "kind",
+        "timestamp",
+        "user",
+        "triggering_event",
+        "metadata",
+        "comment",
+    ]
+    readonly_fields = [
+        "user",  # readonly because it avoid thinking about well-implemented select-boxes
+        "triggering_event",  # readonly because it avoid thinking about well-implemented select-boxes
+        "metadata",  # readonly to avoid a big textbox
+        "comment",  # readonly to avoid a big textbox
     ]
 
 
@@ -32,6 +52,7 @@ class IssueAdmin(admin.ModelAdmin):
 
     inlines = [
         GroupingInline,
+        TurningPointInline,
     ]
 
     list_display = [

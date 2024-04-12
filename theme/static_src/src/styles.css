@@ -102,6 +102,30 @@
     display: flex;
 }
 
+.triangle-left {
+    position:relative;
+}
+
+.triangle-left:before {
+    content: "";
+    border-style: solid;
+    border-width: 9px 8px 9px 0;
+    border-color: transparent rgb(203 213 225) transparent transparent;
+    position: absolute;
+    left: -8px;
+    top: 20px;
+}
+
+.triangle-left:after {
+    content: "";
+    border-style: solid;
+    border-width: 9px 8px 9px 0;
+    border-color: transparent white transparent transparent;
+    position: absolute;
+    left: -6px;
+    top: 20px;
+}
+
 /*
 The below is the output of:
 

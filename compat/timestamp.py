@@ -20,3 +20,12 @@ def parse_timestamp(value):
         return datetime.datetime.fromtimestamp(value, tz=datetime.timezone.utc)
 
     return parse_datetime(value)
+
+
+def format_timestamp(value):
+    """the reverse of parse_timestamp"""
+
+    assert isinstance(value, datetime.datetime)
+    assert value.tzinfo == datetime.timezone.utc
+
+    return value.isoformat()

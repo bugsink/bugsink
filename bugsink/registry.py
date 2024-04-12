@@ -36,10 +36,10 @@ class PeriodCounterRegistry(object):
         # load all events (one by one, let's measure the slowness of the naive implementation before making it faster)
         for event in ordered_events:
             project_pc = by_project[event.project_id]
-            project_pc.inc(event.timestamp)
+            project_pc.inc(event.timestamp)  # `counted_entity` needs not be passed since no unmute_handers are set yet
 
             issue_pc = by_issue[event.issue_id]
-            issue_pc.inc(event.timestamp)
+            issue_pc.inc(event.timestamp)  # `counted_entity` needs not be passed since no unmute_handers are set yet
 
         # connect all volume-based conditions to their respective period counters' event listeners
         # this is done after the events are loaded (as opposed to before they are loaded) because:

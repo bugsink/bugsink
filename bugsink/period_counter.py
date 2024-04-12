@@ -101,7 +101,7 @@ class PeriodCounter(object):
         self.counts = {tuple_length: {} for tuple_length in range(TL_MINUTE + 1)}
         self.event_listeners = {tuple_length: {} for tuple_length in range(TL_MINUTE + 1)}
 
-    def inc(self, datetime_utc, n=1):
+    def inc(self, datetime_utc, n=1, counted_entity=None):
         # we only allow UTC, and we generally use Django model fields, which are UTC, so this should be good:
         assert datetime_utc.tzinfo == timezone.utc
 
@@ -118,12 +118,12 @@ class PeriodCounter(object):
 
                     if not self._get_event_state(tup[:tl], tl, nr_of_periods, gte_threshold):
                         event_listeners_for_tl[(nr_of_periods, gte_threshold)] = change_state(listener, False)
-                        listener.when_becomes_false()
+                        listener.when_becomes_false(counted_entity=counted_entity)
 
                 else:
                     if self._get_event_state(tup[:tl], tl, nr_of_periods, gte_threshold):
                         event_listeners_for_tl[(nr_of_periods, gte_threshold)] = change_state(listener, True)
-                        listener.when_becomes_true()
+                        listener.when_becomes_true(counted_entity=counted_entity)
 
     def add_event_listener(self, period_name, nr_of_periods, gte_threshold, when_becomes_true=noop,
                            when_becomes_false=noop, purpose=None, initial_event_state=None, tup=None):

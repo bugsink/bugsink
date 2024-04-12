@@ -296,7 +296,7 @@ seen as an undo rather than anything else.
 """
 
 
-class MuteUnmuteTestCase(TestCase):
+class MuteUnmuteTestCase(DjangoTestCase):
     """
     Somewhat of an integration test. The unit-under-test here is the whole of
     * the pc_registry
@@ -355,9 +355,10 @@ class MuteUnmuteTestCase(TestCase):
             is_muted=True,
             **denormalized_issue_fields(),
         )
+        event = create_event(project, issue)
 
         pc = registry.by_issue[issue.id] = PeriodCounter()
-        pc.inc(datetime.now(timezone.utc))
+        pc.inc(datetime.now(timezone.utc), counted_entity=event)
 
         with self.assertRaises(Exception):
             IssueStateManager.mute(issue, "[{\"period\": \"day\", \"nr_of_periods\": 1, \"volume\": 1}]")
@@ -394,7 +395,8 @@ class MuteUnmuteTestCase(TestCase):
         # registry.load_from_scratch()
         registry = get_pc_registry()
 
-        registry.by_issue[issue.id].inc(datetime.now(timezone.utc))
+        event = create_event(project, issue)
+        registry.by_issue[issue.id].inc(datetime.now(timezone.utc), counted_entity=event)
 
         self.assertFalse(Issue.objects.get(id=issue.id).is_muted)
         self.assertEquals("[]", Issue.objects.get(id=issue.id).unmute_on_volume_based_conditions)
@@ -415,12 +417,12 @@ class MuteUnmuteTestCase(TestCase):
             is_muted=True,
             **denormalized_issue_fields(),
         )
-
         # because we create our objects before getting the lazy registry, event-listeners will be correctly set by
         # registry.load_from_scratch()
         registry = get_pc_registry()
 
-        registry.by_issue[issue.id].inc(datetime.now(timezone.utc))
+        event = create_event(project, issue)
+        registry.by_issue[issue.id].inc(datetime.now(timezone.utc), counted_entity=event)
 
         self.assertFalse(Issue.objects.get(id=issue.id).is_muted)
         self.assertEquals("[]", Issue.objects.get(id=issue.id).unmute_on_volume_based_conditions)

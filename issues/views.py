@@ -1,6 +1,7 @@
 from collections import namedtuple
 import json
 
+from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import Q
 from django.http import HttpResponseRedirect
@@ -9,8 +10,10 @@ from django.template.defaultfilters import date
 
 from events.models import Event
 from bugsink.decorators import project_membership_required, issue_membership_required
+from compat.timestamp import format_timestamp
 
-from .models import Issue, IssueQuerysetStateManager, IssueStateManager
+from .models import (
+    Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind, add_periods_to_datetime)
 
 
 MuteOption = namedtuple("MuteOption", ["for_or_until", "period_name", "nr_of_periods", "gte_threshold"])
@@ -73,7 +76,59 @@ def _q_for_invalid_for_action(action):
     return illegal_conditions
 
 
-def _apply_action(manager, issue_or_qs, action):
+def _make_history(issue_or_qs, action, user):
+    if action == "resolve":
+        kind = TurningPointKind.FIRST_SEEN
+    elif action.startswith("resolved"):
+        kind = TurningPointKind.RESOLVED
+    elif action.startswith("mute"):
+        kind = TurningPointKind.MUTED
+    elif action == "unmute":
+        kind = TurningPointKind.UNMUTED
+    else:
+        raise ValueError(f"unknown action: {action}")
+
+    if action.startswith("mute_for:"):
+        mute_for_params = action.split(":", 1)[1]
+        period_name, nr_of_periods, _ = mute_for_params.split(",")
+        unmute_after = add_periods_to_datetime(timezone.now(), int(nr_of_periods), period_name)
+        metadata = {"mute_for": {
+            "period_name": period_name, "nr_of_periods": int(nr_of_periods),
+            "unmute_after": format_timestamp(unmute_after)}}
+
+    elif action.startswith("mute_until:"):
+        mute_for_params = action.split(":", 1)[1]
+        period_name, nr_of_periods, gte_threshold = mute_for_params.split(",")
+        metadata = {"mute_until": {
+            "period_name": period_name, "nr_of_periods": int(nr_of_periods), "gte_threshold": gte_threshold}}
+
+    elif action == "mute":
+        metadata = {"mute_unconditionally": True}
+
+    elif action.startswith("resolved_release:"):
+        release_version = action.split(":", 1)[1]
+        metadata = {"resolved_release": release_version}
+    elif action == "resolved_next":
+        metadata = {"resolve_by_next": True}
+    elif action == "resolve":
+        metadata = {"resolved_unconditionally": True}
+    else:
+        metadata = {}
+
+    now = timezone.now()
+    if isinstance(issue_or_qs, Issue):
+        TurningPoint.objects.create(
+            issue=issue_or_qs, kind=kind, user=user, metadata=json.dumps(metadata), timestamp=now)
+    else:
+        TurningPoint.objects.bulk_create([
+            TurningPoint(issue=issue, kind=kind, user=user, metadata=json.dumps(metadata), timestamp=now)
+            for issue in issue_or_qs
+        ])
+
+
+def _apply_action(manager, issue_or_qs, action, user):
+    _make_history(issue_or_qs, action, user)
+
     if action == "resolve":
         manager.resolve(issue_or_qs)
     elif action.startswith("resolved_release:"):
@@ -88,7 +143,8 @@ def _apply_action(manager, issue_or_qs, action):
     elif action.startswith("mute_for:"):
         mute_for_params = action.split(":", 1)[1]
         period_name, nr_of_periods, _ = mute_for_params.split(",")
-        manager.mute(issue_or_qs, unmute_after_tuple=(int(nr_of_periods), period_name))
+        unmute_after = add_periods_to_datetime(timezone.now(), int(nr_of_periods), period_name)
+        manager.mute(issue_or_qs, unmute_after=unmute_after)
 
     elif action.startswith("mute_until:"):
         mute_for_params = action.split(":", 1)[1]
@@ -113,7 +169,8 @@ def issue_list(request, project, state_filter="open"):
         # actions are always marked as illegal, because they are applied first, then checked (and applying twice is
         # illegal)
         unapplied_issue_ids = list(issue_qs.filter(illegal_conditions).values_list("id", flat=True))
-        _apply_action(IssueQuerysetStateManager, issue_qs.exclude(illegal_conditions), request.POST["action"])
+        _apply_action(
+            IssueQuerysetStateManager, issue_qs.exclude(illegal_conditions), request.POST["action"], request.user)
 
     else:
         unapplied_issue_ids = None
@@ -155,7 +212,7 @@ def issue_last_event(request, issue):
 
 def _handle_post(request, issue):
     if _is_valid_action(request.POST["action"], issue):
-        _apply_action(IssueStateManager, issue, request.POST["action"])
+        _apply_action(IssueStateManager, issue, request.POST["action"], request.user)
         issue.save()
 
     # note that if the action is not valid, we just ignore it (i.e. we don't show any error message or anything)

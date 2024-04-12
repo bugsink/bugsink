@@ -13,9 +13,10 @@ from rest_framework.exceptions import ValidationError
 
 # from projects.models import Project
 from compat.auth import parse_auth_header_value
+from compat.timestamp import format_timestamp
 
 from projects.models import Project
-from issues.models import Issue, IssueStateManager, Grouping
+from issues.models import Issue, IssueStateManager, Grouping, TurningPoint, TurningPointKind
 from issues.utils import get_type_and_value_for_data, get_issue_grouper_for_data, get_denormalized_fields_for_data
 from issues.regressions import issue_is_regression
 
@@ -88,7 +89,7 @@ class BaseIngestAPIView(APIView):
             get_pc_registry().by_project[project.id] = PeriodCounter()
 
         project_pc = get_pc_registry().by_project[project.id]
-        project_pc.inc(now)
+        project_pc.inc(now)  # counted_entity (event) is not available yet, since we don't use it we don't pass it.
 
         debug_info = request.META.get("HTTP_X_BUGSINK_DEBUGINFO", "")
 
@@ -181,12 +182,20 @@ class BaseIngestAPIView(APIView):
         create_release_if_needed(ingested_event.project, event.release)
 
         if issue_created:
+            TurningPoint.objects.create(
+                issue=issue, triggering_event=event, timestamp=ingested_event.timestamp,
+                kind=TurningPointKind.FIRST_SEEN)
+
             if ingested_event.project.alert_on_new_issue:
                 send_new_issue_alert.delay(issue.id)
 
         else:
             # new issues cannot be regressions by definition, hence this is in the 'else' branch
             if issue_is_regression(issue, event.release):
+                TurningPoint.objects.create(
+                    issue=issue, triggering_event=event, timestamp=ingested_event.timestamp,
+                    kind=TurningPointKind.REGRESSED)
+
                 if ingested_event.project.alert_on_regression:
                     send_regression_alert.delay(issue.id)
 
@@ -198,13 +207,18 @@ class BaseIngestAPIView(APIView):
             # fact, conversely, it may be more loud when the for/until condition runs out). This is in fact analogous to
             # "resolved" issues which are _also_ treated with more "suspicion" than their unresolved counterparts.
             if issue.is_muted and issue.unmute_after is not None and ingested_event.timestamp > issue.unmute_after:
+                TurningPoint.objects.create(
+                    issue=issue, triggering_event=event, timestamp=ingested_event.timestamp,
+                    kind=TurningPointKind.UNMUTED,
+                    metadata=json.dumps({"mute_for": {"unmute_after": format_timestamp(issue.unmute_after)}}))
+
                 # note that unmuting on-ingest implies that issues that no longer occur stay muted. I'd say this is what
                 # you want: things that no longer happen should _not_ draw your attention, and if you've nicely moved
                 # some issue away from the "Open" tab it should not reappear there if a certain amount of time passes.
                 # Thus, unmute_after should more completely be called unmute_until_events_happen_after but that's a bit
                 # long. Phrased slightly differently: you basically click the button saying "I suppose this issue will
                 # self-resolve in x time; notify me if this is not the case"
-                IssueStateManager.unmute(issue, triggered_by_event=True)
+                IssueStateManager.unmute(issue, triggering_event=event)
 
             # update the denormalized fields
             issue.last_seen = ingested_event.timestamp
@@ -213,7 +227,7 @@ class BaseIngestAPIView(APIView):
         if issue.id not in get_pc_registry().by_issue:
             pc_registry.by_issue[issue.id] = PeriodCounter()
         issue_pc = get_pc_registry().by_issue[issue.id]
-        issue_pc.inc(ingested_event.timestamp)
+        issue_pc.inc(ingested_event.timestamp, counted_entity=event)
 
         # TODO bookkeeping of events_at goes here.
         issue.save()

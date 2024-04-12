@@ -8,6 +8,7 @@ from django.db.models import F, Value
 
 from bugsink.volume_based_condition import VolumeBasedCondition
 from alerts.tasks import send_unmute_alert
+from compat.timestamp import parse_timestamp
 
 from .utils import (
     parse_lines, serialize_lines, filter_qs_for_fixed_at, exclude_qs_for_fixed_at,
@@ -181,7 +182,7 @@ class IssueStateManager(object):
         IssueStateManager.unmute(issue)
 
     @staticmethod
-    def mute(issue, unmute_on_volume_based_conditions="[]", unmute_after_tuple=(None, None)):
+    def mute(issue, unmute_on_volume_based_conditions="[]", unmute_after=None):
         from bugsink.registry import get_pc_registry  # avoid circular import
         if issue.is_resolved:
             raise IncongruentStateException("Cannot mute a resolved issue")
@@ -193,12 +194,11 @@ class IssueStateManager(object):
 
         IssueStateManager.set_unmute_handlers(get_pc_registry().by_issue, issue, now)
 
-        nr_of_periods, period_name = unmute_after_tuple
-        if nr_of_periods is not None and period_name is not None:
-            issue.unmute_after = add_periods_to_datetime(now, nr_of_periods, period_name)
+        if unmute_after is not None:
+            issue.unmute_after = unmute_after
 
     @staticmethod
-    def unmute(issue, triggered_by_event=False):
+    def unmute(issue, triggering_event=None, vbc_dict=None):
         from bugsink.registry import get_pc_registry, UNMUTE_PURPOSE  # avoid circular import
 
         if issue.is_muted:
@@ -214,7 +214,15 @@ class IssueStateManager(object):
             # Keep the pc_registry and the value of issue.unmute_on_volume_based_conditions in-sync:
             get_pc_registry().by_issue[issue.id].remove_event_listener(UNMUTE_PURPOSE)
 
-            if triggered_by_event:
+            if triggering_event is not None:
+                # by sticking close to the point where we call send_unmute_alert.delay, we reuse any thinking about
+                # avoinding double calls in edge-cases. a "coincidental advantage" of this approach is that the current
+                # path is never reached via UI-based paths (because those are by definition not event-triggered); thus
+                # the 2 ways of creating TurningPoints do not collide.
+                TurningPoint.objects.create(
+                    issue=issue, triggering_event=triggering_event, timestamp=triggering_event.server_side_timestamp,
+                    kind=TurningPointKind.UNMUTED, metadata=json.dumps({"mute_until": vbc_dict}))
+
                 # (note: we can expect project to be set, because it will be None only when projects are deleted, in
                 # which case no more unmuting happens)
                 if issue.project.alert_on_unmute:
@@ -240,7 +248,7 @@ class IssueStateManager(object):
                 period_name=vbc.period,
                 nr_of_periods=vbc.nr_of_periods,
                 gte_threshold=vbc.volume,
-                when_becomes_true=create_unmute_issue_handler(issue.id),
+                when_becomes_true=create_unmute_issue_handler(issue.id, vbc.to_dict()),
                 tup=now.timetuple(),
                 purpose=UNMUTE_PURPOSE,
             )
@@ -336,7 +344,7 @@ class IssueQuerysetStateManager(object):
         raise NotImplementedError("reopen is not implemented - see comments above")
 
     @staticmethod
-    def mute(issue_qs, unmute_on_volume_based_conditions="[]", unmute_after_tuple=(None, None)):
+    def mute(issue_qs, unmute_on_volume_based_conditions="[]", unmute_after=None):
         from bugsink.registry import get_pc_registry  # avoid circular import
         if issue_qs.filter(is_resolved=True).exists():
             # we might remove this check for performance reasons later (it's more expensive here than in the non-bulk
@@ -353,24 +361,23 @@ class IssueQuerysetStateManager(object):
 
         IssueQuerysetStateManager.set_unmute_handlers(get_pc_registry().by_issue, issue_qs, now)
 
-        nr_of_periods, period_name = unmute_after_tuple
-        if nr_of_periods is not None and period_name is not None:
-            issue_qs.update(
-                unmute_after=add_periods_to_datetime(now, nr_of_periods, period_name),
-            )
+        if unmute_after is not None:
+            issue_qs.update(unmute_after=unmute_after)
 
     @staticmethod
-    def unmute(issue_qs, triggered_by_event=False):
+    def unmute(issue_qs, triggering_event=None):
         issue_qs.update(
             is_muted=False,
             unmute_on_volume_based_conditions="[]",
             unmute_after=None,
         )
 
+        assert triggering_event is None, "this method can only be called from the UI, i.e. user-not-event-triggered"
         # for the rest of this method there's no fancy queryset based stuff (we don't actually do updates on the DB)
         # we resist the temptation to add filter(is_muted=True) in the below because that would actually add a query
+        # (for this remark to be true triggering_event must be None, which is asserted for in the above)
         for issue in issue_qs:
-            IssueStateManager.unmute(issue, triggered_by_event)
+            IssueStateManager.unmute(issue, triggering_event)
 
     @staticmethod
     def set_unmute_handlers(by_issue, issue_qs, now):
@@ -380,10 +387,55 @@ class IssueQuerysetStateManager(object):
             IssueStateManager.set_unmute_handlers(by_issue, issue, now)
 
 
-def create_unmute_issue_handler(issue_id):
-    def unmute():
+def create_unmute_issue_handler(issue_id, vbc_dict):
+    # as an alternative solution to storing vbc_dict in the closure I considered passing the (period, gte_threshold)
+    # info from the PeriodCounter (in the when_becomes_true call), but the current solution works just as well and
+    # requires less rework.
+
+    def unmute(counted_entity):
         issue = Issue.objects.get(id=issue_id)
-        IssueStateManager.unmute(issue, triggered_by_event=True)
+        IssueStateManager.unmute(issue, triggering_event=counted_entity, vbc_dict=vbc_dict)
         issue.save()
 
     return unmute
+
+
+class TurningPointKind(models.IntegerChoices):
+    FIRST_SEEN = 1, "First seen"
+    RESOLVED = 2, "Resolved"
+    MUTED = 3, "Muted"
+    REGRESSED = 4, "Marked as regressed"
+    UNMUTED = 5, "Unmuted"
+
+    # ASSGINED = 10, "Assigned"   # perhaps later
+    MANUAL_ANNOTATION = 100, "Manual annotation"
+
+
+class TurningPoint(models.Model):
+    """A TurningPoint models a point in time in the history of an issue."""
+    # basically: an Event, but that name was already taken in our system :-) alternative names I considered:
+    # "milestone", "state_change", "transition", "annotation", "episode"
+
+    issue = models.ForeignKey("Issue", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+    triggering_event = models.ForeignKey("events.Event", blank=True, null=True, on_delete=models.SET_NULL)
+    user = models.ForeignKey("auth.User", blank=True, null=True, on_delete=models.SET_NULL)  # null: the system-user
+    timestamp = models.DateTimeField(blank=False, null=False)  # this info is also in the event, but event is nullable
+    kind = models.IntegerField(blank=False, null=False, choices=TurningPointKind.choices)
+    metadata = models.TextField(blank=False, null=False, default="{}")  # json string
+    comment = models.TextField(blank=True, null=False, default="")
+
+    class Meta:
+        ordering = ["-timestamp"]
+        indexes = [
+            models.Index(fields=["timestamp"]),
+        ]
+
+    def parsed_metadata(self):
+        if not hasattr(self, "_parsed_metadata"):
+            self._parsed_metadata = json.loads(self.metadata)
+            # rather than doing some magic using an encoder/decoder we just convert the single value that we know to be
+            # time
+            if "mute_for" in self._parsed_metadata and "unmute_after" in self._parsed_metadata["mute_for"]:
+                self._parsed_metadata["mute_for"]["unmute_after"] = \
+                    parse_timestamp(self._parsed_metadata["mute_for"]["unmute_after"])
+        return self._parsed_metadata

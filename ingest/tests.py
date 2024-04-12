@@ -132,7 +132,7 @@ class IngestViewTestCase(TestCase):
 
         issue, _ = get_or_create_issue(self.loud_project, event_data)
 
-        IssueStateManager.mute(issue, unmute_after_tuple=(1, "day"))
+        IssueStateManager.mute(issue, unmute_after=timezone.now() + datetime.timedelta(days=1))
         issue.save()
 
         request = self.request_factory.post("/api/1/store/")

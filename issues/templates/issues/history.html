@@ -1,6 +1,86 @@
 {% extends "issues/base.html" %}
 {% load static %}
+{% load user %}
 
 {% block tab_content %}
-history
+
+<h1 class="text-2xl font-bold text-ellipsis whitespace-nowrap overflow-hidden">History</h1>
+<div class="italic">Most recent first</div>
+
+{% for turningpoint in issue.turningpoint_set.all %}
+    <div class="flex"><!-- single turningpoint -->
+        <div class="flex-none">
+            <div class="pt-8 pr-2">
+                {% if turningpoint.user %}
+                <img class="w-12 h-12 rounded-full border-2 border-slate-300" src="https://gravatar.com/avatar/{{ user|gravatar_sha }}?s=48&d=robohash"/>
+                {% else %}
+                <img class="w-12 h-12 rounded-full border-2 border-slate-300" src="{% static 'images/bugsink-logo.png' %}"/>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="border-slate-300 border-2 rounded-md mt-6 flex-auto"><!-- the "balloon" -->
+            <div class="p-4 flex triangle-left"><!-- 'header' row -->
+                <div>
+                    <span class="font-bold text-slate-800">{{ turningpoint.get_kind_display }}</span> by
+                    <span class="font-bold text-slate-800">{% if turningpoint.user %}{{ turningpoint.user|best_displayname }}{% else %}System{% endif %}</span>
+                </div>
+            
+                <div class="ml-auto">
+                    {{ turningpoint.timestamp|date:"j M G:i"  }}
+                </div>
+            </div>
+
+            {% if turningpoint.comments %}
+            <div class="border-t-2 p-4 border-slate-300">
+                {{ turningpoint.comments }}
+            </div>
+            {% endif %}
+
+            {% if turningpoint.parsed_metadata %}
+            <div class="border-t-2 p-4 border-slate-300">
+                {% if turningpoint.kind == 3 %} {# muted #}
+                    {% if turningpoint.parsed_metadata.mute_unconditionally %}
+                        Muted unconditionally.
+                    {% endif %}
+
+                    {% if turningpoint.parsed_metadata.mute_until %}
+                        Muted until more than {{ turningpoint.parsed_metadata.mute_until.gte_threshold }} events per {{ turningpoint.parsed_metadata.mute_until.nr_of_periods }} {{ turningpoint.parsed_metadata.mute_until.period_name }}{% if turningpoint.parsed_metadata.mute_until.nr_of_periods != 1 %}s{% endif %} occur.
+                    {% endif %}
+
+                    {% if turningpoint.parsed_metadata.mute_for %}
+                        Muted for {{ turningpoint.parsed_metadata.mute_for.nr_of_periods }} {{ turningpoint.parsed_metadata.mute_for.period_name }}{% if turningpoint.parsed_metadata.mute_for.nr_of_periods != 1 %}s{% endif %}, i.e. until {{ turningpoint.parsed_metadata.mute_for.unmute_after|date:"j M G:i" }}.
+                    {% endif %}
+
+                {% elif turningpoint.kind == 5 %} {# unmuted #}
+
+                    {% if turningpoint.parsed_metadata.mute_until %}
+                        More than {{ turningpoint.parsed_metadata.mute_until.volume }} events per {{ turningpoint.parsed_metadata.mute_until.nr_of_periods }} {{ turningpoint.parsed_metadata.mute_until.period }}{% if turningpoint.parsed_metadata.mute_until.nr_of_periods != 1 %}s{% endif %} occurred unmuting the issue.
+                    {% endif %}
+
+                    {% if turningpoint.parsed_metadata.mute_for %}
+                        An event was observed after the mute-deadline of {{ turningpoint.parsed_metadata.mute_for.unmute_after|date:"j M G:i" }} and the issue was unmuted.
+                    {% endif %}
+
+                {% endif %}
+
+                {% if turningpoint.parsed_metadata.resolved_unconditionally %}
+                    Marked as 'resolved' (without a specific release-marker).
+                {% endif %}
+
+                {% if turningpoint.parsed_metadata.resolved_release %}
+                    Marked as 'resolved in release {{ turningpoint.parsed_metadata.resolved_release }}'.
+                {% endif %}
+
+                {% if turningpoint.parsed_metadata.resolve_by_next %}
+                    Marked as 'resolved by next release'.
+                {% endif %}
+            </div>
+            {% endif %}
+        </div><!-- the "balloon" -->
+    </div><!-- single turningpoint -->
+
+    {% endfor %}
+
+
 {% endblock %}
