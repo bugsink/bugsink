@@ -415,31 +415,29 @@ def issue_event_list(request, issue):
 
 @issue_membership_required
 def history_comment_new(request, issue):
-    # TODO something with auth
 
     if request.method == "POST":
         form = CommentForm(request.POST)
-        if form.is_valid():
-            TurningPoint.objects.create(
-                issue=issue, kind=TurningPointKind.MANUAL_ANNOTATION, user=request.user,
-                comment=form.cleaned_data["comment"],
-                timestamp=timezone.now())
+        assert form.is_valid()  # we have only a textfield with no validation properties; also: no html-side handling
+
+        TurningPoint.objects.create(
+            issue=issue, kind=TurningPointKind.MANUAL_ANNOTATION, user=request.user,
+            comment=form.cleaned_data["comment"],
+            timestamp=timezone.now())
+
         return redirect(issue_history, issue_pk=issue.pk)
 
     raise HttpResponseNotAllowed()
 
 
-def history_comment_edit(request, issue_pk):
-    # TODO something with auth
+@issue_membership_required
+def history_comment_edit(request, issue, comment_pk):
+    comment = get_object_or_404(TurningPoint, pk=comment_pk, issue_id=issue.pk)
 
-    event = get_object_or_404(Event, id=event_pk)
     if request.method == "POST":
-        form = CommentForm(request.POST)
-        if form.is_valid():
-            TurningPoint.objects.create(
-                issue=event.issue, kind=TurningPointKind.COMMENT, user=request.user,
-                comment=form.cleaned_data["comment"],
-                timestamp=timezone.now())
-        return redirect(issue_event_stacktrace, issue_pk=event.issue.pk)
+        form = CommentForm(request.POST, instance=comment)
+        assert form.is_valid()
+        form.save()
+        return redirect(issue_history, issue_pk=issue.pk)
 
     raise HttpResponseNotAllowed()

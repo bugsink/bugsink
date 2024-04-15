@@ -28,14 +28,14 @@
             </div>
 
             <div class="border-t-2 pl-4 pr-4 pb-4 border-slate-300">{# 'body' part of the balloon (separated by a line) #}
-                <form action="{% url "history_comment_new" issue_pk=issue.id %}" method="post">
                 {% csrf_token %}
                     <div class="mt-4">
-                    <textarea name="comment" placeholder="comments..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md w-full"></textarea>
-                    </div>
+                    <form action="{% url "history_comment_new" issue_pk=issue.id %}" method="post">
+                    <textarea name="comment" placeholder="comments..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md w-full h-32"></textarea>
                     <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 active:ring">Post comment</button>
+                    </form>
+                    </div>
                 </div>{# 'body' part of the balloon #}
-                </form>
         </div><!-- the "balloon" -->
     </div><!-- single turningpoint -->
 
@@ -52,7 +52,7 @@
             </div>
         </div>
 
-        <div class="border-slate-300 border-2 rounded-md mt-6 flex-auto"><!-- the "balloon" -->
+        <div class="border-slate-300 border-2 rounded-md mt-6 flex-auto js-balloon"><!-- the "balloon" -->
             <div class="pl-4 flex triangle-left"><!-- 'header' row -->
                 <div class="mt-4 mb-4">
                     <span class="font-bold text-slate-800">{{ turningpoint.get_kind_display }}</span> by
@@ -61,7 +61,7 @@
             
                 <div class="ml-auto flex"> <!-- 'header' row right side -->
                     {% if turningpoint.user == request.user %}
-                    <div class="border-l-2 p-4 text-slate-800">
+                    <div class="border-l-2 p-4 text-slate-800" onclick="makeCommentEditable(this)">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
   <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
 </svg>
@@ -74,17 +74,23 @@
                 </div>
             </div>
 
-            {% if turningpoint.comment or turningpoint.parsed_metadata or turningpoint.triggering_event %}
+            {% if turningpoint.parsed_metadata or turningpoint.triggering_event or turningpoint.comment or turningpoint.user == request.user %}  {# the last clause means: editable, hence space must be reserved #}
             <div class="border-t-2 pl-4 pr-4 pb-4 border-slate-300">{# 'body' part of the balloon (separated by a line) #}
-                {% if turningpoint.comment %}
                     <div class="mt-4">
-                    {{ turningpoint.comment|linebreaksbr }}
-                    {% comment %}
-                    <textarea name="search" placeholder="comments..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md w-full"></textarea>
-                    <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 active:ring">Post comment</button>
-                    {% endcomment %}
+                        <div class="js-comment-plain">
+                        {{ turningpoint.comment|linebreaksbr }}
+                        </div>
+
+                        {% if turningpoint.user == request.user %}
+                        <div class="js-comment-editable hidden">
+                            <form action="{% url "history_comment_edit" issue_pk=issue.id comment_pk=turningpoint.pk %}" method="post">
+                            {% csrf_token %}
+                            <textarea name="comment" placeholder="comments..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md w-full h-32">{{ turningpoint.comment }}</textarea>{# note: we don't actually use {{ form.comments }} here; this means the show-red-on-invalid loop won't work but since everything is valid and we haven't implemented the other parts of that loop that's fine #}
+                            <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 active:ring">Update comment</button>
+                            </form>
+                        </div>
+                        {% endif %}
                     </div>
-                {% endif %}
 
                 {% if turningpoint.parsed_metadata %}
                 <div class="mt-4">
@@ -142,4 +148,8 @@
     {% endfor %}
 
 
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'js/issue_history.js' %}"></script>
 {% endblock %}

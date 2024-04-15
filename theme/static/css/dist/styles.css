@@ -938,6 +938,31 @@ select {
   height: 1rem;
 }
 
+.h-16 {
+  height: 4rem;
+}
+
+.h-24 {
+  height: 6rem;
+}
+
+.h-fit {
+  height: -moz-fit-content;
+  height: fit-content;
+}
+
+.h-32 {
+  height: 8rem;
+}
+
+.h-64 {
+  height: 16rem;
+}
+
+.h-48 {
+  height: 12rem;
+}
+
 .w-1\/4 {
   width: 25%;
 }

@@ -28,5 +28,5 @@ urlpatterns = [
 
     path('event/<uuid:event_pk>/', event_by_internal_id, name="event_by_internal_id"),
     path('issue/<uuid:issue_pk>/history/comment/', history_comment_new, name="history_comment_new"),
-    path('event/<uuid:event_pk>/history/comment/<int:comment_id>/', history_comment_edit, name="history_comment_edit"),
+    path('issue/<uuid:issue_pk>/history/comment/<int:comment_pk>/', history_comment_edit, name="history_comment_edit"),
 ]
