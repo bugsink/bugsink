@@ -20,3 +20,10 @@ function deleteComment(deleteUrl) {
         })
     }
 }
+
+function submitOnCtrlEnter(e) {
+    if (e.key === "Enter" && e.ctrlKey) {
+        e.preventDefault();
+        e.target.form.submit();
+    }
+}
