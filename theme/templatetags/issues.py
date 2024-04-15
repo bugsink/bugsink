@@ -29,6 +29,8 @@ def _core_pygments(code, filename=None):
     # off, if (when) we want to turn this back on we could either [1] implement something more performant (preferred
     # option), perhaps by giving a greater role to the filename or [2] cache the result of the guessing (or even of the
     # whole of pygemtize() (but "caching is hard").
+    # then, once we actually implement guessing, the PythonLexer should probably not be the fallback (instead: guessing
+    # without filename)
     # lexer = guess_lexer_for_filename(filename, code) if filename else PythonLexer()
     lexer = PythonLexer()
 
