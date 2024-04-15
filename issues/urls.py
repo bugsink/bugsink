@@ -2,7 +2,7 @@ from django.urls import path
 
 from .views import (
     issue_list, issue_event_stacktrace, issue_event_details, issue_last_event, issue_event_list, issue_history,
-    issue_grouping, issue_event_breadcrumbs)
+    issue_grouping, issue_event_breadcrumbs, event_by_internal_id)
 
 urlpatterns = [
     path('<int:project_pk>/', issue_list, {"state_filter": "open"}, name="issue_list_open"),
@@ -11,7 +11,9 @@ urlpatterns = [
     path('<int:project_pk>/muted/', issue_list, {"state_filter": "muted"}, name="issue_list_muted"),
     path('<int:project_pk>/all/', issue_list, {"state_filter": "all"}, name="issue_list_all"),
 
+    path('event/<uuid:event_pk>/', event_by_internal_id, name="event_by_internal_id"),
     path('issue/<uuid:issue_pk>/event/<uuid:event_pk>/', issue_event_stacktrace, name="event_stacktrace"),
+
     path('issue/<uuid:issue_pk>/event/<uuid:event_pk>/details/', issue_event_details, name="event_details"),
     path('issue/<uuid:issue_pk>/event/<uuid:event_pk>/breadcrumbs/', issue_event_breadcrumbs, name="event_breadcrumbs"),
 

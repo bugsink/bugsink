@@ -1411,8 +1411,21 @@ select {
   color: rgb(30 41 59 / var(--tw-text-opacity));
 }
 
+.text-cyan-800 {
+  --tw-text-opacity: 1;
+  color: rgb(21 94 117 / var(--tw-text-opacity));
+}
+
+.underline {
+  text-decoration-line: underline;
+}
+
 .line-through {
   text-decoration-line: line-through;
+}
+
+.decoration-dotted {
+  text-decoration-style: dotted;
 }
 
 .filter {

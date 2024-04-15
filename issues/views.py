@@ -203,6 +203,15 @@ def issue_list(request, project, state_filter="open"):
     })
 
 
+def event_by_internal_id(request, event_pk):
+    # a view that allows to link straight to an event by (internal) id. This comes with the cost of a bunch more queries
+    # and a Http redirect when actually clicked, but has the advantage of not needing that event's issue id when
+    # rendering the link. Note that no Auth is needed here because nothing is actually shown.
+    event = get_object_or_404(Event, id=event_pk)
+    issue = event.issue
+    return redirect(issue_event_stacktrace, issue_pk=issue.pk, event_pk=event.pk)
+
+
 @issue_membership_required
 def issue_last_event(request, issue):
     last_event = issue.event_set.order_by("timestamp").last()

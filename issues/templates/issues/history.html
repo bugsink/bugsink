@@ -31,52 +31,64 @@
                 </div>
             </div>
 
-            {% if turningpoint.comments %}
-            <div class="border-t-2 p-4 border-slate-300">
-                {{ turningpoint.comments }}
-            </div>
-            {% endif %}
-
-            {% if turningpoint.parsed_metadata %}
-            <div class="border-t-2 p-4 border-slate-300">
-                {% if turningpoint.kind == 3 %} {# muted #}
-                    {% if turningpoint.parsed_metadata.mute_unconditionally %}
-                        Muted unconditionally.
-                    {% endif %}
-
-                    {% if turningpoint.parsed_metadata.mute_until %}
-                        Muted until more than {{ turningpoint.parsed_metadata.mute_until.gte_threshold }} events per {{ turningpoint.parsed_metadata.mute_until.nr_of_periods }} {{ turningpoint.parsed_metadata.mute_until.period_name }}{% if turningpoint.parsed_metadata.mute_until.nr_of_periods != 1 %}s{% endif %} occur.
-                    {% endif %}
-
-                    {% if turningpoint.parsed_metadata.mute_for %}
-                        Muted for {{ turningpoint.parsed_metadata.mute_for.nr_of_periods }} {{ turningpoint.parsed_metadata.mute_for.period_name }}{% if turningpoint.parsed_metadata.mute_for.nr_of_periods != 1 %}s{% endif %}, i.e. until {{ turningpoint.parsed_metadata.mute_for.unmute_after|date:"j M G:i" }}.
-                    {% endif %}
-
-                {% elif turningpoint.kind == 5 %} {# unmuted #}
-
-                    {% if turningpoint.parsed_metadata.mute_until %}
-                        More than {{ turningpoint.parsed_metadata.mute_until.volume }} events per {{ turningpoint.parsed_metadata.mute_until.nr_of_periods }} {{ turningpoint.parsed_metadata.mute_until.period }}{% if turningpoint.parsed_metadata.mute_until.nr_of_periods != 1 %}s{% endif %} occurred, unmuting the issue.
-                    {% endif %}
-
-                    {% if turningpoint.parsed_metadata.mute_for %}
-                        An event was observed after the mute-deadline of {{ turningpoint.parsed_metadata.mute_for.unmute_after|date:"j M G:i" }} and the issue was unmuted.
-                    {% endif %}
-
+            {% if turningpoint.comments or turningpoint.parsed_metadata or turningpoint.triggering_event %}
+            <div class="border-t-2 pl-4 pr-4 pb-4 border-slate-300">{# 'body' part of the balloon (separated by a line) #}
+                {% if turningpoint.comments %}
+                    <div class="mt-4">
+                    {{ turningpoint.comments }}
+                    </div>
                 {% endif %}
 
-                {% if turningpoint.parsed_metadata.resolved_unconditionally %}
-                    Marked as 'resolved' (without a specific release-marker).
+                {% if turningpoint.parsed_metadata %}
+                <div class="mt-4">
+                    {% if turningpoint.kind == 3 %} {# muted #}
+                        {% if turningpoint.parsed_metadata.mute_unconditionally %}
+                            Muted unconditionally.
+                        {% endif %}
+
+                        {% if turningpoint.parsed_metadata.mute_until %}
+                            Muted until more than {{ turningpoint.parsed_metadata.mute_until.gte_threshold }} events per {{ turningpoint.parsed_metadata.mute_until.nr_of_periods }} {{ turningpoint.parsed_metadata.mute_until.period_name }}{% if turningpoint.parsed_metadata.mute_until.nr_of_periods != 1 %}s{% endif %} occur.
+                        {% endif %}
+
+                        {% if turningpoint.parsed_metadata.mute_for %}
+                            Muted for {{ turningpoint.parsed_metadata.mute_for.nr_of_periods }} {{ turningpoint.parsed_metadata.mute_for.period_name }}{% if turningpoint.parsed_metadata.mute_for.nr_of_periods != 1 %}s{% endif %}, i.e. until {{ turningpoint.parsed_metadata.mute_for.unmute_after|date:"j M G:i" }}.
+                        {% endif %}
+
+                    {% elif turningpoint.kind == 5 %} {# unmuted #}
+
+                        {% if turningpoint.parsed_metadata.mute_until %}
+                            More than {{ turningpoint.parsed_metadata.mute_until.volume }} events per {{ turningpoint.parsed_metadata.mute_until.nr_of_periods }} {{ turningpoint.parsed_metadata.mute_until.period }}{% if turningpoint.parsed_metadata.mute_until.nr_of_periods != 1 %}s{% endif %} occurred, unmuting the issue.
+                        {% endif %}
+
+                        {% if turningpoint.parsed_metadata.mute_for %}
+                            An event was observed after the mute-deadline of {{ turningpoint.parsed_metadata.mute_for.unmute_after|date:"j M G:i" }} and the issue was unmuted.
+                        {% endif %}
+
+                    {% endif %}
+
+                    {% if turningpoint.parsed_metadata.resolved_unconditionally %}
+                        Marked as 'resolved' (without a specific release-marker).
+                    {% endif %}
+
+                    {% if turningpoint.parsed_metadata.resolved_release %}
+                        Marked as 'resolved in release {{ turningpoint.parsed_metadata.resolved_release }}'.
+                    {% endif %}
+
+                    {% if turningpoint.parsed_metadata.resolve_by_next %}
+                        Marked as 'resolved by next release'.
+                    {% endif %}
+                </div>
                 {% endif %}
 
-                {% if turningpoint.parsed_metadata.resolved_release %}
-                    Marked as 'resolved in release {{ turningpoint.parsed_metadata.resolved_release }}'.
+                {% if turningpoint.triggering_event %}
+                <div class="mt-4">
+                    <a href="{% url "event_by_internal_id" event_pk=turningpoint.triggering_event_id %}" class="underline decoration-dotted font-bold text-slate-500">Triggering event</a>
+                </div>
                 {% endif %}
 
-                {% if turningpoint.parsed_metadata.resolve_by_next %}
-                    Marked as 'resolved by next release'.
+                </div>{# 'body' part of the balloon #}
                 {% endif %}
-            </div>
-            {% endif %}
+
         </div><!-- the "balloon" -->
     </div><!-- single turningpoint -->
 
