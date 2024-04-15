@@ -5,10 +5,11 @@ from dateutil.relativedelta import relativedelta
 
 from django.db import models
 from django.db.models import F, Value
+from django.template.defaultfilters import date as default_date_filter
 
 from bugsink.volume_based_condition import VolumeBasedCondition
 from alerts.tasks import send_unmute_alert
-from compat.timestamp import parse_timestamp
+from compat.timestamp import parse_timestamp, format_timestamp
 
 from .utils import (
     parse_lines, serialize_lines, filter_qs_for_fixed_at, exclude_qs_for_fixed_at,
@@ -131,6 +132,18 @@ def add_periods_to_datetime(dt, nr_of_periods, period_name):
     return dt + relativedelta(**{dateutil_kwargs_map[period_name]: nr_of_periods})
 
 
+def format_unmute_reason(unmute_metadata):
+    if "mute_until" in unmute_metadata:
+        d = unmute_metadata["mute_until"]
+        plural_s = "" if d["nr_of_periods"] == 1 else "s"
+        return f"More than { d['volume'] } events per { d['nr_of_periods'] } { d['period'] }{ plural_s } occurred, "\
+               f"unmuting the issue."
+
+    d = unmute_metadata["mute_for"]
+    formatted_date = default_date_filter(d['unmute_after'], 'j M G:i')
+    return f"An event was observed after the mute-deadline of { formatted_date } and the issue was unmuted."
+
+
 class IssueStateManager(object):
     """basically: a namespace; with static methods that combine field-setting in a single place"""
 
@@ -215,6 +228,16 @@ class IssueStateManager(object):
             get_pc_registry().by_issue[issue.id].remove_event_listener(UNMUTE_PURPOSE)
 
             if triggering_event is not None:
+                # (note: we can expect project to be set, because it will be None only when projects are deleted, in
+                # which case no more unmuting happens)
+                if issue.project.alert_on_unmute:
+                    send_unmute_alert.delay(issue.id, format_unmute_reason(unmute_metadata))
+
+                # this is in a funny place but it's still simpler than introducing an Encoder
+                if unmute_metadata is not None and "mute_for" in unmute_metadata:
+                    unmute_metadata["mute_for"]["unmute_after"] = \
+                        format_timestamp(unmute_metadata["mute_for"]["unmute_after"])
+
                 # by sticking close to the point where we call send_unmute_alert.delay, we reuse any thinking about
                 # avoinding double calls in edge-cases. a "coincidental advantage" of this approach is that the current
                 # path is never reached via UI-based paths (because those are by definition not event-triggered); thus
@@ -222,11 +245,6 @@ class IssueStateManager(object):
                 TurningPoint.objects.create(
                     issue=issue, triggering_event=triggering_event, timestamp=triggering_event.server_side_timestamp,
                     kind=TurningPointKind.UNMUTED, metadata=json.dumps(unmute_metadata))
-
-                # (note: we can expect project to be set, because it will be None only when projects are deleted, in
-                # which case no more unmuting happens)
-                if issue.project.alert_on_unmute:
-                    send_unmute_alert.delay(issue.id)
 
     @staticmethod
     def set_unmute_handlers(by_issue, issue, now):

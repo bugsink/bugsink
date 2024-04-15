@@ -24,11 +24,11 @@ def send_regression_alert(issue_id):
 
 
 @shared_task
-def send_unmute_alert(issue_id):
-    _send_alert(issue_id, "Unmuted issue", "an", "UNMUTED")
+def send_unmute_alert(issue_id, unmute_reason):
+    _send_alert(issue_id, "Unmuted issue", "an", "UNMUTED", unmute_reason=unmute_reason)
 
 
-def _send_alert(issue_id, state_description, alert_article, alert_reason):
+def _send_alert(issue_id, state_description, alert_article, alert_reason, **kwargs):
     from issues.models import Issue  # avoid circular import
 
     issue = Issue.objects.get(id=issue_id)
@@ -47,5 +47,6 @@ def _send_alert(issue_id, state_description, alert_article, alert_reason):
                 "alert_article": alert_article,
                 "alert_reason": alert_reason,
                 "settings_url": settings.BASE_URL + "/",  # TODO
+                **kwargs,
             },
         )

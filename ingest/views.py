@@ -13,7 +13,6 @@ from rest_framework.exceptions import ValidationError
 
 # from projects.models import Project
 from compat.auth import parse_auth_header_value
-from compat.timestamp import format_timestamp
 
 from projects.models import Project
 from issues.models import Issue, IssueStateManager, Grouping, TurningPoint, TurningPointKind
@@ -215,7 +214,7 @@ class BaseIngestAPIView(APIView):
                 # self-resolve in x time; notify me if this is not the case"
                 IssueStateManager.unmute(
                     issue, triggering_event=event,
-                    unmute_metadata={"mute_for": {"unmute_after": format_timestamp(issue.unmute_after)}})
+                    unmute_metadata={"mute_for": {"unmute_after": issue.unmute_after}})
 
             # update the denormalized fields
             issue.last_seen = ingested_event.timestamp

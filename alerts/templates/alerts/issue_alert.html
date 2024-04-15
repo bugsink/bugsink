@@ -480,6 +480,12 @@
                             This is {{ alert_article }} <strong>{{ alert_reason }}</strong> issue on project <strong>"{{ project_name }}"</strong>.
                         </p>
 
+                        {% if unmute_reason %}
+                        <p style="font-size: 16px; line-height: 1.625; color: #51545E; margin: 1.1875em 0 1.1875em;">
+                            {{ unmute_reason }}
+                        </p>
+                        {% endif %}
+
                         {# Action #}
                         <table class="body-action" align="center" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="width: 100%; -premailer-width: 100%; -premailer-cellpadding: 0; -premailer-cellspacing: 0; text-align: center; margin: 30px auto; padding: 0;">
                           <tr>

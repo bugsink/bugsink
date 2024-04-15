@@ -61,7 +61,7 @@ class TestAlertSending(DjangoTestCase):
         issue, _ = get_or_create_issue(project=project)
         create_event(project=project, issue=issue)
 
-        send_unmute_alert(issue.id)
+        send_unmute_alert(issue.id, "Some unumte reason")
 
         self.assertEqual(len(mail.outbox), 1)
 

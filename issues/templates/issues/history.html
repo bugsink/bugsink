@@ -55,7 +55,7 @@
                 {% elif turningpoint.kind == 5 %} {# unmuted #}
 
                     {% if turningpoint.parsed_metadata.mute_until %}
-                        More than {{ turningpoint.parsed_metadata.mute_until.volume }} events per {{ turningpoint.parsed_metadata.mute_until.nr_of_periods }} {{ turningpoint.parsed_metadata.mute_until.period }}{% if turningpoint.parsed_metadata.mute_until.nr_of_periods != 1 %}s{% endif %} occurred unmuting the issue.
+                        More than {{ turningpoint.parsed_metadata.mute_until.volume }} events per {{ turningpoint.parsed_metadata.mute_until.nr_of_periods }} {{ turningpoint.parsed_metadata.mute_until.period }}{% if turningpoint.parsed_metadata.mute_until.nr_of_periods != 1 %}s{% endif %} occurred, unmuting the issue.
                     {% endif %}
 
                     {% if turningpoint.parsed_metadata.mute_for %}
