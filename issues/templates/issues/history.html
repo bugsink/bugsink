@@ -28,9 +28,9 @@
             </div>
 
             <div class="border-t-2 pl-4 pr-4 pb-4 border-slate-300">{# 'body' part of the balloon (separated by a line) #}
-                {% csrf_token %}
                     <div class="mt-4">
                     <form action="{% url "history_comment_new" issue_pk=issue.id %}" method="post">
+                    {% csrf_token %}
                     <textarea name="comment" placeholder="comments..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md w-full h-32"></textarea>
                     <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 active:ring">Post comment</button>
                     </form>
