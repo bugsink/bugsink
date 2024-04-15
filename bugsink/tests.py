@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from unittest import TestCase
+from unittest import TestCase as RegularTestCase
 from django.test import TestCase as DjangoTestCase
 
 from projects.models import Project
@@ -28,7 +28,7 @@ class callback(object):
         self.calls += 1
 
 
-class PeriodCounterTestCase(TestCase):
+class PeriodCounterTestCase(RegularTestCase):
 
     def test_prev_tup_near_rollover(self):
         self.assertEquals((2020,), _prev_tup((2021,)))
@@ -154,7 +154,7 @@ class PeriodCounterTestCase(TestCase):
         self.assertEquals({}, pc.event_listeners[TL_MONTH])
 
 
-class VolumeBasedConditionTestCase(TestCase):
+class VolumeBasedConditionTestCase(RegularTestCase):
 
     def test_serialization(self):
         vbc = VolumeBasedCondition("day", 1, 100)

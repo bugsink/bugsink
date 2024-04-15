@@ -1,9 +1,9 @@
-from unittest import TestCase
+from unittest import TestCase as RegularTestCase
 
 from .templatetags.issues import _pygmentize_lines
 
 
-class TestIssuesTemplateTags(TestCase):
+class TestIssuesTemplateTags(RegularTestCase):
     # These tests depend on the assert inside the function, simply calling the function and the assert not blowing up is
     # what we're proving here.
 

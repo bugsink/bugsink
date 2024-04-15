@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase as DjangoTestCase
 
 from django.core import mail
 from django.contrib.auth.models import User
@@ -12,7 +12,7 @@ from .tasks import send_new_issue_alert, send_regression_alert, send_unmute_aler
 from .views import DEBUG_CONTEXTS
 
 
-class TestAlertSending(TestCase):
+class TestAlertSending(DjangoTestCase):
 
     def test_send_new_issue_alert(self):
         project = Project.objects.create(name="Test project")

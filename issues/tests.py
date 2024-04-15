@@ -3,7 +3,7 @@ import json
 import time
 from io import StringIO
 from glob import glob
-from unittest import TestCase
+from unittest import TestCase as RegularTestCase
 from unittest.mock import patch
 from datetime import datetime, timezone
 
@@ -30,7 +30,7 @@ def fresh(obj):
     return type(obj).objects.get(pk=obj.pk)
 
 
-class RegressionUtilTestCase(TestCase):
+class RegressionUtilTestCase(RegularTestCase):
     # This tests the concept of "what is a regression?", it _does not_ test for regressions in our code :-)
     # this particular testcase tests straight on the utility `is_regression` (i.e. not all issue-handling code)
 

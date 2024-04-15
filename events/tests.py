@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase as DjangoTestCase
 from django.contrib.auth.models import User
 from projects.models import Project, ProjectMembership
 from issues.models import Issue
@@ -7,7 +7,7 @@ from issues.factories import denormalized_issue_fields
 from .factories import create_event
 
 
-class ViewTests(TestCase):
+class ViewTests(DjangoTestCase):
     # we start with minimal "does this show something and not fully crash" tests and will expand from there.
 
     def setUp(self):

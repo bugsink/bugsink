@@ -2,7 +2,7 @@ import datetime
 from unittest.mock import patch
 
 from django.conf import settings
-from django.test import TestCase
+from django.test import TestCase as DjangoTestCase
 from django.utils import timezone
 from django.test.client import RequestFactory
 
@@ -18,7 +18,7 @@ from .models import DecompressedEvent
 from .views import BaseIngestAPIView
 
 
-class IngestViewTestCase(TestCase):
+class IngestViewTestCase(DjangoTestCase):
 
     def setUp(self):
         # the existence of loud/quiet reflect that parts of this test focusses on alert-sending
@@ -213,7 +213,7 @@ class IngestViewTestCase(TestCase):
             )
 
 
-class TimeZoneTesCase(TestCase):
+class TimeZoneTesCase(DjangoTestCase):
     """This class contains some tests that formalize my understanding of how Django works; they are not strictly tests
     of bugsink code.
 

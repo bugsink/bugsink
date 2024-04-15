@@ -1,5 +1,5 @@
 import json
-from unittest import TestCase
+from unittest import TestCase as RegularTestCase
 import datetime
 from django.test import override_settings
 
@@ -9,7 +9,7 @@ from .timestamp import parse_timestamp
 from .vars import unrepr
 
 
-class DsnTestCase(TestCase):
+class DsnTestCase(RegularTestCase):
     def test_build_dsn(self):
         self.assertEquals(
             "https://public_key@hosted.bugsink/1",
@@ -49,14 +49,14 @@ class DsnTestCase(TestCase):
             get_header_value("https://public_key@hosted.bugsink/1"))
 
 
-class AuthTestCase(TestCase):
+class AuthTestCase(RegularTestCase):
     def test_parse_header_value(self):
         self.assertEquals(
             {"sentry_key": "foo", "sentry_version": "bar"},
             parse_auth_header_value('Sentry sentry_key=foo,sentry_version=bar'))
 
 
-class TimestampTestCase(TestCase):
+class TimestampTestCase(RegularTestCase):
     def test_numeric_values(self):
         self.assertEquals(
             datetime.datetime(2023, 11, 11, 17, 32, 24, tzinfo=datetime.timezone.utc),
@@ -86,7 +86,7 @@ class TimestampTestCase(TestCase):
             parse_timestamp("2022-09-01T09:45:00.000Z"))
 
 
-class VarsTestCase(TestCase):
+class VarsTestCase(RegularTestCase):
     def test_dicts(self):
         d = json.loads('''{"baz":"1","foo":"'bar'","snu":"None","recurse":{"foo": "'bar'"}}''')
 

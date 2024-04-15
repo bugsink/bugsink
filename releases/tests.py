@@ -1,10 +1,10 @@
-from django.test import TestCase
+from django.test import TestCase as DjangoTestCase
 from datetime import timedelta
 
 from .models import Release, ordered_releases, RE_PACKAGE_VERSION
 
 
-class ReleaseTestCase(TestCase):
+class ReleaseTestCase(DjangoTestCase):
 
     def test_create_and_order(self):
         r0 = Release.objects.create(version="e80f98923f7426a8087009f4c629d25a35565a6a")
