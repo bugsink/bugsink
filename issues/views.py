@@ -428,7 +428,7 @@ def history_comment_new(request, issue):
 
         return redirect(issue_history, issue_pk=issue.pk)
 
-    raise HttpResponseNotAllowed()
+    return HttpResponseNotAllowed(["POST"])
 
 
 @issue_membership_required
@@ -441,4 +441,4 @@ def history_comment_edit(request, issue, comment_pk):
         form.save()
         return redirect(reverse(issue_history, kwargs={'issue_pk': issue.pk}) + f"#comment-{ comment_pk }")
 
-    raise HttpResponseNotAllowed()
+    return HttpResponseNotAllowed(["POST"])
