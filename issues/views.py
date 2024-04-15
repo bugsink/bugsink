@@ -4,7 +4,7 @@ import json
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import Q
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, HttpResponseNotAllowed
 from django.utils.safestring import mark_safe
 from django.template.defaultfilters import date
 
@@ -14,6 +14,7 @@ from compat.timestamp import format_timestamp
 
 from .models import (
     Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind, add_periods_to_datetime)
+from .forms import CommentForm
 
 
 MuteOption = namedtuple("MuteOption", ["for_or_until", "period_name", "nr_of_periods", "gte_threshold"])
@@ -410,3 +411,35 @@ def issue_event_list(request, issue):
         "parsed_data": json.loads(last_event.data),
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
+
+
+@issue_membership_required
+def history_comment_new(request, issue):
+    # TODO something with auth
+
+    if request.method == "POST":
+        form = CommentForm(request.POST)
+        if form.is_valid():
+            TurningPoint.objects.create(
+                issue=issue, kind=TurningPointKind.MANUAL_ANNOTATION, user=request.user,
+                comment=form.cleaned_data["comment"],
+                timestamp=timezone.now())
+        return redirect(issue_history, issue_pk=issue.pk)
+
+    raise HttpResponseNotAllowed()
+
+
+def history_comment_edit(request, issue_pk):
+    # TODO something with auth
+
+    event = get_object_or_404(Event, id=event_pk)
+    if request.method == "POST":
+        form = CommentForm(request.POST)
+        if form.is_valid():
+            TurningPoint.objects.create(
+                issue=event.issue, kind=TurningPointKind.COMMENT, user=request.user,
+                comment=form.cleaned_data["comment"],
+                timestamp=timezone.now())
+        return redirect(issue_event_stacktrace, issue_pk=event.issue.pk)
+
+    raise HttpResponseNotAllowed()

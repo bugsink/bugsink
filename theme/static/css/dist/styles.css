@@ -934,6 +934,10 @@ select {
   height: 100vh;
 }
 
+.h-4 {
+  height: 1rem;
+}
+
 .w-1\/4 {
   width: 25%;
 }
@@ -964,6 +968,10 @@ select {
 
 .w-full {
   width: 100%;
+}
+
+.w-4 {
+  width: 1rem;
 }
 
 .flex-\[2_1_96rem\] {
@@ -1414,6 +1422,11 @@ select {
 .text-cyan-800 {
   --tw-text-opacity: 1;
   color: rgb(21 94 117 / var(--tw-text-opacity));
+}
+
+.text-red-500 {
+  --tw-text-opacity: 1;
+  color: rgb(239 68 68 / var(--tw-text-opacity));
 }
 
 .underline {
@@ -2129,6 +2142,11 @@ pre {
 .focus\:border-cyan-500:focus {
   --tw-border-opacity: 1;
   border-color: rgb(6 182 212 / var(--tw-border-opacity));
+}
+
+.focus\:border-cyan-800:focus {
+  --tw-border-opacity: 1;
+  border-color: rgb(21 94 117 / var(--tw-border-opacity));
 }
 
 .focus\:outline-none:focus {
