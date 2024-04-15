@@ -92,6 +92,10 @@ class Issue(models.Model):
     def occurs_in_last_release(self):
         return False  # TODO actually implement (and then: implement in a performant manner)
 
+    def turningpoint_set_all(self):
+        # like turningpoint_set.all() but with user in select_related
+        return self.turningpoint_set.all().select_related("user")
+
     class Meta:
         unique_together = [
             ("project", "ingest_order"),

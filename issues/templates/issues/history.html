@@ -40,12 +40,12 @@
     </div><!-- single turningpoint -->
 
 
-{% for turningpoint in issue.turningpoint_set.all %}
+{% for turningpoint in issue.turningpoint_set_all %}
     <div class="flex"><!-- single turningpoint -->
         <div class="flex-none">
             <div class="pt-8 pr-2">
-                {% if turningpoint.user %}
-                <img class="w-12 h-12 rounded-full border-2 border-slate-300" src="https://gravatar.com/avatar/{{ user|gravatar_sha }}?s=48&d=robohash"/>
+                {% if turningpoint.user_id %}
+                <img class="w-12 h-12 rounded-full border-2 border-slate-300" src="https://gravatar.com/avatar/{{ turningpoint.user|gravatar_sha }}?s=48&d=robohash"/>
                 {% else %}
                 <img class="w-12 h-12 rounded-full border-2 border-slate-300" src="{% static 'images/bugsink-logo.png' %}"/>
                 {% endif %}
@@ -57,9 +57,9 @@
             <div class="pl-4 flex triangle-left"><!-- 'header' row -->
                 <div class="mt-4 mb-4">
                     <span class="font-bold text-slate-800">{{ turningpoint.get_kind_display }}</span> by
-                    <span class="font-bold text-slate-800">{% if turningpoint.user %}{{ turningpoint.user|best_displayname }}{% else %}Bugsink{% endif %}</span>
+                    <span class="font-bold text-slate-800">{% if turningpoint.user_id %}{{ turningpoint.user|best_displayname }}{% else %}Bugsink{% endif %}</span>
 
-                    {% if turningpoint.user == request.user %}
+                    {% if turningpoint.user_id == request.user.id %}
                     <span class="text-slate-500 pl-1" onclick="toggleCommentEditable(this)">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-4 h-4 inline">
   <path fill-rule="evenodd" d="M11.013 2.513a1.75 1.75 0 0 1 2.475 2.474L6.226 12.25a2.751 2.751 0 0 1-.892.596l-2.047.848a.75.75 0 0 1-.98-.98l.848-2.047a2.75 2.75 0 0 1 .596-.892l7.262-7.261Z" clip-rule="evenodd" />
@@ -77,14 +77,14 @@
                 </div>
             </div>
 
-            {% if turningpoint.parsed_metadata or turningpoint.triggering_event or turningpoint.comment or turningpoint.user == request.user %}  {# the last clause means: editable, hence space must be reserved #}
+            {% if turningpoint.parsed_metadata or turningpoint.triggering_event_id or turningpoint.comment or turningpoint.user_id == request.user.id %}  {# the last clause means: editable, hence space must be reserved #}
             <div class="border-t-2 pl-4 pr-4 pb-4 border-slate-300">{# 'body' part of the balloon (separated by a line) #}
                     <div class="mt-4">
                         <div class="js-comment-plain">
                         {{ turningpoint.comment|linebreaksbr }}
                         </div>
 
-                        {% if turningpoint.user == request.user %}
+                        {% if turningpoint.user_id == request.user.id %}
                         <div class="js-comment-editable hidden">
                             <form action="{% url "history_comment_edit" issue_pk=issue.id comment_pk=turningpoint.pk %}" method="post">
                             {% csrf_token %}
@@ -136,7 +136,7 @@
                 </div>
                 {% endif %}
 
-                {% if turningpoint.triggering_event %}
+                {% if turningpoint.triggering_event_id %}
                 <div class="mt-4">
                     <a href="{% url "event_by_internal_id" event_pk=turningpoint.triggering_event_id %}" class="underline decoration-dotted font-bold text-slate-500">Triggering event</a>
                 </div>
