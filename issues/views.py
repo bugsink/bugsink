@@ -422,10 +422,14 @@ def history_comment_new(request, issue):
         form = CommentForm(request.POST)
         assert form.is_valid()  # we have only a textfield with no validation properties; also: no html-side handling
 
-        TurningPoint.objects.create(
-            issue=issue, kind=TurningPointKind.MANUAL_ANNOTATION, user=request.user,
-            comment=form.cleaned_data["comment"],
-            timestamp=timezone.now())
+        if form.cleaned_data["comment"] != "":
+            # one special case: we simply ignore newly created comments without any contents as a (presumed) mistake. I
+            # think that's amount of magic to have: it still allows one to erase comments (possibly for non-manual
+            # kinds) but it saves you from what is obviously a mistake (without complaining with a red box or something)
+            TurningPoint.objects.create(
+                issue=issue, kind=TurningPointKind.MANUAL_ANNOTATION, user=request.user,
+                comment=form.cleaned_data["comment"],
+                timestamp=timezone.now())
 
         return redirect(issue_history, issue_pk=issue.pk)
 
