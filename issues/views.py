@@ -8,6 +8,7 @@ from django.http import HttpResponseRedirect, HttpResponseNotAllowed
 from django.utils.safestring import mark_safe
 from django.template.defaultfilters import date
 from django.urls import reverse
+from django.core.exceptions import PermissionDenied
 
 from events.models import Event
 from bugsink.decorators import project_membership_required, issue_membership_required
@@ -434,6 +435,9 @@ def history_comment_new(request, issue):
 @issue_membership_required
 def history_comment_edit(request, issue, comment_pk):
     comment = get_object_or_404(TurningPoint, pk=comment_pk, issue_id=issue.pk)
+
+    if comment.user_id != request.user.id:
+        raise PermissionDenied("You can only edit your own comments")
 
     if request.method == "POST":
         form = CommentForm(request.POST, instance=comment)
