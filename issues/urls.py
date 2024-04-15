@@ -2,7 +2,8 @@ from django.urls import path
 
 from .views import (
     issue_list, issue_event_stacktrace, issue_event_details, issue_last_event, issue_event_list, issue_history,
-    issue_grouping, issue_event_breadcrumbs, event_by_internal_id, history_comment_new, history_comment_edit)
+    issue_grouping, issue_event_breadcrumbs, event_by_internal_id, history_comment_new, history_comment_edit,
+    history_comment_delete)
 
 urlpatterns = [
     path('<int:project_pk>/', issue_list, {"state_filter": "open"}, name="issue_list_open"),
@@ -29,4 +30,6 @@ urlpatterns = [
     path('event/<uuid:event_pk>/', event_by_internal_id, name="event_by_internal_id"),
     path('issue/<uuid:issue_pk>/history/comment/', history_comment_new, name="history_comment_new"),
     path('issue/<uuid:issue_pk>/history/comment/<int:comment_pk>/', history_comment_edit, name="history_comment_edit"),
+    path('issue/<uuid:issue_pk>/history/comment/<int:comment_pk>/delete/', history_comment_delete,
+         name="history_comment_delete"),
 ]

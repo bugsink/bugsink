@@ -445,4 +445,20 @@ def history_comment_edit(request, issue, comment_pk):
         form.save()
         return redirect(reverse(issue_history, kwargs={'issue_pk': issue.pk}) + f"#comment-{ comment_pk }")
 
+
+@issue_membership_required
+def history_comment_delete(request, issue, comment_pk):
+    comment = get_object_or_404(TurningPoint, pk=comment_pk, issue_id=issue.pk)
+
+    if comment.user_id != request.user.id:
+        raise PermissionDenied("You can only delete your own comments")
+
+    if comment.kind != TurningPointKind.MANUAL_ANNOTATION:
+        # I'm taking the 'allow almost nothing' path first
+        raise PermissionDenied("You can only delete manual annotations")
+
+    if request.method == "POST":
+        comment.delete()
+        return redirect(reverse(issue_history, kwargs={'issue_pk': issue.pk}))
+
     return HttpResponseNotAllowed(["POST"])
