@@ -1,7 +1,7 @@
 "use strict";
 
-function makeCommentEditable(element) {
+function toggleCommentEditable(element) {
     const balloon = element.closest(".js-balloon");
-    balloon.querySelector(".js-comment-editable").classList.remove("hidden");
-    balloon.querySelector(".js-comment-plain").classList.add("hidden");
+    balloon.querySelector(".js-comment-editable").classList.toggle("hidden");
+    balloon.querySelector(".js-comment-plain").classList.toggle("hidden");
 }

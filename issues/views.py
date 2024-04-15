@@ -7,6 +7,7 @@ from django.db.models import Q
 from django.http import HttpResponseRedirect, HttpResponseNotAllowed
 from django.utils.safestring import mark_safe
 from django.template.defaultfilters import date
+from django.urls import reverse
 
 from events.models import Event
 from bugsink.decorators import project_membership_required, issue_membership_required
@@ -438,6 +439,6 @@ def history_comment_edit(request, issue, comment_pk):
         form = CommentForm(request.POST, instance=comment)
         assert form.is_valid()
         form.save()
-        return redirect(issue_history, issue_pk=issue.pk)
+        return redirect(reverse(issue_history, kwargs={'issue_pk': issue.pk}) + f"#comment-{ comment_pk }")
 
     raise HttpResponseNotAllowed()

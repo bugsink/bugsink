@@ -999,6 +999,26 @@ select {
   width: 1rem;
 }
 
+.w-8 {
+  width: 2rem;
+}
+
+.w-32 {
+  width: 8rem;
+}
+
+.w-64 {
+  width: 16rem;
+}
+
+.w-48 {
+  width: 12rem;
+}
+
+.w-40 {
+  width: 10rem;
+}
+
 .flex-\[2_1_96rem\] {
   flex: 2 1 96rem;
 }
@@ -1349,6 +1369,10 @@ select {
 
 .text-center {
   text-align: center;
+}
+
+.text-right {
+  text-align: right;
 }
 
 .align-top {
