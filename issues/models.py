@@ -198,7 +198,7 @@ class IssueStateManager(object):
             issue.unmute_after = unmute_after
 
     @staticmethod
-    def unmute(issue, triggering_event=None, vbc_dict=None):
+    def unmute(issue, triggering_event=None, unmute_metadata=None):
         from bugsink.registry import get_pc_registry, UNMUTE_PURPOSE  # avoid circular import
 
         if issue.is_muted:
@@ -221,7 +221,7 @@ class IssueStateManager(object):
                 # the 2 ways of creating TurningPoints do not collide.
                 TurningPoint.objects.create(
                     issue=issue, triggering_event=triggering_event, timestamp=triggering_event.server_side_timestamp,
-                    kind=TurningPointKind.UNMUTED, metadata=json.dumps({"mute_until": vbc_dict}))
+                    kind=TurningPointKind.UNMUTED, metadata=json.dumps(unmute_metadata))
 
                 # (note: we can expect project to be set, because it will be None only when projects are deleted, in
                 # which case no more unmuting happens)
@@ -394,7 +394,7 @@ def create_unmute_issue_handler(issue_id, vbc_dict):
 
     def unmute(counted_entity):
         issue = Issue.objects.get(id=issue_id)
-        IssueStateManager.unmute(issue, triggering_event=counted_entity, vbc_dict=vbc_dict)
+        IssueStateManager.unmute(issue, triggering_event=counted_entity, unmute_metadata={"mute_until": vbc_dict})
         issue.save()
 
     return unmute
