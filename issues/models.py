@@ -401,6 +401,8 @@ def create_unmute_issue_handler(issue_id, vbc_dict):
 
 
 class TurningPointKind(models.IntegerChoices):
+    # The language of the kinds reflects a historic view of the system, e.g. "first seen" as opposed to "new issue"; an
+    # alternative take (which is more consistent with the language used elsewhere" is a more "active" language.
     FIRST_SEEN = 1, "First seen"
     RESOLVED = 2, "Resolved"
     MUTED = 3, "Muted"

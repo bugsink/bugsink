@@ -11,7 +11,7 @@ from rest_framework.exceptions import ValidationError
 from projects.models import Project
 from events.factories import create_event_data
 from issues.factories import get_or_create_issue
-from issues.models import IssueStateManager, Issue
+from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
 from bugsink.registry import reset_pc_registry
 
 from .models import DecompressedEvent
@@ -54,6 +54,8 @@ class IngestViewTestCase(DjangoTestCase):
         self.assertTrue(send_new_issue_alert.delay.called)
         self.assertFalse(send_regression_alert.delay.called)
         self.assertFalse(send_unmute_alert.delay.called)
+        self.assertEquals(1, TurningPoint.objects.count())
+        self.assertEquals(TurningPointKind.FIRST_SEEN, TurningPoint.objects.first().kind)
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
@@ -75,6 +77,8 @@ class IngestViewTestCase(DjangoTestCase):
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertTrue(send_regression_alert.delay.called)
         self.assertFalse(send_unmute_alert.delay.called)
+        self.assertEquals(1, TurningPoint.objects.count())
+        self.assertEquals(TurningPointKind.REGRESSED, TurningPoint.objects.first().kind)
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
@@ -101,6 +105,8 @@ class IngestViewTestCase(DjangoTestCase):
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertTrue(send_regression_alert.delay.called)
         self.assertFalse(send_unmute_alert.delay.called)
+        self.assertEquals(1, TurningPoint.objects.count())
+        self.assertEquals(TurningPointKind.REGRESSED, TurningPoint.objects.first().kind)
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
@@ -123,6 +129,8 @@ class IngestViewTestCase(DjangoTestCase):
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertFalse(send_regression_alert.delay.called)
         self.assertTrue(send_unmute_alert.delay.called)
+        self.assertEquals(1, TurningPoint.objects.count())
+        self.assertEquals(TurningPointKind.UNMUTED, TurningPoint.objects.first().kind)
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
@@ -146,6 +154,8 @@ class IngestViewTestCase(DjangoTestCase):
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertFalse(send_regression_alert.delay.called)
         self.assertTrue(send_unmute_alert.delay.called)
+        self.assertEquals(1, TurningPoint.objects.count())
+        self.assertEquals(TurningPointKind.UNMUTED, TurningPoint.objects.first().kind)
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
