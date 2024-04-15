@@ -32,7 +32,7 @@
                     <form action="{% url "history_comment_new" issue_pk=issue.id %}" method="post">
                     {% csrf_token %}
                     <textarea name="comment" placeholder="comments..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md w-full h-32"></textarea>
-                    <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 active:ring">Post comment</button>
+                    <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 active:ring">Post comment</button>
                     </form>
                     </div>
                 </div>{# 'body' part of the balloon #}
@@ -99,7 +99,7 @@
                             <form action="{% url "history_comment_edit" issue_pk=issue.id comment_pk=turningpoint.pk %}" method="post">
                             {% csrf_token %}
                             <textarea name="comment" placeholder="comments..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md w-full h-32">{{ turningpoint.comment }}</textarea>{# note: we don't actually use {{ form.comments }} here; this means the show-red-on-invalid loop won't work but since everything is valid and we haven't implemented the other parts of that loop that's fine #}
-                            <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 active:ring">Update comment</button>
+                            <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 active:ring">Update comment</button>
                             </form>
                         </div>
                         {% endif %}
