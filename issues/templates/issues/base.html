@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
+{% load issues %}
 {% block title %}{{ issue.title }} · {{ block.super }}{% endblock %}
 
 {% block content %}
@@ -140,24 +141,35 @@
                 </div>
 
                 <div class="mb-4">
-                    <div class="text-sm font-bold text-slate-500">Nr. of events</div>
+                    <div class="text-sm font-bold text-slate-500">Nr. of events:</div>
                     <div>{{ issue.event_count }}</div>
                 </div>
 
                 {% if issue.event_count > 1 %}
                 <div class="mb-4">
-                    <div class="text-sm font-bold text-slate-500">First seen</div>
+                    <div class="text-sm font-bold text-slate-500">First seen:</div>
                     <div>{{ issue.first_seen|date:"j M G:i" }}</div>
                 </div>
 
-                <div>
-                    <div class="text-sm font-bold text-slate-500">Last seen</div>
+                <div class="mb-4">
+                    <div class="text-sm font-bold text-slate-500">Last seen:</div>
                     <div>{{ issue.last_seen|date:"j M G:i" }}</div>
                 </div>
                 {% else %}
-                <div>
-                    <div class="text-sm font-bold text-slate-500">Seen at</div>
+                <div class="mb-4">
+                    <div class="text-sm font-bold text-slate-500">Seen at:</div>
                     <div>{{ issue.first_seen|date:"j M G:i" }}</div>
+                </div>
+                {% endif %}
+
+                {% if issue.get_events_at %}
+                <div class="mb-4">
+                    <div class="text-sm font-bold text-slate-500">Seen in releases:</div>
+                    <div>
+                    {% for version in issue.get_events_at %}
+                        <span {% if version|issha %}class="font-mono"{% endif %}>{{ version|shortsha }}{% if not forloop.last %}</span>,{% endif %}
+                    {% endfor %}
+                    </div>
                 </div>
                 {% endif %}
 

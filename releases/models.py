@@ -15,10 +15,6 @@ from issues.models import Issue, TurningPoint, TurningPointKind
 RE_PACKAGE_VERSION = re.compile('((?P<package>.*)[@])?(?P<version>.*)')
 
 
-# We don't actually parse for HEX yet (it's simply non-semver to us) but if we do we could use the following lengths:
-# 12 | 16 | 20 | 32 | 40 | 64
-
-
 def is_valid_semver(full_version):
     try:
         version = RE_PACKAGE_VERSION.match(full_version).groupdict()["version"]

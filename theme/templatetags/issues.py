@@ -1,3 +1,4 @@
+import re
 from django import template
 from pygments import highlight
 from pygments.lexers import PythonLexer
@@ -89,3 +90,27 @@ def firstlineno(value):
     if value.get("lineno") is None:
         return None
     return value['lineno'] - len(value.get('pre_context', []))
+
+
+SHA_RE = re.compile(r"[0-9a-f]+")
+
+
+@register.filter(name='issha')
+def issha(value):
+    """does this look like a sha?"""
+    if len(value) not in [12, 16, 20, 32, 40, 64]:
+        return False
+
+    if not SHA_RE.fullmatch(value):
+        return False
+
+    return True
+
+
+@register.filter(name='shortsha')
+def shortsha(value):
+    """_if_ this value looks like a version hash, make it short"""
+    if not issha(value):
+        return value
+
+    return value[:12]
