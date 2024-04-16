@@ -5,6 +5,8 @@ from semver.version import Version
 
 from django.db import models
 from django.utils import timezone
+from django.db.models.functions import Concat
+from django.db.models import Value
 
 from issues.models import Issue
 
@@ -99,11 +101,10 @@ def create_release_if_needed(project, version):
             project.save()
 
         if release == project.get_latest_release():
-            # bnr means By Next Release
-            for bnr_issue in Issue.objects.filter(project=project, is_resolved_by_next_release=True):
-                bnr_issue.add_fixed_at(release.version)
-                bnr_issue.is_resolved_by_next_release = False
-                bnr_issue.save()
+            Issue.objects.filter(project=project, is_resolved_by_next_release=True).update(
+                fixed_at=Concat("fixed_at", Value(release.version + "\n")),
+                is_resolved_by_next_release=False,
+                )
 
     return release
 
