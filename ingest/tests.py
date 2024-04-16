@@ -19,6 +19,8 @@ from .views import BaseIngestAPIView
 
 
 class IngestViewTestCase(DjangoTestCase):
+    # this TestCase started out as focussed on alert-sending, but has grown beyond that. Sometimes simply by extending
+    # existing tests. This is not a problem in itself, but may be slightly confusing if you don't realize that.
 
     def setUp(self):
         # the existence of loud/quiet reflect that parts of this test focusses on alert-sending
@@ -54,6 +56,8 @@ class IngestViewTestCase(DjangoTestCase):
         self.assertTrue(send_new_issue_alert.delay.called)
         self.assertFalse(send_regression_alert.delay.called)
         self.assertFalse(send_unmute_alert.delay.called)
+        self.assertEquals(1, Issue.objects.count())
+        self.assertEquals("\n", Issue.objects.get().events_at)
         self.assertEquals(1, TurningPoint.objects.count())
         self.assertEquals(TurningPointKind.FIRST_SEEN, TurningPoint.objects.first().kind)
 
@@ -226,6 +230,20 @@ class IngestViewTestCase(DjangoTestCase):
                 project,
                 request,
             )
+
+    def test_ingest_view_stores_events_at(self):
+        request = self.request_factory.post("/api/1/store/")
+
+        event_data = create_event_data()
+        event_data["release"] = "1.0"
+
+        BaseIngestAPIView().process_event(
+            event_data,
+            self.loud_project,
+            request,
+        )
+        self.assertEquals(1, Issue.objects.count())
+        self.assertEquals("1.0\n", Issue.objects.get().events_at)
 
 
 class TimeZoneTesCase(DjangoTestCase):

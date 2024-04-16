@@ -178,7 +178,7 @@ class BaseIngestAPIView(APIView):
             # multiple events with the same event_id "don't happen" (i.e. are the result of badly misbehaving clients)
             raise ValidationError("Event already exists", code="event_already_exists")
 
-        create_release_if_needed(ingested_event.project, event.release, event)
+        release = create_release_if_needed(ingested_event.project, event.release, event)
 
         if issue_created:
             TurningPoint.objects.create(
@@ -225,7 +225,8 @@ class BaseIngestAPIView(APIView):
         issue_pc = get_pc_registry().by_issue[issue.id]
         issue_pc.inc(ingested_event.timestamp, counted_entity=event)
 
-        # TODO bookkeeping of events_at goes here.
+        if release.version + "\n" not in issue.events_at:
+            issue.events_at += release.version + "\n"
         issue.save()
 
 
