@@ -431,7 +431,9 @@ class TurningPointKind(models.IntegerChoices):
     REGRESSED = 4, "Marked as regressed"
     UNMUTED = 5, "Unmuted"
 
-    # ASSGINED = 10, "Assigned"   # perhaps later
+    NEXT_MATERIALIZED = 10, "Release info added"
+
+    # ASSGINED = 10, "Assigned to user"   # perhaps later
     MANUAL_ANNOTATION = 100, "Manual annotation"
 
 

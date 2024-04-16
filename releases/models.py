@@ -1,3 +1,4 @@
+import json
 import re
 import uuid
 
@@ -8,7 +9,7 @@ from django.utils import timezone
 from django.db.models.functions import Concat
 from django.db.models import Value
 
-from issues.models import Issue
+from issues.models import Issue, TurningPoint, TurningPointKind
 
 
 RE_PACKAGE_VERSION = re.compile('((?P<package>.*)[@])?(?P<version>.*)')
@@ -86,7 +87,7 @@ class Release(models.Model):
         return self.version[:12]
 
 
-def create_release_if_needed(project, version):
+def create_release_if_needed(project, version, event):
     if version is None:
         # it is the empty string in practice because we pull this from Issue.release, which is non-nullable
         raise ValueError('The None-like version must be the empty string')
@@ -101,7 +102,18 @@ def create_release_if_needed(project, version):
             project.save()
 
         if release == project.get_latest_release():
-            Issue.objects.filter(project=project, is_resolved_by_next_release=True).update(
+            resolved_by_next_qs = Issue.objects.filter(project=project, is_resolved_by_next_release=True)
+
+            # NOTE: once we introduce an explicit way of creating releases (not event-based) we can not rely on a
+            # triggering event anymore for our timestamp.
+
+            TurningPoint.objects.bulk_create([TurningPoint(
+                    issue=issue, kind=TurningPointKind.NEXT_MATERIALIZED, triggering_event=event,
+                    metadata=json.dumps({"actual_release": release.version}), timestamp=event.server_side_timestamp)
+                for issue in resolved_by_next_qs
+            ])
+
+            resolved_by_next_qs.update(
                 fixed_at=Concat("fixed_at", Value(release.version + "\n")),
                 is_resolved_by_next_release=False,
                 )
