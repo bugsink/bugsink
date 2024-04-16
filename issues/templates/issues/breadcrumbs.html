@@ -7,7 +7,7 @@
 
 <div class="flex">
     <div class="overflow-hidden">
-        <div class="italic">{{ event.server_side_timestamp|date:"j M G:i" }} (Event {{ event.ingest_order }} of {{ issue.event_count }})</div>
+        <div class="italic">{{ event.server_side_timestamp|date:"j M G:i T" }} (Event {{ event.ingest_order }} of {{ issue.event_count }})</div>
     </div>
 
     <div class="ml-auto flex-none">
@@ -49,7 +49,7 @@
     </td>
     <td class="p-4 font-bold text-slate-500 align-top">
         {{ breadcrumb.timestamp }}
-        {# {{ breadcrumb.timestamp|date:"G:i" and milis  }} #}
+        {# {{ breadcrumb.timestamp|date:"G:i T" and milis  }} #}
     </td>
 
     </tr>

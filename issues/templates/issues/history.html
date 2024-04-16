@@ -82,7 +82,7 @@
                 <div class="ml-auto flex"> <!-- 'header' row right side -->
 
                     <div class="p-4 text-right">
-                        {{ turningpoint.timestamp|date:"j M G:i"  }}
+                        {{ turningpoint.timestamp|date:"j M G:i T"  }}
                     </div>
                 </div>
             </div>
@@ -117,7 +117,7 @@
                         {% endif %}
 
                         {% if turningpoint.parsed_metadata.mute_for %}
-                            Muted for {{ turningpoint.parsed_metadata.mute_for.nr_of_periods }} {{ turningpoint.parsed_metadata.mute_for.period_name }}{% if turningpoint.parsed_metadata.mute_for.nr_of_periods != 1 %}s{% endif %}, i.e. until {{ turningpoint.parsed_metadata.mute_for.unmute_after|date:"j M G:i" }}.
+                            Muted for {{ turningpoint.parsed_metadata.mute_for.nr_of_periods }} {{ turningpoint.parsed_metadata.mute_for.period_name }}{% if turningpoint.parsed_metadata.mute_for.nr_of_periods != 1 %}s{% endif %}, i.e. until {{ turningpoint.parsed_metadata.mute_for.unmute_after|date:"j M G:i T" }}.
                         {% endif %}
 
                     {% elif turningpoint.kind == 5 %} {# unmuted #}
@@ -126,7 +126,7 @@
                         {% endif %}
 
                         {% if turningpoint.parsed_metadata.mute_for %}
-                            An event was observed after the mute-deadline of {{ turningpoint.parsed_metadata.mute_for.unmute_after|date:"j M G:i" }} and the issue was unmuted.
+                            An event was observed after the mute-deadline of {{ turningpoint.parsed_metadata.mute_for.unmute_after|date:"j M G:i T" }} and the issue was unmuted.
                         {% endif %}
 
                     {% endif %}
