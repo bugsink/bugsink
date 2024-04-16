@@ -141,6 +141,34 @@
                 </div>
 
                 <div class="mb-4">
+                    <div class="text-sm font-bold text-slate-500">State</div>
+                    <div>
+                        {% if issue.is_resolved %}
+                            Resolved
+                            {% for version in issue.get_fixed_at %}
+                                {% if forloop.first %}in{% endif %}
+                                <span {% if version|issha %}class="font-mono"{% endif %}>{{ version|shortsha }}{% if not forloop.last %}</span>,{% endif %}
+                            {% endfor %}
+                        {% else %}
+                            {% if issue.is_muted %}
+                                Muted
+                                {% if issue.unmute_after %}
+                                    until {{ issue.unmute_after|date:"j M G:i T" }}.
+                                {% elif issue.get_unmute_on_volume_based_conditions %}
+                                    {% for vbc in issue.get_unmute_on_volume_based_conditions %}
+                                        until at least {{ vbc.volume }} events per {{ vbc.nr_of_periods }} {{ vbc.period }}{% if vbc.nr_of_periods != 1 %}s{% endif %}{% if forloop.last %} occur.{% else %} or {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    (unconditionally).
+                                {% endif %}
+                            {% else %}
+                                Open
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="mb-4">
                     <div class="text-sm font-bold text-slate-500">Nr. of events:</div>
                     <div>{{ issue.event_count }}</div>
                 </div>

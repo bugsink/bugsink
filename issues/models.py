@@ -89,6 +89,12 @@ class Issue(models.Model):
             fixed_at.append(release_version)
             self.fixed_at = serialize_lines(fixed_at)
 
+    def get_unmute_on_volume_based_conditions(self):
+        return [
+            VolumeBasedCondition.from_dict(vbc_s)
+            for vbc_s in json.loads(self.unmute_on_volume_based_conditions)
+        ]
+
     def occurs_in_last_release(self):
         return False  # TODO actually implement (and then: implement in a performant manner)
 
