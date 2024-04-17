@@ -15,6 +15,15 @@ share/
 # sqlite
 db.sqlite3
 db.*.sqlite3
+test.sqlite3
+
+db.sqlite3-wal
+db.*.sqlite3-wal
+test.sqlite3-wal
+
+db.sqlite3-shm
+db.*.sqlite3-shm
+test.sqlite3-shm
 
 # vim
 *.swo

@@ -108,6 +108,11 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / os.getenv("DATABASE_NAME", 'db.sqlite3'),
+        'TEST': {
+            # Specifying a NAME here makes it so that sqlite doesn't run in-memory. This is what we want, because we
+            # want our tests to be as similar to the real thing as possible.
+            "NAME": BASE_DIR / os.getenv("DATABASE_NAME", 'test.sqlite3'),
+        }
     }
 }
 
