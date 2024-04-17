@@ -21,11 +21,6 @@ def set_pragmas(sender, connection, **kwargs):
             # (the default is FULL, which is the most conservative setting and one that comes with a performance cost)
             cursor.execute('PRAGMA synchronous = NORMAL;')
 
-            # I've seen that 5000ms is the default on my system, but I can't find this fact documented anywhere, so I'd
-            # rather be explicit than get outside influences. (5000ms is just a starting point; we can adjust it after
-            # we have some data, or even make it configurable)
-            cursor.execute("PRAGMA busy_timeout = 5000;")
-
 
 connection_created.connect(set_pragmas)
 

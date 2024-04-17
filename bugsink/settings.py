@@ -112,7 +112,13 @@ DATABASES = {
             # Specifying a NAME here makes it so that sqlite doesn't run in-memory. This is what we want, because we
             # want our tests to be as similar to the real thing as possible.
             "NAME": BASE_DIR / os.getenv("DATABASE_NAME", 'test.sqlite3'),
-        }
+        },
+        'OPTIONS': {
+            # the "timeout" option here is passed to the Python sqlite3.connect() translates into the busy_timeout
+            # PRAGMA in SQLite.  (5000ms is just a starting point; we can adjust it after we have some data, or even
+            # make it configurable)
+            'timeout': 5,  # this is the default (as per the Python sqlite3 package); we're just being explicit
+        },
     }
 }
 
