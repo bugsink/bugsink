@@ -256,7 +256,7 @@ class TimeZoneTesCase(DjangoTestCase):
 
     def test_datetimes_are_in_utc_when_retrieved_from_the_database_with_default_conf(self):
         # check our default conf
-        self.assertEquals("UTC", settings.TIME_ZONE)
+        self.assertEquals("Europe/Amsterdam", settings.TIME_ZONE)
 
         # save an event in the database; it will be saved in UTC (because that's what Django does)
         e = DecompressedEvent.objects.create()
