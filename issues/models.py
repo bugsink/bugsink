@@ -2,8 +2,9 @@ from datetime import datetime, timezone
 import json
 import uuid
 from dateutil.relativedelta import relativedelta
+from functools import partial
 
-from django.db import models
+from django.db import models, transaction
 from django.db.models import F, Value
 from django.template.defaultfilters import date as default_date_filter
 
@@ -215,7 +216,8 @@ class IssueStateManager(object):
         issue.is_muted = True
         issue.unmute_on_volume_based_conditions = unmute_on_volume_based_conditions
 
-        IssueStateManager.set_unmute_handlers(get_pc_registry().by_issue, issue, now)
+        transaction.on_commit(partial(IssueStateManager.set_unmute_handlers,
+                                      get_pc_registry().by_issue, issue, now))
 
         if unmute_after is not None:
             issue.unmute_after = unmute_after
@@ -241,7 +243,9 @@ class IssueStateManager(object):
                 # (note: we can expect project to be set, because it will be None only when projects are deleted, in
                 # which case no more unmuting happens)
                 if issue.project.alert_on_unmute:
-                    send_unmute_alert.delay(issue.id, format_unmute_reason(unmute_metadata))
+                    transaction.on_commit(partial(
+                        send_unmute_alert.delay,
+                        issue.id, format_unmute_reason(unmute_metadata)))
 
                 # this is in a funny place but it's still simpler than introducing an Encoder
                 if unmute_metadata is not None and "mute_for" in unmute_metadata:
@@ -387,7 +391,9 @@ class IssueQuerysetStateManager(object):
             unmute_on_volume_based_conditions=unmute_on_volume_based_conditions,
         )
 
-        IssueQuerysetStateManager.set_unmute_handlers(get_pc_registry().by_issue, issue_qs, now)
+        transaction.on_commit(partial(
+            IssueQuerysetStateManager.set_unmute_handlers,
+            get_pc_registry().by_issue, [i for i in issue_qs], now))
 
         if unmute_after is not None:
             issue_qs.update(unmute_after=unmute_after)
@@ -408,10 +414,12 @@ class IssueQuerysetStateManager(object):
             IssueStateManager.unmute(issue, triggering_event)
 
     @staticmethod
-    def set_unmute_handlers(by_issue, issue_qs, now):
+    def set_unmute_handlers(by_issue, issue_list, now):
         # in this method there's no fancy queryset based stuff (we don't actually do updates on the DB)
+        # the use of 'issue_list' as opposed to 'issue_qs' is a (non-enforced) indication that for correct usage (in
+        # on_commit) as QS should be evaluated inside the commit and the resulting list should be dealt with afterwards.
 
-        for issue in issue_qs:
+        for issue in issue_list:
             IssueStateManager.set_unmute_handlers(by_issue, issue, now)
 
 

@@ -2,7 +2,7 @@ import datetime
 from unittest.mock import patch
 
 from django.conf import settings
-from django.test import TestCase as DjangoTestCase
+from django.test import TestCase as DjangoTestCase, TransactionTestCase
 from django.utils import timezone
 from django.test.client import RequestFactory
 
@@ -18,9 +18,18 @@ from .models import DecompressedEvent
 from .views import BaseIngestAPIView
 
 
-class IngestViewTestCase(DjangoTestCase):
+class IngestViewTestCase(TransactionTestCase):
     # this TestCase started out as focussed on alert-sending, but has grown beyond that. Sometimes simply by extending
     # existing tests. This is not a problem in itself, but may be slightly confusing if you don't realize that.
+
+    # We use TransactionTestCase because of the following:
+    #
+    # > Django’s TestCase class wraps each test in a transaction and rolls back that transaction after each test, in
+    # > order to provide test isolation. This means that no transaction is ever actually committed, thus your
+    # > on_commit() callbacks will never be run.
+    # > [..]
+    # > Another way to overcome the limitation is to use TransactionTestCase instead of TestCase. This will mean your
+    # > transactions are committed, and the callbacks will run. However [..] significantly slower [..]
 
     def setUp(self):
         # the existence of loud/quiet reflect that parts of this test focusses on alert-sending

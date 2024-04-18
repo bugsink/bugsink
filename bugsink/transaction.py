@@ -71,8 +71,8 @@ class ImmediateAtomic(django_db_transaction.Atomic):
             del connection._start_transaction_under_autocommit_original
 
 
-def immediate_atomic(using=None, savepoint=True, durable=False):
-    # this is the Django 4.2 db.transaction.atomic, but using ImmediateAtomic (and with an extra assert)
+def immediate_atomic(using=None, savepoint=True, durable=True):
+    # this is the Django 4.2 db.transaction.atomic, but using ImmediateAtomic, and with durable=True by default
 
     # the following assertion is because "BEGIN IMMEDIATE" supposes a "BEGIN" (of a transaction), i.e. has no meaning in
     # the context of savepoints.

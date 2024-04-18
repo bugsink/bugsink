@@ -3,9 +3,10 @@ from django.http import HttpResponse
 from django.utils.http import content_disposition_header
 from django.shortcuts import render
 
-from bugsink.decorators import event_membership_required
+from bugsink.decorators import event_membership_required, atomic_for_request_method
 
 
+@atomic_for_request_method
 @event_membership_required
 def event_download(request, event, as_attachment=False):
     result = HttpResponse(event.data, content_type="application/json")
@@ -14,6 +15,7 @@ def event_download(request, event, as_attachment=False):
     return result
 
 
+@atomic_for_request_method
 @event_membership_required
 def event_plaintext(request, event):
     parsed_data = json.loads(event.data)

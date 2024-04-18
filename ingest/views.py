@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
 import json  # TODO consider faster APIs
+from functools import partial
 
 from django.shortcuts import get_object_or_404
 from django.conf import settings
 from django.db.models import Max
+from django.db import transaction
 
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -11,7 +13,7 @@ from rest_framework.views import APIView
 from rest_framework import exceptions
 from rest_framework.exceptions import ValidationError
 
-# from projects.models import Project
+import sentry_sdk_extensions
 from compat.auth import parse_auth_header_value
 
 from projects.models import Project
@@ -19,13 +21,14 @@ from issues.models import Issue, IssueStateManager, Grouping, TurningPoint, Turn
 from issues.utils import get_type_and_value_for_data, get_issue_grouper_for_data, get_denormalized_fields_for_data
 from issues.regressions import issue_is_regression
 
-import sentry_sdk_extensions
-from events.models import Event
-from releases.models import create_release_if_needed
 from bugsink.registry import get_pc_registry
 from bugsink.period_counter import PeriodCounter
-from alerts.tasks import send_new_issue_alert, send_regression_alert
+from bugsink.transaction import immediate_atomic
 from bugsink.exceptions import ViolatedExpectation
+
+from events.models import Event
+from releases.models import create_release_if_needed
+from alerts.tasks import send_new_issue_alert, send_regression_alert
 
 from .negotiation import IgnoreClientContentNegotiation
 from .parsers import EnvelopeParser
@@ -101,11 +104,18 @@ class BaseIngestAPIView(APIView):
 
     @classmethod
     def digest_event(cls, ingested_event, event_data):
+        event, issue = cls._digest_event_to_db(ingested_event, event_data)
+        cls._digest_event_python_postprocessing(ingested_event, event, issue)
+
+    @classmethod
+    @immediate_atomic()
+    def _digest_event_to_db(cls, ingested_event, event_data):
         # event_data is passed explicitly to avoid re-parsing something that may be availabe anyway; we'll come up with
         # a better signature later if this idea sticks
 
-        # leave this at the top -- it may involve reading from the DB which should come before any DB writing
-        pc_registry = get_pc_registry()
+        # leave this at the top -- the point is to trigger load_from_scratch if needed, which may involve reading from
+        # the DB which should come before any DB writing
+        get_pc_registry()
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
@@ -186,7 +196,7 @@ class BaseIngestAPIView(APIView):
                 kind=TurningPointKind.FIRST_SEEN)
 
             if ingested_event.project.alert_on_new_issue:
-                send_new_issue_alert.delay(issue.id)
+                transaction.on_commit(partial(send_new_issue_alert.delay, issue.id))
 
         else:
             # new issues cannot be regressions by definition, hence this is in the 'else' branch
@@ -196,7 +206,7 @@ class BaseIngestAPIView(APIView):
                     kind=TurningPointKind.REGRESSED)
 
                 if ingested_event.project.alert_on_regression:
-                    send_regression_alert.delay(issue.id)
+                    transaction.on_commit(partial(send_regression_alert.delay, issue.id))
 
                 IssueStateManager.reopen(issue)
 
@@ -220,14 +230,18 @@ class BaseIngestAPIView(APIView):
             issue.last_seen = ingested_event.timestamp
             issue.event_count += 1
 
-        if issue.id not in get_pc_registry().by_issue:
-            pc_registry.by_issue[issue.id] = PeriodCounter()
-        issue_pc = get_pc_registry().by_issue[issue.id]
-        issue_pc.inc(ingested_event.timestamp, counted_entity=event)
-
         if release.version + "\n" not in issue.events_at:
             issue.events_at += release.version + "\n"
         issue.save()
+        return event, issue
+
+    @classmethod
+    def _digest_event_python_postprocessing(cls, ingested_event, event, issue):
+        pc_registry = get_pc_registry()
+        if issue.id not in pc_registry.by_issue:
+            pc_registry.by_issue[issue.id] = PeriodCounter()
+        issue_pc = pc_registry.by_issue[issue.id]
+        issue_pc.inc(ingested_event.timestamp, counted_entity=event)
 
 
 class IngestEventAPIView(BaseIngestAPIView):

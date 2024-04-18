@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.core.exceptions import PermissionDenied
 
 from events.models import Event
-from bugsink.decorators import project_membership_required, issue_membership_required
+from bugsink.decorators import project_membership_required, issue_membership_required, atomic_for_request_method
 from compat.timestamp import format_timestamp
 
 from .models import (
@@ -162,6 +162,7 @@ def _apply_action(manager, issue_or_qs, action, user):
         manager.unmute(issue_or_qs)
 
 
+@atomic_for_request_method
 @project_membership_required
 def issue_list(request, project, state_filter="open"):
     if request.method == "POST":
@@ -215,6 +216,7 @@ def event_by_internal_id(request, event_pk):
     return redirect(issue_event_stacktrace, issue_pk=issue.pk, event_pk=event.pk)
 
 
+@atomic_for_request_method
 @issue_membership_required
 def issue_last_event(request, issue):
     last_event = issue.event_set.order_by("timestamp").last()
@@ -250,6 +252,7 @@ def _get_event(issue, event_pk, ingest_order):
         raise ValueError("either event_pk or ingest_order must be provided")
 
 
+@atomic_for_request_method
 @issue_membership_required
 def issue_event_stacktrace(request, issue, event_pk=None, ingest_order=None):
     if request.method == "POST":
@@ -296,6 +299,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, ingest_order=None):
     })
 
 
+@atomic_for_request_method
 @issue_membership_required
 def issue_event_breadcrumbs(request, issue, event_pk=None, ingest_order=None):
     if request.method == "POST":
@@ -323,6 +327,7 @@ def _date_with_milis_html(timestamp):
         '<span class="text-xs">' + date(timestamp, "u")[:3] + '</span>')
 
 
+@atomic_for_request_method
 @issue_membership_required
 def issue_event_details(request, issue, event_pk=None, ingest_order=None):
     if request.method == "POST":
@@ -361,6 +366,7 @@ def issue_event_details(request, issue, event_pk=None, ingest_order=None):
     })
 
 
+@atomic_for_request_method
 @issue_membership_required
 def issue_history(request, issue):
     if request.method == "POST":
@@ -378,6 +384,7 @@ def issue_history(request, issue):
     })
 
 
+@atomic_for_request_method
 @issue_membership_required
 def issue_grouping(request, issue):
     if request.method == "POST":
@@ -395,6 +402,7 @@ def issue_grouping(request, issue):
     })
 
 
+@atomic_for_request_method
 @issue_membership_required
 def issue_event_list(request, issue):
     if request.method == "POST":
@@ -415,6 +423,7 @@ def issue_event_list(request, issue):
     })
 
 
+@atomic_for_request_method
 @issue_membership_required
 def history_comment_new(request, issue):
 
@@ -436,6 +445,7 @@ def history_comment_new(request, issue):
     return HttpResponseNotAllowed(["POST"])
 
 
+@atomic_for_request_method
 @issue_membership_required
 def history_comment_edit(request, issue, comment_pk):
     comment = get_object_or_404(TurningPoint, pk=comment_pk, issue_id=issue.pk)
@@ -450,6 +460,7 @@ def history_comment_edit(request, issue, comment_pk):
         return redirect(reverse(issue_history, kwargs={'issue_pk': issue.pk}) + f"#comment-{ comment_pk }")
 
 
+@atomic_for_request_method
 @issue_membership_required
 def history_comment_delete(request, issue, comment_pk):
     comment = get_object_or_404(TurningPoint, pk=comment_pk, issue_id=issue.pk)

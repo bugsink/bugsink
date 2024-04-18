@@ -7,7 +7,7 @@ from unittest import TestCase as RegularTestCase
 from unittest.mock import patch
 from datetime import datetime, timezone
 
-from django.test import TestCase as DjangoTestCase
+from django.test import TestCase as DjangoTestCase, TransactionTestCase
 from django.contrib.auth.models import User
 from django.test import tag
 
@@ -296,7 +296,7 @@ seen as an undo rather than anything else.
 """
 
 
-class MuteUnmuteTestCase(DjangoTestCase):
+class MuteUnmuteTestCase(TransactionTestCase):
     """
     Somewhat of an integration test. The unit-under-test here is the whole of
     * the pc_registry
