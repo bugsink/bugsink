@@ -7,5 +7,4 @@ class Command(BaseCommand):
     help = "Run the SnapPea foreman service."
 
     def handle(self, *args, **options):
-
         Foreman().run_forever()

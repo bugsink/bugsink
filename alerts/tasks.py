@@ -1,4 +1,4 @@
-from celery import shared_task
+from snappea.decorators import shared_task
 
 from django.conf import settings
 from django.template.defaultfilters import truncatechars
