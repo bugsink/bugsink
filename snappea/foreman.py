@@ -1,3 +1,4 @@
+import sys
 import json
 import os
 import logging
@@ -8,29 +9,62 @@ from sentry_sdk import capture_exception
 
 from . import registry
 from .models import Pea
+from .decorators import shared_task
 
 
-NUM_WORKERS = 2
+GRACEFUL_TIMEOUT = 10
+NUM_WORKERS = 4
 
 
 logger = logging.getLogger("snappea.foreman")
 
 
+@shared_task
 def example_worker():
     import random
-    me = str(random.random())
+    import uuid
+    me = str(uuid.uuid4())
     logger.info("example worker started %s", me)
-    time.sleep(10)
+    time.sleep(random.random() * 10)
     logger.info("example worker stopped %s", me)
 
 
+@shared_task
 def example_failing_worker():
     raise Exception("I am failing")
+
+
+class SafeDict:
+    """Python's dict is 'probably thread safe', but since this is hard to reason about, and in fact .items() may be
+    unsafe, we just use a lock. See e.g.
+    * https://stackoverflow.com/questions/6953351/thread-safety-in-pythons-dictionary
+    * https://stackoverflow.com/questions/66556511/is-listdict-items-thread-safe
+    """
+
+    def __init__(self):
+        self.d = {}
+        self.lock = threading.Lock()
+
+    def set(self, k, v):
+        with self.lock:
+            self.d[k] = v
+
+    def unset(self, k):
+        with self.lock:
+            del self.d[k]
+
+    def list(self):
+        with self.lock:
+            return list(self.d.items())
 
 
 class Foreman:
 
     def __init__(self):
+        self.workers = SafeDict()
+        self.stopping = False
+
+        signal.signal(signal.SIGINT, self.handle_sigint)
         signal.signal(signal.SIGUSR1, self.handle_sigusr1)
 
         pid = os.getpid()
@@ -58,23 +92,42 @@ class Foreman:
                 capture_exception(e)
             finally:
                 logger.info("worker done: %s", pea_id)
+                self.workers.unset(pea_id)
                 self.worker_semaphore.release()
 
         worker_thread = threading.Thread(target=non_failing_function, args=args, kwargs=kwargs)
+
+        # killing threads seems to be 'hard'(https://stackoverflow.com/questions/323972/is-there-any-way-to-kill-a-thre)
+        # we can, however, set deamon=True which will ensure that an exit of the main thread is the end of the program
+        # (and then implement some manual waiting separately).
+        worker_thread.daemon = True
         worker_thread.start()
+        self.workers.set(pea_id, worker_thread)
         return worker_thread
+
+    def handle_sigint(self, signal, frame):
+        # Note: a more direct way is available (just put the stopping in the sigint) but I think the indirection is
+        # easier to think about.
+        logger.info("Received SIGINT")
+        self.stopping = True
+
+        # ensure that anything we might be waiting for is unblocked
+        self.signal_semaphore.release()
+        self.worker_semaphore.release()
 
     def handle_sigusr1(self, sig, frame):
         logger.info("Received SIGUSR1")
         self.signal_semaphore.release()
 
     def run_forever(self):
+        logger.info("Checking Pea backlog")
         while self.create_worker():
-            pass
+            self.check_for_stopping()
 
         while True:
-            print("Checking (potentially waiting) for seen SIGUSR1")
+            logger.info("Checking (potentially waiting) for SIGUSR1")
             self.signal_semaphore.acquire()
+            self.check_for_stopping()
             self.create_worker()
 
     def create_worker(self):
@@ -82,6 +135,7 @@ class Foreman:
 
         logger.info("Checking (potentially waiting) for available worker slots")
         self.worker_semaphore.acquire()
+        self.check_for_stopping()  # always check after .acquire()
 
         pea = Pea.objects.first()
         if pea is None:
@@ -102,8 +156,29 @@ class Foreman:
         task = registry[pea.task_name]
         args = json.loads(pea.args)
         kwargs = json.loads(pea.kwargs)
-        pea.delete()
 
+        self.check_for_stopping()
+        pea.delete()
         self.run_in_thread(pea_id, task, *args, **kwargs)
 
         return True
+
+    def check_for_stopping(self):
+        if not self.stopping:
+            return
+        logger.info("Foreman stopping")
+
+        deadline = time.time() + GRACEFUL_TIMEOUT
+        for pea_id, worker_thread in self.workers.list():
+            if worker_thread.is_alive():
+                time_left = deadline - time.time()
+                if time_left > 0:
+                    logger.info("Waiting for worker %s", pea_id)
+                    worker_thread.join(time_left)
+                    if worker_thread.is_alive():
+                        logger.info("Worker %s did not die before the wait was over", pea_id)
+                else:
+                    logger.info("No time left to wait for worker %s", pea_id)  # it will be killed by system-exit
+
+        logger.info("Foreman exit")
+        sys.exit()
