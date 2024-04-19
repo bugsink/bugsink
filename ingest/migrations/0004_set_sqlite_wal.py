@@ -21,9 +21,14 @@ logger = logging.getLogger("bugsink")
 # > invisible to the read transaction, because the reader is seeing a snapshot of database file from a prior moment in
 # > time.
 #
-# The reason I want this is because it's a model that I can wrap my head around. As a side-effect, it seems likely from
-# skimming various articles on the internet and the sqlite docs that WAL actually has better performance, and less
-# likelihood of deadlocks.
+# The reason I want this is because it's a model for DB reads that I can wrap my head around. As a side-effect, it seems
+# likely from skimming various articles on the internet and the sqlite docs that WAL actually has better performance,
+# and less likelihood of deadlocks.
+#
+# Regarding "a model I can wrap my head around" for DB writes: we get this "for free" with SQLite: write transactions
+# lock the whole DB, so they are completely serialized. This makes for easy reasoning (as long as writes are wrapped in
+# transactions) at the cost of no paralellism (which we deal with by [a] focussing on keeping write transactions as
+# short as possible [b] the ingest/digest distinction which provides an internal queue [c] quotas/load shedding)
 
 
 def set_wal_pragma(apps, schema_editor):
