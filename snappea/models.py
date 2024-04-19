@@ -1,7 +1,7 @@
 from django.db import models
 
 
-class Pea(models.Model):
+class Task(models.Model):
     task_name = models.CharField(max_length=255)
     args = models.TextField(null=False, default='[]')
     kwargs = models.TextField(null=False, default='{}')

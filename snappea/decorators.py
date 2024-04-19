@@ -4,7 +4,7 @@ import json
 
 from . import registry
 
-from .models import Pea
+from .models import Task
 
 
 def shared_task(function):
@@ -17,7 +17,7 @@ def shared_task(function):
             function(*args, **kwargs)
 
         # notes on the lack of immediate_atomic go here
-        Pea.objects.create(task_name=name, args=json.dumps(args), kwargs=json.dumps(kwargs))
+        Task.objects.create(task_name=name, args=json.dumps(args), kwargs=json.dumps(kwargs))
 
         with open("/tmp/snappea.pid", "r") as f:
             # NOTE perhaps we can let systemd take a role here, it seems to do pids

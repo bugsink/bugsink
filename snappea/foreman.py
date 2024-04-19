@@ -8,7 +8,7 @@ import threading
 from sentry_sdk import capture_exception
 
 from . import registry
-from .models import Pea
+from .models import Task
 from .decorators import shared_task
 
 
@@ -80,8 +80,8 @@ class Foreman:
         # stops. (the value of this semaphore is implicitly NUM_WORKERS - active_workers)
         self.worker_semaphore = threading.Semaphore(NUM_WORKERS)
 
-    def run_in_thread(self, pea_id, function, *args, **kwargs):
-        logger.info("run_in_thread: %s, %s.%s", pea_id, function.__module__, function.__name__)
+    def run_in_thread(self, task_id, function, *args, **kwargs):
+        logger.info("run_in_thread: %s, %s.%s", task_id, function.__module__, function.__name__)
 
         def non_failing_function(*inner_args, **inner_kwargs):
             try:
@@ -91,8 +91,8 @@ class Foreman:
                 logger.info("Worker exception: %s", str(e))
                 capture_exception(e)
             finally:
-                logger.info("worker done: %s", pea_id)
-                self.workers.unset(pea_id)
+                logger.info("worker done: %s", task_id)
+                self.workers.unset(task_id)
                 self.worker_semaphore.release()
 
         worker_thread = threading.Thread(target=non_failing_function, args=args, kwargs=kwargs)
@@ -102,7 +102,7 @@ class Foreman:
         # (and then implement some manual waiting separately).
         worker_thread.daemon = True
         worker_thread.start()
-        self.workers.set(pea_id, worker_thread)
+        self.workers.set(task_id, worker_thread)
         return worker_thread
 
     def handle_sigint(self, signal, frame):
@@ -120,7 +120,7 @@ class Foreman:
         self.signal_semaphore.release()
 
     def run_forever(self):
-        logger.info("Checking Pea backlog")
+        logger.info("Checking Task backlog")
         while self.create_worker():
             self.check_for_stopping()
 
@@ -137,12 +137,12 @@ class Foreman:
         self.worker_semaphore.acquire()
         self.check_for_stopping()  # always check after .acquire()
 
-        pea = Pea.objects.first()
-        if pea is None:
+        task = Task.objects.first()
+        if task is None:
             # Seeing this is expected on-bootup (one after all Peas are dealt with, and once for each SIGUSR1 that was
             # received while clearing the initial backlog, but before we went into sleeping mode). If you see it later,
             # it's odd. (We could even assert for it)
-            logger.info("No pea found")
+            logger.info("No task found")
 
             # We acquired the worker_semaphore at the start of this method, but we're not using it. Release immediately!
             self.worker_semaphore.release()
@@ -152,14 +152,14 @@ class Foreman:
         # TODO note on the guarantees we provide (not many)
         # TODO this bit is the main bit where an exception handler is missing: for both the (potentially failing) DB
         # write and the business of looking up tasks by name.
-        pea_id = pea.id
-        task = registry[pea.task_name]
-        args = json.loads(pea.args)
-        kwargs = json.loads(pea.kwargs)
+        task_id = task.id
+        function = registry[task.task_name]
+        args = json.loads(task.args)
+        kwargs = json.loads(task.kwargs)
 
         self.check_for_stopping()
-        pea.delete()
-        self.run_in_thread(pea_id, task, *args, **kwargs)
+        task.delete()
+        self.run_in_thread(task_id, function, *args, **kwargs)
 
         return True
 
@@ -169,16 +169,16 @@ class Foreman:
         logger.info("Foreman stopping")
 
         deadline = time.time() + GRACEFUL_TIMEOUT
-        for pea_id, worker_thread in self.workers.list():
+        for task_id, worker_thread in self.workers.list():
             if worker_thread.is_alive():
                 time_left = deadline - time.time()
                 if time_left > 0:
-                    logger.info("Waiting for worker %s", pea_id)
+                    logger.info("Waiting for worker %s", task_id)
                     worker_thread.join(time_left)
                     if worker_thread.is_alive():
-                        logger.info("Worker %s did not die before the wait was over", pea_id)
+                        logger.info("Worker %s did not die before the wait was over", task_id)
                 else:
-                    logger.info("No time left to wait for worker %s", pea_id)  # it will be killed by system-exit
+                    logger.info("No time left to wait for worker %s", task_id)  # it will be killed by system-exit
 
         logger.info("Foreman exit")
         sys.exit()
