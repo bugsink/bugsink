@@ -108,7 +108,7 @@ class Foreman:
     def handle_sigint(self, signal, frame):
         # Note: a more direct way is available (just put the stopping in the sigint) but I think the indirection is
         # easier to think about.
-        logger.info("Received SIGINT")
+        logger.debug("Received SIGINT")
         self.stopping = True
 
         # ensure that anything we might be waiting for is unblocked
@@ -116,7 +116,7 @@ class Foreman:
         self.worker_semaphore.release()
 
     def handle_sigusr1(self, sig, frame):
-        logger.info("Received SIGUSR1")
+        logger.debug("Received SIGUSR1")
         self.signal_semaphore.release()
 
     def run_forever(self):
@@ -125,7 +125,7 @@ class Foreman:
             self.check_for_stopping()
 
         while True:
-            logger.info("Checking (potentially waiting) for SIGUSR1")
+            logger.debug("Checking (potentially waiting) for SIGUSR1")
             self.signal_semaphore.acquire()
             self.check_for_stopping()
             self.create_worker()
@@ -133,7 +133,7 @@ class Foreman:
     def create_worker(self):
         """returns a boolean 'was anything done?'"""
 
-        logger.info("Checking (potentially waiting) for available worker slots")
+        logger.debug("Checking (potentially waiting) for available worker slots")
         self.worker_semaphore.acquire()
         self.check_for_stopping()  # always check after .acquire()
 
