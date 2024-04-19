@@ -4,6 +4,7 @@ import json
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import Q
+from django.db import transaction
 from django.http import HttpResponseRedirect, HttpResponseNotAllowed
 from django.utils.safestring import mark_safe
 from django.template.defaultfilters import date
@@ -162,9 +163,20 @@ def _apply_action(manager, issue_or_qs, action, user):
         manager.unmute(issue_or_qs)
 
 
+def issue_list(request, project_pk, state_filter="open"):
+    # to keep the write lock as short as possible, issue_list is split up into 2 parts (read/write vs pure reading),
+    # which take in the order of 5ms / 120ms respectively. Some info is passed between transactions (project and
+    # unapplied_issue_ids), but since this is respectively sensitive to much change and the direct result of our own
+    # current action, I don't think this can lead to surprising results.
+
+    project, unapplied_issue_ids = _issue_list_pt_1(request, project_pk=project_pk, state_filter=state_filter)
+    with transaction.atomic():
+        return _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids)
+
+
 @atomic_for_request_method
 @project_membership_required
-def issue_list(request, project, state_filter="open"):
+def _issue_list_pt_1(request, project, state_filter="open"):
     if request.method == "POST":
         issue_ids = request.POST.getlist('issue_ids[]')
         issue_qs = Issue.objects.filter(pk__in=issue_ids)
@@ -179,6 +191,10 @@ def issue_list(request, project, state_filter="open"):
     else:
         unapplied_issue_ids = None
 
+    return project, unapplied_issue_ids
+
+
+def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
     d_state_filter = {
         "open": lambda qs: qs.filter(is_resolved=False, is_muted=False),
         "unresolved": lambda qs: qs.filter(is_resolved=False),
