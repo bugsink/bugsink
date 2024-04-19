@@ -1,7 +1,11 @@
+import logging
+import time
 from functools import partial
 import types
 from django.db import transaction as django_db_transaction
 from django.db import DEFAULT_DB_ALIAS
+
+performance_logger = logging.getLogger("bugsink.performance.db")
 
 
 def _start_transaction_under_autocommit_patched(self):
@@ -61,10 +65,17 @@ class ImmediateAtomic(django_db_transaction.Atomic):
             connection._start_transaction_under_autocommit = types.MethodType(
                 _start_transaction_under_autocommit_patched, connection)
 
+        self.t0 = time.time()
         super(ImmediateAtomic, self).__enter__()
+        took = (time.time() - self.t0) * 1_000
+        performance_logger.info(f"    {took:6.2f}ms BEGIN IMMEDIATE, A.K.A. get-write-lock' ↴")
+        self.t0 = time.time()
 
     def __exit__(self, exc_type, exc_value, traceback):
         super(ImmediateAtomic, self).__exit__(exc_type, exc_value, traceback)
+
+        took = (time.time() - self.t0) * 1000
+        performance_logger.info(f"    {took:6.2f}ms IMMEDIATE transaction' ↴")
 
         connection = django_db_transaction.get_connection(self.using)
         if hasattr(connection, "_start_transaction_under_autocommit"):

@@ -4,7 +4,7 @@ from time import time
 from django.contrib.auth.decorators import login_required
 from django.db import connection
 
-performance_logger = logging.getLogger("bugsink.performance")
+performance_logger = logging.getLogger("bugsink.performance.views")
 
 
 class LoginRequiredMiddleware:
@@ -49,5 +49,7 @@ class PerformanceStatsMiddleware:
         result = view_func(request, *view_args, **view_kwargs)
         took = (time() - t0) * 1000
         if took > 1 and not request.path.startswith("/static"):
-            performance_logger.info(f"    {took:.2f}ms / {len(connection.queries)} queries: '{ view_func.__name__ }' ↴")
+            performance_logger.info(
+                f"    {took:6.2f}ms / {len(connection.queries)} queries: '{ view_func.__name__ }' ↴")
+
         return result
