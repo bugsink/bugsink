@@ -245,7 +245,7 @@ class IssueStateManager(object):
                 if issue.project.alert_on_unmute:
                     transaction.on_commit(partial(
                         send_unmute_alert.delay,
-                        issue.id, format_unmute_reason(unmute_metadata)))
+                        str(issue.id), format_unmute_reason(unmute_metadata)))
 
                 # this is in a funny place but it's still simpler than introducing an Encoder
                 if unmute_metadata is not None and "mute_for" in unmute_metadata:

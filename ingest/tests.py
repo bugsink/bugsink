@@ -144,7 +144,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertTrue(send_unmute_alert.delay.called)
         self.assertEquals(1, TurningPoint.objects.count())
         self.assertEquals(TurningPointKind.UNMUTED, TurningPoint.objects.first().kind)
-        self.assertEquals(send_unmute_alert.delay.call_args[0][0], issue.id)
+        self.assertEquals(send_unmute_alert.delay.call_args[0][0], str(issue.id))
         self.assertEquals(
             send_unmute_alert.delay.call_args[0][1], "More than 1 events per 1 day occurred, unmuting the issue.")
 
@@ -172,7 +172,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertTrue(send_unmute_alert.delay.called)
         self.assertEquals(1, TurningPoint.objects.count())
         self.assertEquals(TurningPointKind.UNMUTED, TurningPoint.objects.first().kind)
-        self.assertEquals(send_unmute_alert.delay.call_args[0][0], issue.id)
+        self.assertEquals(send_unmute_alert.delay.call_args[0][0], str(issue.id))
         self.assertTrue("An event was observed after the mute-deadline of" in send_unmute_alert.delay.call_args[0][1])
 
     @patch("ingest.views.send_new_issue_alert")

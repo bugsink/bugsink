@@ -194,7 +194,7 @@ class BaseIngestAPIView(APIView):
                 kind=TurningPointKind.FIRST_SEEN)
 
             if ingested_event.project.alert_on_new_issue:
-                delay_on_commit(send_new_issue_alert, issue.id)
+                delay_on_commit(send_new_issue_alert, str(issue.id))
 
         else:
             # new issues cannot be regressions by definition, hence this is in the 'else' branch
@@ -204,7 +204,7 @@ class BaseIngestAPIView(APIView):
                     kind=TurningPointKind.REGRESSED)
 
                 if ingested_event.project.alert_on_regression:
-                    delay_on_commit(send_regression_alert, issue.id)
+                    delay_on_commit(send_regression_alert, str(issue.id))
 
                 IssueStateManager.reopen(issue)
 
