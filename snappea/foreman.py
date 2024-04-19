@@ -35,6 +35,8 @@ class Foreman:
         with open("/tmp/snappea.pid", "w") as f:
             f.write(str(pid))
 
+        self.semaphore = threading.Semaphore(0)
+
     def handle_sigterm(self, sig, frame):
         print("Handling SIGTERM signal")
 
@@ -52,17 +54,30 @@ class Foreman:
         return worker_thread
 
     def handle_sigusr1(self, sig, frame):
-        logger.info("Received signal, starting new thread")
-        self.run_in_thread(example_failing_worker)
-        # worker_thread = threading.Thread(target=example_worker)
+        logger.info("Received signal")
 
         lll.append("x")
         me = len(lll)
         for i in range(4):
-            print("am I locked?", me, i)
+            print("am I locked A?", me, i)
+            time.sleep(1)
+
+        self.semaphore.release()
+
+        for i in range(4):
+            print("am I locked B?", me, i)
             time.sleep(1)
 
     def run_forever(self):
-        # there is no actual code here, all the action happens in the signal handlers
         while True:
-            time.sleep(3600)
+            print("Waiting for semaphore")
+            self.semaphore.acquire()
+            self.step()
+
+    def step(self):
+        print("STEP")
+        """
+        self.run_in_thread(example_failing_worker)
+        # worker_thread = threading.Thread(target=example_worker)
+
+        """

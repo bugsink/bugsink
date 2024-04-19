@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'theme',
     'admin_auto_filters',
 
+    'snappea',
     'compat',
     'projects',
     'releases',
@@ -188,6 +189,10 @@ DEBUG_TOOLBAR_CONFIG = {
 
 LOGGING = deepcopy(DEFAULT_LOGGING)
 LOGGING['loggers']['bugsink'] = {
+    "level": "INFO",
+    "handlers": ["console"],
+}
+LOGGING['loggers']['snappea'] = {
     "level": "INFO",
     "handlers": ["console"],
 }
