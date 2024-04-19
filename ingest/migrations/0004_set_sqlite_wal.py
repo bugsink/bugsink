@@ -34,8 +34,6 @@ logger = logging.getLogger("bugsink")
 def set_wal_pragma(apps, schema_editor):
     # even though we're currently on "sqlite only", we take the forward-looking approach of at least having the escape
     # hatch for other DBs:
-    logger.info("\n    Migration info: it's shown in regular migrations")
-
     if not schema_editor.connection.vendor == 'sqlite':
         logger.info('\n    Migration info: Database vendor: {}'.format(schema_editor.connection.vendor))
         logger.info('    Migration info: Skipping set_wal migration')
