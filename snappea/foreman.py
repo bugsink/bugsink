@@ -6,29 +6,30 @@ import threading
 from sentry_sdk import capture_exception
 
 
+NUM_WORKERS = 2
+
+
 logger = logging.getLogger("snappea.foreman")
 
 
 def example_worker():
-    logger.info("example worker started")
+    import random
+    me = str(random.random())
+    logger.info("example worker started %s", me)
     time.sleep(10)
-    logger.info("example worker stopped")
+    logger.info("example worker stopped %s", me)
 
 
 def example_failing_worker():
     raise Exception("I am failing")
 
 
-lll = []
-
-
 class Foreman:
 
     def __init__(self):
-        # signal.signal(signal.SIGTERM, self.handle_sigterm)  later
         signal.signal(signal.SIGUSR1, self.handle_sigusr1)
 
-        self.workers = []
+        # self.workers = []
 
         pid = os.getpid()
         logger.info("Foreman created, my pid is %s", pid)
@@ -36,9 +37,7 @@ class Foreman:
             f.write(str(pid))
 
         self.semaphore = threading.Semaphore(0)
-
-    def handle_sigterm(self, sig, frame):
-        print("Handling SIGTERM signal")
+        self.worker_semaphore = threading.Semaphore(NUM_WORKERS)
 
     def run_in_thread(self, function, *args, **kwargs):
         def non_failing_function(*inner_args, **inner_kwargs):
@@ -48,25 +47,16 @@ class Foreman:
                 # Potential TODO: make this configurable / depend on our existing config in bugsink/settings.py
                 logger.info("Worker exception: %s", str(e))
                 capture_exception(e)
+            finally:
+                self.worker_semaphore.release()
 
         worker_thread = threading.Thread(target=non_failing_function, *args, **kwargs)
-        worker_thread.run()
+        worker_thread.start()
         return worker_thread
 
     def handle_sigusr1(self, sig, frame):
         logger.info("Received signal")
-
-        lll.append("x")
-        me = len(lll)
-        for i in range(4):
-            print("am I locked A?", me, i)
-            time.sleep(1)
-
         self.semaphore.release()
-
-        for i in range(4):
-            print("am I locked B?", me, i)
-            time.sleep(1)
 
     def run_forever(self):
         while True:
@@ -76,8 +66,9 @@ class Foreman:
 
     def step(self):
         print("STEP")
-        """
-        self.run_in_thread(example_failing_worker)
-        # worker_thread = threading.Thread(target=example_worker)
-
-        """
+        print("worker_semaphore.acquire()")
+        self.worker_semaphore.acquire()
+        # self.workers.append is a TODO
+        print("run in thread")
+        self.run_in_thread(example_worker)
+        print("OK")
