@@ -1,11 +1,9 @@
 from datetime import datetime, timezone
 import json  # TODO consider faster APIs
-from functools import partial
 
 from django.shortcuts import get_object_or_404
 from django.conf import settings
 from django.db.models import Max
-from django.db import transaction
 
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -23,7 +21,7 @@ from issues.regressions import issue_is_regression
 
 from bugsink.registry import get_pc_registry
 from bugsink.period_counter import PeriodCounter
-from bugsink.transaction import immediate_atomic
+from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.exceptions import ViolatedExpectation
 
 from events.models import Event
@@ -196,7 +194,7 @@ class BaseIngestAPIView(APIView):
                 kind=TurningPointKind.FIRST_SEEN)
 
             if ingested_event.project.alert_on_new_issue:
-                transaction.on_commit(partial(send_new_issue_alert.delay, issue.id))
+                delay_on_commit(send_new_issue_alert, issue.id)
 
         else:
             # new issues cannot be regressions by definition, hence this is in the 'else' branch
@@ -206,7 +204,7 @@ class BaseIngestAPIView(APIView):
                     kind=TurningPointKind.REGRESSED)
 
                 if ingested_event.project.alert_on_regression:
-                    transaction.on_commit(partial(send_regression_alert.delay, issue.id))
+                    delay_on_commit(send_regression_alert, issue.id)
 
                 IssueStateManager.reopen(issue)
 

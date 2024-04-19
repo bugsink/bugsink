@@ -1,3 +1,4 @@
+from functools import partial
 import types
 from django.db import transaction as django_db_transaction
 from django.db import DEFAULT_DB_ALIAS
@@ -82,3 +83,7 @@ def immediate_atomic(using=None, savepoint=True, durable=True):
         return ImmediateAtomic(DEFAULT_DB_ALIAS, savepoint, durable)(using)
     else:
         return ImmediateAtomic(using, savepoint, durable)
+
+
+def delay_on_commit(function, *args, **kwargs):
+    django_db_transaction.on_commit(partial(function.delay, *args, **kwargs))
