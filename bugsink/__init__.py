@@ -1,8 +1,5 @@
 from django.db.backends.signals import connection_created
 
-# This will make sure the app is always imported when Django starts so that shared_task will use this app:
-from .celery import app as celery_app
-
 
 def set_pragmas(sender, connection, **kwargs):
     # It appears these pragmas don't persist across connections, so we need to set them on each new connection.
@@ -23,6 +20,3 @@ def set_pragmas(sender, connection, **kwargs):
 
 
 connection_created.connect(set_pragmas)
-
-
-__all__ = ('celery_app',)

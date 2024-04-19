@@ -181,12 +181,6 @@ STATICFILES_DIRS = [
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-# Generic CELERY settings (i.e. no expected config per-installation)
-
-CELERY_IGNORE_RESULT = True  # we don't use the "result" part of celery
-CELERY_BROKER_CONNECTION_TIMEOUT = 2.5  # long enough for glitches, short enough to get notified about real problems
-
-
 def show_toolbar_for_queryparam(request):
     if "__debug__" not in request.path and not request.GET.get("debug", ""):
         return False
