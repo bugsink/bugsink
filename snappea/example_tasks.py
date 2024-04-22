@@ -19,3 +19,8 @@ def example_worker():
 @shared_task
 def example_failing_worker():
     raise Exception("I am failing")
+
+
+@shared_task
+def fast_task():
+    pass

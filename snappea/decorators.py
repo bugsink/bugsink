@@ -1,5 +1,5 @@
+import uuid
 import os
-import signal
 import json
 from django.conf import settings
 
@@ -23,11 +23,12 @@ def shared_task(function):
         # notes on the lack of immediate_atomic go here
         Task.objects.create(task_name=name, args=json.dumps(args), kwargs=json.dumps(kwargs))
 
-        with open("/tmp/snappea.pid", "r") as f:
-            # NOTE perhaps we can let systemd take a role here, it seems to do pids
-            # TODO: handling of [1] no such file [2] no such process
-            foreman_pid = int(f.read())
-            os.kill(foreman_pid, signal.SIGUSR1)
+        wakeup_calls_dir = os.path.join('/tmp', 'snappea')
+        if not os.path.exists(wakeup_calls_dir):
+            os.mkdir(wakeup_calls_dir, exist_ok=True)
+
+        with open(os.path.join(wakeup_calls_dir, str(uuid.uuid4())), "w"):
+            pass
 
     name = function.__module__ + "." + function.__name__
     function.delay = delayed_function
