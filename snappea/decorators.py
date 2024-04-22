@@ -23,12 +23,24 @@ def shared_task(function):
         # notes on the lack of immediate_atomic go here
         Task.objects.create(task_name=name, args=json.dumps(args), kwargs=json.dumps(kwargs))
 
-        wakeup_calls_dir = os.path.join('/tmp', 'snappea')
         if not os.path.exists(wakeup_calls_dir):
             os.mkdir(wakeup_calls_dir, exist_ok=True)
 
-        with open(os.path.join(wakeup_calls_dir, str(uuid.uuid4())), "w"):
-            pass
+        if not os.path.exists(wakeup_file):
+            with open(wakeup_file, "w"):
+                pass
+
+    # We use a random filename for wakeup_file, but because this variable is bound to the shared_task decorator it is
+    # not recalculated on every call to .delay(). This has the advantage that when many wakeup signals are sent but not
+    # consumed they will not fill up our wakeup_calls_dir in O(n) fashion. This filling-up could otherwise happen,
+    # because the Foreman takes on some chunk of work from the DB (currently: 100 records) which may take a while to be
+    # processed (especially if this value is larger than the number of workers) and the wake up signals may flood the
+    # wakeup_dir in that time.
+    #
+    # Because the call to uuid() is stored as a local variable of a function (namely: shared_task), it is by definition
+    # thread-local. (CHECK: is this really so? and is this even important?)
+    wakeup_calls_dir = os.path.join('/tmp', 'snappea')
+    wakeup_file = os.path.join(wakeup_calls_dir, str(uuid.uuid4()))
 
     name = function.__module__ + "." + function.__name__
     function.delay = delayed_function
