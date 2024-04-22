@@ -47,13 +47,15 @@ class Foreman:
     Because the Foreman has a single sequential loop, and because it is the only thing that _updates_ tasks, there is no
     need for a locking model of some sort. sqlite locks the whole DB on-write, of course, but in this case we don't use
     that as a feature. The throughput of our MQ is limited by the speed with which we can do writes to sqlite (2 writes
-    and 1 read are needed per task). I do not expect this to be in any way limiting (TODO check)
+    and at most 2 reads are needed per task (2 reads, because 1 to determine 'no more work'; when there are many items
+    at the same time, the average amount of reads may be <1 because we read a whole list)). Performance on personal
+    laptop: 1000 trivial tasks are finished enqueue-to-finished in a few seconds.
 
     The main idea is this endless loop of checking for new work and doing it. This leaves the question of how we "go to
     sleep" when there is no more work and how we wake up from that. This is implemented using inotify on a directory
     created specifically for that purpose (for each Task a file is dropped there) (and a blocking read on the INotify
     object). Note that this idea is somewhat incidental though (0MQ or polling the DB in a busy loop are some
-    alternatives).
+    alternatives). Performance: write/inotify/delete of a single wake-up call is in the order of n*e-5 on my laptop.
     """
 
     def __init__(self):
