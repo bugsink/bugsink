@@ -14,7 +14,6 @@ from sentry_sdk import capture_exception
 from . import registry
 from .models import Task
 from .datastructures import Workers
-from .example_tasks import * # noqa FOR NOW UNTIL WE implement task discovery
 
 
 GRACEFUL_TIMEOUT = 10
