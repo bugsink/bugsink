@@ -11,6 +11,8 @@ import threading
 from inotify_simple import INotify, flags
 from sentry_sdk import capture_exception
 
+from django.conf import settings
+
 from . import registry
 from .models import Task
 from .datastructures import Workers
@@ -71,18 +73,20 @@ class Foreman:
         signal.signal(signal.SIGINT, self.handle_sigint)
 
         # We use inotify to wake up the Foreman when a new Task is created.
-        self.wakeup_calls_dir = os.path.join('/tmp', 'snappea')
-        if not os.path.exists(self.wakeup_calls_dir):
-            os.makedirs(self.wakeup_calls_dir, exist_ok=True)
+        if not os.path.exists(self.settings.WAKEUP_CALLS_DIR):
+            os.makedirs(self.settings.WAKEUP_CALLS_DIR, exist_ok=True)
         self.wakeup_calls = INotify()
-        self.wakeup_calls.add_watch(self.wakeup_calls_dir, flags.CREATE)
+        self.wakeup_calls.add_watch(self.settings.WAKEUP_CALLS_DIR, flags.CREATE)
 
         # Pid stuff
         pid = os.getpid()
 
         logger.info(" =========  SNAPPEA  =========")
         logger.info("Startup: pid is %s", pid)
-        with open("/tmp/snappea.pid", "w") as f:   # TODO configurable location
+        logger.info("Startup: DB-as-MQ location: %s", settings.DATABASES["snappea"]["NAME"])
+        logger.info("Startup: Wake up calls location: %s", self.settings.WAKEUP_CALLS_DIR)
+
+        with open(self.settings.PID_FILE, "w") as f:
             f.write(str(pid))
 
         # Counts the number of "wake up" signals that have not been dealt with yet. The main loop goes to sleep when
@@ -137,12 +141,12 @@ class Foreman:
         # Ensure that anything we might be waiting for is unblocked. A single notification file and .release call is
         # enough because after every wakeup_calls.read() /  acquire call in our codebase the first thing we do is
         # check_for_stopping(), so the release cannot be inadvertently be "used up" by something else.
-        with open(os.path.join(self.wakeup_calls_dir, str(uuid.uuid4())), "w"):
+        with open(os.path.join(self.settings.WAKEUP_CALLS_DIR, str(uuid.uuid4())), "w"):
             pass
         self.worker_semaphore.release()
 
     def run_forever(self):
-        pre_existing_wakeup_notifications = glob.glob(os.path.join(self.wakeup_calls_dir, "*"))
+        pre_existing_wakeup_notifications = glob.glob(os.path.join(self.settings.WAKEUP_CALLS_DIR, "*"))
         if len(pre_existing_wakeup_notifications) > 0:
             # We clear the wakeup_calls_dir on startup. Not strictly necessary because such files would be cleared by in
             # the loop anyway, but it's more efficient to do it first.
@@ -169,7 +173,7 @@ class Foreman:
                 # we write the file. I don't have a link to the man page to back this up, but when running "many" calls
                 # (using 2 processes with each simple tight loop, one creating the files and one deleting them, I did
                 # not get any errors)
-                os.unlink(os.path.join(self.wakeup_calls_dir, event.name))
+                os.unlink(os.path.join(self.settings.WAKEUP_CALLS_DIR, event.name))
 
             self.check_for_stopping()  # always check after .read()
             while self.create_workers() == self.settings.TASK_QS_LIMIT:

@@ -23,11 +23,10 @@ def shared_task(function):
         # it again).
         Task.objects.create(task_name=name, args=json.dumps(args), kwargs=json.dumps(kwargs))
 
-        wakeup_calls_dir = os.path.join('/tmp', 'snappea')
-        wakeup_file = os.path.join(wakeup_calls_dir, thread_uuid)
+        wakeup_file = os.path.join(get_settings().WAKEUP_CALLS_DIR, thread_uuid)
 
-        if not os.path.exists(wakeup_calls_dir):
-            os.mkdir(wakeup_calls_dir, exist_ok=True)
+        if not os.path.exists(get_settings().WAKEUP_CALLS_DIR):
+            os.mkdir(get_settings().WAKEUP_CALLS_DIR, exist_ok=True)
 
         if not os.path.exists(wakeup_file):
             with open(wakeup_file, "w"):
