@@ -1,15 +1,15 @@
 import os
 import json
-from django.conf import settings
 
 from . import registry, thread_uuid
 
 from .models import Task
+from .settings import get_settings
 
 
 def shared_task(function):
     def delayed_function(*args, **kwargs):
-        if settings.SNAPPEA_TASK_ALWAYS_EAGER:
+        if get_settings().TASK_ALWAYS_EAGER:
             # To ensure that args and kwargs are json-serializable in automatic tests and when using the single-server
             # setup we do these 2 .dumps calls here. The cost should be negligible in general (args/kwargs are small),
             # so even when single-server is used as a "production" server this shouldn't be a problem.

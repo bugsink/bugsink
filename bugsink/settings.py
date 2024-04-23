@@ -246,8 +246,9 @@ if SENTRY_DSN is not None:
 BASE_URL = "http://bugsink:9000"  # no trailing slash
 SITE_TITLE = "Bugsink"  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 
-
-SNAPPEA_TASK_ALWAYS_EAGER = True
+SNAPPEA = {
+    "TASK_ALWAYS_EAGER": True,
+}
 
 POSTMARK_API_KEY = os.getenv('POSTMARK_API_KEY')
 
