@@ -206,16 +206,22 @@ class Foreman:
             logger.debug("Create workers: Worker slot available")
             self.check_for_stopping()  # always check after .acquire()
 
-            # TODO note on why no transactions are needed (it's just a single call anyway)
-            # TODO note on the guarantees we provide (not many)
-            # TODO this bit is the main bit where an exception handler is missing: for both the (potentially failing) DB
-            # write and the business of looking up tasks by name.
             task_id = task.id
-            function = registry[task.task_name]
-            args = json.loads(task.args)
-            kwargs = json.loads(task.kwargs)
+            try:
+                function = registry[task.task_name]
+                args = json.loads(task.args)
+                kwargs = json.loads(task.kwargs)
+            except Exception as e:
+                logger.error('Create workers: can\'t execute "%s": %s', task.task_name, e)
+                task.delete()  # we delete the task because we can't do anything with it, and we don't want to hang
+                capture_exception(e)
+                continue
 
             self.check_for_stopping()  # check_for_stopping() right before taking on the work
+
+            # notes on task.delete()  (mostly apply to task.delete in the except-statement above too)
+            # * autocommit is fine: we're the only ones touching this row in the DB
+            # * delete-before-run is the implementation of our at-most-once guarantee
             task.delete()
             self.run_in_thread(task_id, function, *args, **kwargs)
 
@@ -223,7 +229,7 @@ class Foreman:
 
         # Seeing "0 tasks..." is expected, both on Startup and right before we go into "Wait for wakeup". See also
         # above, starting with 'We get "a lot" of Tasks at once'
-        logger.debug("Create workers: %s tasks popped from queue and started as workers ", task_count)
+        logger.debug("Create workers: %s tasks popped from queue", task_count)
         return task_count
 
     def check_for_stopping(self):
