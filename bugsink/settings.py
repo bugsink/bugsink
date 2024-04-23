@@ -1,5 +1,6 @@
 from copy import deepcopy
 import os
+import sys
 
 from pathlib import Path
 
@@ -197,10 +198,29 @@ LOGGING['loggers']['bugsink'] = {
     "level": "INFO",
     "handlers": ["console"],
 }
-LOGGING['loggers']['snappea'] = {
-    "level": "INFO",
-    "handlers": ["console"],
+
+# Snappea Logging
+LOGGING["formatters"]["snappea"] = {
+    "format": "{asctime} - {threadName} - {levelname:7} - {message}",
+    "style": "{",
 }
+
+LOGGING["handlers"]["snappea"] = {
+    "level": "DEBUG" if DEBUG else "INFO",
+    "class": "logging.StreamHandler"
+}
+
+LOGGING["handlers"]["snappea"]["formatter"] = "snappea"
+
+LOGGING['loggers']['snappea'] = {
+    "level": "DEBUG" if DEBUG else "INFO",
+    "handlers": ["snappea"],
+}
+
+# TODO sys.argv checking: how do I want to deal with it in my final config setup?
+if sys.argv[1:2] == ['runsnappea']:
+    for logger in LOGGING['loggers'].values():
+        logger["handlers"] = ["snappea"]
 
 
 # ###################### SERVER-MODE SETTINGS #################

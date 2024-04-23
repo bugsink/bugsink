@@ -1,23 +1,22 @@
 import time
 import random
-import uuid
 import logging
 
 from .decorators import shared_task
 
-logger = logging.getLogger("snappea.foreman")
+# for the example tasks, we pick a non-snappea logger on purpose, to check that non-snappea logs are written in the
+# correct format when the snappea server is running (in general, logs inside tasks will have non-snappea loggers)
+logger = logging.getLogger("bugsink")
 
 
 @shared_task
-def example_worker():
-    me = str(uuid.uuid4())
-    logger.info("example worker started %s", me)
+def random_duration():
+    logger.info("Starting something of a random duration")
     time.sleep(random.random() * 10)
-    logger.info("example worker stopped %s", me)
 
 
 @shared_task
-def example_failing_worker():
+def failing_task():
     raise Exception("I am failing")
 
 
