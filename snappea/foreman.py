@@ -182,7 +182,7 @@ class Foreman:
     def create_workers(self):
         """returns the number of workers created (AKA tasks done)"""
 
-        logger.debug("Main loop: Querying for tasks")
+        logger.debug("Create workers: Querying for tasks")
         # We get "a lot" of Tasks at once, rather than one by one. We assume (but did not test) this is more efficient
         # than getting the Tasks one by one. It also has consequences for the case where many Tasks (and thus
         # wakeup notifications) come in at the same time: in such cases, we may deal with more than one Task for a
@@ -200,10 +200,10 @@ class Foreman:
 
         task_i = -1
         for task_i, task in enumerate(tasks):
-            logger.debug("Main loop: Creating worker for with task %s", short_id(task.id))
-            logger.debug("Main loop: Checking (maybe waiting) for available worker slots")
+            logger.debug("Create workers: Creating worker for with task %s", short_id(task.id))
+            logger.debug("Create workers: Checking (maybe waiting) for available worker slots")
             self.worker_semaphore.acquire()
-            logger.debug("Main loop: Worker slot available")
+            logger.debug("Create workers: Worker slot available")
             self.check_for_stopping()  # always check after .acquire()
 
             # TODO note on why no transactions are needed (it's just a single call anyway)
@@ -223,7 +223,7 @@ class Foreman:
 
         # Seeing "0 tasks..." is expected, both on Startup and right before we go into "Wait for wakeup". See also
         # above, starting with 'We get "a lot" of Tasks at once'
-        logger.debug("Main loop: %s tasks popped from queue and started as workers ", task_count)
+        logger.debug("Create workers: %s tasks popped from queue and started as workers ", task_count)
         return task_count
 
     def check_for_stopping(self):
