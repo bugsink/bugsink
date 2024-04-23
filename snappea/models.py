@@ -1,4 +1,9 @@
+import os
+
 from django.db import models
+
+from .settings import get_settings
+from . import thread_uuid
 
 
 class Task(models.Model):
@@ -8,3 +13,14 @@ class Task(models.Model):
 
     def __str__(self):
         return self.task_name
+
+
+def wakeup_server():
+    wakeup_file = os.path.join(get_settings().WAKEUP_CALLS_DIR, thread_uuid)
+
+    if not os.path.exists(get_settings().WAKEUP_CALLS_DIR):
+        os.mkdir(get_settings().WAKEUP_CALLS_DIR, exist_ok=True)
+
+    if not os.path.exists(wakeup_file):
+        with open(wakeup_file, "w"):
+            pass

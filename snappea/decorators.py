@@ -1,9 +1,8 @@
-import os
 import json
 
-from . import registry, thread_uuid
+from . import registry
 
-from .models import Task
+from .models import Task, wakeup_server
 from .settings import get_settings
 
 
@@ -22,15 +21,7 @@ def shared_task(function):
         # No need for a transaction: we just write something (not connected to any other object, and we will never touch
         # it again).
         Task.objects.create(task_name=name, args=json.dumps(args), kwargs=json.dumps(kwargs))
-
-        wakeup_file = os.path.join(get_settings().WAKEUP_CALLS_DIR, thread_uuid)
-
-        if not os.path.exists(get_settings().WAKEUP_CALLS_DIR):
-            os.mkdir(get_settings().WAKEUP_CALLS_DIR, exist_ok=True)
-
-        if not os.path.exists(wakeup_file):
-            with open(wakeup_file, "w"):
-                pass
+        wakeup_server()
 
     name = function.__module__ + "." + function.__name__
     function.delay = delayed_function
