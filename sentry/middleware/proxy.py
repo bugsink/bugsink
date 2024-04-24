@@ -7,43 +7,12 @@
 # some async process do the actual unzipping (which is potentially costly)
 
 import io
-import logging
 import zlib
 
-from django.conf import settings
 from django.core.exceptions import RequestDataTooBig
 
-try:
-    import uwsgi
 
-    has_uwsgi = True
-except ImportError:
-    has_uwsgi = False
-
-
-logger = logging.getLogger(__name__)
 Z_CHUNK = 1024 * 8
-
-
-if has_uwsgi:
-
-    class UWsgiChunkedInput(io.RawIOBase):
-        def __init__(self):
-            self._internal_buffer = b""
-
-        def readable(self):
-            return True
-
-        def readinto(self, buf):
-            if not self._internal_buffer:
-                self._internal_buffer = uwsgi.chunked_read()
-
-            n = min(len(buf), len(self._internal_buffer))
-            if n > 0:
-                buf[:n] = self._internal_buffer[:n]
-                self._internal_buffer = self._internal_buffer[n:]
-
-            return n
 
 
 class ZDecoder(io.RawIOBase):
@@ -119,57 +88,6 @@ class GzipDecoder(ZDecoder):
         ZDecoder.__init__(self, fp, zlib.decompressobj(16 + zlib.MAX_WBITS))
 
 
-class SetRemoteAddrFromForwardedFor(object):
-    def __init__(self):
-        if not getattr(settings, "SENTRY_USE_X_FORWARDED_FOR", True):
-            from django.core.exceptions import MiddlewareNotUsed
-
-            raise MiddlewareNotUsed
-
-    def _remove_port_number(self, ip_address):
-        if "[" in ip_address and "]" in ip_address:
-            # IPv6 address with brackets, possibly with a port number
-            return ip_address[ip_address.find("[") + 1:ip_address.find("]")]
-        if "." in ip_address and ip_address.rfind(":") > ip_address.rfind("."):
-            # IPv4 address with port number
-            # the last condition excludes IPv4-mapped IPv6 addresses
-            return ip_address.rsplit(":", 1)[0]
-        return ip_address
-
-    def process_request(self, request):
-        try:
-            real_ip = request.META["HTTP_X_FORWARDED_FOR"]
-        except KeyError:
-            pass
-        else:
-            # HTTP_X_FORWARDED_FOR can be a comma-separated list of IPs.
-            # Take just the first one.
-            real_ip = real_ip.split(",")[0].strip()
-            real_ip = self._remove_port_number(real_ip)
-            request.META["REMOTE_ADDR"] = real_ip
-
-
-class ChunkedMiddleware(object):
-    def __init__(self):
-        if not has_uwsgi:
-            from django.core.exceptions import MiddlewareNotUsed
-
-            raise MiddlewareNotUsed
-
-    def process_request(self, request):
-        # If we are dealing with chunked data and we have uwsgi we assume
-        # that we can read to the end of the input stream so we can bypass
-        # the default limited stream.  We set the content length reasonably
-        # high so that the reads generally succeed.  This is ugly but with
-        # Django 1.6 it seems to be the best we can easily do.
-        if "HTTP_TRANSFER_ENCODING" not in request.META:
-            return
-
-        if request.META["HTTP_TRANSFER_ENCODING"].lower() == "chunked":
-            request._stream = io.BufferedReader(UWsgiChunkedInput())
-            request.META["CONTENT_LENGTH"] = "4294967295"  # 0xffffffff
-
-
 class DecompressBodyMiddleware(object):
     def __init__(self, get_response):
         self.get_response = get_response
@@ -197,18 +115,3 @@ class DecompressBodyMiddleware(object):
             # the body.
             del request.META["HTTP_CONTENT_ENCODING"]
         return self.get_response(request)
-
-
-class ContentLengthHeaderMiddleware(object):
-    """
-    Ensure that we have a proper Content-Length/Transfer-Encoding header
-    """
-
-    def process_response(self, request, response):
-        if "Transfer-Encoding" in response or "Content-Length" in response:
-            return response
-
-        if not response.streaming:
-            response["Content-Length"] = str(len(response.content))
-
-        return response
