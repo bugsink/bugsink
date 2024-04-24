@@ -1,3 +1,5 @@
+import io
+import gzip
 import uuid
 
 import time
@@ -21,6 +23,7 @@ class Command(BaseCommand):
         parser.add_argument("--valid-only", action="store_true")
         parser.add_argument("--fresh-id", action="store_true")
         parser.add_argument("--fresh-timestamp", action="store_true")
+        parser.add_argument("--gzip", action="store_true")
         parser.add_argument("kind", action="store", help="The kind of object (filename, project, issue, event)")
         parser.add_argument("identifiers", nargs="+")
 
@@ -64,6 +67,7 @@ class Command(BaseCommand):
         return True
 
     def handle(self, *args, **options):
+        do_gzip = options['gzip']
         dsn = options['dsn']
 
         successfully_sent = []
@@ -80,7 +84,7 @@ class Command(BaseCommand):
                         self.stderr.write("%s %s %s" % ("Not JSON", json_filename, str(e)))
                         continue
 
-                    if self.send_to_server(dsn, options, json_filename, data):
+                    if self.send_to_server(dsn, options, json_filename, data, do_gzip):
                         successfully_sent.append(json_filename)
 
         elif kind == "project":
@@ -89,7 +93,7 @@ class Command(BaseCommand):
                 project = Project.objects.get(pk=project_id)
                 for event in project.event_set.all():
                     data = json.loads(event.data)
-                    if self.send_to_server(dsn, options, str(event.id), data):
+                    if self.send_to_server(dsn, options, str(event.id), data, do_gzip):
                         successfully_sent.append(event.id)
 
         else:
@@ -100,7 +104,7 @@ class Command(BaseCommand):
         for filename in successfully_sent:
             print(filename)
 
-    def send_to_server(self, dsn, options, identifier, data):
+    def send_to_server(self, dsn, options, identifier, data, do_gzip=False):
         if "timestamp" not in data or options["fresh_timestamp"]:
             # weirdly enough a large numer of sentry test data don't actually have this required attribute set.
             # thus, we set it to something arbitrary on the sending side rather than have our server be robust
@@ -117,16 +121,35 @@ class Command(BaseCommand):
             return False
 
         try:
-            response = requests.post(
-                get_store_url(dsn),
-                headers={
-                    "X-Sentry-Auth": get_header_value(dsn),
-                    "X-BugSink-DebugInfo": identifier,  # TODO do we want to send non-filesname identifiers too?
-                },
-                json=data,
-            )
+            headers = {
+                "X-Sentry-Auth": get_header_value(dsn),
+                "X-BugSink-DebugInfo": identifier,  # TODO do we want to send non-filename identifiers too?
+            }
+
+            if do_gzip:
+                print("gzipping")
+                headers["Content-Encoding"] = "gzip"
+                headers["Content-Type"] = "application/json"
+
+                gzipped_data = io.BytesIO()
+                with gzip.GzipFile(fileobj=gzipped_data, mode="w") as f:
+                    f.write(json.dumps(data).encode("utf-8"))
+
+                response = requests.post(
+                    get_store_url(dsn),
+                    headers=headers,
+                    data=gzipped_data.getvalue(),
+                )
+
+            else:
+                response = requests.post(
+                    get_store_url(dsn),
+                    headers=headers,
+                    json=data,
+                )
+
             response.raise_for_status()
             return True
         except Exception as e:
-            self.stderr.write("%s %s" % ("foo", e))
+            self.stderr.write("Error %s, %s" % (e, getattr(getattr(e, 'response', None), 'content', None)))
             return False
