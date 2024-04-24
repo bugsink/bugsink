@@ -1,5 +1,4 @@
 import io
-import gzip
 import uuid
 
 import time
@@ -11,6 +10,7 @@ from django.core.management.base import BaseCommand
 from django.conf import settings
 
 from compat.dsn import get_store_url, get_header_value
+from bugsink.streams import compress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE
 
 from projects.models import Project
 
@@ -23,7 +23,7 @@ class Command(BaseCommand):
         parser.add_argument("--valid-only", action="store_true")
         parser.add_argument("--fresh-id", action="store_true")
         parser.add_argument("--fresh-timestamp", action="store_true")
-        parser.add_argument("--gzip", action="store_true")
+        parser.add_argument("--compress", action="store", choices=["gzip", "deflate", "br"], default=None)
         parser.add_argument("kind", action="store", help="The kind of object (filename, project, issue, event)")
         parser.add_argument("identifiers", nargs="+")
 
@@ -67,7 +67,7 @@ class Command(BaseCommand):
         return True
 
     def handle(self, *args, **options):
-        do_gzip = options['gzip']
+        compress = options['compress']
         dsn = options['dsn']
 
         successfully_sent = []
@@ -84,7 +84,7 @@ class Command(BaseCommand):
                         self.stderr.write("%s %s %s" % ("Not JSON", json_filename, str(e)))
                         continue
 
-                    if self.send_to_server(dsn, options, json_filename, data, do_gzip):
+                    if self.send_to_server(dsn, options, json_filename, data, compress):
                         successfully_sent.append(json_filename)
 
         elif kind == "project":
@@ -93,7 +93,7 @@ class Command(BaseCommand):
                 project = Project.objects.get(pk=project_id)
                 for event in project.event_set.all():
                     data = json.loads(event.data)
-                    if self.send_to_server(dsn, options, str(event.id), data, do_gzip):
+                    if self.send_to_server(dsn, options, str(event.id), data, compress):
                         successfully_sent.append(event.id)
 
         else:
@@ -104,7 +104,7 @@ class Command(BaseCommand):
         for filename in successfully_sent:
             print(filename)
 
-    def send_to_server(self, dsn, options, identifier, data, do_gzip=False):
+    def send_to_server(self, dsn, options, identifier, data, compress):
         if "timestamp" not in data or options["fresh_timestamp"]:
             # weirdly enough a large numer of sentry test data don't actually have this required attribute set.
             # thus, we set it to something arbitrary on the sending side rather than have our server be robust
@@ -126,19 +126,24 @@ class Command(BaseCommand):
                 "X-BugSink-DebugInfo": identifier,  # TODO do we want to send non-filename identifiers too?
             }
 
-            if do_gzip:
-                print("gzipping")
-                headers["Content-Encoding"] = "gzip"
+            if compress in ["gzip", "deflate"]:
+                if compress == "gzip":
+                    headers["Content-Encoding"] = "gzip"
+                    wbits = WBITS_PARAM_FOR_GZIP
+
+                else:
+                    headers["Content-Encoding"] = "deflate"
+                    wbits = WBITS_PARAM_FOR_DEFLATE
+
                 headers["Content-Type"] = "application/json"
 
-                gzipped_data = io.BytesIO()
-                with gzip.GzipFile(fileobj=gzipped_data, mode="w") as f:
-                    f.write(json.dumps(data).encode("utf-8"))
+                compressed_data = io.BytesIO()
+                compress_with_zlib(io.BytesIO(json.dumps(data).encode("utf-8")), compressed_data, wbits)
 
                 response = requests.post(
                     get_store_url(dsn),
                     headers=headers,
-                    data=gzipped_data.getvalue(),
+                    data=compressed_data.getvalue(),
                 )
 
             else:
@@ -151,5 +156,6 @@ class Command(BaseCommand):
             response.raise_for_status()
             return True
         except Exception as e:
+            raise
             self.stderr.write("Error %s, %s" % (e, getattr(getattr(e, 'response', None), 'content', None)))
             return False
