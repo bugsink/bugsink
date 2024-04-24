@@ -1,3 +1,4 @@
+import io
 from datetime import datetime, timezone
 
 from unittest import TestCase as RegularTestCase
@@ -12,6 +13,9 @@ from events.factories import create_event
 from .period_counter import PeriodCounter, _prev_tup, TL_DAY, TL_MONTH, TL_YEAR
 from .volume_based_condition import VolumeBasedCondition
 from .registry import PeriodCounterRegistry
+from .streams import (
+    compress_with_zlib, decompress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE, MaxDataReader,
+    MaxDataWriter)
 
 
 def apply_n(f, n, v):
@@ -196,3 +200,48 @@ class PCRegistryTestCase(DjangoTestCase):
         self.assertEquals({project.id}, by_project.keys())
         self.assertEquals({issue.id}, by_issue.keys())
         self.assertEquals({(1, 100)}, by_issue[issue.id].event_listeners[TL_DAY].keys())
+
+
+class StreamsTestCase(RegularTestCase):
+
+    def test_compress_decompress_gzip(self):
+        myself_times_ten = open(__file__, 'rb').read() * 10
+        plain_stream = io.BytesIO(myself_times_ten)
+        compressed_stream = io.BytesIO()
+        result_stream = io.BytesIO()
+
+        compress_with_zlib(plain_stream, compressed_stream, WBITS_PARAM_FOR_GZIP)
+        compressed_stream.seek(0)
+        decompress_with_zlib(compressed_stream, result_stream, WBITS_PARAM_FOR_GZIP)
+        self.assertEquals(myself_times_ten, result_stream.getvalue())
+
+    def test_compress_decompress_deflate(self):
+        myself_times_ten = open(__file__, 'rb').read() * 10
+        plain_stream = io.BytesIO(open(__file__, 'rb').read() * 10)
+        compressed_stream = io.BytesIO()
+        result_stream = io.BytesIO()
+
+        compress_with_zlib(plain_stream, compressed_stream, WBITS_PARAM_FOR_DEFLATE)
+        compressed_stream.seek(0)
+        decompress_with_zlib(compressed_stream, result_stream, WBITS_PARAM_FOR_DEFLATE)
+        self.assertEquals(myself_times_ten, result_stream.getvalue())
+
+    def test_max_data_reader(self):
+        stream = io.BytesIO(b"hello" * 100)
+        reader = MaxDataReader(stream, 250)
+
+        for i in range(25):
+            self.assertEquals(b"hellohello", reader.read(10))
+
+        with self.assertRaises(ValueError):
+            self.assertEquals(b"hellohello", reader.read(10))
+
+    def test_max_data_writer(self):
+        stream = io.BytesIO()
+        writer = MaxDataWriter(stream, 250)
+
+        for i in range(25):
+            writer.write(b"hellohello")
+
+        with self.assertRaises(ValueError):
+            writer.write(b"hellohello")
