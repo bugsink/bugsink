@@ -31,11 +31,6 @@ class ZDecoder(io.RawIOBase):
         return True
 
     def readinto(self, buf):
-        if self.z is None:
-            self.z = zlib.decompressobj()
-            retry = True
-        else:
-            retry = False
 
         n = 0
         max_length = len(buf)
@@ -48,14 +43,7 @@ class ZDecoder(io.RawIOBase):
             if self.flushed is None:
                 chunk = self.fp.read(Z_CHUNK)
                 compressed = self.z.unconsumed_tail + chunk
-                try:
-                    decompressed = self.z.decompress(compressed, max_length)
-                except zlib.error:
-                    if not retry:
-                        raise
-                    self.z = zlib.decompressobj(-zlib.MAX_WBITS)
-                    retry = False
-                    decompressed = self.z.decompress(compressed, max_length)
+                decompressed = self.z.decompress(compressed, max_length)
 
                 if not chunk:
                     self.flushed = self.z.flush()
@@ -77,6 +65,8 @@ class DeflateDecoder(ZDecoder):
     """
     Decoding for "content-encoding: deflate"
     """
+    def __init__(self, fp):
+        ZDecoder.__init__(self, fp, zlib.decompressobj(-zlib.MAX_WBITS))
 
 
 class GzipDecoder(ZDecoder):
