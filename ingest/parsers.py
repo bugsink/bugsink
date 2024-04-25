@@ -1,3 +1,4 @@
+import json
 import io
 
 
@@ -30,7 +31,7 @@ class LengthFinder:
 
     def process(self, output_stream, chunk):
         needed = self.length - self.count
-        if needed < len(chunk):
+        if needed <= len(chunk):
             part_of_result, remainder = chunk[:needed], chunk[needed:]
             output_stream.write(part_of_result)
             return True, remainder
@@ -66,12 +67,13 @@ class StreamingEnvelopeParser:
     def __init__(self, input_stream, chunk_size=1024):
         self.input_stream = input_stream
         self.chunk_size = chunk_size
-        self.bufs = []
+
+        self.remainder = b""  # leftover from previous read chunk that's not handled by a parser yet
         self.at_eof = False
 
         self.envelope_headers = None
 
-    def _parse_envelope_headers(self):
+    def _parse_headers(self):
         """
         Quoted from https://develop.sentry.dev/sdk/envelopes/#headers at version 9c7f19f96562
         conversion to numbered list mine
@@ -94,22 +96,65 @@ class StreamingEnvelopeParser:
         > 8. All known headers and their data types can be validated by an implementation;
         >    if validation fails, the Envelope may be rejected as malformed.
         > 9. Empty headers `{}` are technically valid
+
+        (Note that the combination of point 6 and the fact that JSON strings may not contain newlines unescaped makes
+        the whole headers-terminated-by-newline possible)
         """
 
-        envelope_header_stream = io.BytesIO()
-        header_bytes, self.at_eof = readuntil(
-            self.input_stream, b"", NewlineFinder(error_for_eof=None), envelope_header_stream, self.chunk_size)
+        header_stream = io.BytesIO()
 
-        # HIER GEBLEVEN: nu punt 1..9 implementeren voor deze header bytes
-        # EN DAN: get_items
+        # points 3, 4 (we don't use 5, 6, 7, 9 explicitly)
+        self.remainder, self.at_eof = readuntil(
+            self.input_stream, self.remainder, NewlineFinder(error_for_eof=None), header_stream, self.chunk_size)
+
+        header_stream_value = header_stream.getvalue()
+        if self.at_eof and header_stream_value == b"":
+            return None
+
+        try:
+            return json.loads(header_stream_value.decode("utf-8"))  # points 1, 2
+        except json.JSONDecodeError as e:
+            raise ParseError("Header not JSON") from e
 
     def get_envelope_headers(self):
-        if self.headers is None:
-            self._parse_envelope_headers()
-        return self.headers
+        if self.envelope_headers is None:
+            self.envelope_headers = self._parse_headers()
+            assert self.envelope_headers is not None
 
-    def get_items(self):
-        # yields tuples of (item_header, item)
+        return self.envelope_headers
 
-        # this parses the headers if it's not done yet, such that our 'seek pointer' is correct.
+    def get_items(self, output_stream_factory):
+        # yields the item_headers and item_output_streams (with the content of the items written into them)
+        # closing the item_output_stream is the responsibility of the calller
+
         self.get_envelope_headers()
+
+        while not self.at_eof:
+            item_headers = self._parse_headers()
+            if item_headers is None:
+                self.at_eof = True
+                break
+
+            if "length" in item_headers:
+                length = item_headers["length"]
+                finder = LengthFinder(length, error_for_eof="EOF while reading item with explicitly specified length")
+            else:
+                finder = NewlineFinder(error_for_eof=None)
+
+            item_output_stream = output_stream_factory(item_headers)
+            self.remainder, self.at_eof = readuntil(
+                self.input_stream, self.remainder, finder, item_output_stream, self.chunk_size)
+
+            if "length" in item_headers:
+                # items with an explicit length are terminated by a newline (if at EOF, this is optional as per the set
+                # of examples in the docs)
+                self.remainder, self.at_eof = readuntil(
+                    self.input_stream, self.remainder, NewlineFinder(error_for_eof=None), io.BytesIO(), self.chunk_size)
+
+            yield item_headers, item_output_stream
+
+    def get_items_directly(self):
+        # this method is just convenience for testing
+
+        for item_headers, output_stream in self.get_items(lambda item_headers: io.BytesIO()):
+            yield item_headers, output_stream.getvalue()

@@ -19,7 +19,7 @@ from bugsink.registry import reset_pc_registry
 
 from .models import DecompressedEvent
 from .views import BaseIngestAPIView
-from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder
+from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 
 
 class IngestViewTestCase(TransactionTestCase):
@@ -375,3 +375,127 @@ class TestParser(RegularTestCase):
         self.assertEquals(10, len(b"line 0\nlin"))  # this explains the previous line
         self.assertEquals(b"e ", remainder)
         self.assertEquals(b"1\nline 2\nline 3\n", input_stream.read())
+
+    # The "full examples" below are from the Sentry developer documentation; we should at least be able to parse those
+
+    def test_full_example_envelope_with_2_items(self):
+        # Note that the attachment contains a Windows newline at the end of its
+        # payload which is included in `length`:
+
+        parser = StreamingEnvelopeParser(io.BytesIO(b"""{"event_id":"9ec79c33ec9942ab8353589fcb2e04dc","dsn":"https://e12d836b15bb49d7bbf99e64295d995b:@sentry.io/42"}\n{"type":"attachment","length":10,"content_type":"text/plain","filename":"hello.txt"}\n\xef\xbb\xbfHello\r\n\n{"type":"event","length":41,"content_type":"application/json","filename":"application.log"}\n{"message":"hello world","level":"error"}\n"""))  # noqa
+
+        envelope_headers = parser.get_envelope_headers()
+        self.assertEquals(
+            {"event_id": "9ec79c33ec9942ab8353589fcb2e04dc",
+             "dsn": "https://e12d836b15bb49d7bbf99e64295d995b:@sentry.io/42"},
+            envelope_headers)
+
+        items = parser.get_items_directly()
+
+        header, item = next(items)
+        self.assertEquals(
+            {"type": "attachment", "length": 10, "content_type": "text/plain", "filename": "hello.txt"},
+            header)  # we check item-header parsing once, should be enough.
+        self.assertEquals(b"\xef\xbb\xbfHello\r\n", item)
+
+        header, item = next(items)
+        self.assertEquals(b'{"message":"hello world","level":"error"}', item)
+
+        with self.assertRaises(StopIteration):
+            next(items)
+
+    def test_envelope_with_2_items_last_newline_omitted(self):
+        parser = StreamingEnvelopeParser(io.BytesIO(b"""{"event_id":"9ec79c33ec9942ab8353589fcb2e04dc","dsn":"https://e12d836b15bb49d7bbf99e64295d995b:@sentry.io/42"}\n{"type":"attachment","length":10,"content_type":"text/plain","filename":"hello.txt"}\n\xef\xbb\xbfHello\r\n\n{"type":"event","length":41,"content_type":"application/json","filename":"application.log"}\n{"message":"hello world","level":"error"}"""))  # noqa
+
+        items = parser.get_items_directly()
+
+        header, item = next(items)
+        self.assertEquals(b"\xef\xbb\xbfHello\r\n", item)
+
+        header, item = next(items)
+        self.assertEquals(b'{"message":"hello world","level":"error"}', item)
+
+        with self.assertRaises(StopIteration):
+            next(items)
+
+    def test_envelope_with_2_empty_attachments(self):
+        parser = StreamingEnvelopeParser(io.BytesIO(b"""{"event_id":"9ec79c33ec9942ab8353589fcb2e04dc"}\n{"type":"attachment","length":0}\n\n{"type":"attachment","length":0}\n\n"""))  # noqa
+
+        items = parser.get_items_directly()
+
+        header, item = next(items)
+        self.assertEquals(b"", item)
+
+        header, item = next(items)
+        self.assertEquals(b"", item)
+
+        with self.assertRaises(StopIteration):
+            next(items)
+
+    def test_envelope_with_2_empty_attachments_last_newline_omitted(self):
+        parser = StreamingEnvelopeParser(io.BytesIO(b"""{"event_id":"9ec79c33ec9942ab8353589fcb2e04dc"}\n{"type":"attachment","length":0}\n\n{"type":"attachment","length":0}\n"""))  # noqa
+
+        items = parser.get_items_directly()
+
+        header, item = next(items)
+        self.assertEquals(b"", item)
+
+        header, item = next(items)
+        self.assertEquals(b"", item)
+
+        with self.assertRaises(StopIteration):
+            next(items)
+
+    def test_item_with_implicit_length_terminated_by_newline(self):
+        parser = StreamingEnvelopeParser(io.BytesIO(b"""{"event_id":"9ec79c33ec9942ab8353589fcb2e04dc"}\n{"type":"attachment"}\nhelloworld\n"""))  # noqa
+
+        items = parser.get_items_directly()
+
+        header, item = next(items)
+        self.assertEquals(b"helloworld", item)
+
+        with self.assertRaises(StopIteration):
+            next(items)
+
+    def test_item_with_implicit_length_last_newline_omitted_terminated_by_eof(self):
+        parser = StreamingEnvelopeParser(io.BytesIO(b"""{"event_id":"9ec79c33ec9942ab8353589fcb2e04dc"}\n{"type":"attachment"}\nhelloworld"""))  # noqa
+
+        items = parser.get_items_directly()
+
+        header, item = next(items)
+        self.assertEquals(b"helloworld", item)
+
+        with self.assertRaises(StopIteration):
+            next(items)
+
+    def test_envelope_without_headers_implicit_length_last_newline_omitted_terminated_by_eof(self):
+        parser = StreamingEnvelopeParser(io.BytesIO(b"""{}\n{"type":"session"}\n{"started": "2020-02-07T14:16:00Z","attrs":{"release":"sentry-test@1.0.0"}}"""))  # noqa
+
+        items = parser.get_items_directly()
+
+        header, item = next(items)
+        self.assertEquals(b'{"started": "2020-02-07T14:16:00Z","attrs":{"release":"sentry-test@1.0.0"}}', item)
+
+        with self.assertRaises(StopIteration):
+            next(items)
+
+    # Below: not from documenation, but inpsired by it
+
+    def test_missing_content_aka_length_too_long(self):
+        # based on test_envelope_with_2_items_last_newline_omitted, but with length "41" replaced by "42"
+        parser = StreamingEnvelopeParser(io.BytesIO(b"""{"event_id":"9ec79c33ec9942ab8353589fcb2e04dc","dsn":"https://e12d836b15bb49d7bbf99e64295d995b:@sentry.io/42"}\n{"type":"event","length":42,"content_type":"application/json","filename":"application.log"}\n{"message":"hello world","level":"error"}"""))  # noqa
+
+        items = parser.get_items_directly()
+
+        with self.assertRaises(ParseError) as e:
+            header, item = next(items)
+        self.assertEquals("EOF while reading item with explicitly specified length", str(e.exception))
+
+    def test_non_json_header(self):
+        parser = StreamingEnvelopeParser(io.BytesIO(b"""{"event_id":"9ec79c33ec9942ab8353589fcb2e04dc","dsn":"https://e12d836b15bb49d7bbf99e64295d995b:@sentry.io/42"}\nTHIS IS NOT JSON\n{"message":"hello world","level":"error"}"""))  # noqa
+
+        items = parser.get_items_directly()
+
+        with self.assertRaises(ParseError) as e:
+            header, item = next(items)
+        self.assertEquals("Header not JSON", str(e.exception))
