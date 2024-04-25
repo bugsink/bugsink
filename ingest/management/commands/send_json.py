@@ -161,6 +161,5 @@ class Command(BaseCommand):
             response.raise_for_status()
             return True
         except Exception as e:
-            raise
             self.stderr.write("Error %s, %s" % (e, getattr(getattr(e, 'response', None), 'content', None)))
             return False

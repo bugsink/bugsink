@@ -1,6 +1,8 @@
 import zlib
 import io
 
+from bugsink.app_settings import get_settings
+
 
 DEFAULT_CHUNK_SIZE = 8 * 1024
 
@@ -14,6 +16,10 @@ WBITS_PARAM_FOR_GZIP = 16 + zlib.MAX_WBITS  # zlib.MAX_WBITS == 15
 # > 8 to −15: Uses the absolute value of wbits as the window size logarithm. The input must be a raw stream with no
 # > header or trailer.
 WBITS_PARAM_FOR_DEFLATE = -zlib.MAX_WBITS
+
+
+class MaxLengthExceeded(ValueError):
+    pass
 
 
 def zlib_generator(input_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
@@ -91,10 +97,16 @@ def compress_with_zlib(input_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
 
 class MaxDataReader:
 
-    def __init__(self, stream, max_length):
+    def __init__(self, max_length, stream):
         self.bytes_read = 0
         self.stream = stream
-        self.max_length = max_length
+
+        if isinstance(max_length, str):  # reusing this is a bit of a hack, but leads to readable code at usage
+            self.max_length = get_settings()[max_length]
+            self.reason = "%s: %s" % (max_length, self.max_length)
+        else:
+            self.max_length = max_length
+            self.reason = str(max_length)
 
     def read(self, size=None):
         if size is None:
@@ -104,22 +116,42 @@ class MaxDataReader:
         self.bytes_read += len(result)
 
         if self.bytes_read > self.max_length:
-            raise ValueError("Max length (%s) exceeded" % self.max_length)
+            raise MaxLengthExceeded("Max length (%s) exceeded" % self.reason)
 
         return result
+
+    def __getattr__(self, attr):
+        return getattr(self.stream, attr)
 
 
 class MaxDataWriter:
 
-    def __init__(self, stream, max_length):
+    def __init__(self, max_length, stream):
         self.bytes_written = 0
         self.stream = stream
-        self.max_length = max_length
+
+        if isinstance(max_length, str):  # reusing this is a bit of a hack, but leads to readable code at usage
+            self.max_length = get_settings()[max_length]
+            self.reason = "%s: %s" % (max_length, self.max_length)
+        else:
+            self.max_length = max_length
+            self.reason = str(max_length)
 
     def write(self, data):
         self.bytes_written += len(data)
 
         if self.bytes_written > self.max_length:
-            raise ValueError("Max length exceeded")
+            raise MaxLengthExceeded("Max length (%s) exceeded" % self.reason)
 
         self.stream.write(data)
+
+    def __getattr__(self, attr):
+        return getattr(self.stream, attr)
+
+
+class NullWriter:
+    def write(self, data):
+        pass
+
+    def close(self):
+        pass

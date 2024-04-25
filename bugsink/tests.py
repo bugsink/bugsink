@@ -252,7 +252,7 @@ class StreamsTestCase(RegularTestCase):
 
     def test_max_data_reader(self):
         stream = io.BytesIO(b"hello" * 100)
-        reader = MaxDataReader(stream, 250)
+        reader = MaxDataReader(250, stream)
 
         for i in range(25):
             self.assertEquals(b"hellohello", reader.read(10))
@@ -264,13 +264,13 @@ class StreamsTestCase(RegularTestCase):
 
     def test_max_data_reader_none_ok(self):
         stream = io.BytesIO(b"hello" * 10)
-        reader = MaxDataReader(stream, 250)
+        reader = MaxDataReader(250, stream)
 
         self.assertEquals(b"hello" * 10, reader.read(None))
 
     def test_max_data_reader_none_fail(self):
         stream = io.BytesIO(b"hello" * 100)
-        reader = MaxDataReader(stream, 250)
+        reader = MaxDataReader(250, stream)
 
         with self.assertRaises(ValueError) as e:
             reader.read(None)
@@ -279,7 +279,7 @@ class StreamsTestCase(RegularTestCase):
 
     def test_max_data_writer(self):
         stream = io.BytesIO()
-        writer = MaxDataWriter(stream, 250)
+        writer = MaxDataWriter(250, stream)
 
         for i in range(25):
             writer.write(b"hellohello")

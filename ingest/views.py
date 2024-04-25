@@ -24,7 +24,7 @@ from bugsink.registry import get_pc_registry
 from bugsink.period_counter import PeriodCounter
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.exceptions import ViolatedExpectation
-from bugsink.streams import content_encoding_reader
+from bugsink.streams import content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded
 
 from events.models import Event
 from releases.models import create_release_if_needed
@@ -43,6 +43,14 @@ logger = logging.getLogger("bugsink.ingest")
 
 @method_decorator(csrf_exempt, name='dispatch')
 class BaseIngestAPIView(View):
+
+    def post(self, request, project_pk=None):
+        try:
+            return self._post(request, project_pk)
+        except MaxLengthExceeded as e:
+            return JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST)  # NOTE untested behavior
+        except exceptions.ValidationError as e:
+            return JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST)  # NOTE untested behavior
 
     @classmethod
     def get_sentry_key_for_request(cls, request):
@@ -249,25 +257,29 @@ class BaseIngestAPIView(View):
 
 class IngestEventAPIView(BaseIngestAPIView):
 
-    def post(self, request, project_pk=None):
+    def _post(self, request, project_pk=None):
         project = self.get_project(request, project_pk)
 
-        request_data = json.loads(content_encoding_reader(request).read())
+        request_data = json.loads(
+            MaxDataReader("MAX_EVENT_SIZE", content_encoding_reader(
+                MaxDataReader("MAX_EVENT_COMPRESSED_SIZE", request))).read())
 
-        try:
-            self.process_event(request_data, project, request)
-        except exceptions.ValidationError as e:
-            return JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST)  # NOTE untested behavior
+        self.process_event(request_data, project, request)
 
         return HttpResponse()
 
 
 class IngestEnvelopeAPIView(BaseIngestAPIView):
 
-    def post(self, request, project_pk=None):
+    def _post(self, request, project_pk=None):
         project = self.get_project(request, project_pk)
 
-        parser = StreamingEnvelopeParser(content_encoding_reader(request))
+        # Note: wrapping the COMPRESSES_SIZE checks arount request makes it so that when clients do not compress their
+        # requests, they are still subject to the (smaller) maximums that apply pre-uncompress. This is exactly what we
+        # want.
+        parser = StreamingEnvelopeParser(
+                    MaxDataReader("MAX_ENVELOPE_SIZE", content_encoding_reader(
+                        MaxDataReader("MAX_ENVELOPE_COMPRESSED_SIZE", request))))
 
         # TODO: use the envelope_header's DSN if it is available (exact order-of-operations will depend on load-shedding
         # mechanisms)
@@ -275,7 +287,14 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         # envelope_headers["event_id"] is required when type=event per the spec (and takes precedence over the payload's
         # event_id), so we can relay on it having been set.
 
-        for item_headers, output_stream in parser.get_items(lambda item_headers: io.BytesIO()):
+        def factory(item_headers):
+            if item_headers.get("type") == "event":
+                return MaxDataWriter("MAX_EVENT_SIZE", io.BytesIO())
+
+            # everything else can be discarded; still: we check for size limits
+            return MaxDataWriter("MAX_EVENT_SIZE", NullWriter())
+
+        for item_headers, output_stream in parser.get_items(factory):
             try:
                 item_bytes = output_stream.getvalue()
                 if item_headers.get("type") != "event":
