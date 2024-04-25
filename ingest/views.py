@@ -272,17 +272,27 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         # TODO: use the envelope_header's DSN if it is available (exact order-of-operations will depend on load-shedding
         # mechanisms)
         # envelope_headers = parser.get_envelope_headers()
+        # envelope_headers["event_id"] is required when type=event per the spec (and takes precedence over the payload's
+        # event_id), so we can relay on it having been set.
 
         for item_headers, output_stream in parser.get_items(lambda item_headers: io.BytesIO()):
             try:
                 item_bytes = output_stream.getvalue()
                 if item_headers.get("type") != "event":
                     logger.info("skipping non-event item: %s", item_headers.get("type"))
+
+                    if item_headers.get("type") == "transaction":
+                        # From the spec of type=event: This Item is mutually exclusive with `"transaction"` Items.
+                        # i.e. when we see a transaction, a regular event will not be present and we can stop.
+                        logger.info("discarding the rest of the envelope")
+                        break
+
                     continue
 
                 event_data = json.loads(item_bytes.decode("utf-8"))
 
                 self.process_event(event_data, project, request)
+                break  # From the spec of type=event: This Item may occur at most once per Envelope. i.e. seen=done
 
             finally:
                 output_stream.close()

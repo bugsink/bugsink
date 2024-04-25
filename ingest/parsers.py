@@ -151,8 +151,11 @@ class StreamingEnvelopeParser:
             if "length" in item_headers:
                 # items with an explicit length are terminated by a newline (if at EOF, this is optional as per the set
                 # of examples in the docs)
+                should_be_empty = io.BytesIO()
                 self.remainder, self.at_eof = readuntil(
-                    self.input_stream, self.remainder, NewlineFinder(), io.BytesIO(), self.chunk_size)
+                    self.input_stream, self.remainder, NewlineFinder(), should_be_empty, self.chunk_size)
+                if should_be_empty.getvalue() != b"":
+                    raise ParseError("Item with explicit length not terminated by newline/EOF")
 
             yield item_headers, item_output_stream
 

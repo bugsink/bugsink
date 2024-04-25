@@ -130,7 +130,9 @@ class Command(BaseCommand):
             }
             data_bytes = json.dumps(data).encode("utf-8")
             if use_envelope:
-                data_bytes = b'{}\n{"type": "event"}\n' + data_bytes  # the smallest possible envelope.
+                # the smallest possible envelope:
+                data_bytes = (b'{}\n{"type": "event", "event_id": "%s"}\n' % (data["event_id"]).encode("utf-8") +
+                              data_bytes)
 
             if compress in ["gzip", "deflate"]:
                 if compress == "gzip":

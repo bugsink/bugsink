@@ -481,6 +481,9 @@ class TestParser(RegularTestCase):
 
     def test_missing_content_aka_length_too_long(self):
         # based on test_envelope_with_2_items_last_newline_omitted, but with length "41" replaced by "42"
+
+        # > If length cannot be consumed, that is, the Envelope is EOF before the number of bytes has been consumed,
+        # > then the Envelope is malformed.
         parser = StreamingEnvelopeParser(io.BytesIO(b"""{"event_id":"9ec79c33ec9942ab8353589fcb2e04dc","dsn":"https://e12d836b15bb49d7bbf99e64295d995b:@sentry.io/42"}\n{"type":"event","length":42,"content_type":"application/json","filename":"application.log"}\n{"message":"hello world","level":"error"}"""))  # noqa
 
         items = parser.get_items_directly()
@@ -488,6 +491,19 @@ class TestParser(RegularTestCase):
         with self.assertRaises(ParseError) as e:
             header, item = next(items)
         self.assertEquals("EOF while reading item with explicitly specified length", str(e.exception))
+
+    def test_too_much_content_aka_length_too_short(self):
+        # based on test_envelope_with_2_items_last_newline_omitted, but with length "41" replaced by "40"
+
+        # > Length-prefixed payloads must terminate with \n or EOF. The newline is not considered part of the payload.
+        # > Any other character, including whitespace, means the Envelope is malformed.
+        parser = StreamingEnvelopeParser(io.BytesIO(b"""{"event_id":"9ec79c33ec9942ab8353589fcb2e04dc","dsn":"https://e12d836b15bb49d7bbf99e64295d995b:@sentry.io/42"}\n{"type":"event","length":40,"content_type":"application/json","filename":"application.log"}\n{"message":"hello world","level":"error"}"""))  # noqa
+
+        items = parser.get_items_directly()
+
+        with self.assertRaises(ParseError) as e:
+            header, item = next(items)
+        self.assertEquals("Item with explicit length not terminated by newline/EOF", str(e.exception))
 
     def test_non_json_header(self):
         parser = StreamingEnvelopeParser(io.BytesIO(b"""{"event_id":"9ec79c33ec9942ab8353589fcb2e04dc","dsn":"https://e12d836b15bb49d7bbf99e64295d995b:@sentry.io/42"}\nTHIS IS NOT JSON\n{"message":"hello world","level":"error"}"""))  # noqa
@@ -501,6 +517,9 @@ class TestParser(RegularTestCase):
     def test_eof_after_envelope_headers(self):
         # whether this is valid or not: not entirely clear from the docs. It won't matter in practice, of course
         # (because nothing interesting is contained)
+        # hints in the documentation that this is correct:
+        # > Header-only Example:  <= this implies such an example might be seen in the wild
+        # > There can be an arbitrary number of Items in an Envelope   <= 0 is an arbitrary number
         parser = StreamingEnvelopeParser(io.BytesIO(b"""{}"""))
 
         items = parser.get_items_directly()
