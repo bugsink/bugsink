@@ -318,3 +318,20 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
                 output_stream.close()
 
         return HttpResponse()
+
+
+# Just a few thoughts on the relative performance of the main building blocks of dealing with Envelopes, and how this
+# affect our decision making. On my local laptop (local loopback, django dev server), with a single 50KiB event, I
+# measured the following approximate timtings:
+# 0.00001s just get the bytes
+# 0.0002s get bytes & gunzip
+# 0.0005s get bytes, gunzip & json load
+#
+# The goal of having an ingest/digest split is to keep the server responsive in times of peek load. It is _not_ to have
+# get crazy good throughput numbers (because ingest isn't the bottleneck anyway).
+#
+# One consideration was: should we just store the compressed envelope on-upload. Answer, given the numbers above: not
+# needed, fine to unpack. This is also prudent from the perspective of storage, because the envelope may contain much
+# more stuff that we don't care about (up to 20MiB compressed) whereas the max event size (uncompressed) is 1MiB.
+# Another advantage: this allows us to raise the relevant Header parsing and size limitation Exceptions to the SDKs.
+#
