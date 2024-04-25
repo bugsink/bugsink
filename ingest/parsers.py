@@ -63,6 +63,14 @@ def readuntil(input_stream, initial_chunk, finder, output_stream, chunk_size):
 
 
 class StreamingEnvelopeParser:
+    """
+    Parse "Envelope" data.
+    See https://develop.sentry.dev/sdk/envelopes/
+
+    This is a streaming parser. We're not radical about performance (no Rust) but given [1] the relative maximum sizes
+    (envelope: 100MiB, event: 1MiB -- in other words: 99% bloat is possible) and [2] our goal of being robust even on
+    second rate hardware it seems prudent to not just load everything into memory.
+    """
 
     def __init__(self, input_stream, chunk_size=1024):
         self.input_stream = input_stream
