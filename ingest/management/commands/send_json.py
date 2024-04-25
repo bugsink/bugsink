@@ -1,5 +1,6 @@
 import io
 import uuid
+import brotli
 
 import time
 import json
@@ -139,12 +140,20 @@ class Command(BaseCommand):
                     headers["Content-Encoding"] = "gzip"
                     wbits = WBITS_PARAM_FOR_GZIP
 
-                else:
+                elif compress == "deflate":
                     headers["Content-Encoding"] = "deflate"
                     wbits = WBITS_PARAM_FOR_DEFLATE
 
                 compressed_data = compress_with_zlib(io.BytesIO(data_bytes), wbits)
+                response = requests.post(
+                    get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
+                    headers=headers,
+                    data=compressed_data,
+                )
 
+            elif compress == "br":
+                headers["Content-Encoding"] = "br"
+                compressed_data = brotli.compress(data_bytes)
                 response = requests.post(
                     get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
                     headers=headers,

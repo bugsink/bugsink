@@ -1,5 +1,6 @@
 import io
 from datetime import datetime, timezone
+import brotli
 
 from unittest import TestCase as RegularTestCase
 from django.test import TestCase as DjangoTestCase
@@ -14,8 +15,8 @@ from .period_counter import PeriodCounter, _prev_tup, TL_DAY, TL_MONTH, TL_YEAR
 from .volume_based_condition import VolumeBasedCondition
 from .registry import PeriodCounterRegistry
 from .streams import (
-    compress_with_zlib, ZLibReader, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE, MaxDataReader,
-    MaxDataWriter)
+    compress_with_zlib, GeneratorReader, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE, MaxDataReader,
+    MaxDataWriter, zlib_generator, brotli_generator)
 
 
 def apply_n(f, n, v):
@@ -211,7 +212,7 @@ class StreamsTestCase(RegularTestCase):
         compressed_stream = io.BytesIO(compress_with_zlib(plain_stream, WBITS_PARAM_FOR_GZIP))
 
         result = b""
-        reader = ZLibReader(compressed_stream, WBITS_PARAM_FOR_GZIP)
+        reader = GeneratorReader(zlib_generator(compressed_stream, WBITS_PARAM_FOR_GZIP))
 
         while True:
             chunk = reader.read(3)
@@ -228,7 +229,23 @@ class StreamsTestCase(RegularTestCase):
         compressed_stream = io.BytesIO(compress_with_zlib(plain_stream, WBITS_PARAM_FOR_DEFLATE))
 
         result = b""
-        reader = ZLibReader(compressed_stream, WBITS_PARAM_FOR_DEFLATE)
+        reader = GeneratorReader(zlib_generator(compressed_stream, WBITS_PARAM_FOR_DEFLATE))
+
+        while True:
+            chunk = reader.read(3)
+            result += chunk
+            if chunk == b"":
+                break
+
+        self.assertEquals(myself_times_ten, result)
+
+    def test_compress_decompress_brotli(self):
+        myself_times_ten = open(__file__, 'rb').read() * 10
+
+        compressed_stream = io.BytesIO(brotli.compress(myself_times_ten))
+
+        result = b""
+        reader = GeneratorReader(brotli_generator(compressed_stream))
 
         while True:
             chunk = reader.read(3)
@@ -245,7 +262,7 @@ class StreamsTestCase(RegularTestCase):
         compressed_stream = io.BytesIO(compress_with_zlib(plain_stream, WBITS_PARAM_FOR_DEFLATE))
 
         result = b""
-        reader = ZLibReader(compressed_stream, WBITS_PARAM_FOR_DEFLATE)
+        reader = GeneratorReader(zlib_generator(compressed_stream, WBITS_PARAM_FOR_DEFLATE))
 
         result = reader.read(None)
         self.assertEquals(myself_times_ten, result)

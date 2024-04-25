@@ -1,5 +1,6 @@
 import zlib
 import io
+import brotli
 
 from bugsink.app_settings import get_settings
 
@@ -35,10 +36,23 @@ def zlib_generator(input_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
     yield z.flush()
 
 
-class ZLibReader:
+def brotli_generator(input_stream, chunk_size=DEFAULT_CHUNK_SIZE):
+    decompressor = brotli.Decompressor()
 
-    def __init__(self, input_stream, wbits):
-        self.generator = zlib_generator(input_stream, wbits)
+    while True:
+        compressed_chunk = input_stream.read(chunk_size)
+        if not compressed_chunk:
+            break
+
+        yield decompressor.process(compressed_chunk)
+
+    assert decompressor.is_finished()
+
+
+class GeneratorReader:
+
+    def __init__(self, generator):
+        self.generator = generator
         self.unread = b""
 
     def read(self, size=None):
@@ -67,13 +81,13 @@ def content_encoding_reader(request):
     encoding = request.META.get("HTTP_CONTENT_ENCODING", "").lower()
 
     if encoding == "gzip":
-        return ZLibReader(request, WBITS_PARAM_FOR_GZIP)
+        return GeneratorReader(zlib_generator(request, WBITS_PARAM_FOR_GZIP))
 
     if encoding == "deflate":
-        return ZLibReader(request, WBITS_PARAM_FOR_DEFLATE)
+        return GeneratorReader(zlib_generator(request, WBITS_PARAM_FOR_DEFLATE))
 
     if encoding == "br":
-        raise NotImplementedError("Brotli not supported (yet)")
+        return GeneratorReader(brotli_generator(request))
 
     return request
 
