@@ -9,7 +9,7 @@ import jsonschema
 from django.core.management.base import BaseCommand
 from django.conf import settings
 
-from compat.dsn import get_store_url, get_header_value
+from compat.dsn import get_store_url, get_envelope_url, get_header_value
 from bugsink.streams import compress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE
 
 from projects.models import Project
@@ -24,6 +24,7 @@ class Command(BaseCommand):
         parser.add_argument("--fresh-id", action="store_true")
         parser.add_argument("--fresh-timestamp", action="store_true")
         parser.add_argument("--compress", action="store", choices=["gzip", "deflate", "br"], default=None)
+        parser.add_argument("--use-envelope", action="store_true")
         parser.add_argument("kind", action="store", help="The kind of object (filename, project, issue, event)")
         parser.add_argument("identifiers", nargs="+")
 
@@ -68,6 +69,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         compress = options['compress']
+        use_envelope = options['use_envelope']
         dsn = options['dsn']
 
         successfully_sent = []
@@ -84,7 +86,7 @@ class Command(BaseCommand):
                         self.stderr.write("%s %s %s" % ("Not JSON", json_filename, str(e)))
                         continue
 
-                    if self.send_to_server(dsn, options, json_filename, data, compress):
+                    if self.send_to_server(dsn, options, json_filename, data, use_envelope, compress):
                         successfully_sent.append(json_filename)
 
         elif kind == "project":
@@ -93,7 +95,7 @@ class Command(BaseCommand):
                 project = Project.objects.get(pk=project_id)
                 for event in project.event_set.all():
                     data = json.loads(event.data)
-                    if self.send_to_server(dsn, options, str(event.id), data, compress):
+                    if self.send_to_server(dsn, options, str(event.id), data, use_envelope, compress):
                         successfully_sent.append(event.id)
 
         else:
@@ -104,7 +106,7 @@ class Command(BaseCommand):
         for filename in successfully_sent:
             print(filename)
 
-    def send_to_server(self, dsn, options, identifier, data, compress):
+    def send_to_server(self, dsn, options, identifier, data, use_envelope, compress):
         if "timestamp" not in data or options["fresh_timestamp"]:
             # weirdly enough a large numer of sentry test data don't actually have this required attribute set.
             # thus, we set it to something arbitrary on the sending side rather than have our server be robust
@@ -122,9 +124,13 @@ class Command(BaseCommand):
 
         try:
             headers = {
+                "Content-Type": "application/json",
                 "X-Sentry-Auth": get_header_value(dsn),
                 "X-BugSink-DebugInfo": identifier,  # TODO do we want to send non-filename identifiers too?
             }
+            data_bytes = json.dumps(data).encode("utf-8")
+            if use_envelope:
+                data_bytes = b'{}\n{"type": "event"}\n' + data_bytes  # the smallest possible envelope.
 
             if compress in ["gzip", "deflate"]:
                 if compress == "gzip":
@@ -135,22 +141,20 @@ class Command(BaseCommand):
                     headers["Content-Encoding"] = "deflate"
                     wbits = WBITS_PARAM_FOR_DEFLATE
 
-                headers["Content-Type"] = "application/json"
-
                 compressed_data = io.BytesIO()
-                compress_with_zlib(io.BytesIO(json.dumps(data).encode("utf-8")), compressed_data, wbits)
+                compress_with_zlib(io.BytesIO(data_bytes), compressed_data, wbits)
 
                 response = requests.post(
-                    get_store_url(dsn),
+                    get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
                     headers=headers,
                     data=compressed_data.getvalue(),
                 )
 
             else:
                 response = requests.post(
-                    get_store_url(dsn),
+                    get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
                     headers=headers,
-                    json=data,
+                    data=data_bytes,
                 )
 
             response.raise_for_status()
