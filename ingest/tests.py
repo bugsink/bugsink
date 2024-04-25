@@ -294,7 +294,7 @@ class TestParser(RegularTestCase):
         input_stream.seek(0)
 
         output_stream = io.BytesIO()
-        remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(None), output_stream, 3)
+        remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertFalse(at_eof)
         self.assertEquals(b"line 0", output_stream.getvalue())
@@ -307,7 +307,7 @@ class TestParser(RegularTestCase):
         input_stream.seek(0)
 
         output_stream = io.BytesIO()
-        remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(None), output_stream, 3)
+        remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertFalse(at_eof)
         self.assertEquals(b"line 0", output_stream.getvalue())
@@ -320,7 +320,7 @@ class TestParser(RegularTestCase):
         input_stream.seek(0)
 
         output_stream = io.BytesIO()
-        remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(None), output_stream, 3)
+        remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertFalse(at_eof)
         self.assertEquals(b"line 0", output_stream.getvalue())
@@ -333,21 +333,12 @@ class TestParser(RegularTestCase):
         input_stream.seek(0)
 
         output_stream = io.BytesIO()
-        remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(None), output_stream, 3)
+        remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertTrue(at_eof)
         self.assertEquals(b"line 0", output_stream.getvalue())
         self.assertEquals(b"", remainder)
         self.assertEquals(b"", input_stream.read())
-
-    def test_readuntil_newline_eof_is_exception(self):
-        input_stream = io.BytesIO(b"line 0")
-        initial_chunk = b""
-        input_stream.seek(0)
-
-        output_stream = io.BytesIO()
-        with self.assertRaises(ParseError):
-            remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder("eof not ok"), output_stream, 3)
 
     def test_readuntil_newline_bigger_chunk(self):
         input_stream = io.BytesIO(b"e 0\nline 1\nline 2\nline 3\n")
@@ -355,7 +346,7 @@ class TestParser(RegularTestCase):
         input_stream.seek(0)
 
         output_stream = io.BytesIO()
-        remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(None), output_stream, 1024)
+        remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 1024)
 
         self.assertFalse(at_eof)
         self.assertEquals(b"line 0", output_stream.getvalue())
@@ -368,13 +359,21 @@ class TestParser(RegularTestCase):
         input_stream.seek(0)
 
         output_stream = io.BytesIO()
-        remainder, at_eof = readuntil(input_stream, initial_chunk, LengthFinder(10, None), output_stream, 3)
+        remainder, at_eof = readuntil(input_stream, initial_chunk, LengthFinder(10, "eof not ok"), output_stream, 3)
 
         self.assertFalse(at_eof)
         self.assertEquals(b"line 0\nlin", output_stream.getvalue())
-        self.assertEquals(10, len(b"line 0\nlin"))  # this explains the previous line
         self.assertEquals(b"e ", remainder)
         self.assertEquals(b"1\nline 2\nline 3\n", input_stream.read())
+
+    def test_readuntil_length_eof_is_exception(self):
+        input_stream = io.BytesIO(b"e 0\nline 1\nline 2\nline 3\n")
+        initial_chunk = b"lin"
+        input_stream.seek(0)
+
+        output_stream = io.BytesIO()
+        with self.assertRaises(ParseError):
+            remainder, at_eof = readuntil(input_stream, initial_chunk, LengthFinder(100, "EOF"), output_stream, 1000)
 
     # The "full examples" below are from the Sentry developer documentation; we should at least be able to parse those
 
@@ -499,3 +498,35 @@ class TestParser(RegularTestCase):
         with self.assertRaises(ParseError) as e:
             header, item = next(items)
         self.assertEquals("Header not JSON", str(e.exception))
+
+    def test_eof_after_envelope_headers(self):
+        # whether this is valid or not: not entirely clear from the docs. It won't matter in practice, of course
+        # (because nothing interesting is contained)
+        parser = StreamingEnvelopeParser(io.BytesIO(b"""{}"""))
+
+        items = parser.get_items_directly()
+        with self.assertRaises(StopIteration):
+            header, item = next(items)
+
+    def test_eof_after_item_headers(self):
+        parser = StreamingEnvelopeParser(io.BytesIO(b"""{}\n{}"""))
+
+        items = parser.get_items_directly()
+
+        with self.assertRaises(ParseError) as e:
+            header, item = next(items)
+        self.assertEquals("EOF when reading headers; what is this a header for then?", str(e.exception))
+
+    def test_item_headers_but_no_item(self):
+        # another edge case that we don't care about much (no data)
+        # as per test_item_with_implicit_length_last_newline_omitted_terminated_by_eof, "implicit lenght and last
+        # newline omitted" is a valid combination. We make explicit that this is also the case for 0-length item
+        parser = StreamingEnvelopeParser(io.BytesIO(b"""{}\n{}\n"""))
+
+        items = parser.get_items_directly()
+
+        header, item = next(items)
+        self.assertEquals(b"", item)
+
+        with self.assertRaises(StopIteration):
+            header, item = next(items)

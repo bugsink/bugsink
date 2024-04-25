@@ -7,9 +7,7 @@ class ParseError(Exception):
 
 
 class NewlineFinder:
-
-    def __init__(self, error_for_eof):
-        self.error_for_eof = error_for_eof
+    error_for_eof = None
 
     def process(self, output_stream, chunk):
         index = chunk.find(b"\n")
@@ -73,7 +71,7 @@ class StreamingEnvelopeParser:
 
         self.envelope_headers = None
 
-    def _parse_headers(self):
+    def _parse_headers(self, eof_is_error):
         """
         Quoted from https://develop.sentry.dev/sdk/envelopes/#headers at version 9c7f19f96562
         conversion to numbered list mine
@@ -105,11 +103,16 @@ class StreamingEnvelopeParser:
 
         # points 3, 4 (we don't use 5, 6, 7, 9 explicitly)
         self.remainder, self.at_eof = readuntil(
-            self.input_stream, self.remainder, NewlineFinder(error_for_eof=None), header_stream, self.chunk_size)
+            self.input_stream, self.remainder, NewlineFinder(), header_stream, self.chunk_size)
 
         header_stream_value = header_stream.getvalue()
-        if self.at_eof and header_stream_value == b"":
-            return None
+        if self.at_eof:
+            if header_stream_value == b"":
+                return None
+
+            if eof_is_error:
+                # We found some header-data, but nothing else. This is an error
+                raise ParseError("EOF when reading headers; what is this a header for then?")
 
         try:
             return json.loads(header_stream_value.decode("utf-8"))  # points 1, 2
@@ -118,7 +121,7 @@ class StreamingEnvelopeParser:
 
     def get_envelope_headers(self):
         if self.envelope_headers is None:
-            self.envelope_headers = self._parse_headers()
+            self.envelope_headers = self._parse_headers(eof_is_error=False)
             assert self.envelope_headers is not None
 
         return self.envelope_headers
@@ -130,7 +133,7 @@ class StreamingEnvelopeParser:
         self.get_envelope_headers()
 
         while not self.at_eof:
-            item_headers = self._parse_headers()
+            item_headers = self._parse_headers(eof_is_error=True)
             if item_headers is None:
                 self.at_eof = True
                 break
@@ -139,7 +142,7 @@ class StreamingEnvelopeParser:
                 length = item_headers["length"]
                 finder = LengthFinder(length, error_for_eof="EOF while reading item with explicitly specified length")
             else:
-                finder = NewlineFinder(error_for_eof=None)
+                finder = NewlineFinder()
 
             item_output_stream = output_stream_factory(item_headers)
             self.remainder, self.at_eof = readuntil(
@@ -149,7 +152,7 @@ class StreamingEnvelopeParser:
                 # items with an explicit length are terminated by a newline (if at EOF, this is optional as per the set
                 # of examples in the docs)
                 self.remainder, self.at_eof = readuntil(
-                    self.input_stream, self.remainder, NewlineFinder(error_for_eof=None), io.BytesIO(), self.chunk_size)
+                    self.input_stream, self.remainder, NewlineFinder(), io.BytesIO(), self.chunk_size)
 
             yield item_headers, item_output_stream
 
