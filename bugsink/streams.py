@@ -98,19 +98,15 @@ class MaxDataReader:
 
     def read(self, size=None):
         if size is None:
-            raise ValueError("MaxDataReader.read() - size must be specified")
+            return self.read(self.max_length - self.bytes_read + 1)  # +1 to trigger the max length check
 
-        # Note: we raise the error when an attempt is made to read to much data. In theory/principle this means that we
-        # could be too strict, because we would complain before the actual problem had occurred, and the downstream read
-        # may actually return something much smaller than what we request.
-        # In practice [1] this is a rounding error [2] max sizes are usually integer multiples of our chunk size.
-        # (this tool is meant to be used in some chunked setting)
-        self.bytes_read += size
+        result = self.stream.read(size)
+        self.bytes_read += len(result)
 
         if self.bytes_read > self.max_length:
-            raise ValueError("Max length exceeded")
+            raise ValueError("Max length (%s) exceeded" % self.max_length)
 
-        return self.stream.read(size)
+        return result
 
 
 class MaxDataWriter:

@@ -257,8 +257,25 @@ class StreamsTestCase(RegularTestCase):
         for i in range(25):
             self.assertEquals(b"hellohello", reader.read(10))
 
-        with self.assertRaises(ValueError):
-            self.assertEquals(b"hellohello", reader.read(10))
+        with self.assertRaises(ValueError) as e:
+            reader.read(10)
+
+        self.assertEquals("Max length (250) exceeded", str(e.exception))
+
+    def test_max_data_reader_none_ok(self):
+        stream = io.BytesIO(b"hello" * 10)
+        reader = MaxDataReader(stream, 250)
+
+        self.assertEquals(b"hello" * 10, reader.read(None))
+
+    def test_max_data_reader_none_fail(self):
+        stream = io.BytesIO(b"hello" * 100)
+        reader = MaxDataReader(stream, 250)
+
+        with self.assertRaises(ValueError) as e:
+            reader.read(None)
+
+        self.assertEquals("Max length (250) exceeded", str(e.exception))
 
     def test_max_data_writer(self):
         stream = io.BytesIO()
