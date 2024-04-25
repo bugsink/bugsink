@@ -291,8 +291,9 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             if item_headers.get("type") == "event":
                 return MaxDataWriter("MAX_EVENT_SIZE", io.BytesIO())
 
-            # everything else can be discarded; still: we check for size limits
-            return MaxDataWriter("MAX_EVENT_SIZE", NullWriter())
+            # everything else can be discarded; (we don't check for individual size limits, because these differ
+            # per item type, we have the envelope limit to protect us, and we incur almost no cost (NullWriter) anyway.
+            return NullWriter()
 
         for item_headers, output_stream in parser.get_items(factory):
             try:
