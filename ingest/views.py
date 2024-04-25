@@ -29,7 +29,7 @@ from releases.models import create_release_if_needed
 from alerts.tasks import send_new_issue_alert, send_regression_alert
 
 from .negotiation import IgnoreClientContentNegotiation
-from .parsers import EnvelopeParser
+# from .parsers import EnvelopeParser
 from .models import DecompressedEvent
 
 
@@ -252,7 +252,7 @@ class IngestEventAPIView(BaseIngestAPIView):
 
 
 class IngestEnvelopeAPIView(BaseIngestAPIView):
-    parser_classes = [EnvelopeParser]
+    # parser_classes = [EnvelopeParser]
 
     def post(self, request, project_pk=None):
         project = self.get_project(request, project_pk)

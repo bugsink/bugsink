@@ -1,3 +1,5 @@
+import io
+
 
 class ParseError(Exception):
     pass
@@ -5,56 +7,64 @@ class ParseError(Exception):
 
 class NewlineFinder:
 
-    def __init__(self):
-        self.indexof = -1
+    def __init__(self, error_for_eof):
+        self.error_for_eof = error_for_eof
 
-    def is_done_after(self, chunk):
-        self.indexof = chunk.indexof(b"\n")
-        return self.indexof != -1
+    def process(self, output_stream, chunk):
+        index = chunk.find(b"\n")
+        if index != -1:
+            part_of_result, remainder = chunk[:index], chunk[index + 1:]
+            output_stream.write(part_of_result)
+            return True, remainder
 
-    def result_and_remainder(self, bufs):
-        last_buf_result, remainder = bufs[-1][:self.indexof], bufs[-1][self.indexof:]
-        result = b"".join(bufs[:-1]) + last_buf_result
-        return result, remainder
-
-    def eof_result(self, bufs):
-        return b"".join(bufs), b""
+        output_stream.write(chunk)
+        return False, b""
 
 
-def readuntil(bufs, stream, finder, chunk_size, error_for_eof):
-    # returns (finder_result, at_eof)
-    # bufs is modified in place
+class LengthFinder:
 
-    def readchunk():
-        chunk = stream.read(chunk_size)
+    def __init__(self, length, error_for_eof):
+        self.error_for_eof = error_for_eof
+        self.length = length
+        self.count = 0
+
+    def process(self, output_stream, chunk):
+        needed = self.length - self.count
+        if needed < len(chunk):
+            part_of_result, remainder = chunk[:needed], chunk[needed:]
+            output_stream.write(part_of_result)
+            return True, remainder
+
+        self.count += len(chunk)
+        output_stream.write(chunk)
+        return False, b""
+
+
+def readuntil(input_stream, initial_chunk, finder, output_stream, chunk_size):
+    chunk = initial_chunk
+    done = False
+
+    done, remainder = finder.process(output_stream, chunk)
+
+    while not done:
+        chunk = input_stream.read(chunk_size)
+
         if not chunk:
-            if error_for_eof is None:
+            if finder.error_for_eof is None:
                 # eof is implicit success
-                return finder.eof_result(bufs), True
+                return b"", True
 
-            raise ParseError(error_for_eof)
-        bufs.append(chunk)
-        return chunk
+            raise ParseError(finder.error_for_eof)
 
-    # HIER NO WE NEED TO CHECK bufs FIRST!
-    # (at least on entry)
-    # this is a good reason to not do this as a list, but have a single buf
-    chunk = readchunk()
-    while not finder.is_done_after(chunk):
-        chunk = readchunk()
+        done, remainder = finder.process(output_stream, chunk)
 
-    result, remainder = finder.result_and_remainder(bufs)
-
-    bufs.clear()
-    bufs.append(remainder)
-
-    return result, False
+    return remainder, False
 
 
 class StreamingEnvelopeParser:
 
-    def __init__(self, stream, chunk_size=1024):
-        self.stream = stream
+    def __init__(self, input_stream, chunk_size=1024):
+        self.input_stream = input_stream
         self.chunk_size = chunk_size
         self.bufs = []
         self.at_eof = False
@@ -86,7 +96,9 @@ class StreamingEnvelopeParser:
         > 9. Empty headers `{}` are technically valid
         """
 
-        header_bytes, self.at_eof = readuntil(self.bufs, self.stream, NewlineFinder(), self.chunk_size, error_for_eof=None)
+        envelope_header_stream = io.BytesIO()
+        header_bytes, self.at_eof = readuntil(
+            self.input_stream, b"", NewlineFinder(error_for_eof=None), envelope_header_stream, self.chunk_size)
 
         # HIER GEBLEVEN: nu punt 1..9 implementeren voor deze header bytes
         # EN DAN: get_items
@@ -101,5 +113,3 @@ class StreamingEnvelopeParser:
 
         # this parses the headers if it's not done yet, such that our 'seek pointer' is correct.
         self.get_envelope_headers()
-
-

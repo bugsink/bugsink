@@ -1,5 +1,8 @@
+import io
+
 import datetime
 from unittest.mock import patch
+from unittest import TestCase as RegularTestCase
 
 from django.conf import settings
 from django.test import TestCase as DjangoTestCase, TransactionTestCase
@@ -16,6 +19,7 @@ from bugsink.registry import reset_pc_registry
 
 from .models import DecompressedEvent
 from .views import BaseIngestAPIView
+from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder
 
 
 class IngestViewTestCase(TransactionTestCase):
@@ -280,3 +284,94 @@ class TimeZoneTesCase(DjangoTestCase):
             # different timezone is active
             e = DecompressedEvent.objects.create()
             self.assertEquals(datetime.timezone.utc, e.timestamp.tzinfo)
+
+
+class TestParser(RegularTestCase):
+
+    def test_readuntil_newline_everything_in_initial_chunk(self):
+        input_stream = io.BytesIO(b"line 2\nline 3\n")
+        initial_chunk = b"line 0\nline 1\n"
+        input_stream.seek(0)
+
+        output_stream = io.BytesIO()
+        remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(None), output_stream, 3)
+
+        self.assertFalse(at_eof)
+        self.assertEquals(b"line 0", output_stream.getvalue())
+        self.assertEquals(b"line 1\n", remainder)
+        self.assertEquals(b"line 2\nline 3\n", input_stream.read())
+
+    def test_readuntil_newline_with_initial_chunk(self):
+        input_stream = io.BytesIO(b"e 0\nline 1\nline 2\nline 3\n")
+        initial_chunk = b"lin"
+        input_stream.seek(0)
+
+        output_stream = io.BytesIO()
+        remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(None), output_stream, 3)
+
+        self.assertFalse(at_eof)
+        self.assertEquals(b"line 0", output_stream.getvalue())
+        self.assertEquals(b"li", remainder)
+        self.assertEquals(b"ne 1\nline 2\nline 3\n", input_stream.read())
+
+    def test_readuntil_newline_no_initial_chunk(self):
+        input_stream = io.BytesIO(b"line 0\nline 1\nline 2\nline 3\n")
+        initial_chunk = b""
+        input_stream.seek(0)
+
+        output_stream = io.BytesIO()
+        remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(None), output_stream, 3)
+
+        self.assertFalse(at_eof)
+        self.assertEquals(b"line 0", output_stream.getvalue())
+        self.assertEquals(b"li", remainder)
+        self.assertEquals(b"ne 1\nline 2\nline 3\n", input_stream.read())
+
+    def test_readuntil_newline_until_eof(self):
+        input_stream = io.BytesIO(b"line 0")
+        initial_chunk = b""
+        input_stream.seek(0)
+
+        output_stream = io.BytesIO()
+        remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(None), output_stream, 3)
+
+        self.assertTrue(at_eof)
+        self.assertEquals(b"line 0", output_stream.getvalue())
+        self.assertEquals(b"", remainder)
+        self.assertEquals(b"", input_stream.read())
+
+    def test_readuntil_newline_eof_is_exception(self):
+        input_stream = io.BytesIO(b"line 0")
+        initial_chunk = b""
+        input_stream.seek(0)
+
+        output_stream = io.BytesIO()
+        with self.assertRaises(ParseError):
+            remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder("eof not ok"), output_stream, 3)
+
+    def test_readuntil_newline_bigger_chunk(self):
+        input_stream = io.BytesIO(b"e 0\nline 1\nline 2\nline 3\n")
+        initial_chunk = b"lin"
+        input_stream.seek(0)
+
+        output_stream = io.BytesIO()
+        remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(None), output_stream, 1024)
+
+        self.assertFalse(at_eof)
+        self.assertEquals(b"line 0", output_stream.getvalue())
+        self.assertEquals(b"line 1\nline 2\nline 3\n", remainder)
+        self.assertEquals(b"", input_stream.read())
+
+    def test_readuntil_length(self):
+        input_stream = io.BytesIO(b"e 0\nline 1\nline 2\nline 3\n")
+        initial_chunk = b"lin"
+        input_stream.seek(0)
+
+        output_stream = io.BytesIO()
+        remainder, at_eof = readuntil(input_stream, initial_chunk, LengthFinder(10, None), output_stream, 3)
+
+        self.assertFalse(at_eof)
+        self.assertEquals(b"line 0\nlin", output_stream.getvalue())
+        self.assertEquals(10, len(b"line 0\nlin"))  # this explains the previous line
+        self.assertEquals(b"e ", remainder)
+        self.assertEquals(b"1\nline 2\nline 3\n", input_stream.read())
