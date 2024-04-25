@@ -1,6 +1,8 @@
 import json
 import io
 
+from bugsink.streams import MaxDataWriter
+
 
 class ParseError(Exception):
     pass
@@ -99,7 +101,7 @@ class StreamingEnvelopeParser:
         the whole headers-terminated-by-newline possible)
         """
 
-        header_stream = io.BytesIO()
+        header_stream = MaxDataWriter("MAX_HEADER_SIZE", io.BytesIO())
 
         # points 3, 4 (we don't use 5, 6, 7, 9 explicitly)
         self.remainder, self.at_eof = readuntil(
