@@ -14,7 +14,7 @@ from .period_counter import PeriodCounter, _prev_tup, TL_DAY, TL_MONTH, TL_YEAR
 from .volume_based_condition import VolumeBasedCondition
 from .registry import PeriodCounterRegistry
 from .streams import (
-    compress_with_zlib, decompress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE, MaxDataReader,
+    compress_with_zlib, ZLibReader, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE, MaxDataReader,
     MaxDataWriter)
 
 
@@ -207,24 +207,48 @@ class StreamsTestCase(RegularTestCase):
     def test_compress_decompress_gzip(self):
         myself_times_ten = open(__file__, 'rb').read() * 10
         plain_stream = io.BytesIO(myself_times_ten)
-        compressed_stream = io.BytesIO()
-        result_stream = io.BytesIO()
 
-        compress_with_zlib(plain_stream, compressed_stream, WBITS_PARAM_FOR_GZIP)
-        compressed_stream.seek(0)
-        decompress_with_zlib(compressed_stream, result_stream, WBITS_PARAM_FOR_GZIP)
-        self.assertEquals(myself_times_ten, result_stream.getvalue())
+        compressed_stream = io.BytesIO(compress_with_zlib(plain_stream, WBITS_PARAM_FOR_GZIP))
+
+        result = b""
+        reader = ZLibReader(compressed_stream, WBITS_PARAM_FOR_GZIP)
+
+        while True:
+            chunk = reader.read(3)
+            result += chunk
+            if chunk == b"":
+                break
+
+        self.assertEquals(myself_times_ten, result)
 
     def test_compress_decompress_deflate(self):
         myself_times_ten = open(__file__, 'rb').read() * 10
-        plain_stream = io.BytesIO(open(__file__, 'rb').read() * 10)
-        compressed_stream = io.BytesIO()
-        result_stream = io.BytesIO()
+        plain_stream = io.BytesIO(myself_times_ten)
 
-        compress_with_zlib(plain_stream, compressed_stream, WBITS_PARAM_FOR_DEFLATE)
-        compressed_stream.seek(0)
-        decompress_with_zlib(compressed_stream, result_stream, WBITS_PARAM_FOR_DEFLATE)
-        self.assertEquals(myself_times_ten, result_stream.getvalue())
+        compressed_stream = io.BytesIO(compress_with_zlib(plain_stream, WBITS_PARAM_FOR_DEFLATE))
+
+        result = b""
+        reader = ZLibReader(compressed_stream, WBITS_PARAM_FOR_DEFLATE)
+
+        while True:
+            chunk = reader.read(3)
+            result += chunk
+            if chunk == b"":
+                break
+
+        self.assertEquals(myself_times_ten, result)
+
+    def test_compress_decompress_read_none(self):
+        myself_times_ten = open(__file__, 'rb').read() * 10
+        plain_stream = io.BytesIO(myself_times_ten)
+
+        compressed_stream = io.BytesIO(compress_with_zlib(plain_stream, WBITS_PARAM_FOR_DEFLATE))
+
+        result = b""
+        reader = ZLibReader(compressed_stream, WBITS_PARAM_FOR_DEFLATE)
+
+        result = reader.read(None)
+        self.assertEquals(myself_times_ten, result)
 
     def test_max_data_reader(self):
         stream = io.BytesIO(b"hello" * 100)

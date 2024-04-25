@@ -1,4 +1,5 @@
 import zlib
+import io
 
 
 DEFAULT_CHUNK_SIZE = 8 * 1024
@@ -15,7 +16,7 @@ WBITS_PARAM_FOR_GZIP = 16 + zlib.MAX_WBITS  # zlib.MAX_WBITS == 15
 WBITS_PARAM_FOR_DEFLATE = -zlib.MAX_WBITS
 
 
-def decompress_with_zlib(input_stream, output_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
+def zlib_generator(input_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
     z = zlib.decompressobj(wbits=wbits)
 
     while True:
@@ -23,13 +24,58 @@ def decompress_with_zlib(input_stream, output_stream, wbits, chunk_size=DEFAULT_
         if not compressed_chunk:
             break
 
-        output_stream.write(z.decompress(compressed_chunk))
+        yield z.decompress(compressed_chunk)
 
-    output_stream.write(z.flush())
+    yield z.flush()
 
 
-def compress_with_zlib(input_stream, output_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
+class ZLibReader:
+
+    def __init__(self, input_stream, wbits):
+        self.generator = zlib_generator(input_stream, wbits)
+        self.unread = b""
+
+    def read(self, size=None):
+        if size is None:
+            for chunk in self.generator:
+                self.unread += chunk
+
+            result = self.unread
+            self.unread = b""
+            return result
+
+        while size > len(self.unread):
+            try:
+                chunk = next(self.generator)
+                if chunk == b"":
+                    break
+                self.unread += chunk
+            except StopIteration:
+                break
+
+        self.unread, result = self.unread[size:], self.unread[:size]
+        return result
+
+
+def content_encoding_reader(request):
+    encoding = request.META.get("HTTP_CONTENT_ENCODING", "").lower()
+
+    if encoding == "gzip":
+        return ZLibReader(request, WBITS_PARAM_FOR_GZIP)
+
+    if encoding == "deflate":
+        return ZLibReader(request, WBITS_PARAM_FOR_DEFLATE)
+
+    if encoding == "br":
+        raise NotImplementedError("Brotli not supported (yet)")
+
+    return request
+
+
+def compress_with_zlib(input_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
     # mostly useful for testing (compress-decompress cycles)
+
+    output_stream = io.BytesIO()
     z = zlib.compressobj(wbits=wbits)
 
     while True:
@@ -40,6 +86,7 @@ def compress_with_zlib(input_stream, output_stream, wbits, chunk_size=DEFAULT_CH
         output_stream.write(z.compress(uncompressed_chunk))
 
     output_stream.write(z.flush())
+    return output_stream.getvalue()
 
 
 class MaxDataReader:

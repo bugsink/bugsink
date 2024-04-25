@@ -141,13 +141,12 @@ class Command(BaseCommand):
                     headers["Content-Encoding"] = "deflate"
                     wbits = WBITS_PARAM_FOR_DEFLATE
 
-                compressed_data = io.BytesIO()
-                compress_with_zlib(io.BytesIO(data_bytes), compressed_data, wbits)
+                compressed_data = compress_with_zlib(io.BytesIO(data_bytes), wbits)
 
                 response = requests.post(
                     get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
                     headers=headers,
-                    data=compressed_data.getvalue(),
+                    data=compressed_data,
                 )
 
             else:

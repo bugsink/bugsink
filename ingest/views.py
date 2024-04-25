@@ -23,6 +23,7 @@ from bugsink.registry import get_pc_registry
 from bugsink.period_counter import PeriodCounter
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.exceptions import ViolatedExpectation
+from bugsink.streams import content_encoding_reader
 
 from events.models import Event
 from releases.models import create_release_if_needed
@@ -247,7 +248,7 @@ class IngestEventAPIView(BaseIngestAPIView):
     def post(self, request, project_pk=None):
         project = self.get_project(request, project_pk)
 
-        request_data = json.loads(request.read())
+        request_data = json.loads(content_encoding_reader(request).read())
 
         try:
             self.process_event(request_data, project, request)
@@ -262,7 +263,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
     def post(self, request, project_pk=None):
         project = self.get_project(request, project_pk)
 
-        parser = StreamingEnvelopeParser(request)
+        parser = StreamingEnvelopeParser(content_encoding_reader(request))
 
         # TODO: use the envelope_header's DSN if it is available (exact order-of-operations will depend on load-shedding
         # mechanisms)

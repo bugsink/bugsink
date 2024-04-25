@@ -71,8 +71,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
-    'sentry.middleware.proxy.DecompressBodyMiddleware',
-
     'bugsink.middleware.PerformanceStatsMiddleware',
 ]
 
