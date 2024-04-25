@@ -1,17 +1,17 @@
+import io
 from datetime import datetime, timezone
 import json  # TODO consider faster APIs
 
 from django.shortcuts import get_object_or_404
 from django.conf import settings
 from django.db.models import Max
+from django.views import View
+from django.core import exceptions
+from django.core.exceptions import ValidationError
+from django.http import HttpResponse, JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 
-from rest_framework import permissions, status
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework import exceptions
-from rest_framework.exceptions import ValidationError
-
-import sentry_sdk_extensions
 from compat.auth import parse_auth_header_value
 
 from projects.models import Project
@@ -28,16 +28,16 @@ from events.models import Event
 from releases.models import create_release_if_needed
 from alerts.tasks import send_new_issue_alert, send_regression_alert
 
-from .negotiation import IgnoreClientContentNegotiation
-# from .parsers import EnvelopeParser
+from .parsers import StreamingEnvelopeParser
 from .models import DecompressedEvent
 
 
-class BaseIngestAPIView(APIView):
-    permission_classes = [permissions.AllowAny]
-    authentication_classes = []
-    content_negotiation_class = IgnoreClientContentNegotiation
-    http_method_names = ["post"]
+HTTP_400_BAD_REQUEST = 400
+HTTP_501_NOT_IMPLEMENTED = 501
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class BaseIngestAPIView(View):
 
     @classmethod
     def get_sentry_key_for_request(cls, request):
@@ -247,48 +247,37 @@ class IngestEventAPIView(BaseIngestAPIView):
     def post(self, request, project_pk=None):
         project = self.get_project(request, project_pk)
 
-        self.process_event(request.data, project, request)
-        return Response()
+        request_data = json.loads(request.read())
+
+        try:
+            self.process_event(request_data, project, request)
+        except exceptions.ValidationError as e:
+            return JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST)  # NOTE untested behavior
+
+        return HttpResponse()
 
 
 class IngestEnvelopeAPIView(BaseIngestAPIView):
-    # parser_classes = [EnvelopeParser]
 
     def post(self, request, project_pk=None):
         project = self.get_project(request, project_pk)
 
-        data = request.data  # make this a local var to ensure it's sent as part of capture_stacktrace(..)
-        if len(data) < 3:
-            # we expect at least a header, a type-decla, and a body; this enables us to deal with a good number of
-            # messages, however, a proper implementation of Envelope parsing, including parsing of the headers and the
-            # body (esp. if there multiple parts), using both the specification (if there is any) and the sentry
-            # codebase as a reference, is a TODO (such extra parts are currently silently ignored)
-            sentry_sdk_extensions.capture_stacktrace("Invalid envelope (< 3 parts)")
-            return Response({"message": "Missing headers / unsupported type"}, status=status.HTTP_501_NOT_IMPLEMENTED)
+        parser = StreamingEnvelopeParser(request)
 
-        if len(data) > 3:
-            sentry_sdk_extensions.capture_stacktrace("> 3 envelope parts, logged for understanding")  # i.e. no error
+        # TODO: use the envelope_header's DSN if it is available (exact order-of-operations will depend on load-shedding
+        # mechanisms)
+        # envelope_headers = parser.get_envelope_headers()
 
-        if data[1].get("type") != "event":
-            sentry_sdk_extensions.capture_stacktrace("Invalid envelope (not an event)")
-            return Response({"message": "Only events are supported"}, status=status.HTTP_501_NOT_IMPLEMENTED)
+        for item_headers, output_stream in parser.get_items(lambda item_headers: io.BytesIO()):
+            try:
+                item_bytes = output_stream.getvalue()
+                if item_headers.get("type") != "event":
+                    continue
+                event_data = json.loads(item_bytes.decode("utf-8"))
 
-        # TODO think about a good order to handle this in. Namely: if no project Header is provided, you are basically
-        # forced to do some parsing of the envelope... and this could be costly.
-        # https://gitlab.com/glitchtip/glitchtip-backend/-/issues/181
+                self.process_event(event_data, project, request)
 
-        """
-        # KvS: this is presumably the path that is used for envelopes (and then also when the above are not provided)
-        # TODO I'd much rather deal with that explicitly
-        from urllib.parse import urlparse
-        if isinstance(data, list):
-            if data_first := next(iter(data), None):
-                if isinstance(data_first, dict):
-                    dsn = urlparse(data_first.get("dsn"))
-                    if dsn.username:
-                        return dsn.username
-        """
+            finally:
+                output_stream.close()
 
-        event = data[2]
-        self.process_event(event, project, request)
-        return Response()
+        return HttpResponse()

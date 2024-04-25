@@ -8,8 +8,7 @@ from django.conf import settings
 from django.test import TestCase as DjangoTestCase, TransactionTestCase
 from django.utils import timezone
 from django.test.client import RequestFactory
-
-from rest_framework.exceptions import ValidationError
+from django.core.exceptions import ValidationError
 
 from projects.models import Project
 from events.factories import create_event_data
