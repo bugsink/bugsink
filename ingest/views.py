@@ -1,3 +1,4 @@
+import logging
 import io
 from datetime import datetime, timezone
 import json  # TODO consider faster APIs
@@ -35,6 +36,9 @@ from .models import DecompressedEvent
 
 HTTP_400_BAD_REQUEST = 400
 HTTP_501_NOT_IMPLEMENTED = 501
+
+
+logger = logging.getLogger("bugsink.ingest")
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -273,7 +277,9 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             try:
                 item_bytes = output_stream.getvalue()
                 if item_headers.get("type") != "event":
+                    logger.info("skipping non-event item: %s", item_headers.get("type"))
                     continue
+
                 event_data = json.loads(item_bytes.decode("utf-8"))
 
                 self.process_event(event_data, project, request)
