@@ -105,8 +105,12 @@ class ImmediateAtomic(django_db_transaction.Atomic):
 def immediate_atomic(using=None, savepoint=True, durable=True):
     # this is the Django 4.2 db.transaction.atomic, but using ImmediateAtomic, and with durable=True by default
 
-    # the following assertion is because "BEGIN IMMEDIATE" supposes a "BEGIN" (of a transaction), i.e. has no meaning in
-    # the context of savepoints.
+    # the following assertion is because "BEGIN IMMEDIATE" supposes a "BEGIN" (of a transaction), i.e. has no meaning
+    # when this wrapper is not the outermost one.
+
+    # Side-note: the parameter `savepoint` is a bit of a misnomer, it is not about "is the current thing a savepoint",
+    # but rather, "are savepoints allowed inside the current context". (The former would imply that it could never be
+    # combined with durable=True, which is not the case.)
     assert durable, "immediate_atomic should always be used with durable=True"
 
     if callable(using):
