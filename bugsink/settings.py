@@ -245,7 +245,7 @@ BASE_URL = "http://bugsink:9000"  # no trailing slash
 SITE_TITLE = "Bugsink"  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 
 SNAPPEA = {
-    "TASK_ALWAYS_EAGER": True,
+    "TASK_ALWAYS_EAGER": False,
 }
 
 POSTMARK_API_KEY = os.getenv('POSTMARK_API_KEY')
