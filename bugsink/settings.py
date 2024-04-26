@@ -221,10 +221,6 @@ if sys.argv[1:2] == ['runsnappea']:
         logger["handlers"] = ["snappea"]
 
 
-# ###################### SERVER-MODE SETTINGS #################
-
-BUGSINK_DIGEST_IMMEDIATELY = True
-
 # ###################### MOST PER-SITE CONFIG BELOW THIS LINE ###################
 
 
