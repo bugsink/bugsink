@@ -51,6 +51,14 @@ class ImmediateAtomic(django_db_transaction.Atomic):
         sleep(5)
         print("I am going to write")
         user.save() # no need to actually change the user, as long as we run a write query
+
+    ## why transactions:
+    One more note that I have trouble integrating into the story-line. Django says
+
+    > Atomicity is the defining property of database transactions.
+
+    But this is not true. But we also care about isolation (views on the data) and about serializability (the order of
+    transactions). In particular serializability (locking out other writers) is what we are after here.
     """
 
     # We use some ad hoc monkey-patching to implement this, relying on the fact that the _start_transaction_under_..
