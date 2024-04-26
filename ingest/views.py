@@ -125,7 +125,11 @@ class BaseIngestAPIView(View):
 
         # leave this at the top -- the point is to trigger load_from_scratch if needed, which may involve reading from
         # the DB which should come before any DB writing. A note on locking the PC: because period_counter accesses are
-        # inside an immediate transaction, they are serialized "for free".
+        # inside an immediate transaction, they are serialized "for free", so threading will "just work". Even inside
+        # snappea and the django dev server.
+        # TODO however, in a multi-processing context (gunicon itself and gunicorn/snappea), the PC will not be shared
+        # between processes. We need to think of something (or fall back to database-based counting, or set up gunicorn
+        # in threaded-worker mode).
         get_pc_registry()
 
         # NOTE: we don't do anything with project-period-counting yet; we'll revisit this bit, and its desired location,

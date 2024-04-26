@@ -242,6 +242,7 @@ SITE_TITLE = "Bugsink"  # you can customize this as e.g. "My Bugsink" or "Bugsin
 
 SNAPPEA = {
     "TASK_ALWAYS_EAGER": False,
+    "NUM_WORKERS": 1,
 }
 
 POSTMARK_API_KEY = os.getenv('POSTMARK_API_KEY')
@@ -255,7 +256,7 @@ EMAIL_USE_TLS = True
 SERVER_EMAIL = DEFAULT_FROM_EMAIL = 'Klaas van Schelven <klaas@vanschelven.com>'
 
 BUGSINK = {
-    "DIGEST_IMMEDIATELY": False,
+    "DIGEST_IMMEDIATELY": True,
 
     # "MAX_EVENT_SIZE": _MEBIBYTE,
     # "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,
