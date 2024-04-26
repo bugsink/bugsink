@@ -52,9 +52,6 @@ class Event(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, help_text="Bugsink-internal")
 
-    # null=True reveals our doubts about "should this always be set, or even be done at all?"
-    ingested_event = models.ForeignKey("ingest.DecompressedEvent", null=True, on_delete=models.SET_NULL)
-
     server_side_timestamp = models.DateTimeField(db_index=True, blank=False, null=False)
 
     # not actually expected to be null, but we want to be able to delete issues without deleting events (cleanup later)
@@ -171,7 +168,7 @@ class Event(models.Model):
         return get_title_for_exception_type_and_value(self.calculated_type, self.calculated_value)
 
     @classmethod
-    def from_ingested(cls, ingested_event, ingest_order, issue, parsed_data, denormalized_fields):
+    def from_ingested(cls, event_metadata, ingest_order, issue, parsed_data, denormalized_fields):
         # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
         # objects etc).
@@ -179,10 +176,9 @@ class Event(models.Model):
         try:
             event = cls.objects.create(
                 event_id=parsed_data["event_id"],
-                project=ingested_event.project,
-                ingested_event=ingested_event,  # <= thoughts about defaults v.s. check-as-part-of-get go here...
+                project_id=event_metadata["project_id"],
                 issue=issue,
-                server_side_timestamp=ingested_event.timestamp,
+                server_side_timestamp=event_metadata["timestamp"],
                 data=json.dumps(parsed_data),
 
                 timestamp=parse_timestamp(parsed_data["timestamp"]),
@@ -204,7 +200,7 @@ class Event(models.Model):
                 has_exception="exception" in parsed_data,
                 has_logentry="logentry" in parsed_data,
 
-                debug_info=ingested_event.debug_info,
+                debug_info=event_metadata["debug_info"],
 
                 ingest_order=ingest_order,
 

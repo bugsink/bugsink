@@ -2,7 +2,6 @@ from django.core.management.base import BaseCommand
 
 from issues.models import Issue
 from events.models import Event
-from ingest.models import DecompressedEvent
 
 
 class Command(BaseCommand):
@@ -18,4 +17,3 @@ class Command(BaseCommand):
         print("nuking")
         Issue.objects.all().delete()
         Event.objects.all().delete()
-        DecompressedEvent.objects.all().delete()

@@ -39,7 +39,6 @@ class EventAdmin(admin.ModelAdmin):
     fields = [
         'id',
         'event_id',
-        'ingested_event',
         'server_side_timestamp',
         'calculated_type',
         'calculated_value',
@@ -65,7 +64,6 @@ class EventAdmin(admin.ModelAdmin):
     readonly_fields = [
         'id',
         'event_id',
-        'ingested_event',
         'server_side_timestamp',
         'calculated_type',
         'calculated_value',

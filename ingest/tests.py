@@ -4,8 +4,7 @@ import datetime
 from unittest.mock import patch
 from unittest import TestCase as RegularTestCase
 
-from django.conf import settings
-from django.test import TestCase as DjangoTestCase, TransactionTestCase
+from django.test import TransactionTestCase
 from django.utils import timezone
 from django.test.client import RequestFactory
 from django.core.exceptions import ValidationError
@@ -15,10 +14,26 @@ from events.factories import create_event_data
 from issues.factories import get_or_create_issue
 from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
 from bugsink.registry import reset_pc_registry
+from compat.timestamp import format_timestamp
 
-from .models import DecompressedEvent
 from .views import BaseIngestAPIView
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
+
+
+def _digest_params(event_data, project, request, now=None):
+    if now is None:
+        # because we want to count events before having created event objects (quota may block the latter) we cannot
+        # depend on event.timestamp; instead, we look on the clock once here, and then use that for both the project
+        # and issue period counters.
+        now = datetime.datetime.now(timezone.utc)
+
+    # adapter to quickly reuse existing tests on refactored code. let's see where the code ends up before spending
+    # considerable time on rewriting the tests
+    return {
+        "event_metadata": {"project_id": project.id, "timestamp": format_timestamp(now), "debug_info": ""},
+        "event_data": event_data,
+        "project": project,
+    }
 
 
 class IngestViewTestCase(TransactionTestCase):
@@ -60,11 +75,8 @@ class IngestViewTestCase(TransactionTestCase):
     def test_ingest_view_new_issue_alert(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
         request = self.request_factory.post("/api/1/store/")
 
-        BaseIngestAPIView().process_event(
-            create_event_data(),
-            self.loud_project,
-            request,
-        )
+        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.loud_project, request))
+
         self.assertTrue(send_new_issue_alert.delay.called)
         self.assertFalse(send_regression_alert.delay.called)
         self.assertFalse(send_unmute_alert.delay.called)
@@ -85,11 +97,8 @@ class IngestViewTestCase(TransactionTestCase):
 
         request = self.request_factory.post("/api/1/store/")
 
-        BaseIngestAPIView().process_event(
-            event_data,
-            self.loud_project,
-            request,
-        )
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.loud_project, request))
+
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertTrue(send_regression_alert.delay.called)
         self.assertFalse(send_unmute_alert.delay.called)
@@ -113,11 +122,8 @@ class IngestViewTestCase(TransactionTestCase):
 
         request = self.request_factory.post("/api/1/store/")
 
-        BaseIngestAPIView().process_event(
-            event_data,
-            self.loud_project,
-            request,
-        )
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.loud_project, request))
+
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertTrue(send_regression_alert.delay.called)
         self.assertFalse(send_unmute_alert.delay.called)
@@ -137,11 +143,8 @@ class IngestViewTestCase(TransactionTestCase):
 
         request = self.request_factory.post("/api/1/store/")
 
-        BaseIngestAPIView().process_event(
-            event_data,
-            self.loud_project,
-            request,
-        )
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.loud_project, request))
+
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertFalse(send_regression_alert.delay.called)
         self.assertTrue(send_unmute_alert.delay.called)
@@ -164,12 +167,12 @@ class IngestViewTestCase(TransactionTestCase):
 
         request = self.request_factory.post("/api/1/store/")
 
-        BaseIngestAPIView().process_event(
+        BaseIngestAPIView().digest_event(**_digest_params(
             event_data,
             self.loud_project,
             request,
             now=timezone.now() + datetime.timedelta(days=2),
-        )
+        ))
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertFalse(send_regression_alert.delay.called)
         self.assertTrue(send_unmute_alert.delay.called)
@@ -188,11 +191,8 @@ class IngestViewTestCase(TransactionTestCase):
         # doesn't silently break we've included the positive case in the loop here.
         for (expected_called, project) in [(False, self.quiet_project), (True, self.loud_project)]:
             # new event
-            BaseIngestAPIView().process_event(
-                create_event_data(),
-                project,
-                request,
-            )
+            BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), project, request))
+
             self.assertEquals(expected_called, send_new_issue_alert.delay.called)
 
             issue = Issue.objects.get(project=project)
@@ -200,11 +200,7 @@ class IngestViewTestCase(TransactionTestCase):
             issue.save()
 
             # regression
-            BaseIngestAPIView().process_event(
-                create_event_data(),
-                project,
-                request,
-            )
+            BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), project, request))
 
             self.assertEquals(expected_called, send_regression_alert.delay.called)
 
@@ -214,11 +210,8 @@ class IngestViewTestCase(TransactionTestCase):
             issue.save()
 
             # unmute via API
-            BaseIngestAPIView().process_event(
-                create_event_data(),
-                project,
-                request,
-            )
+            BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), project, request))
+
             self.assertEquals(expected_called, send_unmute_alert.delay.called)
 
     def test_deal_with_double_event_ids(self):
@@ -229,19 +222,11 @@ class IngestViewTestCase(TransactionTestCase):
         event_data = create_event_data()
 
         # first time
-        BaseIngestAPIView().process_event(
-            event_data,
-            project,
-            request,
-        )
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, project, request))
 
         with self.assertRaises(ValidationError):
             # second time
-            BaseIngestAPIView().process_event(
-                event_data,
-                project,
-                request,
-            )
+            BaseIngestAPIView().digest_event(**_digest_params(event_data, project, request))
 
     def test_ingest_view_stores_events_at(self):
         request = self.request_factory.post("/api/1/store/")
@@ -249,40 +234,10 @@ class IngestViewTestCase(TransactionTestCase):
         event_data = create_event_data()
         event_data["release"] = "1.0"
 
-        BaseIngestAPIView().process_event(
-            event_data,
-            self.loud_project,
-            request,
-        )
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.loud_project, request))
+
         self.assertEquals(1, Issue.objects.count())
         self.assertEquals("1.0\n", Issue.objects.get().events_at)
-
-
-class TimeZoneTesCase(DjangoTestCase):
-    """This class contains some tests that formalize my understanding of how Django works; they are not strictly tests
-    of bugsink code.
-
-    We put this in events/tests.py because that's a place where we use Django's TestCase, and we want to test in that
-    context, as well as the one of Event models.
-    """
-
-    def test_datetimes_are_in_utc_when_retrieved_from_the_database_with_default_conf(self):
-        # check our default conf
-        self.assertEquals("Europe/Amsterdam", settings.TIME_ZONE)
-
-        # save an event in the database; it will be saved in UTC (because that's what Django does)
-        e = DecompressedEvent.objects.create()
-
-        # we activate a timezone that is not UTC to ensure our tests run even when we're in a different timezone
-        with timezone.override('America/Chicago'):
-            self.assertEquals(datetime.timezone.utc, e.timestamp.tzinfo)
-
-    def test_datetimes_are_in_utc_when_retrieved_from_the_database_no_matter_the_active_timezone_when_creating(self):
-        with timezone.override('America/Chicago'):
-            # save an event in the database; it will be saved in UTC (because that's what Django does); even when a
-            # different timezone is active
-            e = DecompressedEvent.objects.create()
-            self.assertEquals(datetime.timezone.utc, e.timestamp.tzinfo)
 
 
 class TestParser(RegularTestCase):

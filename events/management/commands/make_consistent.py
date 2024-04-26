@@ -2,7 +2,6 @@ from django.core.management.base import BaseCommand
 from django.db.models import Count
 
 from releases.models import Release
-from ingest.models import DecompressedEvent
 from issues.models import Issue
 from events.models import Event
 
@@ -29,10 +28,6 @@ def make_consistent():
     for event in Event.objects.filter(project=None):
         print("Deleting event %s, because it has no project" % event)
         event.delete()
-
-    for decompressed_event in DecompressedEvent.objects.filter(project=None):
-        print("Deleting decompressed event %s, because it has no project" % decompressed_event)
-        decompressed_event.delete()
 
 
 class Command(BaseCommand):

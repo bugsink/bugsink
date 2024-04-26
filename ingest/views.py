@@ -1,10 +1,10 @@
 import logging
 import io
+import os
 from datetime import datetime, timezone
 import json  # TODO consider faster APIs
 
 from django.shortcuts import get_object_or_404
-from django.conf import settings
 from django.db.models import Max
 from django.views import View
 from django.core import exceptions
@@ -25,13 +25,16 @@ from bugsink.period_counter import PeriodCounter
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.exceptions import ViolatedExpectation
 from bugsink.streams import content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded
+from bugsink.app_settings import get_settings
 
 from events.models import Event
 from releases.models import create_release_if_needed
 from alerts.tasks import send_new_issue_alert, send_regression_alert
+from compat.timestamp import format_timestamp, parse_timestamp
 
-from .parsers import StreamingEnvelopeParser
-from .models import DecompressedEvent
+from .parsers import StreamingEnvelopeParser, ParseError
+from .filestore import get_filename_for_event_id
+from .tasks import digest
 
 
 HTTP_400_BAD_REQUEST = 400
@@ -78,55 +81,66 @@ class BaseIngestAPIView(View):
         return get_object_or_404(Project, pk=project_pk, sentry_key=sentry_key)
 
     @classmethod
-    def process_event(cls, event_data, project, request, now=None):
-        if now is None:  # now is not-None in tests
-            # because we want to count events before having created event objects (quota may block the latter) we cannot
-            # depend on event.timestamp; instead, we look on the clock once here, and then use that for both the project
-            # and issue period counters.
-            now = datetime.now(timezone.utc)
+    def process_event(cls, event_id, event_data_stream, project, request):
+        # because we want to count events before having created event objects (quota may block the latter) we cannot
+        # depend on event.timestamp; instead, we look on the clock once here, and then use that for both the project
+        # and issue period counters.
+        now = datetime.now(timezone.utc)
 
-        # note: we may want to skip saving the raw data in a setup where we have integrated ingest/digest, but for now
-        # we just always save it; note that even for the integrated setup a case can be made for saving the raw data
-        # before proceeding because it may be useful for debugging errors in the digest process.
-        ingested_event = cls.ingest_event(now, event_data, request, project)
-        if settings.BUGSINK_DIGEST_IMMEDIATELY:
-            # NOTE once we implement the no-immediate case, we should do so in a way that catches ValidationErrors
-            # raised by digest_event
-            cls.digest_event(ingested_event, event_data)
+        event_metadata = cls.get_event_meta(now, request, project)
+
+        if get_settings().DIGEST_IMMEDIATELY:
+            # in this case the stream will be an BytesIO object, so we can actually call .get_value() on it.
+            event_data = json.loads(event_data_stream.getvalue().decode("utf-8"))
+            cls.digest_event(event_metadata, event_data, project=project)
+        else:
+            # In this case the stream will be a file that has been written the event's content to it.
+            # To ensure that the (possibly EAGER) handling of the digest has the file available, we flush it here:
+            event_data_stream.flush()
+            # Note: flush() does not necessarily write the file’s data to disk. Use flush() followed by os.fsync() to
+            # ensure this behavior
+            os.fsync(event_data_stream.fileno())
+
+            digest.delay(event_id, event_metadata)
 
     @classmethod
-    def ingest_event(cls, now, event_data, request, project):
-        # JIT-creation of the PeriodCounter for the project; alternatively we could monitor the project creation and
-        # create the PeriodCounter there.
-        if project.id not in get_pc_registry().by_project:
-            get_pc_registry().by_project[project.id] = PeriodCounter()
-
-        project_pc = get_pc_registry().by_project[project.id]
-        project_pc.inc(now)  # counted_entity (event) is not available yet, since we don't use it we don't pass it.
-
+    def get_event_meta(cls, now, request, project):
         debug_info = request.META.get("HTTP_X_BUGSINK_DEBUGINFO", "")
-
-        return DecompressedEvent.objects.create(
-            project=project,
-            data=json.dumps(event_data),  # TODO don't parse-then-print for BaseIngestion
-            timestamp=now,
-            debug_info=debug_info,
-        )
+        return {
+            "project_id": project.id,
+            "timestamp": format_timestamp(now),
+            "debug_info": debug_info,
+        }
 
     @classmethod
-    def digest_event(cls, ingested_event, event_data):
-        event, issue = cls._digest_event_to_db(ingested_event, event_data)
-        cls._digest_event_python_postprocessing(ingested_event, event, issue)
+    def digest_event(cls, event_metadata, event_data, project=None):
+        event, issue = cls._digest_event_to_db(event_metadata, event_data, project=project)
+        cls._digest_event_python_postprocessing(parse_timestamp(event_metadata["timestamp"]), event, issue)
 
     @classmethod
     @immediate_atomic()
-    def _digest_event_to_db(cls, ingested_event, event_data):
-        # event_data is passed explicitly to avoid re-parsing something that may be availabe anyway; we'll come up with
-        # a better signature later if this idea sticks
+    def _digest_event_to_db(cls, event_metadata, event_data, project=None):
+        if project is None:
+            # having project as an optional argument allows us to pass this in when we have the information available
+            # (in the DIGEST_IMMEDIATELY case) which saves us a query.
+            project = Project.objects.get(pk=event_metadata["project_id"])
+
+        timestamp = parse_timestamp(event_metadata["timestamp"])
 
         # leave this at the top -- the point is to trigger load_from_scratch if needed, which may involve reading from
-        # the DB which should come before any DB writing
+        # the DB which should come before any DB writing. A note on locking the PC: because period_counter accesses are
+        # inside an immediate transaction, they are serialized "for free".
         get_pc_registry()
+
+        # NOTE: we don't do anything with project-period-counting yet; we'll revisit this bit, and its desired location,
+        # once we start with quotas.
+        # # JIT-creation of the PeriodCounter for the project; alternatively we could monitor the project creation and
+        # # create the PeriodCounter there.
+        # if project.id not in get_pc_registry().by_project:
+        #     get_pc_registry().by_project[project.id] = PeriodCounter()
+        #
+        # project_pc = get_pc_registry().by_project[project.id]
+        # project_pc.inc(now)  # counted_entity (event) is not available yet, since we don't use it we don't pass it.
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
@@ -139,17 +153,17 @@ class BaseIngestAPIView(View):
 
         grouping_key = get_issue_grouper_for_data(event_data, calculated_type, calculated_value)
 
-        if not Grouping.objects.filter(project=ingested_event.project, grouping_key=grouping_key).exists():
+        if not Grouping.objects.filter(project_id=event_metadata["project_id"], grouping_key=grouping_key).exists():
             # we don't have Project.issue_count here ('premature optimization') so we just do an aggregate instead.
-            max_current = Issue.objects.filter(project=ingested_event.project).aggregate(
+            max_current = Issue.objects.filter(project_id=event_metadata["project_id"]).aggregate(
                 Max("ingest_order"))["ingest_order__max"]
             issue_ingest_order = max_current + 1 if max_current is not None else 1
 
             issue = Issue.objects.create(
                 ingest_order=issue_ingest_order,
-                project=ingested_event.project,
-                first_seen=ingested_event.timestamp,
-                last_seen=ingested_event.timestamp,
+                project_id=event_metadata["project_id"],
+                first_seen=timestamp,
+                last_seen=timestamp,
                 event_count=1,
                 **denormalized_fields,
             )
@@ -159,20 +173,20 @@ class BaseIngestAPIView(View):
             issue_created = True
 
             grouping = Grouping.objects.create(
-                project=ingested_event.project,
+                project_id=event_metadata["project_id"],
                 grouping_key=grouping_key,
                 issue=issue,
             )
 
         else:
-            grouping = Grouping.objects.get(project=ingested_event.project, grouping_key=grouping_key)
+            grouping = Grouping.objects.get(project_id=event_metadata["project_id"], grouping_key=grouping_key)
             issue = grouping.issue
             issue_created = False
 
         # NOTE: an event always has a single (automatically calculated) Grouping associated with it. Since we have that
         # information available here, we could add it to the Event model.
         event, event_created = Event.from_ingested(
-            ingested_event,
+            event_metadata,
             # the assymetry with + 1 is because the event_count is only incremented below for the not issue_created case
             issue.event_count if issue_created else issue.event_count + 1,
             issue,
@@ -199,24 +213,24 @@ class BaseIngestAPIView(View):
             # multiple events with the same event_id "don't happen" (i.e. are the result of badly misbehaving clients)
             raise ValidationError("Event already exists", code="event_already_exists")
 
-        release = create_release_if_needed(ingested_event.project, event.release, event)
+        release = create_release_if_needed(project, event.release, event)
 
         if issue_created:
             TurningPoint.objects.create(
-                issue=issue, triggering_event=event, timestamp=ingested_event.timestamp,
+                issue=issue, triggering_event=event, timestamp=timestamp,
                 kind=TurningPointKind.FIRST_SEEN)
 
-            if ingested_event.project.alert_on_new_issue:
+            if project.alert_on_new_issue:
                 delay_on_commit(send_new_issue_alert, str(issue.id))
 
         else:
             # new issues cannot be regressions by definition, hence this is in the 'else' branch
             if issue_is_regression(issue, event.release):
                 TurningPoint.objects.create(
-                    issue=issue, triggering_event=event, timestamp=ingested_event.timestamp,
+                    issue=issue, triggering_event=event, timestamp=timestamp,
                     kind=TurningPointKind.REGRESSED)
 
-                if ingested_event.project.alert_on_regression:
+                if project.alert_on_regression:
                     delay_on_commit(send_regression_alert, str(issue.id))
 
                 IssueStateManager.reopen(issue)
@@ -226,7 +240,7 @@ class BaseIngestAPIView(View):
             # 'muted' issue is thus not treated as something to more deeply ignore than an unresolved issue (and in
             # fact, conversely, it may be more loud when the for/until condition runs out). This is in fact analogous to
             # "resolved" issues which are _also_ treated with more "suspicion" than their unresolved counterparts.
-            if issue.is_muted and issue.unmute_after is not None and ingested_event.timestamp > issue.unmute_after:
+            if issue.is_muted and issue.unmute_after is not None and timestamp > issue.unmute_after:
                 # note that unmuting on-ingest implies that issues that no longer occur stay muted. I'd say this is what
                 # you want: things that no longer happen should _not_ draw your attention, and if you've nicely moved
                 # some issue away from the "Open" tab it should not reappear there if a certain amount of time passes.
@@ -238,7 +252,7 @@ class BaseIngestAPIView(View):
                     unmute_metadata={"mute_for": {"unmute_after": issue.unmute_after}})
 
             # update the denormalized fields
-            issue.last_seen = ingested_event.timestamp
+            issue.last_seen = timestamp
             issue.event_count += 1
 
         if release.version + "\n" not in issue.events_at:
@@ -247,12 +261,12 @@ class BaseIngestAPIView(View):
         return event, issue
 
     @classmethod
-    def _digest_event_python_postprocessing(cls, ingested_event, event, issue):
+    def _digest_event_python_postprocessing(cls, timestamp, event, issue):
         pc_registry = get_pc_registry()
         if issue.id not in pc_registry.by_issue:
             pc_registry.by_issue[issue.id] = PeriodCounter()
         issue_pc = pc_registry.by_issue[issue.id]
-        issue_pc.inc(ingested_event.timestamp, counted_entity=event)
+        issue_pc.inc(timestamp, counted_entity=event)
 
 
 class IngestEventAPIView(BaseIngestAPIView):
@@ -283,21 +297,26 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
         # TODO: use the envelope_header's DSN if it is available (exact order-of-operations will depend on load-shedding
         # mechanisms)
-        # envelope_headers = parser.get_envelope_headers()
-        # envelope_headers["event_id"] is required when type=event per the spec (and takes precedence over the payload's
-        # event_id), so we can relay on it having been set.
+        envelope_headers = parser.get_envelope_headers()
 
         def factory(item_headers):
             if item_headers.get("type") == "event":
-                return MaxDataWriter("MAX_EVENT_SIZE", io.BytesIO())
+                if get_settings().DIGEST_IMMEDIATELY:
+                    return MaxDataWriter("MAX_EVENT_SIZE", io.BytesIO())
+
+                # envelope_headers["event_id"] is required when type=event per the spec (and takes precedence over the
+                # payload's event_id), so we can relay on it having been set.
+                if "event_id" not in envelope_headers:
+                    raise ParseError("event_id not found in envelope headers")
+                filename = get_filename_for_event_id(envelope_headers["event_id"])
+                return MaxDataWriter("MAX_EVENT_SIZE", open(filename, 'wb'))
 
             # everything else can be discarded; (we don't check for individual size limits, because these differ
             # per item type, we have the envelope limit to protect us, and we incur almost no cost (NullWriter) anyway.
             return NullWriter()
 
-        for item_headers, output_stream in parser.get_items(factory):
+        for item_headers, event_output_stream in parser.get_items(factory):
             try:
-                item_bytes = output_stream.getvalue()
                 if item_headers.get("type") != "event":
                     logger.info("skipping non-event item: %s", item_headers.get("type"))
 
@@ -309,13 +328,11 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
                     continue
 
-                event_data = json.loads(item_bytes.decode("utf-8"))
-
-                self.process_event(event_data, project, request)
+                self.process_event(envelope_headers["event_id"], event_output_stream, project, request)
                 break  # From the spec of type=event: This Item may occur at most once per Envelope. i.e. seen=done
 
             finally:
-                output_stream.close()
+                event_output_stream.close()
 
         return HttpResponse()
 
