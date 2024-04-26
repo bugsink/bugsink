@@ -60,6 +60,17 @@ class ImmediateAtomic(django_db_transaction.Atomic):
 
     def __enter__(self):
         connection = django_db_transaction.get_connection(self.using)
+
+        # Like the superclass check, but more strict for the case of "in tests"
+        if (self.durable and connection.atomic_blocks):
+            if not connection.atomic_blocks[-1]._from_testcase:
+                raise RuntimeError("A durable atomic block cannot be nested within another atomic block.")
+
+            # We do not allow nesting of durable atomic blocks in tests. If it's important enough to run in atomic mode,
+            # it's important enough to be tested as such. I just spent 2 hours debugging a test that was failing because
+            # of this.
+            raise RuntimeError("A durable atomic block cannot be nested -- not even in tests.")
+
         if hasattr(connection, "_start_transaction_under_autocommit"):
             connection._start_transaction_under_autocommit_original = connection._start_transaction_under_autocommit
             connection._start_transaction_under_autocommit = types.MethodType(
