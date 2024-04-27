@@ -1,3 +1,4 @@
+import os
 import logging
 import json
 
@@ -23,3 +24,5 @@ def digest(event_id, event_metadata):
         BaseIngestAPIView.digest_event(event_metadata, event_data)
     except ValidationError as e:
         logger.warning("ValidationError in digest_event", exc_info=e)
+    finally:
+        os.unlink(get_filename_for_event_id(event_id))
