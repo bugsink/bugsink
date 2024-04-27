@@ -38,21 +38,27 @@ class Command(BaseCommand):
 
         print("preparing data")
         prepared_data = {}
+        timings = {}
         for i_thread in range(options["threads"]):
             prepared_data[i_thread] = {}
             for i_request in range(options["requests"]):
-                prepared_data[i_thread][i_request] = self.prepare(data, options, i_thread, i_request, compress, use_envelope)
+                prepared_data[i_thread][i_request] = self.prepare(
+                    data, options, i_thread, i_request, compress, use_envelope)
+
+                timings[i_thread] = []
 
         print("sending data")
         for i in range(options["threads"]):
             t = threading.Thread(target=self.loop_send_to_server, args=(
-                dsn, options, use_envelope, compress, prepared_data[i]))
+                dsn, options, use_envelope, compress, prepared_data[i], timings[i]))
             t.start()
 
         print("waiting for threads to finish")
         for t in threading.enumerate():
             if t != threading.current_thread():
                 t.join()
+
+        self.print_stats(timings)
         print("done")
 
     def prepare(self, data, options, i_thread, i_request, compress, use_envelope):
@@ -63,6 +69,7 @@ class Command(BaseCommand):
 
             # If promted, we just update the timestamp to 'now' to be able to avoid any 'ignore old stuff'
             # filters (esp. on hosted sentry when we want to see anything over there)
+
             data["timestamp"] = time.time()
 
         if options["fresh_id"]:
@@ -93,9 +100,12 @@ class Command(BaseCommand):
         return compressed_data
 
     @staticmethod
-    def loop_send_to_server(dsn, options, use_envelope, compress, compressed_datas):
+    def loop_send_to_server(dsn, options, use_envelope, compress, compressed_datas, timings):
         for compressed_data in compressed_datas.values():
+            t0 = time.time()
             Command.send_to_server(dsn, options, use_envelope, compress, compressed_data)
+            taken = time.time() - t0
+            timings.append(taken)
 
     @staticmethod
     def send_to_server(dsn, options, use_envelope, compress, compressed_data):
@@ -136,3 +146,18 @@ class Command(BaseCommand):
         except Exception as e:
             print("Error %s, %s" % (e, getattr(getattr(e, 'response', None), 'content', None)))
             return False
+
+    @staticmethod
+    def print_stats(timings):
+        # flatten the dict of lists to a single list:
+        all_timings = [timing for sublist in timings.values() for timing in sublist]
+
+        # print the avg, mean, 90th, 95th and 99th percentiles
+        print("==============")
+        print("avg:   %.3fs" % (sum(all_timings) / len(all_timings)))
+        print("==============")
+        print("50th:  %.3fs" % sorted(all_timings)[len(all_timings) // 2])
+        print("75th:  %.3fs" % sorted(all_timings)[int(len(all_timings) * 0.75)])
+        print("90th:  %.3fs" % sorted(all_timings)[int(len(all_timings) * 0.9)])
+        print("95th:  %.3fs" % sorted(all_timings)[int(len(all_timings) * 0.95)])
+        print("99th:  %.3fs" % sorted(all_timings)[int(len(all_timings) * 0.99)])
