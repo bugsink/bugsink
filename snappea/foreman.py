@@ -84,12 +84,28 @@ class Foreman:
         pid = os.getpid()
 
         logger.info(" =========  SNAPPEA  =========")
-        logger.info("Startup: pid is %s", pid)
-        logger.info("Startup: DB-as-MQ location: %s", settings.DATABASES["snappea"]["NAME"])
-        logger.info("Startup: Wake up calls location: %s", self.settings.WAKEUP_CALLS_DIR)
+
+        # if the PID_FILE already exists, read it to see whether snappea is already running.
+        # this implementation is not supposed to be bullet-proof for race conditions (nor is it cross-platform)... it's
+        # just a small check to prevent the regularly occurring cases:
+        # * starting a second runsnappea in development
+        # * running bugsink twice on a single machine, but pointing snappea to its own set of dirs.
+        if os.path.exists(self.settings.PID_FILE):
+            with open(self.settings.PID_FILE, "r") as f:
+                old_pid = int(f.read())
+            if os.path.exists(f"/proc/{old_pid}"):
+                logger.error("Startup: snappea is already running with pid %s, EXIT", old_pid)
+                sys.exit(1)
+            else:
+                logger.warning("Startup: stale pid file found, removing %s", self.settings.PID_FILE)
+                os.remove(self.settings.PID_FILE)
 
         with open(self.settings.PID_FILE, "w") as f:
             f.write(str(pid))
+
+        logger.info("Startup: pid is %s", pid)
+        logger.info("Startup: DB-as-MQ location: %s", settings.DATABASES["snappea"]["NAME"])
+        logger.info("Startup: Wake up calls location: %s", self.settings.WAKEUP_CALLS_DIR)
 
         # Counts the number of "wake up" signals that have not been dealt with yet. The main loop goes to sleep when
         # this is 0
@@ -265,6 +281,7 @@ class Foreman:
                         "Stopping: %s did not die in %.1fs, proceeding to kill",
                         short_id(task_id), self.settings.GRACEFUL_TIMEOUT)
 
-        logger.info("Stopping: EXIT")
+        os.remove(self.settings.PID_FILE)
 
+        logger.info("Stopping: EXIT")
         sys.exit()
