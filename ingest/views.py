@@ -274,11 +274,22 @@ class IngestEventAPIView(BaseIngestAPIView):
     def _post(self, request, project_pk=None):
         project = self.get_project(request, project_pk)
 
-        request_data = json.loads(
+        # This endpoint is deprecated. Personally, I think it's the simpler (and given my goals therefore better) of the
+        # two, but fighting windmills and all... given that it's deprecated, I'm not going to give it quite as much love
+        # (at least for now). In particular, "not DIGEST_IMMEDIATELY" is not implemented here. Interfaces between the
+        # internal methods quite changed a bit recently, and this one did not keep up. In particular: in our current set
+        # of interfaces we need an event_id before parsing (or after parsing but then we have double work). Easiest
+        # solution: just copy/paste from process_event(), and take only one branch.
+        now = datetime.now(timezone.utc)
+
+        event_metadata = self.get_event_meta(now, request, project)
+
+        # if get_settings().DIGEST_IMMEDIATELY:  this is the only branch we implemented here.
+        event_data = json.loads(
             MaxDataReader("MAX_EVENT_SIZE", content_encoding_reader(
                 MaxDataReader("MAX_EVENT_COMPRESSED_SIZE", request))).read())
 
-        self.process_event(request_data, project, request)
+        self.digest_event(event_metadata, event_data, project=project)
 
         return HttpResponse()
 
