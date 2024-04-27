@@ -192,6 +192,12 @@ DEBUG_TOOLBAR_CONFIG = {
 
 
 LOGGING = deepcopy(DEFAULT_LOGGING)
+
+# Django's standard logging has LOGGING['handlers']['console']['filters'] = ['require_debug_true']; our app is
+# configured (by default at least) to just spit everything on stdout, even in production. stdout is picked up by
+# gunicorn, and we can "take it from there".
+LOGGING['handlers']['console']['filters'] = []
+
 LOGGING['loggers']['bugsink'] = {
     "level": "INFO",
     "handlers": ["console"],
