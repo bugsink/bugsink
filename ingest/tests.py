@@ -18,6 +18,7 @@ from events.factories import create_event_data
 from issues.factories import get_or_create_issue
 from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
 from bugsink.registry import reset_pc_registry
+from bugsink.app_settings import override_settings
 from compat.timestamp import format_timestamp
 from compat.dsn import get_header_value
 from ingest.management.commands.send_json import Command as SendJsonCommand
@@ -283,6 +284,10 @@ class IngestViewTestCase(TransactionTestCase):
             )
             self.assertEquals(
                 200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+    def test_envelope_endpoint_digest_non_immediate(self):
+        with override_settings(DIGEST_IMMEDIATELY=False):
+            self.test_envelope_endpoint()
 
 
 class TestParser(RegularTestCase):

@@ -256,7 +256,7 @@ EMAIL_USE_TLS = True
 SERVER_EMAIL = DEFAULT_FROM_EMAIL = 'Klaas van Schelven <klaas@vanschelven.com>'
 
 BUGSINK = {
-    "DIGEST_IMMEDIATELY": True,
+    "DIGEST_IMMEDIATELY": False,
 
     # "MAX_EVENT_SIZE": _MEBIBYTE,
     # "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,

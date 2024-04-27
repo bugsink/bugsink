@@ -1,7 +1,10 @@
 # approach as in snappea/settings.py
 # alternative would be: just put "everything" in the big settings.py (or some mix-using-imports version of that).
 # but for now I like the idea of keeping the bugsink-as-an-app stuff separate from the regular Django/db/global stuff.
+from contextlib import contextmanager
+
 from django.conf import settings
+
 
 _KIBIBYTE = 1024
 _MEBIBYTE = 1024 * _KIBIBYTE
@@ -37,3 +40,16 @@ def get_settings():
         _settings.update(getattr(settings, "BUGSINK", {}))
 
     return _settings
+
+
+@contextmanager
+def override_settings(**new_settings):
+    global _settings
+    old_settings = _settings
+    _settings = AttrLikeDict()
+    _settings.update(old_settings)
+    for k in new_settings:
+        assert k in old_settings, "Unknown setting (likely error in tests): %s" % k
+    _settings.update(new_settings)
+    yield
+    _settings = old_settings
