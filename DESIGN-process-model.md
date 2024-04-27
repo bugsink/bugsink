@@ -29,6 +29,7 @@ Main drawback: tie-in to Linux.
 
 However, the model of "just writing some unique file" is very simple to understand.
 And the division of labor regarding these files is also simple (the clients just put files there, the snappeaserver just cleans)
+And it's a nicely decoupled model too: if either server or client is temporarily gone, the messages are not lost/blocking ("postbox model")
 And it provides a potential path forward if we ever want to put everything (the messages themselves) in those files.
 
 * signals: abandoned, e.g. https://github.com/python/cpython/issues/118143 for the reason
