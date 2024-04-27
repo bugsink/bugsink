@@ -1,4 +1,8 @@
+from glob import glob
+import json
 import io
+import uuid
+import time
 
 import datetime
 from unittest.mock import patch
@@ -15,6 +19,8 @@ from issues.factories import get_or_create_issue
 from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
 from bugsink.registry import reset_pc_registry
 from compat.timestamp import format_timestamp
+from compat.dsn import get_header_value
+from ingest.management.commands.send_json import Command as SendJsonCommand
 
 from .views import BaseIngestAPIView
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
@@ -238,6 +244,45 @@ class IngestViewTestCase(TransactionTestCase):
 
         self.assertEquals(1, Issue.objects.count())
         self.assertEquals("1.0\n", Issue.objects.get().events_at)
+
+    def test_envelope_endpoint(self):
+        # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        # first, we ingest many issues
+        command = SendJsonCommand()
+        command.stdout = io.StringIO()
+        command.stderr = io.StringIO()
+
+        for filename in glob("./ingest/samples/*/*.json")[:1]:  # one is enough here
+            with open(filename) as f:
+                data = json.loads(f.read())
+
+            data["event_id"] = uuid.uuid4().hex
+
+            if "timestamp" not in data:
+                # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
+                data["timestamp"] = time.time()
+
+            if not command.is_valid(data, filename):
+                continue
+
+            data_bytes = json.dumps(data).encode("utf-8")
+            data_bytes = (b'{"event_id": "%s"}\n{"type": "event"}\n' % (data["event_id"]).encode("utf-8") + data_bytes)
+
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                    "X-BugSink-DebugInfo": filename,
+                },
+                data=data_bytes,
+            )
+            self.assertEquals(
+                200, response.status_code, response.content if response.status_code != 302 else response.url)
 
 
 class TestParser(RegularTestCase):
