@@ -12,6 +12,7 @@ from inotify_simple import INotify, flags
 from sentry_sdk import capture_exception
 
 from django.conf import settings
+from django.db import transaction
 
 from . import registry
 from .models import Task
@@ -196,7 +197,15 @@ class Foreman:
         # (we've put _some_ limit on the amount of tasks to get in a single query to avoid memory overflows when there
         # is a lot of work. the expected case is: when the snappeaserver has been gone for a while, and work has been
         # built up in the backlog; we want to at least be resilient for that case.)
-        tasks = Task.objects.all()[:self.settings.TASK_QS_LIMIT]
+        with transaction.atomic(durable=True):
+            # We wrap this read in a transaction to ensure that we get a 'fresh "snapshot" of the database file as it
+            # existed at the moment in time when the read transaction started.' Just to be sure, as per discussion here:
+            # https://sqlite.org/forum/forumpost/c65fb89666
+            # > To the best of my knowledge that should be OK, provided there is not a "left over" read transaction in
+            # > connection Y from before the write in connection X.
+            # (I introduced this transaction later, and before I did I did not notice any problems, presumably because
+            # when in autocommit mode you get fresh transactions per query...)
+            tasks = Task.objects.all()[:self.settings.TASK_QS_LIMIT]
 
         task_i = -1
         for task_i, task in enumerate(tasks):
