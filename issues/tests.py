@@ -431,7 +431,7 @@ class MuteUnmuteTestCase(TransactionTestCase):
         self.assertEquals(1, send_unmute_alert.delay.call_count)
 
 
-class ViewTests(DjangoTestCase):
+class ViewTests(TransactionTestCase):
     # we start with minimal "does this show something and not fully crash" tests and will expand from there.
 
     def setUp(self):
@@ -469,7 +469,7 @@ class ViewTests(DjangoTestCase):
 
 
 @tag("integration")
-class IntegrationTest(DjangoTestCase):
+class IntegrationTest(TransactionTestCase):
     def test_many_issues_ingest_and_show(self):
         user = User.objects.create_user(username='test', password='test')
         project = Project.objects.create(name="test")

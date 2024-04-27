@@ -2,13 +2,12 @@ from functools import wraps
 
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
 
 from projects.models import Project
 from issues.models import Issue
 from events.models import Event
 
-from .transaction import immediate_atomic
+from .transaction import durable_atomic, immediate_atomic
 
 
 def login_exempt(view):
@@ -107,7 +106,7 @@ def atomic_for_request_method(function, *decorator_args, **decorator_kwargs):
             with immediate_atomic(*decorator_args, **decorator_kwargs):
                 return function(request, *args, **kwargs)
 
-        with transaction.atomic(*decorator_args, **decorator_kwargs):
+        with durable_atomic(*decorator_args, **decorator_kwargs):
             return function(request, *args, **kwargs)
 
     return wrapper

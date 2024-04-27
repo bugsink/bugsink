@@ -1,6 +1,6 @@
 import datetime
 
-from django.test import TestCase as DjangoTestCase
+from django.test import TestCase as DjangoTestCase, TransactionTestCase
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.utils import timezone
@@ -12,7 +12,7 @@ from issues.factories import denormalized_issue_fields
 from .factories import create_event
 
 
-class ViewTests(DjangoTestCase):
+class ViewTests(TransactionTestCase):
     # we start with minimal "does this show something and not fully crash" tests and will expand from there.
 
     def setUp(self):

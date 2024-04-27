@@ -12,7 +12,8 @@ from inotify_simple import INotify, flags
 from sentry_sdk import capture_exception
 
 from django.conf import settings
-from django.db import transaction
+
+from bugsink.transaction import durable_atomic
 
 from . import registry
 from .models import Task
@@ -197,7 +198,7 @@ class Foreman:
         # (we've put _some_ limit on the amount of tasks to get in a single query to avoid memory overflows when there
         # is a lot of work. the expected case is: when the snappeaserver has been gone for a while, and work has been
         # built up in the backlog; we want to at least be resilient for that case.)
-        with transaction.atomic(durable=True):
+        with durable_atomic():
             # We wrap this read in a transaction to ensure that we get a 'fresh "snapshot" of the database file as it
             # existed at the moment in time when the read transaction started.' Just to be sure, as per discussion here:
             # https://sqlite.org/forum/forumpost/c65fb89666
@@ -229,7 +230,7 @@ class Foreman:
             self.check_for_stopping()  # check_for_stopping() right before taking on the work
 
             # notes on task.delete()  (mostly apply to task.delete in the except-statement above too)
-            # * autocommit is fine: we're the only ones touching this row in the DB
+            # * no explicit  transaction needed, autocommit is fine: we're the only ones touching this row in the DB
             # * delete-before-run is the implementation of our at-most-once guarantee
             task.delete()
             self.run_in_thread(task_id, function, *args, **kwargs)

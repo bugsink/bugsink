@@ -4,15 +4,16 @@ import json
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import Q
-from django.db import transaction
 from django.http import HttpResponseRedirect, HttpResponseNotAllowed
 from django.utils.safestring import mark_safe
 from django.template.defaultfilters import date
 from django.urls import reverse
 from django.core.exceptions import PermissionDenied
 
-from events.models import Event
 from bugsink.decorators import project_membership_required, issue_membership_required, atomic_for_request_method
+from bugsink.transaction import durable_atomic
+
+from events.models import Event
 from compat.timestamp import format_timestamp
 
 from .models import (
@@ -170,7 +171,7 @@ def issue_list(request, project_pk, state_filter="open"):
     # current action, I don't think this can lead to surprising results.
 
     project, unapplied_issue_ids = _issue_list_pt_1(request, project_pk=project_pk, state_filter=state_filter)
-    with transaction.atomic():
+    with durable_atomic():
         return _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids)
 
 
