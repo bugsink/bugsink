@@ -4,12 +4,23 @@ import sys
 
 from pathlib import Path
 
-import sentry_sdk
-from sentry_sdk.integrations.django import DjangoIntegration
-
 from django.utils.log import DEFAULT_LOGGING
 
 from debug_toolbar.middleware import show_toolbar
+
+
+# We have a single file for our default settings, and expect (if they use the recommended setup) the end-users to
+# configure their setup using a single bugsink_conf.py also. To be able to have (slightly) different settings for e.g.
+# logging for various commands, we expose a variable I_AM_RUNNING that can be used to determine what command is being
+# run. We use (potentially fragile) sys.argv checks to determine what command is being run. For now "it works, don't
+# fix it"
+if sys.argv[1:2] == ['runsnappea']:
+    I_AM_RUNNING = "SNAPPEA"
+elif sys.argv[1:2] == ['test']:
+    I_AM_RUNNING = "TEST"
+else:
+    I_AM_RUNNING = "OTHER"
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -18,8 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-$@clhhieazwnxnha-_zah&(bieq%yux7#^07&xsvhn58t)8@xw'
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ["*"]  # SECURITY WARNING: also make production-worthy
 
@@ -193,10 +203,11 @@ DEBUG_TOOLBAR_CONFIG = {
 
 LOGGING = deepcopy(DEFAULT_LOGGING)
 
-# Django's standard logging has LOGGING['handlers']['console']['filters'] = ['require_debug_true']; our app is
-# configured (by default at least) to just spit everything on stdout, even in production. stdout is picked up by
-# gunicorn, and we can "take it from there".
-LOGGING['handlers']['console']['filters'] = []
+if I_AM_RUNNING != "TEST":
+    # Django's standard logging has LOGGING['handlers']['console']['filters'] = ['require_debug_true']; our app is
+    # configured (by default at least) to just spit everything on stdout, even in production. stdout is picked up by
+    # gunicorn, and we can "take it from there".
+    LOGGING['handlers']['console']['filters'] = []
 
 LOGGING['loggers']['bugsink'] = {
     "level": "INFO",
@@ -210,7 +221,7 @@ LOGGING["formatters"]["snappea"] = {
 }
 
 LOGGING["handlers"]["snappea"] = {
-    "level": "DEBUG" if DEBUG else "INFO",
+    "level": "DEBUG" if DEBUG else "INFO",  # TODO this won't work either. but this I can do more classically (development.py)
     "class": "logging.StreamHandler"
 }
 
@@ -221,51 +232,9 @@ LOGGING['loggers']['snappea'] = {
     "handlers": ["snappea"],
 }
 
-# TODO sys.argv checking: how do I want to deal with it in my final config setup?
-if sys.argv[1:2] == ['runsnappea']:
+
+if I_AM_RUNNING == "SNAPPEA":
+    # We set all handlers to the snappea handler in this case: this way the things that are logged inside individual
+    # workers show up with the relevant worker-annotations (i.e. threadName).
     for logger in LOGGING['loggers'].values():
         logger["handlers"] = ["snappea"]
-
-
-# ###################### MOST PER-SITE CONFIG BELOW THIS LINE ###################
-
-
-# {PROTOCOL}://{PUBLIC_KEY}:{DEPRECATED_SECRET_KEY}@{HOST}{PATH}/{PROJECT_ID}
-SENTRY_DSN = os.getenv("SENTRY_DSN")
-
-
-if SENTRY_DSN is not None:
-    sentry_sdk.init(
-        dsn=SENTRY_DSN,
-        integrations=[DjangoIntegration()],
-        auto_session_tracking=False,
-        traces_sample_rate=0,
-        send_default_pii=True,
-    )
-
-SNAPPEA = {
-    "TASK_ALWAYS_EAGER": True,
-    "NUM_WORKERS": 1,
-}
-
-POSTMARK_API_KEY = os.getenv('POSTMARK_API_KEY')
-
-EMAIL_HOST = 'smtp.postmarkapp.com'
-EMAIL_HOST_USER = POSTMARK_API_KEY
-EMAIL_HOST_PASSWORD = POSTMARK_API_KEY
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-
-SERVER_EMAIL = DEFAULT_FROM_EMAIL = 'Klaas van Schelven <klaas@vanschelven.com>'
-
-BUGSINK = {
-    "DIGEST_IMMEDIATELY": False,
-
-    # "MAX_EVENT_SIZE": _MEBIBYTE,
-    # "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,
-    # "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
-    # "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
-
-    "BASE_URL": "http://bugsink:9000",  # no trailing slash
-    "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
-}
