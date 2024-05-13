@@ -24,7 +24,7 @@ def is_valid_semver(full_version):
         return False
 
 
-def sort_key(release):
+def release_sort_key(release):
     return (
         release.sort_epoch,
         Version.parse(release.semver) if release.is_semver else release.date_released
@@ -35,7 +35,7 @@ def ordered_releases(*filter_args, **filter_kwargs):
     """Python-based sorting of Release objects (to facilitate semver-based sorting when applicable)"""
     releases = Release.objects.filter(*filter_args, **filter_kwargs)
 
-    return sorted(releases, key=sort_key)
+    return sorted(releases, key=release_sort_key)
 
 
 class Release(models.Model):
