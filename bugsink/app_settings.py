@@ -11,6 +11,9 @@ _MEBIBYTE = 1024 * _KIBIBYTE
 
 
 DEFAULTS = {
+    "BASE_URL": "http://bugsink:9000",  # no trailing slash
+    "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
+
     "DIGEST_IMMEDIATELY": True,
 
     # MAX* below mirror the (current) values for the Sentry Relax

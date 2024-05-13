@@ -4,6 +4,8 @@ from django.db import models
 from django.conf import settings
 from django.utils.text import slugify
 
+from bugsink.app_settings import get_settings
+
 from compat.dsn import build_dsn
 
 
@@ -39,7 +41,7 @@ class Project(models.Model):
 
     @property
     def dsn(self):
-        return build_dsn(settings.BASE_URL, self.id, self.sentry_key)
+        return build_dsn(get_settings().BASE_URL, self.id, self.sentry_key)
 
     """
     # TODO is this even more efficient?

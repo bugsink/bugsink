@@ -243,9 +243,6 @@ if SENTRY_DSN is not None:
         send_default_pii=True,
     )
 
-BASE_URL = "http://bugsink:9000"  # no trailing slash
-SITE_TITLE = "Bugsink"  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
-
 SNAPPEA = {
     "TASK_ALWAYS_EAGER": True,
     "NUM_WORKERS": 1,
@@ -268,4 +265,7 @@ BUGSINK = {
     # "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,
     # "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
     # "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
+
+    "BASE_URL": "http://bugsink:9000",  # no trailing slash
+    "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 }

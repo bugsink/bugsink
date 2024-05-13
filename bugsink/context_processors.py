@@ -1,9 +1,9 @@
-from django.conf import settings
+from bugsink.app_settings import get_settings
 
 
 def useful_settings_processor(request):
     return {
-        'site_title': settings.SITE_TITLE,
+        'site_title': get_settings().SITE_TITLE,
     }
 
 

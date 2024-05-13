@@ -1,9 +1,9 @@
 from snappea.decorators import shared_task
 
-from django.conf import settings
 from django.template.defaultfilters import truncatechars
 
 from projects.models import ProjectMembership
+from bugsink.app_settings import get_settings
 
 from .utils import send_rendered_email
 
@@ -38,15 +38,15 @@ def _send_alert(issue_id, state_description, alert_article, alert_reason, **kwar
             base_template_name="alerts/issue_alert",
             recipient_list=[membership.user.email],
             context={
-                "site_title": settings.SITE_TITLE,
-                "base_url": settings.BASE_URL + "/",
+                "site_title": get_settings().SITE_TITLE,
+                "base_url": get_settings().BASE_URL + "/",
                 "issue_title": issue.title(),
                 "project_name": issue.project.name,
-                "issue_url": settings.BASE_URL + issue.get_absolute_url(),
+                "issue_url": get_settings().BASE_URL + issue.get_absolute_url(),
                 "state_description": state_description,
                 "alert_article": alert_article,
                 "alert_reason": alert_reason,
-                "settings_url": settings.BASE_URL + "/",  # TODO
+                "settings_url": get_settings().BASE_URL + "/",  # TODO
                 **kwargs,
             },
         )

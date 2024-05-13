@@ -6,10 +6,11 @@ from django.contrib.auth import views as auth_views
 
 from .views import home, trigger_error, favicon
 from alerts.views import debug_email
+from bugsink.app_settings import get_settings
 
 
-admin.site.site_header = settings.SITE_TITLE
-admin.site.site_title = settings.SITE_TITLE
+admin.site.site_header = get_settings().SITE_TITLE
+admin.site.site_title = get_settings().SITE_TITLE
 admin.site.index_title = "Admin"  # everyone calls this the "admin" anyway. Let's set the title accordingly.
 
 
