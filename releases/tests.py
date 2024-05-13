@@ -12,7 +12,10 @@ class ReleaseTestCase(DjangoTestCase):
         self.assertEquals(0, r0.sort_epoch)
 
         # still using hash; stay at epoch 0
-        # the timedelta avoids tests breaking when fast & checks dates are ignored when comparing against semver
+        # the timedelta has 2 purposes:
+        # * when the tests are very fast, it ensures that r0 and r1 are not created at the same time (as it would be in
+        #   real usage too)
+        # * it ensures that dates are ignored when comparing r1 and r2 (r2 has a smaller date than r1, but comes later)
         r1 = Release.objects.create(
             version="2a678dbbbecd2978ccaa76c326a0fb2e70073582",
             date_released=r0.date_released + timedelta(seconds=10),
