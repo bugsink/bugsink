@@ -1,0 +1,8 @@
+#!/bin/sh
+
+files=`git diff --cached --name-status`
+
+. bin/activate
+python manage.py tailwind build
+
+git add theme/static/css/dist/styles.css
