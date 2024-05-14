@@ -36,3 +36,6 @@ snappea.sqlite3-wal
 # node (tailwind)
 node_modules
 /package*
+
+# conf
+bugsink_conf.py

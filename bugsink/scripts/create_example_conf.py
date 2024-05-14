@@ -17,7 +17,7 @@ def main():
     secret_key = get_random_secret_key()
 
     with open(args.output_file, "w") as f:
-        f.write('''# auto-generated example bugsink_conf.py
+        f.write('''from bugsink.settings.default import *  # noqa
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = "''' + secret_key + '''"
@@ -25,7 +25,18 @@ SECRET_KEY = "''' + secret_key + '''"
 # Alternatively, pass the SECRET_KEY as an environment variable. (although that has security implications too!)
 # i.e. those may leak in shared server setups.
 #
-# SECRET_KEY = os.getenv("SECRET_KEY")
+# SECRET_KEY = os.environ["SECRET_KEY"]  # use dictionary lookup rather than .getenv to ensure the variable is set.
+
+
+ALLOWED_HOSTS = ["bugsink.example.org"]  # set this to match your host (TODO: check what happens in forwarded configs?)
+
+
+# TODO refer to database documentation and provide instructions for overrides.
+
+
+# The time-zone here is the default for display purposes (when no project/user configuration is used).
+# https://docs.djangoproject.com/en/4.2/ref/settings/#std-setting-TIME_ZONE
+TIME_ZONE = 'Europe/Amsterdam'
 
 
 # See TODO in the docs
@@ -55,8 +66,10 @@ BUGSINK = {
     # "BASE_URL": "http://bugsink:9000",  # no trailing slash
     # "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 }
-
 ''')
+
+    print("Configuration file created at", args.output_file)
+    print("Edit this file to match your setup")
 
 
 # some thoughts that I haven't been able to squish into a short comment yet:
@@ -81,3 +94,6 @@ BUGSINK = {
 # 3. regarding the sensitivity of this key, and storing it in the file system: I'd argue that if the server you're
 # running bugsink on is compromised (and the file can be read) you have bigger problems (since the DB is also on that
 # server)
+
+if __name__ == "__main__":
+    main()

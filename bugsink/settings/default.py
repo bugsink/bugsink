@@ -6,8 +6,6 @@ from pathlib import Path
 
 from django.utils.log import DEFAULT_LOGGING
 
-from debug_toolbar.middleware import show_toolbar
-
 
 # We have a single file for our default settings, and expect (if they use the recommended setup) the end-users to
 # configure their setup using a single bugsink_conf.py also. To be able to have (slightly) different settings for e.g.
@@ -23,22 +21,18 @@ else:
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-$@clhhieazwnxnha-_zah&(bieq%yux7#^07&xsvhn58t)8@xw'
+# To allow using this file without any bugsink_conf.py overrides, we get some variables from the environment. Because
+# the expected use-case of this file is using the `from bugsink.settings.default import *` idiom, which implies that
+# variables may very well be defined explicitly in a bugsink_conf.py or similar explicit settings file, we cannot
+# enforce the existance of environment variables, so we always use os.getenv with a sane fallback.
+
+# The fallback here is such that Django will fail to start if no SECRET_KEY is (eventually) defined, which is the goal.
+SECRET_KEY = os.getenv("SECRET_KEY", "")
 
 DEBUG = False
-
-ALLOWED_HOSTS = ["*"]  # SECURITY WARNING: also make production-worthy
-
-INTERNAL_IPS = [
-    "127.0.0.1",
-]
-
-
-# Application definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -48,10 +42,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    'debug_toolbar',
-    'tailwind',
+    'tailwind',  # As currently set up, this is also needed in production (templatetags)
     'theme',
-    'admin_auto_filters',
+    'admin_auto_filters',  # TODO: decide whether 'admin.py' is useful in production too.
 
     'snappea',
     'compat',
@@ -68,8 +61,6 @@ INSTALLED_APPS = [
 TAILWIND_APP_NAME = 'theme'
 
 MIDDLEWARE = [
-    "debug_toolbar.middleware.DebugToolbarMiddleware",
-
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -81,7 +72,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
-    'bugsink.middleware.PerformanceStatsMiddleware',
+    'bugsink.middleware.PerformanceStatsMiddleware',  # TODO decide whether this is useful in production too.
 ]
 
 ROOT_URLCONF = 'bugsink.urls'
@@ -113,7 +104,6 @@ WSGI_APPLICATION = 'bugsink.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -121,7 +111,7 @@ DATABASES = {
         'TEST': {
             # Specifying a NAME here makes it so that sqlite doesn't run in-memory. This is what we want, because we
             # want our tests to be as similar to the real thing as possible.
-            "NAME": BASE_DIR / os.getenv("DATABASE_NAME", 'test.sqlite3'),
+            "NAME": BASE_DIR / os.getenv("TEST_DATABASE_NAME", 'test.sqlite3'),
         },
         'OPTIONS': {
             # the "timeout" option here is passed to the Python sqlite3.connect() translates into the busy_timeout
@@ -132,7 +122,7 @@ DATABASES = {
     },
     "snappea": {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / os.getenv("DATABASE_NAME", 'snappea.sqlite3'),
+        'NAME': BASE_DIR / os.getenv("SNAPPEA_DATABASE_NAME", 'snappea.sqlite3'),
         # 'TEST': {  postponed, for starters we'll do something like SNAPPEA_ALWAYS_EAGER
         'OPTIONS': {
             'timeout': 5,
@@ -148,7 +138,6 @@ LOGIN_REDIRECT_URL = "/"
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -166,7 +155,6 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
-
 LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'Europe/Amsterdam'
@@ -178,7 +166,6 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
-
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [
     BASE_DIR / "static",
@@ -190,23 +177,13 @@ STATICFILES_DIRS = [
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-def show_toolbar_for_queryparam(request):
-    if "__debug__" not in request.path and not request.GET.get("debug", ""):
-        return False
-    return show_toolbar(request)
-
-
-DEBUG_TOOLBAR_CONFIG = {
-    "SHOW_TOOLBAR_CALLBACK": show_toolbar_for_queryparam,
-}
-
-
 LOGGING = deepcopy(DEFAULT_LOGGING)
 
 if I_AM_RUNNING != "TEST":
     # Django's standard logging has LOGGING['handlers']['console']['filters'] = ['require_debug_true']; our app is
-    # configured (by default at least) to just spit everything on stdout, even in production. stdout is picked up by
-    # gunicorn, and we can "take it from there".
+    # configured (by default at least) to just spit everything on stdout, especially in production. stdout is picked up
+    # by e.g. gunicorn, and we can "take it from there". We don't do this when running tests, because tests are run with
+    # DEBUG=False and we don't want the visual pollution.
     LOGGING['handlers']['console']['filters'] = []
 
 LOGGING['loggers']['bugsink'] = {
@@ -221,14 +198,14 @@ LOGGING["formatters"]["snappea"] = {
 }
 
 LOGGING["handlers"]["snappea"] = {
-    "level": "DEBUG" if DEBUG else "INFO",  # TODO this won't work either. but this I can do more classically (development.py)
+    "level": "INFO",
     "class": "logging.StreamHandler"
 }
 
 LOGGING["handlers"]["snappea"]["formatter"] = "snappea"
 
 LOGGING['loggers']['snappea'] = {
-    "level": "DEBUG" if DEBUG else "INFO",
+    "level": "INFO",
     "handlers": ["snappea"],
 }
 
