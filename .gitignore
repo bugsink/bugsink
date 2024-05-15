@@ -2,32 +2,36 @@
 *.pyc
 __pycache__
 
-# Virtual Environments
-.env
-.venv
-bin/
-include/
-lib/
-lib64
-pyvenv.cfg
-share/
+# Virtual Environments / build
+/.env
+/.venv
+/bin/
+/include/
+/lib/
+/lib64
+/pyvenv.cfg
+/share/
+/Bugsink.egg-info/
+/bugsink/_version.py
+/dist/
+
 
 # sqlite
-db.sqlite3
-db.*.sqlite3
-test.sqlite3
+/db.sqlite3
+/db.*.sqlite3
+/test.sqlite3
 
-db.sqlite3-wal
-db.*.sqlite3-wal
-test.sqlite3-wal
+/db.sqlite3-wal
+/db.*.sqlite3-wal
+/test.sqlite3-wal
 
-db.sqlite3-shm
-db.*.sqlite3-shm
-test.sqlite3-shm
+/db.sqlite3-shm
+/db.*.sqlite3-shm
+/test.sqlite3-shm
 
-snappea.sqlite3
-snappea.sqlite3-shm
-snappea.sqlite3-wal
+/snappea.sqlite3
+/snappea.sqlite3-shm
+/snappea.sqlite3-wal
 
 # vim
 *.swo
@@ -38,4 +42,4 @@ node_modules
 /package*
 
 # conf
-bugsink_conf.py
+/bugsink_conf.py

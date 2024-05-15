@@ -7,6 +7,7 @@ django-admin-autocomplete-filter==0.7.*
 pygments==2.16.*
 inotify_simple
 brotli
+python-dateutil
 
 # testing/development only:
 requests
