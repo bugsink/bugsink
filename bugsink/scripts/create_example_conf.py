@@ -31,7 +31,12 @@ SECRET_KEY = "''' + secret_key + '''"
 ALLOWED_HOSTS = ["bugsink.example.org"]  # set this to match your host (TODO: check what happens in forwarded configs?)
 
 
-# TODO refer to database documentation and provide instructions for overrides.
+# Configure the paths to the database. If you do not set these, the databases will be created in the current directory.
+# (being explicit about a full path is _strongly_ recommended)
+
+# DATABASES["default"]["NAME"] = 'db.sqlite3'
+# DATABASES["default"]["TEST"]["NAME"] = 'test.sqlite3'
+# DATABASES["snappea"]["NAME"] = 'snappea.sqlite3'
 
 
 # The time-zone here is the default for display purposes (when no project/user configuration is used).

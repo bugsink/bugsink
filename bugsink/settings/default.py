@@ -107,11 +107,11 @@ WSGI_APPLICATION = 'bugsink.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / os.getenv("DATABASE_NAME", 'db.sqlite3'),
+        'NAME': os.getenv("DATABASE_PATH", 'db.sqlite3'),
         'TEST': {
             # Specifying a NAME here makes it so that sqlite doesn't run in-memory. This is what we want, because we
             # want our tests to be as similar to the real thing as possible.
-            "NAME": BASE_DIR / os.getenv("TEST_DATABASE_NAME", 'test.sqlite3'),
+            "NAME": os.getenv("TEST_DATABASE_PATH", 'test.sqlite3'),
         },
         'OPTIONS': {
             # the "timeout" option here is passed to the Python sqlite3.connect() translates into the busy_timeout
@@ -122,7 +122,7 @@ DATABASES = {
     },
     "snappea": {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / os.getenv("SNAPPEA_DATABASE_NAME", 'snappea.sqlite3'),
+        'NAME': os.getenv("SNAPPEA_DATABASE_PATH", 'snappea.sqlite3'),
         # 'TEST': {  postponed, for starters we'll do something like SNAPPEA_ALWAYS_EAGER
         'OPTIONS': {
             'timeout': 5,

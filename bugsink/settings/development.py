@@ -1,5 +1,5 @@
 from .default import *  # noqa
-from .default import INSTALLED_APPS, MIDDLEWARE, LOGGING
+from .default import BASE_DIR, INSTALLED_APPS, MIDDLEWARE, LOGGING, DATABASES
 
 import os
 
@@ -40,6 +40,17 @@ def show_toolbar_for_queryparam(request):
 DEBUG_TOOLBAR_CONFIG = {
     "SHOW_TOOLBAR_CALLBACK": show_toolbar_for_queryparam,
 }
+
+
+# In development, we just keep the databases inside the root directory of the source-code. In production this is "not
+# recommended" (very foolish): this path maps to the virualenv's root directory, which is not a good place to store
+# databases.
+DATABASES["default"]["NAME"] = BASE_DIR / 'db.sqlite3'
+DATABASES["default"]["TEST"]["NAME"] = BASE_DIR / 'test.sqlite3'
+DATABASES["snappea"]["NAME"] = BASE_DIR / 'snappea.sqlite3'
+
+# {  postponed, for starters we'll do something like SNAPPEA_ALWAYS_EAGER
+# DATABASES["snappea"]["TEST"]["NAME"] = BASE_DIR / 'test.snappea.sqlite3'
 
 
 # {PROTOCOL}://{PUBLIC_KEY}:{DEPRECATED_SECRET_KEY}@{HOST}{PATH}/{PROJECT_ID}
