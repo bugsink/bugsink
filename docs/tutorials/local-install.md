@@ -89,7 +89,7 @@ bugsink-manage migrate
 ```
 
 This will create a new SQLite database in the current directory and set up the
-necessary tables. You may verify the presence of the databse by running
+necessary tables. You may verify the presence of the database by running
 
 ```bash
 ls db.sqlite3
