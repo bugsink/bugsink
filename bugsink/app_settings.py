@@ -11,7 +11,7 @@ _MEBIBYTE = 1024 * _KIBIBYTE
 
 
 DEFAULTS = {
-    "BASE_URL": "http://bugsink:9000",  # no trailing slash
+    "BASE_URL": "http://127.0.0.1:9000",  # no trailing slash
     "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 
     "DIGEST_IMMEDIATELY": True,

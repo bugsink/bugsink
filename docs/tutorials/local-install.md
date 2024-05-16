@@ -52,7 +52,7 @@ in your shell prompt.
 You can install Bugsink using `pip`:
 
 ```bash
-pip install bugsink
+python -m pip install bugsink
 ```
 
 You should see output indicating that Bugsink and its dependencies are being
@@ -71,7 +71,7 @@ You can create a configuration file that's suitable for local development by
 running:
 
 ```bash
-bugsink-create-conf --local-development --port=9000
+bugsink-create-conf --template=local --port=9000
 ```
 
 This will create a file `bugsink_conf.py` in the current directory. You may
@@ -89,7 +89,11 @@ bugsink-manage migrate
 ```
 
 This will create a new SQLite database in the current directory and set up the
-necessary tables.
+necessary tables. You may verify the presence of the databse by running
+
+```bash
+ls db.sqlite3
+```
 
 ## Create a superuser
 

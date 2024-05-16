@@ -1,0 +1,64 @@
+# Generated using bugsink-create-conf --template=default
+
+from bugsink.settings.default import *  # noqa
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = "{{ secret_key }}"
+
+# Alternatively, pass the SECRET_KEY as an environment variable. (although that has security implications too, i.e.
+# those may leak in shared server setups)
+#
+# SECRET_KEY = os.environ["SECRET_KEY"]  # use dictionary lookup rather than .getenv to ensure the variable is set.
+
+
+# Replacing "*" with your actual hostname forms an extra layer of security if your proxy/webserver is misconfigured.
+# Doing so is recommended in production.
+ALLOWED_HOSTS = ["*"]
+
+
+# Configure the paths to the database. If you do not set these, the databases will be created in the current directory.
+# (in production, being explicit about a full path is _strongly_ recommended)
+
+# DATABASES["default"]["NAME"] = 'db.sqlite3'
+# DATABASES["default"]["TEST"]["NAME"] = 'test.sqlite3'
+# DATABASES["snappea"]["NAME"] = 'snappea.sqlite3'
+
+
+# The time-zone here is the default for display purposes (when no project/user configuration is used).
+# You can change this at any time since datetime information is stored as UTC in the database.
+# https://docs.djangoproject.com/en/4.2/ref/settings/#std-setting-TIME_ZONE
+TIME_ZONE = 'UTC'  # alternatively, e.g. 'Europe/Amsterdam'
+
+
+# See TODO in the docs
+SNAPPEA = {
+    "TASK_ALWAYS_EAGER": False,
+    "NUM_WORKERS": 1,
+}
+
+
+# See TODO in docs
+# 
+# EMAIL_HOST = ...
+# EMAIL_HOST_USER = ...
+# EMAIL_HOST_PASSWORD = ...
+# EMAIL_PORT = ...
+# EMAIL_USE_TLS = ...
+
+SERVER_EMAIL = DEFAULT_FROM_EMAIL = "Bugsink <bugsink@example.org>"
+
+BUGSINK = {
+    # The URL where the Bugsink instance is hosted. This is used in the email notifications and to construct DSNs.
+    "BASE_URL": "http://127.0.0.1:{{ port }}",  # no trailing slash
+
+    # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
+    # "SITE_TITLE": "Bugsink",  
+
+    # See TODO in the docs
+    # "DIGEST_IMMEDIATELY": False,
+
+    # "MAX_EVENT_SIZE": _MEBIBYTE,
+    # "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,
+    # "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
+    # "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
+}

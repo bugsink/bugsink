@@ -1,13 +1,17 @@
 import argparse
 import os
 import sys
+from pathlib import Path
 
 from django.core.management.utils import get_random_secret_key
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Create a configuration file for the example")
+    parser = argparse.ArgumentParser(description="Create a configuration file.")
     parser.add_argument("--output-file", "-o", help="Output file", default="bugsink_conf.py")
+    parser.add_argument(
+        "--template", help="Template to use; default or local", choices=["default", "local"], default="default")
+    parser.add_argument("--port", help="Port to use in SITE_TITLE ; default is 9000", type=int, default=9000)
     args = parser.parse_args()
 
     if os.path.exists(args.output_file):
@@ -15,63 +19,18 @@ def main():
         sys.exit(1)
 
     secret_key = get_random_secret_key()
+    port = str(args.port)
+
+    conf_template_dir = Path(__file__).resolve().parent.parent / "conf_templates"
+    with open(conf_template_dir / (args.template + ".py.template"), "r") as f:
+        template = f.read()
+
+    body = template.\
+        replace("{{ secret_key }}", secret_key). \
+        replace("{{ port }}", port)
 
     with open(args.output_file, "w") as f:
-        f.write('''from bugsink.settings.default import *  # noqa
-
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "''' + secret_key + '''"
-
-# Alternatively, pass the SECRET_KEY as an environment variable. (although that has security implications too!)
-# i.e. those may leak in shared server setups.
-#
-# SECRET_KEY = os.environ["SECRET_KEY"]  # use dictionary lookup rather than .getenv to ensure the variable is set.
-
-
-ALLOWED_HOSTS = ["bugsink.example.org"]  # set this to match your host (TODO: check what happens in forwarded configs?)
-
-
-# Configure the paths to the database. If you do not set these, the databases will be created in the current directory.
-# (being explicit about a full path is _strongly_ recommended)
-
-# DATABASES["default"]["NAME"] = 'db.sqlite3'
-# DATABASES["default"]["TEST"]["NAME"] = 'test.sqlite3'
-# DATABASES["snappea"]["NAME"] = 'snappea.sqlite3'
-
-
-# The time-zone here is the default for display purposes (when no project/user configuration is used).
-# https://docs.djangoproject.com/en/4.2/ref/settings/#std-setting-TIME_ZONE
-TIME_ZONE = 'Europe/Amsterdam'
-
-
-# See TODO in the docs
-SNAPPEA = {
-    "TASK_ALWAYS_EAGER": True,
-    "NUM_WORKERS": 1,
-}
-
-
-# EMAIL_HOST = ...
-# EMAIL_HOST_USER = ...
-# EMAIL_HOST_PASSWORD = ...
-# EMAIL_PORT = ...
-# EMAIL_USE_TLS = ...
-
-SERVER_EMAIL = DEFAULT_FROM_EMAIL = "Bugsink <bugsink@example.org>"
-
-BUGSINK = {
-    # See TODO in the docs
-    # "DIGEST_IMMEDIATELY": False,
-
-    # "MAX_EVENT_SIZE": _MEBIBYTE,
-    # "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,
-    # "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
-    # "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
-
-    # "BASE_URL": "http://bugsink:9000",  # no trailing slash
-    # "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
-}
-''')
+        f.write(body)
 
     print("Configuration file created at", args.output_file)
     print("Edit this file to match your setup")
