@@ -107,6 +107,23 @@ bugsink-manage createsuperuser
 
 This will create a new user account with administrative privileges.
 
+## Collect static files
+
+Bugsink uses static files for its web interface.
+
+You can collect the static files by running:
+
+```bash
+bugsink-manage collectstatic --noinput
+```
+
+You should see something like
+
+```
+123 static files copied to '/path/to/your/working/dir/collectedstatic'.
+```
+
+
 ## Run the Bugsink server
 
 The recommended way to run Bugsink is using Gunicorn, a WSGI server.
@@ -118,7 +135,7 @@ PYTHONUNBUFFERED=1 gunicorn --bind="127.0.0.1:9000" --access-logfile - --capture
 ```
 
 You should see output indicating that the server is running. You can now access Bugsink by visiting
-http://localhost:9000/ in your web browser.
+http://127.0.0.1:9000/ in your web browser.
 
 
 

@@ -8,6 +8,7 @@ pygments==2.16.*
 inotify_simple
 brotli
 python-dateutil
+whitenoise
 
 # testing/development only:
 requests
