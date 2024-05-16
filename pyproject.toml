@@ -20,6 +20,7 @@ classifiers = [
 dynamic = ["version", "dependencies"]
 
 [project.scripts]
+bugsink-show-version = "bugsink.scripts.show_version:main"
 bugsink-manage = "bugsink.scripts.manage:main"
 bugsink-create-example-conf = "bugsink.scripts.create_example_conf:main"
 
