@@ -39,6 +39,9 @@ class Project(models.Model):
     def __str__(self):
         return self.name
 
+    def get_absolute_url(self):
+        return f"/issues/{ self.id }/"
+
     @property
     def dsn(self):
         return build_dsn(get_settings().BASE_URL, self.id, self.sentry_key)
