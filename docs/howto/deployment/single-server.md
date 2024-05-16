@@ -23,7 +23,7 @@ need to substitute commands here and there.
 This guide assumes you know your way around the command line and have (root) `ssh` access to a fresh system with the
 single purpose of running Bugsink.
 
-## Python & pip
+## Python, pip and venv
 
 You can verify that Python and Pip are installed by running the following commands:
 
@@ -42,24 +42,7 @@ If either is not, install with
 ```bash
 apt update
 apt upgrade
-apt install python3 python3-pip
-```
-
-
-## Install Bugsink and its dependencies
-
-We install Bugsink and its dependencies straight into the system Python. (On a server that's used for more than Bugsink
-alone, you will likely want to use a virtual environment to avoid conflicts between different projects)
-
-```
-python3 -m pip install bugsink
-```
-
-This will install Bugsink and its dependencies. After the installation is complete, you can verify that Bugsink is
-installed by running:
-
-```bash
-bugsink-show-version
+apt install python3 python3-pip python3-venv -y
 ```
 
 ## Set up a non-root user
@@ -67,7 +50,7 @@ bugsink-show-version
 It's a good practice to use a non-root user to run the Bugsink server. You can create a new user by running (as root):
 
 ```bash
-adduser bugsink
+adduser bugsink --disabled-password --gecos ""
 ```
 
 You can then switch to the new user by running:
@@ -76,16 +59,48 @@ You can then switch to the new user by running:
 su - bugsink
 ```
 
-You should now be in `/home/bugsink`. This is where we'll put both the configuration for Bugsink and the database.
+You should now be in `/home/bugsink`. This is where we'll put Bugsink's codebase, the configuration for Bugsink and the
+database.
+
+## Set up a virtual environment and activate it
+
+It's a good practice to use a virtual environment to manage your Python
+dependencies. This way, you can avoid conflicts between different projects.
+
+Run the following commands to create a virtual environment and activate it:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+After running these commands, you should see the name of the virtual environment i.e. `(venv)` in your shell prompt.
+
+## Install Bugsink and its dependencies
+
+You can install Bugsink using `pip`:
+
+```bash
+python3 -m pip install Bugsink
+```
+
+You should see output indicating that Bugsink and its dependencies are being installed. After the installation is
+complete, you can verify that Bugsink is installed by running:
+
+```bash
+bugsink-show-version
+```
+
 
 ## Create configuration template
 
 Bugsink relies on a configuration file to determine how it should run.
 
-You can create a configuration file that's suitable for production by running:
+You can create a configuration file that's suitable for production by running the following command (replace `YOURHOST`
+with the hostname of your server):
 
 ```bash
-bugsink-create-conf --template=default
+bugsink-create-conf --template=recommended --host=YOURHOST
 ```
 
 This will create a file `bugsink_conf.py` in the current directory (which is, assuming you're following along, the
@@ -96,17 +111,13 @@ nano bugsink_conf.py
 ```
 
 The generated template matches the current guide, so in principle you will not need to change much. However, you'll
-probably will need to adjust at least:
+probably will need to check or adjust at least:
 
 * `BASE_URL` to match the URL where you want to access Bugsink
 * `SITE_NAME` to match the name of your site if you want to distinguish it from other Bugsink instances
 * `DEFAULT_FROM_EMAIL` to match the email address from which Bugsink will send emails
 * `EMAIL_HOST` and associated variables to match the SMTP server you want to use to send emails
 * `TIME_ZONE` to match your timezone (if you want to see times in your local timezone rather than UTC)
-
-TODO should there not be another template then? "recommended"
-TODO should contain `STATIC_ROOT` too
-
 
 ## Initialize the database
 
@@ -150,14 +161,17 @@ bugsink-manage collectstatic --noinput
 You should see something like
 
 ```
-123 static files copied to '/home/bugsink/collectedstatic/'
+123 static files copied to '/home/bugsink/venv/lib/python3.12/site-packages/collectedstatic/'
 ```
 
 
-## Set up Gunicorn
+## Set up Gunicorn (managed by Systemd)
 
-We will run Bugsink using Gunicorn, a WSGI server. Rather than running Gunicorn directly, we will use a systemd service
-to manage the process.
+We will run Bugsink using Gunicorn, a WSGI server.
+
+Gunicorn was already installed as part of the Bugsink dependencies, so we just need to run it.
+
+Rather than running Gunicorn directly, [we will use a systemd service to manage the process](https://docs.gunicorn.org/en/latest/deploy.html#systemd).
 
 Exit the `bugsink` user by running:
 
@@ -167,26 +181,84 @@ exit
 
 This should bring you back to the root user.
 
-Create a new file `/etc/systemd/system/bugsink.service` with the following contents:
+Create 2 files:
+
+`/etc/systemd/system/gunicorn.service` with the following contents:
 
 ```ini
-ACTUALLY READ THIS FROM TFM PLEASE
+[Unit]
+Description=gunicorn daemon
+Requires=gunicorn.socket
+After=network.target
 
+[Service]
+Type=notify
+User=bugsink
+Group=bugsink
 
+Environment="PYTHONUNBUFFERED=1"
+RuntimeDirectory=gunicorn
+WorkingDirectory=/home/bugsink
+ExecStart=/home/bugsink/venv/bin/gunicorn --access-logfile - --capture-output --error-logfile - bugsink.wsgi
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
 
-
-
-
+[Install]
+WantedBy=multi-user.target
 ```
 
+`/etc/systemd/system/gunicorn.socket` with the following contents:
 
+```
+[Unit]
+Description=gunicorn socket
+
+[Socket]
+ListenStream=/run/gunicorn.sock
+SocketUser=www-data
+
+[Install]
+WantedBy=sockets.target
+```
+
+Enable and start the socket (enabling means it will also start on boot):
 
 ```bash
-PYTHONUNBUFFERED=1 gunicorn --bind="127.0.0.1:9000" --access-logfile - --capture-output --error-logfile - bugsink.wsgi
+systemctl enable --now gunicorn.socket
 ```
 
-You should see output indicating that the server is running. You can now access Bugsink by visiting
-http://127.0.0.1:9000/ in your web browser.
+Inspect the status of gunicorn using
+
+```bash
+systemctl status gunicorn.service
+```
+
+To test whether gunicorn actually listens on the socket, and whether everything can be reached, use:
+
+```bash
+sudo -u www-data curl --unix-socket /run/gunicorn.sock http:/static/js/issue_list.js
+```
+
+TODO NO SUCCESS YET! 404
+
+TODO number of workers? as of yet unset?
+at least document it
+
+HIER GEBLEVEN:
+    let's point a A-record to this server.
+
+
+## Set up Nginx
+
+Install nginx
+
+```bash
+apt install nginx
+```
+
+TODO iets met DNS
 
 
 

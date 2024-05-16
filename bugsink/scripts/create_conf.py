@@ -11,7 +11,9 @@ def main():
     parser.add_argument("--output-file", "-o", help="Output file", default="bugsink_conf.py")
     parser.add_argument(
         "--template", help="Template to use; default or local", choices=["default", "local"], default="default")
+
     parser.add_argument("--port", help="Port to use in SITE_TITLE ; default is 9000", type=int, default=9000)
+    parser.add_argument("--host", help="Host to use in SITE_TITLE ; default is 127.0.0.1")
     args = parser.parse_args()
 
     if os.path.exists(args.output_file):
@@ -20,14 +22,16 @@ def main():
 
     secret_key = get_random_secret_key()
     port = str(args.port)
+    host = args.host
 
     conf_template_dir = Path(__file__).resolve().parent.parent / "conf_templates"
     with open(conf_template_dir / (args.template + ".py.template"), "r") as f:
         template = f.read()
 
     body = template.\
-        replace("{{ secret_key }}", secret_key). \
-        replace("{{ port }}", port)
+        replace("{{ secret_key }}", secret_key).\
+        replace("{{ port }}", port).\
+        replace("{{ host }}", host)
 
     with open(args.output_file, "w") as f:
         f.write(body)

@@ -1,3 +1,4 @@
+gunicorn
 Django==4.2.*
 sentry-sdk==1.32.*
 django-tailwind==3.6.*

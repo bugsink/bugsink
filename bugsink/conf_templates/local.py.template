@@ -48,7 +48,7 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 BUGSINK = {
     # The URL where the Bugsink instance is hosted. This is used in the email notifications and to construct DSNs.
-    "BASE_URL": "http://127.0.0.1:{{ port }}",  # no trailing slash
+    "BASE_URL": "http://{{ host }}:{{ port }}",  # no trailing slash
 
     # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
     # "SITE_TITLE": "Bugsink",  
