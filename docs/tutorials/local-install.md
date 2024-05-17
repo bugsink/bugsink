@@ -52,7 +52,7 @@ in your shell prompt.
 You can install Bugsink using `pip`:
 
 ```bash
-python -m pip install bugsink
+python -m pip install bugsink --upgrade
 ```
 
 You should see output indicating that Bugsink and its dependencies are being
