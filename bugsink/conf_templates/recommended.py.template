@@ -10,7 +10,12 @@ SECRET_KEY = "{{ secret_key }}"
 
 # Replacing "*" with your actual hostname forms an extra layer of security if your proxy/webserver is misconfigured.
 # Doing so is recommended in production.
-ALLOWED_HOSTS = ["hosted.bugsink.com"]
+ALLOWED_HOSTS = ["*"]
+
+# Note: the recommended setup uses a reverse proxy (i.e. Nginx) in front of the Django server. This is why we trust the
+# X-Forwarded-Proto and X-Forwarded-Host headers. If you do not use a reverse proxy, you should remove these settings.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
 
 
 # In the recommended setup, the database is SQLite. The single (unix) user is named `bugsink` and we put the database in

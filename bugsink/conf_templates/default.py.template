@@ -15,6 +15,10 @@ SECRET_KEY = "{{ secret_key }}"
 # Doing so is recommended in production.
 ALLOWED_HOSTS = ["*"]
 
+# Uncomment the 2 lines below if Bugsink is running behind a reverse proxy (and make sure the proxy is configured
+# correctly).
+# SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# USE_X_FORWARDED_HOST = True
 
 # Configure the paths to the database. If you do not set these, the databases will be created in the current directory.
 # (in production, being explicit about a full path is _strongly_ recommended)
