@@ -12,6 +12,7 @@ The components you'll set up are:
 * Python
 * Bugsink and its dependencies (including Gunicorn)
 * A reverse proxy (Nginx) to handle incoming HTTP requests
+* SSL certificates
 * Snappea, a background process to handle longer-running tasks
 
 Note that you will _not_ need to set up some of the "usual suspects" like a database server or a message broker. This is
