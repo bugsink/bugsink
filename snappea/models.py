@@ -19,7 +19,7 @@ def wakeup_server():
     wakeup_file = os.path.join(get_settings().WAKEUP_CALLS_DIR, thread_uuid)
 
     if not os.path.exists(get_settings().WAKEUP_CALLS_DIR):
-        os.mkdir(get_settings().WAKEUP_CALLS_DIR, exist_ok=True)
+        os.makedirs(get_settings().WAKEUP_CALLS_DIR, exist_ok=True)
 
     if not os.path.exists(wakeup_file):
         with open(wakeup_file, "w"):
