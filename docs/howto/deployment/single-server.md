@@ -372,6 +372,7 @@ server {
 }
 
 server {
+    server_name                     YOURHOST;
 
     location / {
         # The socket is created by the gunicorn.socket systemd service
