@@ -10,7 +10,7 @@ def main():
     parser = argparse.ArgumentParser(description="Create a configuration file.")
     parser.add_argument("--output-file", "-o", help="Output file", default="bugsink_conf.py")
     parser.add_argument(
-        "--template", help="Template to use; default or local", choices=["default", "local"], default="default")
+        "--template", help="Template to use; recommended or local", choices=["recommended", "local"])
 
     parser.add_argument("--port", help="Port to use in SITE_TITLE ; default is 9000", type=int, default=9000)
     parser.add_argument("--host", help="Host to use in SITE_TITLE ; default is 127.0.0.1")
