@@ -187,14 +187,13 @@ exit
 
 This should bring you back to the root user.
 
-Create 2 files:
+Create a file:
 
 `/etc/systemd/system/gunicorn.service` with the following contents:
 
 ```ini
 [Unit]
 Description=gunicorn daemon
-Requires=gunicorn.socket
 After=network.target
 
 [Service]
@@ -205,28 +204,13 @@ Group=bugsink
 Environment="PYTHONUNBUFFERED=1"
 RuntimeDirectory=gunicorn
 WorkingDirectory=/home/bugsink
-ExecStart=/home/bugsink/venv/bin/gunicorn --workers=5 --access-logfile - --capture-output --error-logfile - bugsink.wsgi
+ExecStart=/home/bugsink/venv/bin/gunicorn --bind="127.0.0.1:8000" --workers=5 --access-logfile - --capture-output --error-logfile - bugsink.wsgi
 ExecReload=/bin/kill -s HUP $MAINPID
 KillMode=mixed
 TimeoutStopSec=5
-PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
-```
-
-`/etc/systemd/system/gunicorn.socket` with the following contents:
-
-```
-[Unit]
-Description=gunicorn socket
-
-[Socket]
-ListenStream=/run/gunicorn.sock
-SocketUser=www-data
-
-[Install]
-WantedBy=sockets.target
 ```
 
 (In the example above we have set the number of workers to 5; a good starting point for this value in general is the
@@ -375,8 +359,8 @@ server {
     server_name                     YOURHOST;
 
     location / {
-        # The socket is created by the gunicorn.socket systemd service
-        proxy_pass                  http://unix:/run/gunicorn.sock;
+        # Pass the request to Gunicorn via proxy_pass.
+        proxy_pass                  http://127.0.0.1:8000;
 
         # Set the Host header to the original host.
         proxy_set_header            Host $host;
@@ -441,6 +425,7 @@ ExecStart=/home/bugsink/venv/bin/bugsink-manage runsnappea
 ExecReload=/bin/kill -s HUP $MAINPID
 KillMode=mixed
 TimeoutStopSec=5
+PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
