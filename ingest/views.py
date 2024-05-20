@@ -1,3 +1,4 @@
+import os
 import logging
 import io
 from datetime import datetime, timezone
@@ -320,6 +321,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
                 if "event_id" not in envelope_headers:
                     raise ParseError("event_id not found in envelope headers")
                 filename = get_filename_for_event_id(envelope_headers["event_id"])
+                os.makedirs(os.path.dirname(filename), exist_ok=True)
                 return MaxDataWriter("MAX_EVENT_SIZE", open(filename, 'wb'))
 
             # everything else can be discarded; (we don't check for individual size limits, because these differ

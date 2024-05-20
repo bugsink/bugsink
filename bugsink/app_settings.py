@@ -24,6 +24,9 @@ DEFAULTS = {
 
     # I don't think Sentry specifies this one, but we do: given the spec 8KiB should be enough by an order of magnitude.
     "MAX_HEADER_SIZE": 8 * _KIBIBYTE,
+
+    # Locations of files & directories:
+    "INGEST_STORE_BASE_DIR": "/tmp/bugsink/ingestion",
 }
 
 

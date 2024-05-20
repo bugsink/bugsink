@@ -67,7 +67,7 @@ if SENTRY_DSN is not None:
     )
 
 SNAPPEA = {
-    "TASK_ALWAYS_EAGER": True,
+    "TASK_ALWAYS_EAGER": False,
     "NUM_WORKERS": 1,
 }
 
