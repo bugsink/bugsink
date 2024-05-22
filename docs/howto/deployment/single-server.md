@@ -425,7 +425,6 @@ ExecStart=/home/bugsink/venv/bin/bugsink-manage runsnappea
 ExecReload=/bin/kill -s HUP $MAINPID
 KillMode=mixed
 TimeoutStopSec=5
-PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target

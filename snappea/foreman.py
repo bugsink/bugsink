@@ -89,7 +89,7 @@ class Foreman:
         # this implementation is not supposed to be bullet-proof for race conditions (nor is it cross-platform)... it's
         # just a small check to prevent the regularly occurring cases:
         # * starting a second runsnappea in development
-        # * running bugsink twice on a single machine, but pointing snappea to its own set of dirs.
+        # * running 2 separate instances of bugsink on a single machine without properly distinguishing them
         if os.path.exists(self.settings.PID_FILE):
             with open(self.settings.PID_FILE, "r") as f:
                 old_pid = int(f.read())
@@ -100,6 +100,7 @@ class Foreman:
                 logger.warning("Startup: stale pid file found, removing %s", self.settings.PID_FILE)
                 os.remove(self.settings.PID_FILE)
 
+        os.makedirs(os.path.dirname(self.settings.PID_FILE), exist_ok=True)
         with open(self.settings.PID_FILE, "w") as f:
             f.write(str(pid))
 

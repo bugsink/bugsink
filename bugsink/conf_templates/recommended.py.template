@@ -35,6 +35,19 @@ TIME_ZONE = 'UTC'  # alternatively, e.g. 'Europe/Amsterdam'
 SNAPPEA = {
     "TASK_ALWAYS_EAGER": False,
     "NUM_WORKERS": 4,
+
+    "PID_FILE": "/home/bugsink/snappea/snappea.pid",
+    "WAKEUP_CALLS_DIR": "/home/bugsink/snappea/wakeup",
+}
+
+
+DEFAULTS = {
+
+    "NUM_WORKERS": 4,
+    "GRACEFUL_TIMEOUT": 10,
+
+    "TASK_QS_LIMIT": 100,
+
 }
 
 
