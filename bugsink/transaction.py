@@ -109,7 +109,7 @@ class ImmediateAtomic(SuperDurableAtomic):
         self.t0 = time.time()
         super(ImmediateAtomic, self).__enter__()
         took = (time.time() - self.t0) * 1_000
-        performance_logger.info(f"{took:6.2f}ms BEGIN IMMEDIATE, A.K.A. get-write-lock'")
+        performance_logger.info(f"{took:6.2f}ms BEGIN IMMEDIATE, A.K.A. get-write-lock")
         self.t0 = time.time()
 
     def __exit__(self, exc_type, exc_value, traceback):
