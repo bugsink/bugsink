@@ -358,6 +358,9 @@ server {
 server {
     server_name                     YOURHOST;
 
+    # this matches the default configuration for MAX_ENVELOPE_COMPRESSED_SIZE. Note that Nginx's "M" means MiB.
+    client_max_body_size 20M;
+
     location / {
         # Pass the request to Gunicorn via proxy_pass.
         proxy_pass                  http://127.0.0.1:8000;
