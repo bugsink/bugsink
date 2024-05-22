@@ -197,6 +197,7 @@ Description=gunicorn daemon
 After=network.target
 
 [Service]
+Restart=always
 Type=notify
 User=bugsink
 Group=bugsink
@@ -205,7 +206,6 @@ Environment="PYTHONUNBUFFERED=1"
 RuntimeDirectory=gunicorn
 WorkingDirectory=/home/bugsink
 ExecStart=/home/bugsink/venv/bin/gunicorn --bind="127.0.0.1:8000" --workers=5 --access-logfile - --capture-output --error-logfile - --max-requests=1000 --max-requests-jitter=100 bugsink.wsgi
-ExecReload=/bin/kill -s HUP $MAINPID
 KillMode=mixed
 TimeoutStopSec=5
 
@@ -410,20 +410,22 @@ We will set up Snappea to run as a systemd service.
 
 Add a file `/etc/systemd/system/snappea.service` with the following contents:
 
-```
+```ini
 [Unit]
 Description=snappea daemon
 
 [Service]
+Restart=always
 User=bugsink
 Group=bugsink
 
 Environment="PYTHONUNBUFFERED=1"
+RuntimeDirectory=gunicorn
 WorkingDirectory=/home/bugsink
 ExecStart=/home/bugsink/venv/bin/bugsink-runsnappea
-ExecReload=/bin/kill -s HUP $MAINPID
 KillMode=mixed
 TimeoutStopSec=5
+RuntimeMaxSec=1d
 
 [Install]
 WantedBy=multi-user.target
