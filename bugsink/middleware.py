@@ -48,8 +48,7 @@ class PerformanceStatsMiddleware:
         t0 = time()
         result = view_func(request, *view_args, **view_kwargs)
         took = (time() - t0) * 1000
-        if took > 1 and not request.path.startswith("/static"):
-            performance_logger.info(
-                f"    {took:6.2f}ms / {len(connection.queries)} queries: '{ view_func.__name__ }' ↴")
+        if not request.path.startswith("/static"):
+            performance_logger.info(f"{took:6.2f}ms / {len(connection.queries)} queries: '{ view_func.__name__ }'")
 
         return result

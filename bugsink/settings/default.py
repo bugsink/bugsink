@@ -192,9 +192,17 @@ if I_AM_RUNNING != "TEST":
     # DEBUG=False and we don't want the visual pollution.
     LOGGING['handlers']['console']['filters'] = []
 
+# Top-level bugsink logger
 LOGGING['loggers']['bugsink'] = {
     "level": "INFO",
     "handlers": ["console"],
+}
+
+# Performance logging is hidden by default, but it can be enabled by adding a handler to the logger.
+LOGGING['loggers']['bugsink.performance'] = {
+    "level": "INFO",
+    "handlers": [],
+    "propagate": False,
 }
 
 # Snappea Logging
@@ -205,10 +213,9 @@ LOGGING["formatters"]["snappea"] = {
 
 LOGGING["handlers"]["snappea"] = {
     "level": "INFO",
-    "class": "logging.StreamHandler"
+    "class": "logging.StreamHandler",
+    "formatter": "snappea",
 }
-
-LOGGING["handlers"]["snappea"]["formatter"] = "snappea"
 
 LOGGING['loggers']['snappea'] = {
     "level": "INFO",

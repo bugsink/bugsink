@@ -248,7 +248,7 @@ class Foreman:
             self.check_for_stopping()  # check_for_stopping() right before taking on the work
 
             # notes on task.delete()  (mostly apply to task.delete in the except-statement above too)
-            # * no explicit  transaction needed, autocommit is fine: we're the only ones touching this row in the DB
+            # * no explicit transaction needed, autocommit is fine: we're the only ones touching this row in the DB
             # * delete-before-run is the implementation of our at-most-once guarantee
             task.delete()
             self.run_in_thread(task_id, function, *args, **kwargs)

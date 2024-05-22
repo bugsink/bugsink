@@ -109,14 +109,14 @@ class ImmediateAtomic(SuperDurableAtomic):
         self.t0 = time.time()
         super(ImmediateAtomic, self).__enter__()
         took = (time.time() - self.t0) * 1_000
-        performance_logger.info(f"    {took:6.2f}ms BEGIN IMMEDIATE, A.K.A. get-write-lock' ↴")
+        performance_logger.info(f"{took:6.2f}ms BEGIN IMMEDIATE, A.K.A. get-write-lock'")
         self.t0 = time.time()
 
     def __exit__(self, exc_type, exc_value, traceback):
         super(ImmediateAtomic, self).__exit__(exc_type, exc_value, traceback)
 
         took = (time.time() - self.t0) * 1000
-        performance_logger.info(f"    {took:6.2f}ms IMMEDIATE transaction' ↴")
+        performance_logger.info(f"{took:6.2f}ms IMMEDIATE transaction'")
 
         connection = django_db_transaction.get_connection(self.using)
         if hasattr(connection, "_start_transaction_under_autocommit"):

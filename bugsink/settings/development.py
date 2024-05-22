@@ -93,8 +93,23 @@ BUGSINK = {
     "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 }
 
+
+# performance development settings: show inline in the console, with a nice little arrow
+LOGGING["formatters"]["performance"] = {
+    "format": "    {message} ↴",
+    "style": "{",
+}
+
+LOGGING["handlers"]["performance"] = {
+    "level": "INFO",
+    "class": "logging.StreamHandler",
+    "formatter": "performance",
+}
+
+LOGGING['loggers']['bugsink.performance']["handlers"] = ["performance"]
+
+
+# snappea development settings: see all details, and include timestamps (we have no sytemd journal here)
 LOGGING["handlers"]["snappea"]["level"] = "DEBUG"
 LOGGING["loggers"]["snappea"]["level"] = "DEBUG"
-
-# include timestamps too
 LOGGING["formatters"]["snappea"]["format"] = "{asctime} - {threadName} - {levelname:7} - {message}"
