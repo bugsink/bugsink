@@ -1,5 +1,5 @@
 from .default import *  # noqa
-from .default import BASE_DIR, INSTALLED_APPS, MIDDLEWARE, LOGGING, DATABASES
+from .default import BASE_DIR, INSTALLED_APPS, MIDDLEWARE, LOGGING, DATABASES, I_AM_RUNNING
 
 import os
 
@@ -106,7 +106,10 @@ LOGGING["handlers"]["look_below_in_stream"] = {
     "formatter": "look_below",
 }
 
-LOGGING['loggers']['bugsink.performance']["handlers"] = ["look_below_in_stream"]
+if I_AM_RUNNING == "SNAPPEA":
+    LOGGING['loggers']['bugsink.performance']["handlers"] = ["snappea"]
+else:
+    LOGGING['loggers']['bugsink.performance']["handlers"] = ["look_below_in_stream"]
 
 
 # snappea development settings: see all details, and include timestamps (we have no sytemd journal here)

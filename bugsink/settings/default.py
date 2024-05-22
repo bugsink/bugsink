@@ -227,4 +227,5 @@ if I_AM_RUNNING == "SNAPPEA":
     # We set all handlers to the snappea handler in this case: this way the things that are logged inside individual
     # workers show up with the relevant worker-annotations (i.e. threadName).
     for logger in LOGGING['loggers'].values():
-        logger["handlers"] = ["snappea"]
+        if "handlers" in logger and "console" in logger["handlers"]:
+            logger["handlers"] = ["snappea"]
