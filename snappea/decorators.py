@@ -1,9 +1,13 @@
+import logging
 import json
 
-from . import registry
+from performance.context_managers import time_to_logger
 
+from . import registry
 from .models import Task, wakeup_server
 from .settings import get_settings
+
+performance_logger = logging.getLogger("bugsink.performance.snappea")
 
 
 def shared_task(function):
@@ -18,9 +22,12 @@ def shared_task(function):
             # the non-eager case either).
             return
 
-        # No need for a transaction: we just write something (not connected to any other object, and we will never touch
-        # it again).
-        Task.objects.create(task_name=name, args=json.dumps(args), kwargs=json.dumps(kwargs))
+        with time_to_logger(performance_logger, "Snappea Task.create()"):
+            # No need for a transaction: we just write something (not connected to any other object, and we will never
+            # touch it again). Counterpoint: if we'd have a transaction, we could distinguish between "wait for write
+            # lock" and "actually write".
+            Task.objects.create(task_name=name, args=json.dumps(args), kwargs=json.dumps(kwargs))
+
         wakeup_server()
 
     name = function.__module__ + "." + function.__name__

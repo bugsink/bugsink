@@ -13,6 +13,7 @@ from sentry_sdk import capture_exception
 
 from django.conf import settings
 
+from performance.context_managers import time_to_logger
 from bugsink.transaction import durable_atomic
 
 from . import registry
@@ -20,8 +21,8 @@ from .models import Task
 from .datastructures import Workers
 from .settings import get_settings
 
-
 logger = logging.getLogger("snappea.foreman")
+performance_logger = logging.getLogger("bugsink.performance.snappea")
 
 
 def short_id(task_id):
@@ -241,7 +242,8 @@ class Foreman:
                 kwargs = json.loads(task.kwargs)
             except Exception as e:
                 logger.error('Create workers: can\'t execute "%s": %s', task.task_name, e)
-                task.delete()  # we delete the task because we can't do anything with it, and we don't want to hang
+                with time_to_logger(performance_logger, "Snappea delete Task"):
+                    task.delete()  # we delete the task because we can't do anything with it, and we don't want to hang
                 capture_exception(e)
                 continue
 
@@ -249,8 +251,10 @@ class Foreman:
 
             # notes on task.delete()  (mostly apply to task.delete in the except-statement above too)
             # * no explicit transaction needed, autocommit is fine: we're the only ones touching this row in the DB
+            #       (see 'counterpoint' in decorators.py for a counterpoint)
             # * delete-before-run is the implementation of our at-most-once guarantee
-            task.delete()
+            with time_to_logger(performance_logger, "Snappea Task.delete()"):
+                task.delete()
             self.run_in_thread(task_id, function, *args, **kwargs)
 
         task_count = task_i + 1
