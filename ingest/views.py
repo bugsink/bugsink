@@ -42,6 +42,7 @@ HTTP_501_NOT_IMPLEMENTED = 501
 
 
 logger = logging.getLogger("bugsink.ingest")
+performance_logger = logging.getLogger("bugsink.performance.ingest")
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -91,13 +92,16 @@ class BaseIngestAPIView(View):
 
         if get_settings().DIGEST_IMMEDIATELY:
             # in this case the stream will be an BytesIO object, so we can actually call .get_value() on it.
-            event_data = json.loads(event_data_stream.getvalue().decode("utf-8"))
+            event_data_bytes = event_data_stream.getvalue()
+            event_data = json.loads(event_data_bytes.decode("utf-8"))
+            performance_logger.info("ingested event with %s bytes", len(event_data_bytes))
             cls.digest_event(event_metadata, event_data, project=project)
         else:
             # In this case the stream will be a file that has been written the event's content to it.
             # To ensure that the (possibly EAGER) handling of the digest has the file available, we flush it here:
             event_data_stream.flush()
 
+            performance_logger.info("ingested event with %s bytes", event_data_stream.bytes_written)
             digest.delay(event_id, event_metadata)
 
     @classmethod
