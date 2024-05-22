@@ -1,0 +1,24 @@
+{% load static tailwind_tags %}<!DOCTYPE html>{# copy of base.html, but without variables (and hence no menu), for use in contextless templates (e.g. 500.html) #}
+<html lang="en">
+	<head>
+    <title>{% block title %}Bugsink{% endblock %}</title>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        {% tailwind_preload_css %}
+		{% tailwind_css %}
+	</head>
+
+	<body>
+        <div id="content">
+            <div class="flex pl-4 bg-slate-200">
+                <a href="/"><img src="{% static 'images/bugsink-logo.png' %}" class="p-2 h-12 w-12"></a>
+                <a href="/"><div class="pt-4 pb-4 pl-2 pr-2 font-bold">Bugsink</div></a>
+            </div>
+            <div>
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    {% block extra_js %}{% endblock %}
+    </body>
+</html>
