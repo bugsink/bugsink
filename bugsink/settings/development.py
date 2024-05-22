@@ -95,18 +95,18 @@ BUGSINK = {
 
 
 # performance development settings: show inline in the console, with a nice little arrow
-LOGGING["formatters"]["performance"] = {
+LOGGING["formatters"]["look_below"] = {
     "format": "    {message} ↴",
     "style": "{",
 }
 
-LOGGING["handlers"]["performance"] = {
+LOGGING["handlers"]["look_below_in_stream"] = {
     "level": "INFO",
     "class": "logging.StreamHandler",
-    "formatter": "performance",
+    "formatter": "look_below",
 }
 
-LOGGING['loggers']['bugsink.performance']["handlers"] = ["performance"]
+LOGGING['loggers']['bugsink.performance']["handlers"] = ["look_below_in_stream"]
 
 
 # snappea development settings: see all details, and include timestamps (we have no sytemd journal here)
