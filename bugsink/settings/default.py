@@ -199,7 +199,7 @@ LOGGING['loggers']['bugsink'] = {
 
 # Snappea Logging
 LOGGING["formatters"]["snappea"] = {
-    "format": "{asctime} - {threadName} - {levelname:7} - {message}",
+    "format": "{threadName} - {levelname:7} - {message}",
     "style": "{",
 }
 
