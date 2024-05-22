@@ -204,7 +204,7 @@ Group=bugsink
 Environment="PYTHONUNBUFFERED=1"
 RuntimeDirectory=gunicorn
 WorkingDirectory=/home/bugsink
-ExecStart=/home/bugsink/venv/bin/gunicorn --bind="127.0.0.1:8000" --workers=5 --access-logfile - --capture-output --error-logfile - bugsink.wsgi
+ExecStart=/home/bugsink/venv/bin/gunicorn --bind="127.0.0.1:8000" --workers=5 --access-logfile - --capture-output --error-logfile - --max-requests=1000 --max-requests-jitter=100 bugsink.wsgi
 ExecReload=/bin/kill -s HUP $MAINPID
 KillMode=mixed
 TimeoutStopSec=5
