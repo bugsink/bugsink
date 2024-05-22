@@ -419,7 +419,6 @@ User=bugsink
 Group=bugsink
 
 Environment="PYTHONUNBUFFERED=1"
-RuntimeDirectory=gunicorn
 WorkingDirectory=/home/bugsink
 ExecStart=/home/bugsink/venv/bin/bugsink-runsnappea
 ExecReload=/bin/kill -s HUP $MAINPID
