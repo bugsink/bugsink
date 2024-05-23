@@ -1,10 +1,15 @@
+import logging
 from datetime import datetime, timezone
 
 from projects.models import Project
 from events.models import Event
 from issues.models import Issue, IssueStateManager
+from performance.context_managers import time_to_logger
 
 from .period_counter import PeriodCounter
+
+
+performance_logger = logging.getLogger("bugsink.performance.registry")
 
 
 _registry = None
@@ -59,7 +64,8 @@ def get_pc_registry():
 
     global _registry
     if _registry is None:
-        _registry = PeriodCounterRegistry()
+        with time_to_logger(performance_logger, "period counter registry initialization"):
+            _registry = PeriodCounterRegistry()
     return _registry
 
 
