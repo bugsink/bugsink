@@ -123,7 +123,8 @@ class Foreman:
         # of the right place is something I want to postpone (it's also something we need to do for gunicorn, where it's
         # even harder because multi-process means the n (number of workers) don't share the same instance.
         from bugsink.registry import get_pc_registry
-        get_pc_registry()
+        with durable_atomic():
+            get_pc_registry()
 
     def run_in_thread(self, task_id, function, *args, **kwargs):
         # NOTE: we expose args & kwargs in the logs; as it stands no sensitive stuff lives there in our case, but this

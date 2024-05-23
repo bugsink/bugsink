@@ -32,14 +32,14 @@ class PeriodCounterRegistry(object):
         by_project = {}
         by_issue = {}
 
-        for project in projects:
+        for project in projects.iterator():
             by_project[project.id] = PeriodCounter()
 
-        for issue in issues:
+        for issue in issues.iterator():
             by_issue[issue.id] = PeriodCounter()
 
         # load all events (one by one, let's measure the slowness of the naive implementation before making it faster)
-        for event in ordered_events:
+        for event in ordered_events.iterator():
             project_pc = by_project[event.project_id]
             project_pc.inc(event.timestamp)  # `counted_entity` needs not be passed since no unmute_handers are set yet
 
@@ -50,7 +50,7 @@ class PeriodCounterRegistry(object):
         # this is done after the events are loaded (as opposed to before they are loaded) because:
         # 1. this ensures we don't trigger any events as a side effect of load_from_scratch
         # 2. not having to evalutate the handlers each time is more performant
-        for issue in issues.filter(is_muted=True):
+        for issue in issues.filter(is_muted=True).iterator():
             IssueStateManager.set_unmute_handlers(by_issue, issue, now)
 
         return by_project, by_issue
@@ -61,6 +61,9 @@ def get_pc_registry():
     # slows down the first (handled) event. When we get to the "real gunicorn server" we should probably just hook into
     # gunicorn's events to initialize this
     # (note once you do this: don't hook into app-initialization; there you cannot expect to be running DB stuff)
+
+    # note: must be run inside a transaction to ensure consistency because we use .iterator()
+    # https://docs.djangoproject.com/en/5.0/ref/databases/#sqlite-isolation
 
     global _registry
     if _registry is None:
