@@ -29,6 +29,10 @@ This means (surprisingly) we can take our eye off optimizing this particular par
 * in the debugserver (integrated ingestion/handling) we don't expect 100k events; and even if we did a 6s delay on the
   first event/request is fine.
 
+Counterpoint: on playground.bugsink.com I just observed 42s to initalize 150k events, which is ~5 times more slow than
+the above. It's also a "real hiccup". Anyway, there's too many questions about period counter (e.g. how to share
+across processes, or the consequences of quota) to focus on this particular point first.
+
 Ways forward once we do decide to improve:
 
 * regular saving of state (savepoint in time, with "unhandled after") (the regularity of saving is left as an exercise
