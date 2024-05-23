@@ -11,10 +11,11 @@ from bugsink.wsgi import application
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python cornless.py host:port")
-
-    host = sys.argv[1].split(":")[0]
-    port = int(sys.argv[1].split(":")[1])
+        host = "127.0.0.1"
+        port = 8000
+    else:
+        host = sys.argv[1].split(":")[0]
+        port = int(sys.argv[1].split(":")[1])
 
     httpd = simple_server.make_server("", port, application)
     httpd.serve_forever()
