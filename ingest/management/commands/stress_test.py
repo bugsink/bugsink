@@ -30,6 +30,11 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         compress = options['compress']
         use_envelope = options['use_envelope']
+
+        # non-envelope mode is deprecated by Sentry; we only implement DIGEST_IMMEDIATELY=True for that mode which is
+        # usually not what we want to do our stress-tests for. (if this assumption is still true later in 2024, we can
+        # just remove the non-envelope mode support completely.)
+        assert use_envelope, "Only envelope mode is supported"
         dsn = options['dsn']
 
         json_filename = options["filename"]
