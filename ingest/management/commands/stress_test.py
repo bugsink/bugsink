@@ -53,6 +53,7 @@ class Command(BaseCommand):
                 timings[i_thread] = []
 
         print("sending data")
+        t0 = time.time()
         for i in range(options["threads"]):
             t = threading.Thread(target=self.loop_send_to_server, args=(
                 dsn, options, use_envelope, compress, prepared_data[i], timings[i]))
@@ -62,8 +63,9 @@ class Command(BaseCommand):
         for t in threading.enumerate():
             if t != threading.current_thread():
                 t.join()
+        total_time = time.time() - t0
 
-        self.print_stats(timings)
+        self.print_stats(options["threads"], options["requests"], total_time, timings)
         print("done")
 
     def prepare(self, data, options, i_thread, i_request, compress, use_envelope):
@@ -153,9 +155,19 @@ class Command(BaseCommand):
             return False
 
     @staticmethod
-    def print_stats(timings):
+    def print_stats(threads, requests, total_time, timings):
         # flatten the dict of lists to a single list:
         all_timings = [timing for sublist in timings.values() for timing in sublist]
+
+        print("==============")
+        print("Results")
+        print("==============")
+
+        print("threads: %d" % threads)
+        print("requests per thread: %d" % requests)
+        print("total requests: %d" % (threads * requests))
+        print("total time: %.3fs" % total_time)
+        print("requests per second: %.3f" % (threads * requests / total_time))
 
         # print the avg, mean, 90th, 95th and 99th percentiles
         print("==============")
