@@ -8,7 +8,9 @@
 
 # Because SQLite does not support interrupts, we need to spin up a new thread to run the server, so that the main thread
 # can be interrupted with SIGINT. We then call the `interrupt()` method on the default connection to interrupt the
-# query.
+# query. (We have observed that the standard sentry sdk does not play well with this threaded server; when sentry is not
+# used you get a nice 500 page and the server serves the next request; when it is used, the server somehow hangs. I did
+# not investigate further, will instead create a simplified version of the sentry client for such cases.)
 
 import sys
 import signal

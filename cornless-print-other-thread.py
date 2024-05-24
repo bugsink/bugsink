@@ -5,7 +5,8 @@
 
 # This version spins up a new thread to run the server, so that the main thread can be interrupted with SIGINT. This is
 # useful when Python's signal-handling is not working, e.g. when running a long-running piece of C code that does not
-# regularly do the call to the Python signal check.
+# regularly do the call to the Python signal check. See cornless-interrupt-sqlite.py for a warning about sentry_sdk
+# (observed there, but may apply here too)
 
 # Ideas from:
 # https://stackoverflow.com/questions/1032813/dump-stacktraces-of-all-active-threads
