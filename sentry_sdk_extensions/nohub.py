@@ -28,17 +28,22 @@ def get_default_client_options():
 
 
 def capture_exception(dsn, error=None, client_options=None):
-    if error is not None:
-        exc_info = exc_info_from_error(error)
-    else:
-        exc_info = sys.exc_info()
+    try:
+        if error is not None:
+            exc_info = exc_info_from_error(error)
+        else:
+            exc_info = sys.exc_info()
 
-    event, hint = event_from_exception(exc_info, client_options=client_options)
-    event["event_id"] = uuid.uuid4().hex
-    event["timestamp"] = time.time()
-    event["platform"] = "python"
+        event, hint = event_from_exception(exc_info, client_options=client_options)
+        event["event_id"] = uuid.uuid4().hex
+        event["timestamp"] = time.time()
+        event["platform"] = "python"
 
-    serialized_event = serialize(event)
+        serialized_event = serialize(event)
+    except Exception as e:
+        logger.warning("sentry_sdk_extensions.nohub.capture_exception Error: %s", e)
+        return None
+
     return send_to_server(dsn, serialized_event)
 
 
@@ -60,10 +65,10 @@ def send_to_server(dsn, data):
         )
 
         response.raise_for_status()
-        return True
+        return data["event_id"]
     except Exception as e:
-        logger.warning("sentry_sdk_extensions.nohub.capture Error: %s", e)
-        return False
+        logger.warning("sentry_sdk_extensions.nohub.send_to_server Error: %s", e)
+        return None
 
 
 @contextmanager
