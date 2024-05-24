@@ -1,5 +1,7 @@
 import logging
 from time import time
+import os
+from sentry_sdk_extensions.nohub import capture_exception
 
 from django.contrib.auth.decorators import login_required
 from django.db import connection
@@ -54,4 +56,21 @@ class PerformanceStatsMiddleware:
 
     def process_view(self, request, view_func, view_args, view_kwargs):
         self.view_name = view_func.__name__
+        return None
+
+
+class CaptureExceptionsMiddleware:
+    # Capture exceptions using a Middleware rather than the more magical sentry_sdk.init() method. This is more
+    # explicit and easier to understand, though less feature-complete.
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        return self.get_response(request)
+
+    def process_exception(self, request, exception):
+        dsn = os.getenv("SENTRY_DSN")
+        if dsn is not None:
+            capture_exception(dsn, exception)
         return None
