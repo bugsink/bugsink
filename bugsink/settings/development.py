@@ -7,6 +7,7 @@ from debug_toolbar.middleware import show_toolbar
 
 import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
+from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
 
 
 SECRET_KEY = 'django-insecure-$@clhhieazwnxnha-_zah&(bieq%yux7#^07&xsvhn58t)8@xw'
@@ -64,6 +65,7 @@ if SENTRY_DSN is not None:
         auto_session_tracking=False,
         traces_sample_rate=0,
         send_default_pii=True,
+        transport=MoreLoudlyFailingTransport,
     )
 
 SNAPPEA = {
