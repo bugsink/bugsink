@@ -9,8 +9,9 @@ import json
 import requests
 from contextlib import contextmanager
 
-from sentry_sdk.utils import exc_info_from_error, event_from_exception
+from sentry_sdk.utils import exc_info_from_error, event_from_exception, walk_exception_chain
 from sentry_sdk.serializer import serialize
+from sentry_sdk.integrations.django.templates import get_template_frame_from_exception
 
 
 from compat.dsn import get_envelope_url, get_header_value
@@ -38,6 +39,9 @@ def capture_exception(dsn, error=None, client_options=None):
         event["event_id"] = uuid.uuid4().hex
         event["timestamp"] = time.time()
         event["platform"] = "python"
+
+        # this makes our setup Django-specific; it may not be what we generally want, but it's what I need now.
+        process_django_templates(event, hint)
 
         serialized_event = serialize(event)
     except Exception as e:
@@ -78,3 +82,52 @@ def capture_exceptions(dsn, client_options=None):
     except Exception as e:
         capture_exception(dsn, error=e, client_options=client_options)
         raise
+
+
+def process_django_templates(event, hint):
+    # Copied from sentry_sdk.integrations.django, but in a way that way can reference it (it's an inner function at the
+    # original location)
+
+    # I only got this to work when TEMPLATE_DEBUG is True, at least for the case where there was just "any old
+    # exception" which happens as part of a template rendering, i.e. as opposed to a template syntax error. I'm not sure
+    # whether the regular sentry_sdk would have the same problem, but I'm not going to worry about it now.
+
+    if hint is None:
+        return event
+
+    exc_info = hint.get("exc_info", None)
+
+    if exc_info is None:
+        return event
+
+    exception = event.get("exception", None)
+
+    if exception is None:
+        return event
+
+    values = exception.get("values", None)
+
+    if values is None:
+        return event
+
+    for exception, (_, exc_value, _) in zip(
+        reversed(values), walk_exception_chain(exc_info)
+    ):
+        frame = get_template_frame_from_exception(exc_value)
+        if frame is not None:
+            frames = exception.get("stacktrace", {}).get("frames", [])
+
+            for i in reversed(range(len(frames))):
+                f = frames[i]
+                if (
+                    f.get("function") in ("Parser.parse", "parse", "render")
+                    and f.get("module") == "django.template.base"
+                ):
+                    i += 1
+                    break
+            else:
+                i = len(frames)
+
+            frames.insert(i, frame)
+
+    return event
