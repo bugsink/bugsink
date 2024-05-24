@@ -15,17 +15,23 @@ class LoginRequiredMiddleware:
         return self.get_response(request)
 
     def process_view(self, request, view_func, view_args, view_kwargs):
+        # returning None is interpreted by Django as "proceed with handling it"; we do this for all cases where we
+        # have determined that the user is authenticated or user authentication is not required
+
         if request.user.is_authenticated:
-            return
+            return None
 
         # we explicitly ignore the admin and accounts paths, and the api; we can always push this to a setting later
         for path in ["/admin", "/accounts", "/api"]:
             if request.path.startswith(path):
-                return None  # returning None is interpreted by Django as "proceed with handling it"
+                return None
 
         if getattr(view_func, 'login_exempt', False):
             return None
 
+        # Note: this short-circuits the rest of the middleware handling. That's OK in this case though, because what we
+        # do amounts to "redirect and do something else". (It's not OK in the general case, where you just want to do a
+        # small middleware-like thing and proceed normally otherwise)
         return login_required(view_func)(request, *view_args, **view_kwargs)
 
 
