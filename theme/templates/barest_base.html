@@ -1,0 +1,20 @@
+{% load static tailwind_tags %}<!DOCTYPE html>{# copy of bare_base.html, but without even a menu bar #}
+<html lang="en">
+	<head>
+    <title>{% block title %}Bugsink{% endblock %}</title>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        {% tailwind_preload_css %}
+		{% tailwind_css %}
+	</head>
+
+	<body>
+        <div id="content">
+            <div>
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    {% block extra_js %}{% endblock %}
+    </body>
+</html>
