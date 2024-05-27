@@ -111,7 +111,7 @@ WSGI_APPLICATION = 'bugsink.wsgi.application'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
+        'ENGINE': 'bugsink.timed_sqlite_backend',
         'NAME': os.getenv("DATABASE_PATH", 'db.sqlite3'),
         'TEST': {
             # Specifying a NAME here makes it so that sqlite doesn't run in-memory. This is what we want, because we
