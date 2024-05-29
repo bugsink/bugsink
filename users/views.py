@@ -19,9 +19,7 @@ def signup(request):
         form = UserCreationForm(request.POST)
 
         if form.is_valid():
-            form.save()
-            username = form.cleaned_data.get('username')
-            user = UserModel.objects.get(username=username)
+            user = form.save()
             login(request, user)
             return redirect('home')
     else:
