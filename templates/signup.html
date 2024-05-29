@@ -1,0 +1,60 @@
+{% extends "barest_base.html" %}
+{% load static %}
+
+{% block title %}Sign up · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+<div class="bg-cyan-100 h-screen overflow-y-scroll flex items-center justify-center"> {# the cyan background #}
+    <div class="bg-white lg:w-5/12 md:6/12 w-10/12">  {# the centered box #}
+        <div class="bg-slate-200 absolute left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-full p-4 md:p-8">  {# the logo #}
+                <a href="/"><img src="{% static 'images/bugsink-logo.png' %}" class="h-8 w-8 md:h-16 md:w-16" alt="Bugsink"></a>
+        </div>
+
+        <div class="p-12 md:pt-24 md:pl-24 md:pr-24 md:pb-16">
+
+            <form method="post" action=".">
+                {% csrf_token %}
+
+                <div class="text-lg mb-6 md:mb-8">
+                    <input name="username" type="text" class="{% if form.username.errors %}bg-red-100{% else %}bg-slate-200{% endif %} pl-4 py-2 md:py-4 focus:outline-none w-full" {% if form.username.value %}value="{{ form.username.value }}"{% endif %} placeholder="{{ form.username.label }}" />
+                    {% if form.username.errors %}
+                    {% for error in form.username.errors %}
+                        <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
+                    {% endfor %}
+                    {% elif form.username.help_text %}
+                        <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.username.help_text }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="text-lg mb-6 md:mb-8">
+                    <input name="password1" type="password" class="{% if form.password1.errors %}bg-red-100{% else %}bg-slate-200{% endif %} pl-4 py-2 md:py-4 focus:outline-none w-full" {% if form.password1.value %}value="{{ form.password1.value }}"{% endif %} placeholder="{{ form.password1.label }}" />
+                    {% if form.password1.errors %}
+                    {% for error in form.password1.errors %}
+                        <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
+                    {% endfor %}
+                    {% elif form.password1.help_text %}
+                        <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.password1.help_text }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="text-lg mb-6 md:mb-8">
+                    <input name="password2" type="password" class="{% if form.password2.errors %}bg-red-100{% else %}bg-slate-200{% endif %} pl-4 py-2 md:py-4 focus:outline-none w-full" {% if form.password2.value %}value="{{ form.password2.value }}"{% endif %} placeholder="{{ form.password2.label }}" />
+                    {% if form.password2.errors %}
+                    {% for error in form.password2.errors %}
+                        <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
+                    {% endfor %}
+                    {% elif form.password2.help_text %}
+                        <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.password2.help_text }}</div>
+                    {% endif %}
+                </div>
+
+                <button class="bg-slate-800 font-medium p-2 md:p-4 text-white uppercase w-full">Sign up</button>
+
+            </form>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}

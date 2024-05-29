@@ -10,10 +10,21 @@ _KIBIBYTE = 1024
 _MEBIBYTE = 1024 * _KIBIBYTE
 
 
+# CB means "create by"
+CB_ANYBODY = 0
+CB_MEMBERS = 1
+CB_ADMINS = 2
+CB_NOBODY = 3
+
+
 DEFAULTS = {
     "BASE_URL": "http://127.0.0.1:9000",  # no trailing slash
     "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 
+    # Users, teams, projects
+    "USER_REGISTRATION": CB_ANYBODY,  # who can register new users. default: anybody, i.e. users can register themselves
+
+    # System inner workings:
     "DIGEST_IMMEDIATELY": True,
 
     # MAX* below mirror the (current) values for the Sentry Relax
