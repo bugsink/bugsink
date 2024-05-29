@@ -7,6 +7,7 @@ from functools import partial
 from django.db import models, transaction
 from django.db.models import F, Value
 from django.template.defaultfilters import date as default_date_filter
+from django.conf import settings
 
 from bugsink.volume_based_condition import VolumeBasedCondition
 from alerts.tasks import send_unmute_alert
@@ -458,7 +459,9 @@ class TurningPoint(models.Model):
 
     issue = models.ForeignKey("Issue", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
     triggering_event = models.ForeignKey("events.Event", blank=True, null=True, on_delete=models.SET_NULL)
-    user = models.ForeignKey("auth.User", blank=True, null=True, on_delete=models.SET_NULL)  # null: the system-user
+
+    # null: the system-user
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=models.SET_NULL)
     timestamp = models.DateTimeField(blank=False, null=False)  # this info is also in the event, but event is nullable
     kind = models.IntegerField(blank=False, null=False, choices=TurningPointKind.choices)
     metadata = models.TextField(blank=False, null=False, default="{}")  # json string

@@ -47,6 +47,7 @@ include = [
     "static*",
     "templates*",
     "theme*",
+    "users*",
 ]
 
 # exclude = ["my_package.tests*"]  # exclude packages matching these glob patterns (empty by default)

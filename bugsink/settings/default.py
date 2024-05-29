@@ -47,9 +47,10 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'tailwind',  # As currently set up, this is also needed in production (templatetags)
-    'theme',
     'admin_auto_filters',  # TODO: decide whether 'admin.py' is useful in production too.
 
+    'users',
+    'theme',
     'snappea',
     'compat',
     'projects',
@@ -61,6 +62,8 @@ INSTALLED_APPS = [
 
     'performance',
 ]
+
+AUTH_USER_MODEL = "users.User"
 
 TAILWIND_APP_NAME = 'theme'
 
