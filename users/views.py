@@ -58,13 +58,9 @@ def confirm_email(request, token=None):
     verification.user.save()
     verification.delete()
 
-    # I don't want to log the user in based on the verification email alone; although in principle doing so would not
-    # be something fundamentally more insecure than what we do in the password-reset loop (in both cases access to the
-    # email is enough to get access to Bugsink), better to err on the side of security.
-    # If we ever want to introduce a more user-friendly approach, we could make automatic login dependent on some
-    # (signed) cookie that's being set when registring. i.e.: if you've just recently entered your password in the same
-    # browser, it works.
-    # login(request, verification.user)
+    # this mirrors the approach of what we do in password-resetting; and rightfully so because the in both cases access
+    # to email is assumed to be sufficient proof of identity.
+    login(request, verification.user)
 
     return render(request, "users/email_confirmed.html")
 
