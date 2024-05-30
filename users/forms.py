@@ -2,13 +2,18 @@ import urllib.parse
 
 from django import forms
 from django.urls import reverse
-from django.contrib.auth.forms import UserCreationForm as BaseUserCreationForm
+from django.contrib.auth.forms import UserCreationForm as BaseUserCreationForm, SetPasswordForm as BaseSetPasswordForm
 from django.core.validators import EmailValidator
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.contrib.auth import password_validation
 from django.forms import ModelForm
 from django.utils.html import escape, mark_safe
+
+
+def _(x):
+    # dummy gettext
+    return x
 
 
 UserModel = get_user_model()
@@ -68,3 +73,26 @@ class UserCreationForm(BaseUserCreationForm):
 
 class ResendConfirmationForm(forms.Form):
     email = forms.EmailField()
+
+
+class RequestPasswordResetForm(forms.Form):
+    email = forms.EmailField()
+
+    def clean_email(self):
+        email = self.cleaned_data['email']
+        if not UserModel.objects.filter(username=email).exists():
+            # Many sites say "if the email is registered, we've sent you an email with a password reset link" instead.
+            # The idea is not to leak information about which emails are registered. But in our setup we're already
+            # leaking that information in the signup form. At least for now, I'm erring on the side of
+            # user-friendliness. see https://news.ycombinator.com/item?id=33718202
+            raise ValidationError("This email is not registered.")
+
+        return email
+
+
+class SetPasswordForm(BaseSetPasswordForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['new_password1'].help_text = "At least 8 characters"
+
+        self.fields['new_password2'].help_text = None  # "Confirm password" is descriptive enough

@@ -8,9 +8,9 @@ from django.utils import timezone
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
 
-from .forms import UserCreationForm, ResendConfirmationForm
+from .forms import UserCreationForm, ResendConfirmationForm, RequestPasswordResetForm, SetPasswordForm
 from .models import EmailVerification
-from .tasks import send_confirm_email
+from .tasks import send_confirm_email, send_reset_email
 
 
 UserModel = get_user_model()
@@ -43,7 +43,7 @@ def signup(request):
     return render(request, "signup.html", {"form": form})
 
 
-def confirm_email(request, token):
+def confirm_email(request, token=None):
     # clean up expired tokens; doing this on every request is just fine, it saves us from having to run a cron job-like
     EmailVerification.objects.filter(
         created_at__lt=timezone.now() - timedelta(get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)).delete()
@@ -87,11 +87,72 @@ def resend_confirmation(request):
     return render(request, "users/resend_confirmation.html", {"form": form})
 
 
+def request_reset_password(request):
+    # something like this exists in Django too; copy-paste-modify from the other views was more simple than thoroughly
+    # understanding the Django implementation and hooking into it.
+
+    if request.method == 'POST':
+        form = RequestPasswordResetForm(request.POST)
+
+        if form.is_valid():
+            user = UserModel.objects.get(username=form.cleaned_data['email'])
+            # if not user.is_active  no separate branch for this: password-reset implies email-confirmation
+
+            # we reuse the EmailVerification model for password resets; security wise it doesn't matter, because the
+            # visiting any link with the token implies control over the email account; and we have defined that such
+            # control implies both verification and password-resetting.
+            verification = EmailVerification.objects.create(user=user, email=user.username)
+            send_reset_email.delay(user.username, verification.token)
+            return render(request, "users/reset_password_email_sent.html", {"email": user.username})
+
+    else:
+        form = RequestPasswordResetForm()
+
+    return render(request, "users/request_reset_password.html", {"form": form})
+
+
+def reset_password(request, token=None):
+    # clean up expired tokens; doing this on every request is just fine, it saves us from having to run a cron
+    # job-like thing
+    EmailVerification.objects.filter(
+        created_at__lt=timezone.now() - timedelta(get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)).delete()
+
+    try:
+        verification = EmailVerification.objects.get(token=token)
+    except EmailVerification.DoesNotExist:
+        # good enough (though a special page might be prettier)
+        raise Http404("Invalid or expired token")
+
+    user = verification.user
+
+    if request.method == 'POST':
+        form = SetPasswordForm(user, request.POST)
+        if form.is_valid():
+            user.is_active = True  # password-reset implies email-confirmation
+            user.set_password(form.cleaned_data['new_password1'])
+            user.save()
+
+            verification.delete()
+
+            login(request, verification.user)
+            return redirect('home')
+
+    else:
+        form = SetPasswordForm(user)
+
+    return render(request, "users/reset_password.html", {"form": form})
+
+
 DEBUG_CONTEXTS = {
     "confirm_email": {
         "site_title": get_settings().SITE_TITLE,
         "base_url": get_settings().BASE_URL + "/",
         "confirm_url": "http://example.com/confirm-email/1234567890abcdef",  # nonsense to avoid circular import
+    },
+    "reset_password_email": {
+        "site_title": get_settings().SITE_TITLE,
+        "base_url": get_settings().BASE_URL + "/",
+        "reset_url": "http://example.com/reset-password/1234567890abcdef",  # nonsense to avoid circular import
     },
 }
 

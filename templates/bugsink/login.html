@@ -44,7 +44,7 @@
             </form>
 
             <div class="mt-4">
-                <a href="{#{% url 'password_reset' TODO %}#}" class="text-slate-800">Forgot password?</a>
+                <a href="{% url 'request_reset_password' %}" class="text-slate-800">Forgot password?</a>
                 {% if registration_enabled %}<a href="{% url 'signup' %}" class="float-right text-slate-800">Create an account</a>{% endif %}
             </div>
         </div>

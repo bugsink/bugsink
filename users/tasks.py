@@ -19,3 +19,17 @@ def send_confirm_email(email, token):
             "confirm_url": reverse("confirm_email", kwargs={"token": token}),
         },
     )
+
+
+@shared_task
+def send_reset_email(email, token):
+    send_rendered_email(
+        subject="Reset your password",
+        base_template_name="users/reset_password_email",
+        recipient_list=[email],
+        context={
+            "site_title": get_settings().SITE_TITLE,
+            "base_url": get_settings().BASE_URL + "/",
+            "reset_url": reverse("reset_email", kwargs={"token": token}),
+        },
+    )
