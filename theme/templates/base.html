@@ -49,7 +49,7 @@
                     <a href="/accounts/login/"><div class="p-4 hover:bg-slate-400">Login</div></a>
                 {% else %}
                     <a href="/accounts/TODO/"><div class="p-4 hover:bg-slate-400">Profile</div></a>
-                    <a href="/accounts/logout/"><div class="p-4 hover:bg-slate-400">Log out</div></a>
+                    <div class="p-4 hover:bg-slate-400"><form id="logout-form" method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Log out</button></form></div>
                 {% endif %}
                 </div>
             </div>
