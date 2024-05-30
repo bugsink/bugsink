@@ -7,7 +7,7 @@ from django.contrib.auth import views as auth_views
 from alerts.views import debug_email as debug_alerts_email
 from users.views import debug_email as debug_users_email
 from bugsink.app_settings import get_settings
-from users.views import signup, confirm_email
+from users.views import signup, confirm_email, resend_confirmation
 
 from .views import home, trigger_error, favicon
 
@@ -21,6 +21,7 @@ urlpatterns = [
     path('', home, name='home'),
 
     path("accounts/signup/", signup, name="signup"),
+    path("accounts/resend-confirmation/", resend_confirmation, name="resend_confirmation"),
     path("accounts/confirm-email/<str:token>/", confirm_email, name="confirm_email"),
 
     path("accounts/login/", auth_views.LoginView.as_view(template_name="bugsink/login.html"), name="login"),

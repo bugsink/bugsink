@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
 
-from .forms import UserCreationForm
+from .forms import UserCreationForm, ResendConfirmationForm
 from .models import EmailVerification
 from .tasks import send_confirm_email
 
@@ -67,6 +67,24 @@ def confirm_email(request, token):
     # login(request, verification.user)
 
     return render(request, "users/email_confirmed.html")
+
+
+def resend_confirmation(request):
+    if request.method == 'POST':
+        form = ResendConfirmationForm(request.POST)
+
+        if form.is_valid():
+            user = UserModel.objects.get(username=form.cleaned_data['email'])
+            if user.is_active:
+                raise Http404("This email is already confirmed.")
+
+            verification = EmailVerification.objects.create(user=user, email=user.username)
+            send_confirm_email.delay(user.username, verification.token)
+            return render(request, "users/confirm_email_sent.html", {"email": user.username})
+    else:
+        form = ResendConfirmationForm(data=request.GET)
+
+    return render(request, "users/resend_confirmation.html", {"form": form})
 
 
 DEBUG_CONTEXTS = {

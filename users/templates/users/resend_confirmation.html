@@ -1,0 +1,42 @@
+{% extends "barest_base.html" %}
+{% load static %}
+
+{% block title %}Resend confirmation · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+<div class="bg-cyan-100 h-screen overflow-y-scroll flex items-center justify-center"> {# the cyan background #}
+    <div class="bg-white lg:w-5/12 md:6/12 w-10/12">  {# the centered box #}
+        <div class="bg-slate-200 absolute left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-full p-4 md:p-8">  {# the logo #}
+                <a href="/"><img src="{% static 'images/bugsink-logo.png' %}" class="h-8 w-8 md:h-16 md:w-16" alt="Bugsink"></a>
+        </div>
+
+        <div class="p-12 md:pt-24 md:pl-24 md:pr-24 md:pb-16">
+
+            <form method="post" action=".">
+                {% csrf_token %}
+
+                <div class="text-lg mb-6 md:mb-8">
+                    <input name="email" type="text" class="{% if form.email.errors %}bg-red-100{% else %}bg-slate-200{% endif %} pl-4 py-2 md:py-4 focus:outline-none w-full" {% if form.email.value %}value="{{ form.email.value }}"{% endif %} placeholder="{{ form.email.label }}" />
+                    {% if form.email.errors %}
+                    {% for error in form.email.errors %}
+                        <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
+                    {% endfor %}
+                    {% elif form.email.help_text %}
+                        <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.email.help_text|safe }}</div>
+                    {% endif %}
+                </div>
+
+                <button class="bg-slate-800 font-medium p-2 md:p-4 text-white uppercase w-full">Resend verification email</button>
+            </form>
+
+            <div class="mt-4">
+                <a href="{#{% url 'password_reset' TODO %}#}" class="text-slate-800">Forgot password?</a>
+                <a href="{% url 'login' %}" class="float-right text-slate-800">Log in instead</a>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}

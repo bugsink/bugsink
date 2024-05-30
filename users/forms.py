@@ -1,9 +1,14 @@
+import urllib.parse
+
+from django import forms
+from django.urls import reverse
 from django.contrib.auth.forms import UserCreationForm as BaseUserCreationForm
 from django.core.validators import EmailValidator
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.contrib.auth import password_validation
 from django.forms import ModelForm
+from django.utils.html import escape, mark_safe
 
 
 UserModel = get_user_model()
@@ -30,6 +35,14 @@ class UserCreationForm(BaseUserCreationForm):
         model = UserModel
         fields = ("username",)
 
+    def clean_username(self):
+        if UserModel.objects.filter(username=self.cleaned_data['username'], is_active=False).exists():
+            raise ValidationError(mark_safe(
+                'This email is already registered but not yet confirmed. Please check your email for the confirmation '
+                'link or <b><a href="' + reverse("resend_confirmation") + "?email=" +
+                urllib.parse.quote(escape(self.cleaned_data['username'])) + '">request it again</a></b>.'))
+        return self.cleaned_data['username']
+
     def _post_clean(self):
         # copy of django.contrib.auth.forms.UserCreationForm._post_clean; but with password1 instead of password2; I'd
         # say it's better UX to complain where the original error is made
@@ -51,3 +64,7 @@ class UserCreationForm(BaseUserCreationForm):
         if commit:
             user.save()
         return user
+
+
+class ResendConfirmationForm(forms.Form):
+    email = forms.EmailField()

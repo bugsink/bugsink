@@ -23,7 +23,7 @@
                         <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
                     {% endfor %}
                     {% elif form.username.help_text %}
-                        <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.username.help_text }}</div>
+                        <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.username.help_text|safe }}</div>
                     {% endif %}
                 </div>
 
@@ -34,7 +34,7 @@
                         <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
                     {% endfor %}
                     {% elif form.password1.help_text %}
-                        <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.password1.help_text }}</div>
+                        <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.password1.help_text|safe }}</div>
                     {% endif %}
                 </div>
 
@@ -45,7 +45,7 @@
                         <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
                     {% endfor %}
                     {% elif form.password2.help_text %}
-                        <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.password2.help_text }}</div>
+                        <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.password2.help_text|safe }}</div>
                     {% endif %}
                 </div>
 
