@@ -1,0 +1,5 @@
+Someone has registered a Bugsink account with this email address.
+
+If it was you, please follow the link below to verify your email address.
+
+{{ confirm_url }}

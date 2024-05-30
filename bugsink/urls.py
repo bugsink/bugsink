@@ -4,9 +4,10 @@ from django.contrib import admin
 from django.urls import include, path
 from django.contrib.auth import views as auth_views
 
-from alerts.views import debug_email
+from alerts.views import debug_email as debug_alerts_email
+from users.views import debug_email as debug_users_email
 from bugsink.app_settings import get_settings
-from users.views import signup
+from users.views import signup, confirm_email
 
 from .views import home, trigger_error, favicon
 
@@ -20,6 +21,8 @@ urlpatterns = [
     path('', home, name='home'),
 
     path("accounts/signup/", signup, name="signup"),
+    path("accounts/confirm-email/<str:token>/", confirm_email, name="confirm_email"),
+
     path("accounts/login/", auth_views.LoginView.as_view(template_name="bugsink/login.html"), name="login"),
     path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
 
@@ -35,7 +38,8 @@ urlpatterns = [
 
 if settings.DEBUG:
     urlpatterns += [
-        path('debug-email-alerts/<str:template_name>/', debug_email),
+        path('debug-alerts-email/<str:template_name>/', debug_alerts_email),
+        path('debug-users-email/<str:template_name>/', debug_users_email),
         path('trigger-error/', trigger_error),
         path("__debug__/", include("debug_toolbar.urls")),
     ]

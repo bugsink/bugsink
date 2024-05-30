@@ -23,6 +23,8 @@ DEFAULTS = {
 
     # Users, teams, projects
     "USER_REGISTRATION": CB_ANYBODY,  # who can register new users. default: anybody, i.e. users can register themselves
+    "USER_REGISTRATION_VERIFY_EMAIL": True,
+    "USER_REGISTRATION_VERIFY_EMAIL_EXPIRY": 3 * 24 * 60 * 60,  # 7 days
 
     # System inner workings:
     "DIGEST_IMMEDIATELY": True,
