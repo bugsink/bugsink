@@ -28,7 +28,7 @@ urlpatterns = [
     path("accounts/reset-password/<str:token>/", reset_password, name="reset_password"),
 
     path("accounts/login/", auth_views.LoginView.as_view(template_name="bugsink/login.html"), name="login"),
-    path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("accounts/logout/", auth_views.LogoutView.as_view(template_name="users/logged_out.html"), name="logout"),
 
     path('api/', include('ingest.urls')),
 
