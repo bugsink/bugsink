@@ -4,7 +4,7 @@ from snappea.decorators import shared_task
 
 from bugsink.app_settings import get_settings
 
-from alerts.utils import send_rendered_email
+from bugsink.utils import send_rendered_email
 
 
 @shared_task

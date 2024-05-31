@@ -5,7 +5,7 @@ from django.template.defaultfilters import truncatechars
 from projects.models import ProjectMembership
 from bugsink.app_settings import get_settings
 
-from .utils import send_rendered_email
+from bugsink.utils import send_rendered_email
 
 
 def _get_users_for_email_alert(issue):
