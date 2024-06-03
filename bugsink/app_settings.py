@@ -25,6 +25,7 @@ DEFAULTS = {
     "USER_REGISTRATION": CB_ANYBODY,  # who can register new users. default: anybody, i.e. users can register themselves
     "USER_REGISTRATION_VERIFY_EMAIL": True,
     "USER_REGISTRATION_VERIFY_EMAIL_EXPIRY": 3 * 24 * 60 * 60,  # 7 days
+    "TEAM_CREATION": CB_MEMBERS,  # who can create new teams. default: members, which means "any member of the site"
 
     # System inner workings:
     "DIGEST_IMMEDIATELY": True,

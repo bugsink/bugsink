@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Members · {{ project.name }}  · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+
+
+<div class="flex items-center justify-center">
+
+    <div class="m-4 max-w-4xl flex-auto">
+
+        <div class="flex">
+            <h1 class="text-4xl mt-4 font-bold">Members</h1>
+
+            <div class="ml-auto mt-4">
+                <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" name="action" value="resolved_next">Invite Member</button>
+            </div> 
+        </div>
+
+        <div>
+          <form action="" method="post">
+          {% csrf_token %}
+
+          <table class="w-full mt-8">
+          <tbody>
+                <thead>
+                <tr class="bg-slate-200">
+                    <th class="w-full p-4 text-left text-xl" colspan="2">{{ project.name }}</th>
+                </tr>
+
+                {% for member in members %}
+                <tr class="bg-white border-slate-200 border-b-2">
+                <td class="w-full p-4">
+                    <div>
+                        <a href="TODO" class="text-xl text-cyan-500 font-bold">{{ member.user.email }}</a>  {# "best name" perhaps later? #}
+                    </div>
+                </td>
+
+                <td class="p-4">
+                    <div>
+                        <button name="action" value="leave" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Leave</button>
+                    </div> 
+                </td>
+
+                </tr>
+                {% endfor %}
+            </tbody>
+            </table>
+
+            </form>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}

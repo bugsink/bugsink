@@ -45,6 +45,7 @@ include = [
     "sentry_sdk_extensions*",
     "snappea*",
     "static*",
+    "teams*",
     "templates*",
     "theme*",
     "users*",

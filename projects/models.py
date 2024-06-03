@@ -13,6 +13,8 @@ class Project(models.Model):
     # id is implied which makes it an Integer; we would prefer a uuid but the sentry clients have int baked into the DSN
     # parser (we could also introduce a special field for that purpose but that's ugly too)
 
+    team = models.ForeignKey("teams.Team", blank=False, null=True, on_delete=models.SET_NULL)
+
     name = models.CharField(max_length=255, blank=False, null=False)
     slug = models.SlugField(max_length=50, blank=False, null=False)
 
@@ -75,7 +77,7 @@ class ProjectMembership(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
-    # TODO inheriting True/False for None from either Organization (which we also don't have yet) or directly from
+    # TODO inheriting True/False for None from either Team (which we also don't have yet) or directly from
     # User(Profile) is something we'll do later. At that point we'll probably implement it as denormalized here, so
     # we'll just have to shift the currently existing field into send_email_alerts_denormalized and create a 3-way
     # field.
@@ -85,7 +87,7 @@ class ProjectMembership(models.Model):
     # role = models.CharField(max_length=255, blank=False, null=False)
 
     def __str__(self):
-        return f"{self.user} membership of {self.project}"
+        return f"{self.user} project membership of {self.project}"
 
     class Meta:
         unique_together = ("project", "user")

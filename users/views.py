@@ -108,6 +108,8 @@ def request_reset_password(request):
 
 
 def reset_password(request, token=None):
+    # alternative name: set_password (because this one also works for initial setting of a password)
+
     # clean up expired tokens; doing this on every request is just fine, it saves us from having to run a cron
     # job-like thing
     EmailVerification.objects.filter(
@@ -120,6 +122,7 @@ def reset_password(request, token=None):
         raise Http404("Invalid or expired token")
 
     user = verification.user
+    next = request.POST.get("next", request.GET.get("next", redirect('home')))
 
     if request.method == 'POST':
         form = SetPasswordForm(user, request.POST)
@@ -131,12 +134,13 @@ def reset_password(request, token=None):
             verification.delete()
 
             login(request, verification.user)
-            return redirect('home')
+
+            return redirect(next)
 
     else:
         form = SetPasswordForm(user)
 
-    return render(request, "users/reset_password.html", {"form": form})
+    return render(request, "users/reset_password.html", {"form": form, "next": next})
 
 
 DEBUG_CONTEXTS = {

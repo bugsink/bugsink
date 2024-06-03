@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'theme',
     'snappea',
     'compat',
+    'teams',
     'projects',
     'releases',
     'ingest',

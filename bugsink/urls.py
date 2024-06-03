@@ -32,6 +32,8 @@ urlpatterns = [
 
     path('api/', include('ingest.urls')),
 
+    path('projects/', include('projects.urls')),
+    path('teams/', include('teams.urls')),
     path('events/', include('events.urls')),
     path('issues/', include('issues.urls')),
 

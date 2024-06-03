@@ -204,3 +204,9 @@ pre { line-height: 125%; }
 .syntax-coloring .vi { color: #19177C } /* Name.Variable.Instance */
 .syntax-coloring .vm { color: #19177C } /* Name.Variable.Magic */
 .syntax-coloring .il { color: #666666 } /* Literal.Number.Integer.Long */
+
+input[type='radio'] {
+    /* I wanted to style the whole of the radio button in a non-navy color (something that fits more with what we
+    do generally but I didn't manage to get it done in the self-allotted time. I'm still seeing a navy outer ring */
+    color: rgb(6 182 212);  /* cyan-500 */
+}
