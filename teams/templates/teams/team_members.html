@@ -43,10 +43,10 @@
                 <tr class="bg-white border-slate-200 border-b-2">
                 <td class="w-full p-4">
                     <div>
-                        <a href="TODO" class="text-xl text-cyan-500 font-bold">{{ member.user.email }}</a>  {# "best name" perhaps later? #}
+                        <a href="{% url "team_member_settings" team_pk=team.pk user_pk=member.user_id %}" class="text-xl text-cyan-500 font-bold">{{ member.user.email }}</a>  {# "best name" perhaps later? #}
                         {% if not member.accepted %}
-                        <span class="bg-slate-100 rounded-2xl px-4 py-2 ml-2 text-sm">Invited</span>
-                        {% elif member.role == 0 %} {# NOTE: we intentionally hide admin-ness for non-accepted users; TODO better use of constants #}
+                        <span class="bg-slate-100 rounded-2xl px-4 py-2 ml-2 text-sm">Invitation pending</span>
+                        {% elif member.role == 1 %} {# NOTE: we intentionally hide admin-ness for non-accepted users; TODO better use of constants #}
                         <span class="bg-cyan-100 rounded-2xl px-4 py-2 ml-2 text-sm">Admin</span>
                         {% endif %}
                     </div>
@@ -55,9 +55,9 @@
                 <td class="p-4">
                     <div class="flex justify-end">
                         {% if request.user == member.user %}  {# TODO: do not allow leaving when there is only a single admin #}
-                            <button name="action" value="delete-%s" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Leave</button>
+                            <button name="action" value="remove:{{ member.user_id }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Leave</button>
                         {% else %}  {# NOTE: in our setup request_user_is_admin is implied because only admins may view the membership page #}
-                            <button name="action" value="delete-%s" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Remove</button>
+                            <button name="action" value="remove:{{ member.user_id }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Remove</button>
                         {% endif %}
                     </div> 
                 </td>

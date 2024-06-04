@@ -1,4 +1,4 @@
-You have been invited to join the team "{{ team.name }}" on {{ site_title }}.
+You have been invited to join the team "{{ team_name }}" on {{ site_title }}.
 
 View, accept or reject the invitation by clicking the link below:
 

@@ -1,8 +1,10 @@
 from datetime import timedelta
 
+from django.db import models
 from django.shortcuts import render, redirect
 from django.contrib.auth import get_user_model, login
 from django.http import Http404, HttpResponseRedirect
+from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from django.urls import reverse
 from django.contrib import messages
@@ -12,22 +14,49 @@ from bugsink.app_settings import get_settings
 from bugsink.decorators import login_exempt
 
 from .models import Team, TeamMembership, TeamRole
-from .forms import TeamMemberInviteForm
+from .forms import TeamMemberInviteForm, TeamMembershipForm, MyTeamMembershipForm
 from .tasks import send_team_invite_email, send_team_invite_email_new_user
 
 User = get_user_model()
 
 
-def team_list(request):
-    team_list = Team.objects.all()
+def team_list(request, ownership_filter="mine"):
+    if request.method == 'POST':
+        full_action_str = request.POST.get('action')
+        action, team_pk = full_action_str.split(":", 1)
+        assert action == "leave", "Invalid action"
+        TeamMembership.objects.filter(team=team_pk, user=request.user.id).delete()
+        # messages.success("User removed from team")  I think this will be obvious enough
+
+    if ownership_filter == "mine":
+        base_qs = TeamMembership.objects.filter(user=request.user)
+    elif ownership_filter == "other":
+        base_qs = TeamMembership.objects.exclude(user=request.user).distinct("team") # TODO filter on minimal visibility
+    else:
+        raise ValueError("Invalid ownership_filter")
+
+    # select member_list with associated counts (active i.e. accepted members)
+    member_list = base_qs.select_related('team').annotate(
+        project_count=models.Count('team__project', distinct=True),
+        member_count=models.Count('team__teammembership', distinct=True, filter=models.Q(team__teammembership__accepted=True)),
+    )
+
     return render(request, 'teams/team_list.html', {
-        'state_filter': 'mine',
-        'team_list': team_list,
+        'ownership_filter': ownership_filter,
+        'member_list': member_list,
     })
 
 
 def team_members(request, team_pk):
     # TODO: check if user is a member of the team and has permission to view this page
+
+    if request.method == 'POST':
+        full_action_str = request.POST.get('action')
+        action, user_id = full_action_str.split(":", 1)
+        assert action == "remove", "Invalid action"
+        TeamMembership.objects.filter(team=team_pk, user=user_id).delete()
+        # messages.success("User removed from team")  I think this will be obvious enough
+
     team = Team.objects.get(id=team_pk)
     return render(request, 'teams/team_members.html', {
         'team': team,
@@ -84,6 +113,43 @@ def team_members_invite(request, team_pk):
 
     return render(request, 'teams/team_members_invite.html', {
         'team': team,
+        'form': form,
+    })
+
+
+def team_member_settings(request, team_pk, user_pk):
+    try:
+        your_membership = TeamMembership.objects.get(team=team_pk, user=request.user)
+    except TeamMembership.DoesNotExist:
+        raise PermissionDenied("You are not a member of this team")
+
+    if not your_membership.accepted:
+        return redirect("team_members_accept", team_pk=team_pk)
+
+    if str(user_pk) != str(request.user.id):
+        if not your_membership.role == TeamRole.ADMIN:
+            raise PermissionDenied("You are not an admin of this team")
+
+        membership = TeamMembership.objects.get(team=team_pk, user=user_pk)
+        create_form = lambda data: TeamMembershipForm(data, instance=membership)  # noqa
+    else:
+        edit_role = your_membership.role == TeamRole.ADMIN
+        create_form = lambda data: MyTeamMembershipForm(data=data, instance=your_membership, edit_role=edit_role)  # noqa
+
+    if request.method == 'POST':
+        form = create_form(request.POST)
+
+        if form.is_valid():
+            form.save()
+            return redirect('team_members', team_pk=team_pk)  # actually, for non-admins the path back to "your teams"?  or generally, just go back to where you came from?
+
+    else:
+        form = create_form(None)
+
+    return render(request, 'teams/team_member_settings.html', {
+        'this_is_you': str(user_pk) == str(request.user.id),
+        'user': User.objects.get(id=user_pk),
+        'team': Team.objects.get(id=team_pk),
         'form': form,
     })
 
@@ -150,3 +216,23 @@ def team_members_accept(request, team_pk):
         raise Http404("Invalid action")
 
     return render(request, "teams/team_members_accept.html", {"team": team, "membership": membership})
+
+
+DEBUG_CONTEXTS = {
+    "mails/team_membership_invite_new_user": {
+        "site_title": get_settings().SITE_TITLE,
+        "base_url": get_settings().BASE_URL + "/",
+        "team_name": "Some team",
+        "url": "http://example.com/confirm-email/1234567890abcdef",  # nonsense to avoid circular import
+    },
+    "mails/team_membership_invite": {
+        "site_title": get_settings().SITE_TITLE,
+        "base_url": get_settings().BASE_URL + "/",
+        "team_name": "Some team",
+        "url": "http://example.com/confirm-email/1234567890abcdef",  # nonsense to avoid circular import
+    },
+}
+
+
+def debug_email(request, template_name):
+    return render(request, template_name + ".html", DEBUG_CONTEXTS[template_name])

@@ -6,6 +6,7 @@ from django.contrib.auth import views as auth_views
 
 from alerts.views import debug_email as debug_alerts_email
 from users.views import debug_email as debug_users_email
+from teams.views import debug_email as debug_teams_email
 from bugsink.app_settings import get_settings
 from users.views import signup, confirm_email, resend_confirmation, request_reset_password, reset_password
 
@@ -44,8 +45,9 @@ urlpatterns = [
 
 if settings.DEBUG:
     urlpatterns += [
-        path('debug-alerts-email/<str:template_name>/', debug_alerts_email),
-        path('debug-users-email/<str:template_name>/', debug_users_email),
+        path('debug-alerts-email/<path:template_name>/', debug_alerts_email),
+        path('debug-users-email/<path:template_name>/', debug_users_email),
+        path('debug-teams-email/<path:template_name>/', debug_teams_email),
         path('trigger-error/', trigger_error),
         path("__debug__/", include("debug_toolbar.urls")),
     ]

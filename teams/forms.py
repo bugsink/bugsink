@@ -1,7 +1,8 @@
 from django import forms
 from django.contrib.auth import get_user_model
+from django.template.defaultfilters import yesno
 
-from .models import TeamRole
+from .models import TeamRole, TeamMembership
 
 User = get_user_model()
 
@@ -24,3 +25,33 @@ class TeamMemberInviteForm(forms.Form):
             raise forms.ValidationError('No user with this email address in the system.')
 
         return email
+
+
+class MyTeamMembershipForm(forms.ModelForm):
+    """Edit your TeamMembership, i.e. email-settings are OK, and role only for admins"""
+
+    class Meta:
+        model = TeamMembership
+        fields = ["send_email_alerts", "role"]
+
+    def __init__(self, *args, **kwargs):
+        edit_role = kwargs.pop("edit_role")
+        super().__init__(*args, **kwargs)
+        assert self.instance is not None, "This form is only implemented for editing"
+
+        if not edit_role:
+            del self.fields['role']
+
+        # self.instance.user[.profile].send_email_alerts  TODO implement
+        global_send_email_alerts = True
+        empty_label = "User-default (currently: %s)" % yesno(global_send_email_alerts)
+        self.fields['send_email_alerts'].empty_label = empty_label
+        self.fields['send_email_alerts'].widget.choices[0] = ("unknown", empty_label)
+
+
+class TeamMembershipForm(forms.ModelForm):
+    """Edit TeamMembership for not-you, i.e. set a role but not email-settings"""
+
+    class Meta:
+        model = TeamMembership
+        fields = ["role"]

@@ -13,8 +13,8 @@
 
 <div class="flex bg-slate-50 mt-4 items-end">
     <div class="flex">
-    <a href=""><div class="p-4 font-bold text-xl hover:bg-slate-200 {% if state_filter == "mine" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">My Teams</div></a>
-    <a href=""><div class="p-4 font-bold text-xl hover:bg-slate-200 {% if state_filter == "all" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">All Teams</div></a>
+    <a href="{% url "team_list" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 {% if ownership_filter == "mine" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">My Teams</div></a>
+    <a href="{% url "team_list_other" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 {% if ownership_filter == "other" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">Other Teams</div></a>
     </div>
     <div class="ml-auto p-2">
         <input type="text" name="search" placeholder="search teams..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md"/>
@@ -28,23 +28,29 @@
 
       <table class="w-full">
       <tbody>
-            {% for team in team_list %}
+            {% for member in member_list %}
             <tr class="bg-white border-slate-200 border-b-2">
             <td class="w-full p-4">
-                <div class="text-xl font-bold text-slate-800">
-                    {{ team.name }}
+                <div class="text-xl font-bold text-cyan-500">
+                    <a href={% url "team_member_settings" team_pk=member.team.id user_pk=request.user.id %}>{{ member.team.name }}</a>
+
+
                 </div>
                 <div>
-                    {{ team.project_set.count }} projects | {{ team.teammembership_set.count }} members
+                    {{ member.project_count }} projects | {{ member.member_count }} members
             </td>
 
-            <td class="pr-2">
+            <td class="pr-2 text-center">
+                {% if not member.accepted %}
+                <span class="bg-slate-100 rounded-2xl px-4 py-2 ml-2 text-sm">Invitation&nbsp;pending</span>
+                {% elif member.role == 1 %} {# NOTE: we intentionally hide admin-ness for non-accepted users; TODO better use of constants #}
                 <span class="bg-cyan-100 rounded-2xl px-4 py-2 ml-2 text-sm">Admin</span>
+                {% endif %}
             </td>
 
             <td class="pr-2">
                 <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer" onclick="followContainedLink(this);" >
-                    <a href="{% url 'team_members' team_pk=team.id %}">
+                    <a href="{% url 'team_members' team_pk=member.team.id %}">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8">
       <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
     </svg>
@@ -65,7 +71,7 @@
 
             <td>
                 <div>
-                    <button name="action" value="leave" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Leave</button>
+                    <button name="action" value="leave:{{ member.team.id }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Leave</button>
                 </div> 
             </td>
 
