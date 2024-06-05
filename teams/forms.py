@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.template.defaultfilters import yesno
 
-from .models import TeamRole, TeamMembership
+from .models import TeamRole, TeamMembership, Team
 
 User = get_user_model()
 
@@ -55,3 +55,9 @@ class TeamMembershipForm(forms.ModelForm):
     class Meta:
         model = TeamMembership
         fields = ["role"]
+
+
+class TeamForm(forms.ModelForm):
+    class Meta:
+        model = Team
+        fields = ["name", "visibility"]

@@ -8,13 +8,14 @@ from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from django.urls import reverse
 from django.contrib import messages
+from django.contrib.auth.decorators import permission_required
 
 from users.models import EmailVerification
 from bugsink.app_settings import get_settings
 from bugsink.decorators import login_exempt
 
 from .models import Team, TeamMembership, TeamRole
-from .forms import TeamMemberInviteForm, TeamMembershipForm, MyTeamMembershipForm
+from .forms import TeamMemberInviteForm, TeamMembershipForm, MyTeamMembershipForm, TeamForm
 from .tasks import send_team_invite_email, send_team_invite_email_new_user
 
 User = get_user_model()
@@ -59,21 +60,75 @@ def team_list(request, ownership_filter="mine"):
     })
 
 
+@permission_required("teams.add_team")
+def team_new(request):
+    if request.method == 'POST':
+        form = TeamForm(request.POST)
+
+        if form.is_valid():
+            team = form.save()
+
+            # the user who creates the team is automatically an (accepted) admin of the team
+            TeamMembership.objects.create(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True)
+            return redirect('team_members', team_pk=team.id)
+
+    else:
+        form = TeamForm()
+
+    return render(request, 'teams/team_new.html', {
+        'form': form,
+    })
+
+
+@permission_required("teams.edit_team")
+def team_edit(request, team_pk):
+    team = Team.objects.get(id=team_pk)
+
+    if request.method == 'POST':
+        form = TeamForm(request.POST, instance=team)
+
+        if form.is_valid():
+            form.save()
+            return redirect('team_members', team_pk=team.id)
+
+    else:
+        form = TeamForm(instance=team)
+
+    return render(request, 'teams/team_edit.html', {
+        'team': team,
+        'form': form,
+    })
+
+
 def team_members(request, team_pk):
     # TODO: check if user is a member of the team and has permission to view this page
 
     if request.method == 'POST':
         full_action_str = request.POST.get('action')
         action, user_id = full_action_str.split(":", 1)
-        assert action == "remove", "Invalid action"
-        TeamMembership.objects.filter(team=team_pk, user=user_id).delete()
-        # messages.success("User removed from team")  I think this will be obvious enough
+        if action == "remove":
+            TeamMembership.objects.filter(team=team_pk, user=user_id).delete()
+        elif action == "reinvite":
+            user = User.objects.get(id=user_id)
+            _send_team_invite_email(user, team_pk)
+            messages.success(request, f"Invitation resent to {user.email}")
 
     team = Team.objects.get(id=team_pk)
     return render(request, 'teams/team_members.html', {
         'team': team,
         'members': team.teammembership_set.all().select_related('user'),
     })
+
+
+def _send_team_invite_email(user, team_pk):
+    """Send an email to a user inviting them to a team; (for new users this includes the email-verification link)"""
+    if user.is_active:
+        send_team_invite_email.delay(user.email, team_pk)
+    else:
+        # this happens for new (in this view) users, but also for users who have been invited before but have
+        # not yet accepted the invite. In the latter case, we just send a fresh email
+        verification = EmailVerification.objects.create(user=user, email=user.username)
+        send_team_invite_email_new_user.delay(user.email, team_pk, verification.token)
 
 
 def team_members_invite(request, team_pk):
@@ -95,13 +150,7 @@ def team_members_invite(request, team_pk):
             user, user_created = User.objects.get_or_create(
                 email=email, defaults={'username': email, 'is_active': False})
 
-            if user.is_active:
-                send_team_invite_email.delay(email, team_pk)
-            else:
-                # this happens for new (in this view) users, but also for users who have been invited before but have
-                # not yet accepted the invite. In the latter case, we just send a fresh email
-                verification = EmailVerification.objects.create(user=user, email=user.username)
-                send_team_invite_email_new_user.delay(email, team_pk, verification.token)
+            _send_team_invite_email(user, team_pk)
 
             _, membership_created = TeamMembership.objects.get_or_create(team=team, user=user, defaults={
                 'role': form.cleaned_data['role'],
@@ -212,7 +261,8 @@ def team_members_accept(request, team_pk):
     membership = TeamMembership.objects.get(team=team, user=request.user)
 
     if membership.accepted:
-        return redirect()  # TODO same question as below
+        # i.e. the user has already accepted the invite, we just silently redirect as if they had just done so
+        return redirect("team_member_settings", team_pk=team_pk, user_pk=request.user.id)
 
     if request.method == 'POST':
         # no need for a form, it's just a pair of buttons
@@ -223,7 +273,7 @@ def team_members_accept(request, team_pk):
         if request.POST["action"] == "accept":
             membership.accepted = True
             membership.save()
-            return redirect()  # TODO what's a good thing to show for any given team? we don't have that yet I think.
+            return redirect("team_member_settings", team_pk=team_pk, user_pk=request.user.id)
 
         raise Http404("Invalid action")
 
