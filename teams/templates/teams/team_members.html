@@ -63,6 +63,16 @@
                 </td>
 
                 </tr>
+                {% empty %}
+                <tr class="bg-white border-slate-200 border-b-2">
+                <td class="w-full p-4">
+                    <div>
+                        {# Note: this is already somewhat exceptional, because the usually you'll at least see yourself here (unless you're a superuser and a team has become memberless) #}
+                        No members yet. <a href="{% url "team_members_invite" team_pk=team.pk %}" class="text-cyan-500 font-bold">Invite someone</a>. 
+                    </div>
+                </td>
+                </tr>
+
                 {% endfor %}
             </tbody>
             </table>

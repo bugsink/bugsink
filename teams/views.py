@@ -28,22 +28,34 @@ def team_list(request, ownership_filter="mine"):
         TeamMembership.objects.filter(team=team_pk, user=request.user.id).delete()
         # messages.success("User removed from team")  I think this will be obvious enough
 
+    my_memberships = TeamMembership.objects.filter(user=request.user)
+
     if ownership_filter == "mine":
-        base_qs = TeamMembership.objects.filter(user=request.user)
+        base_qs = Team.objects.filter(teammembership__in=my_memberships)
     elif ownership_filter == "other":
-        base_qs = TeamMembership.objects.exclude(user=request.user).distinct("team") # TODO filter on minimal visibility
+        base_qs = Team.objects.exclude(teammembership__in=my_memberships).distinct()
     else:
         raise ValueError("Invalid ownership_filter")
 
-    # select member_list with associated counts (active i.e. accepted members)
-    member_list = base_qs.select_related('team').annotate(
-        project_count=models.Count('team__project', distinct=True),
-        member_count=models.Count('team__teammembership', distinct=True, filter=models.Q(team__teammembership__accepted=True)),
+    team_list = base_qs.annotate(
+        project_count=models.Count('project', distinct=True),
+        member_count=models.Count('teammembership', distinct=True, filter=models.Q(teammembership__accepted=True)),
     )
+
+    if ownership_filter == "mine":
+        # Perhaps there's some Django-native way of doing this, but I can't figure it out soon enough, and this also
+        # works:
+        my_memberships_dict = {m.team_id: m for m in my_memberships}
+
+        team_list_2 = []
+        for team in team_list:
+            team.member = my_memberships_dict.get(team.id)
+            team_list_2.append(team)
+        team_list = team_list_2
 
     return render(request, 'teams/team_list.html', {
         'ownership_filter': ownership_filter,
-        'member_list': member_list,
+        'team_list': team_list,
     })
 
 

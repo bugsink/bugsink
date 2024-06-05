@@ -28,37 +28,43 @@
 
       <table class="w-full">
       <tbody>
-            {% for member in member_list %}
+            {% for team in team_list %}
             <tr class="bg-white border-slate-200 border-b-2">
             <td class="w-full p-4">
                 <div class="text-xl font-bold text-cyan-500">
-                    <a href={% url "team_member_settings" team_pk=member.team.id user_pk=request.user.id %}>{{ member.team.name }}</a>
+                    <a href={% url "team_member_settings" team_pk=team.id user_pk=request.user.id %}>{{ team.name }}</a>
 
 
                 </div>
                 <div>
-                    {{ member.project_count }} projects | {{ member.member_count }} members
+                    {{ team.project_count }} projects | {{ team.member_count }} members
+                </div>
             </td>
 
             <td class="pr-2 text-center">
-                {% if not member.accepted %}
-                <span class="bg-slate-100 rounded-2xl px-4 py-2 ml-2 text-sm">Invitation&nbsp;pending</span>
-                {% elif member.role == 1 %} {# NOTE: we intentionally hide admin-ness for non-accepted users; TODO better use of constants #}
-                <span class="bg-cyan-100 rounded-2xl px-4 py-2 ml-2 text-sm">Admin</span>
+                {% if team.member %}
+                    {% if not team.member.accepted %}
+                    <span class="bg-slate-100 rounded-2xl px-4 py-2 ml-2 text-sm">You're&nbsp;invited!</span>
+                    {% elif team.member.role == 1 %} {# NOTE: we intentionally hide admin-ness for non-accepted users; TODO better use of constants #}
+                    <span class="bg-cyan-100 rounded-2xl px-4 py-2 ml-2 text-sm">Admin</span>
+                    {% endif %}
                 {% endif %}
             </td>
 
             <td class="pr-2">
+                {% if team.member.is_admin %}
                 <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer" onclick="followContainedLink(this);" >
-                    <a href="{% url 'team_members' team_pk=member.team.id %}">
+                    <a href="{% url 'team_members' team_pk=team.id %}">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8">
       <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
     </svg>
                     </a>
                 </div>
+                {% endif %}
             </td>
 
             <td class="pr-2">
+                {% if team.member.is_admin %}
                 <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer"onclick="followContainedLink(this);" >
                     <a href="TODO">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8">
@@ -67,16 +73,33 @@
                         </svg>
                     </a>
                 </div>
+                {% endif %}
             </td>
 
             <td>
-                <div>
-                    <button name="action" value="leave:{{ member.team.id }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Leave</button>
-                </div> 
+                {% if team.member %}
+                    {% if not team.member.accepted %}
+                        <div>
+                            <a href="{% url 'team_members_accept' team_pk=team.id %}" class="font-bold text-cyan-500">Invitation</a>
+                        </div> 
+                    {% elif team.member.role == 1 %} {# NOTE: we intentionally hide admin-ness for non-accepted users; TODO better use of constants #}
+                        <div>
+                            <button name="action" value="leave:{{ team.id }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Leave</button>
+                        </div> 
+                    {% endif %}
+                {% endif %}
+            </td>
+
+            </tr>
+            {% empty %}
+            <tr class="bg-white border-slate-200 border-b-2">
+            <td class="w-full p-4">
+                No teams found.
             </td>
 
             </tr>
             {% endfor %}
+
         </tbody>
         </table>
 

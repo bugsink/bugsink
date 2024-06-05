@@ -41,3 +41,6 @@ class TeamMembership(models.Model):
 
     class Meta:
         unique_together = ("team", "user")
+
+    def is_admin(self):
+        return self.role == TeamRole.ADMIN

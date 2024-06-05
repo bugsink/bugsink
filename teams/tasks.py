@@ -20,7 +20,7 @@ def send_team_invite_email_new_user(email, team_pk, token):
             "site_title": get_settings().SITE_TITLE,
             "base_url": get_settings().BASE_URL + "/",
             "team_name": team.name,
-            "url": reverse("team_members_accept_new_user", kwargs={
+            "url": get_settings().BASE_URL + reverse("team_members_accept_new_user", kwargs={
                 "token": token,
                 "team_pk": team_pk,
             }),
@@ -40,7 +40,7 @@ def send_team_invite_email(email, team_pk):
             "site_title": get_settings().SITE_TITLE,
             "base_url": get_settings().BASE_URL + "/",
             "team_name": team.name,
-            "url": reverse("team_members_accept", kwargs={
+            "url": get_settings().BASE_URL + reverse("team_members_accept", kwargs={
                 "team_pk": team_pk,
             }),
         },

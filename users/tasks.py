@@ -15,7 +15,7 @@ def send_confirm_email(email, token):
         context={
             "site_title": get_settings().SITE_TITLE,
             "base_url": get_settings().BASE_URL + "/",
-            "confirm_url": reverse("confirm_email", kwargs={"token": token}),
+            "confirm_url": get_settings().BASE_URL + reverse("confirm_email", kwargs={"token": token}),
         },
     )
 
@@ -29,6 +29,6 @@ def send_reset_email(email, token):
         context={
             "site_title": get_settings().SITE_TITLE,
             "base_url": get_settings().BASE_URL + "/",
-            "reset_url": reverse("reset_email", kwargs={"token": token}),
+            "reset_url": get_settings().BASE_URL + reverse("reset_password", kwargs={"token": token}),
         },
     )
