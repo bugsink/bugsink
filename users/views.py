@@ -62,7 +62,7 @@ def confirm_email(request, token=None):
     # to email is assumed to be sufficient proof of identity.
     login(request, verification.user)
 
-    return render(request, "users/email_confirmed.html")
+    return redirect('home')
 
 
 def resend_confirmation(request):
