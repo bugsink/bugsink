@@ -88,9 +88,10 @@ def team_new(request):
     })
 
 
-@permission_required("teams.edit_team")
 def team_edit(request, team_pk):
     team = Team.objects.get(id=team_pk)
+    if not TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists():
+        raise PermissionDenied("You are not an admin of this team")
 
     if request.method == 'POST':
         form = TeamForm(request.POST, instance=team)
@@ -109,7 +110,9 @@ def team_edit(request, team_pk):
 
 
 def team_members(request, team_pk):
-    # TODO: check if user is a member of the team and has permission to view this page
+    team = Team.objects.get(id=team_pk)
+    if not TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists():
+        raise PermissionDenied("You are not an admin of this team")
 
     if request.method == 'POST':
         full_action_str = request.POST.get('action')
@@ -121,7 +124,6 @@ def team_members(request, team_pk):
             _send_team_invite_email(user, team_pk)
             messages.success(request, f"Invitation resent to {user.email}")
 
-    team = Team.objects.get(id=team_pk)
     return render(request, 'teams/team_members.html', {
         'team': team,
         'members': team.teammembership_set.all().select_related('user'),
@@ -140,9 +142,9 @@ def _send_team_invite_email(user, team_pk):
 
 
 def team_members_invite(request, team_pk):
-    # TODO: check if user is a member of the team and has permission to view this page
-
     team = Team.objects.get(id=team_pk)
+    if not TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists():
+        raise PermissionDenied("You are not an admin of this team")
 
     if get_settings().USER_REGISTRATION in [CB_ANYBODY, CB_MEMBERS]:
         user_must_exist = False
