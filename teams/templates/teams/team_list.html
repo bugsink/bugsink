@@ -72,7 +72,7 @@
             </td>
 
             <td class="pr-2">
-                {% if team.member.is_admin %}
+                {% if team.member.is_admin or request.user.is_superuser %}
                 <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer" onclick="followContainedLink(this);" >
                     <a href="{% url 'team_members' team_pk=team.id %}">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8">
@@ -84,7 +84,7 @@
             </td>
 
             <td class="pr-2">
-                {% if team.member.is_admin %}
+                {% if team.member.is_admin or request.user.is_superuser %}
                 <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer"onclick="followContainedLink(this);" >
                     <a href="{% url "team_edit" team_pk=team.id %}">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8">
@@ -108,7 +108,7 @@
                         </div> 
                     {% endif %}
                 {% else %}
-                    {% if team.is_joinable %}
+                    {% if team.is_joinable or request.user.is_superuser %}
                         <div>
                             <button name="action" value="join:{{ team.id }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Join</button>
                         </div>

@@ -15,7 +15,7 @@ from users.models import EmailVerification
 from bugsink.app_settings import get_settings, CB_ANYBODY, CB_ADMINS, CB_MEMBERS
 from bugsink.decorators import login_exempt
 
-from .models import Team, TeamMembership, TeamRole
+from .models import Team, TeamMembership, TeamRole, TeamVisibility
 from .forms import TeamMemberInviteForm, TeamMembershipForm, MyTeamMembershipForm, TeamForm
 from .tasks import send_team_invite_email, send_team_invite_email_new_user
 
@@ -25,7 +25,17 @@ User = get_user_model()
 def team_list(request, ownership_filter=None):
     my_memberships = TeamMembership.objects.filter(user=request.user)
     my_teams = Team.objects.filter(teammembership__in=my_memberships)
-    other_teams = Team.objects.exclude(teammembership__in=my_memberships).distinct()  # TODO visibility-check
+
+    if request.user.is_superuser:
+        # superusers can see all teams, even hidden ones
+        other_teams = Team.objects\
+            .exclude(teammembership__in=my_memberships)\
+            .order_by('name').distinct()
+    else:
+        other_teams = Team.objects\
+            .exclude(teammembership__in=my_memberships)\
+            .exclude(visibility=TeamVisibility.HIDDEN)\
+            .order_by('name').distinct()
 
     if ownership_filter is None:
         # if no tab is provided, we redirect to the most informative one. generally we prefer "mine", but not when empty
@@ -41,7 +51,7 @@ def team_list(request, ownership_filter=None):
             TeamMembership.objects.filter(team=team_pk, user=request.user.id).delete()
         elif action == "join":
             team = Team.objects.get(id=team_pk)
-            if not team.is_joinable():
+            if not team.is_joinable() and not request.user.is_superuser:
                 raise PermissionDenied("This team is not joinable")
 
             messages.success(request, 'You have joined the team "%s"' % team.name)
@@ -99,7 +109,8 @@ def team_new(request):
 
 def team_edit(request, team_pk):
     team = Team.objects.get(id=team_pk)
-    if not TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists():
+    if (not TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists() and
+            not request.user.is_superuser):
         raise PermissionDenied("You are not an admin of this team")
 
     if request.method == 'POST':
@@ -120,7 +131,8 @@ def team_edit(request, team_pk):
 
 def team_members(request, team_pk):
     team = Team.objects.get(id=team_pk)
-    if not TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists():
+    if (not TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists() and
+            not request.user.is_superuser):
         raise PermissionDenied("You are not an admin of this team")
 
     if request.method == 'POST':
@@ -152,7 +164,8 @@ def _send_team_invite_email(user, team_pk):
 
 def team_members_invite(request, team_pk):
     team = Team.objects.get(id=team_pk)
-    if not TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists():
+    if (not TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists() and
+            not request.user.is_superuser):
         raise PermissionDenied("You are not an admin of this team")
 
     if get_settings().USER_REGISTRATION in [CB_ANYBODY, CB_MEMBERS]:
@@ -218,7 +231,7 @@ def team_member_settings(request, team_pk, user_pk):
         membership = TeamMembership.objects.get(team=team_pk, user=user_pk)
         create_form = lambda data: TeamMembershipForm(data, instance=membership)  # noqa
     else:
-        edit_role = your_membership.role == TeamRole.ADMIN
+        edit_role = your_membership.role == TeamRole.ADMIN or request.user.is_superuser
         create_form = lambda data: MyTeamMembershipForm(data=data, instance=your_membership, edit_role=edit_role)  # noqa
 
     if request.method == 'POST':
