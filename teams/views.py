@@ -2,13 +2,14 @@ from datetime import timedelta
 
 from django.db import models
 from django.shortcuts import render, redirect
-from django.contrib.auth import get_user_model, login
+from django.contrib.auth import get_user_model
 from django.http import Http404, HttpResponseRedirect
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from django.urls import reverse
 from django.contrib import messages
 from django.contrib.auth.decorators import permission_required
+from django.contrib.auth import logout
 
 from users.models import EmailVerification
 from bugsink.app_settings import get_settings, CB_ANYBODY, CB_ADMINS, CB_MEMBERS
@@ -255,23 +256,34 @@ def team_members_accept_new_user(request, team_pk, token):
         # external system, password is managed externally". For now, we're good.
         # In the above we take the (perhaps redundant) approach of checking for either of 2 login-blocking conditions.
 
-        return HttpResponseRedirect(reverse("set_password", kwargs={"token": token}) + "?next=" + reverse(
+        return HttpResponseRedirect(reverse("reset_password", kwargs={"token": token}) + "?next=" + reverse(
             team_members_accept, kwargs={"team_pk": team_pk})
         )
-        # TODO: thoughts about showing the user what's going on.
 
     # the above "set_password" branch is the "main flow"/"whole point" of this view: auto-login using a token and
-    # subsequent password-set because no user exists yet. However, it is possible that a user ends up here while already
-    # having registered, e.g. when multiple invites have been sent in a row. In that case, the password-setting may be
-    # skipped and we can just skip straight to the actual team-accept
+    # subsequent password-set because no (active) user exists yet. However, it is possible that a user ends up here
+    # while already having completed registration, e.g. when multiple invites have been sent in a row. In that case, the
+    # password-setting may be skipped and we can just skip straight to the actual team-accept.
 
-    # TODO: check how this interacts with login_[not]_required.... my thinking is: we should just do a login() here
-    # and should be OK; but this needs to be tested.
-    login(request, user)
-    return team_members_accept(request, team_pk)
+    # to remove some of the confusion mentioned in "team_members_accept", we at least log you out if the verification
+    # you've clicked on is for a different user than the one you're logged in as.
+    if request.user.is_authenticated and request.user != user:
+        logout(request)
+
+    # In this case, we clean up the no-longer-required verification object (we make somewhat of an exception to the
+    # "don't change stuff on GET" rule, because it's immaterial here).
+    verification.delete()
+
+    # And we just redirect to the regular "accept" page. No auto-login, because we're not in a POST request here. (at a
+    # small cost in UX in the case you reach this page in a logged-out state).
+    return redirect("team_members_accept", team_pk=team_pk)
 
 
 def team_members_accept(request, team_pk):
+    # NOTE: in principle it is confusingly possible to reach this page while logged in as user A, while having been
+    # invited as user B. Security-wise this is fine, but UX-wise it could be confusing. However, I'm in the assumption
+    # here that normal people (i.e. not me) don't have multiple accounts, so I'm not going to bother with this.
+
     team = Team.objects.get(id=team_pk)
     membership = TeamMembership.objects.get(team=team, user=request.user)
 
