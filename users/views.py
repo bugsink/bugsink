@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.contrib.auth import login
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, reverse
 from django.contrib.auth import get_user_model
 from django.http import Http404
 from django.utils import timezone
@@ -129,7 +129,7 @@ def reset_password(request, token=None):
         raise Http404("Invalid or expired token")
 
     user = verification.user
-    next = request.POST.get("next", request.GET.get("next", redirect('home')))
+    next = request.POST.get("next", request.GET.get("next", reverse("home")))
 
     if request.method == 'POST':
         form = SetPasswordForm(user, request.POST)
