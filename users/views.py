@@ -54,15 +54,22 @@ def confirm_email(request, token=None):
         # good enough (though a special page might be prettier)
         raise Http404("Invalid or expired token")
 
-    verification.user.is_active = True
-    verification.user.save()
-    verification.delete()
+    if request.method == 'POST':
+        # We insist on POST requests to do the actual confirmation (at the cost of an extra click). See:
+        # https://softwareengineering.stackexchange.com/a/422579/168778
+        # there's no form, the'res just a button to generate the post request
 
-    # this mirrors the approach of what we do in password-resetting; and rightfully so because the in both cases access
-    # to email is assumed to be sufficient proof of identity.
-    login(request, verification.user)
+        verification.user.is_active = True
+        verification.user.save()
+        verification.delete()
 
-    return redirect('home')
+        # this mirrors the approach of what we do in password-resetting; and rightfully so because the in both cases
+        # access to email is assumed to be sufficient proof of identity.
+        login(request, verification.user)
+
+        return redirect('home')
+
+    return render(request, "users/confirm_email.html")
 
 
 def resend_confirmation(request):
