@@ -107,6 +107,12 @@
                             <button name="action" value="leave:{{ team.id }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Leave</button>
                         </div> 
                     {% endif %}
+                {% else %}
+                    {% if team.is_joinable %}
+                        <div>
+                            <button name="action" value="join:{{ team.id }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Join</button>
+                        </div>
+                    {% endif %}
                 {% endif %}
             </td>
 

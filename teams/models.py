@@ -11,9 +11,10 @@ class TeamRole(models.IntegerChoices):
 
 
 class TeamVisibility(models.IntegerChoices):
-    PUBLIC = 0  # anyone can join(?); or even just click-through(?)
-    VISIBLE = 1  # the team is visible, you can request to join(?), but this needs to be approved
-    HIDDEN = 2  # the team is not visible to non-members; you need to be invited
+    # PUBLIC = 0  # anyone can see the team and its members  not sure if I want this or always want to require click-in
+    JOINABLE = 1  # anyone can join
+    VISIBLE = 10  # the team is visible, you can request to join(?), but this needs to be approved
+    HIDDEN = 99  # the team is not visible to non-members; you need to be invited
 
 
 class Team(models.Model):
@@ -22,10 +23,13 @@ class Team(models.Model):
     name = models.CharField(max_length=255, blank=False, null=False, unique=True)
     slug = models.SlugField(max_length=50, blank=False, null=False)
 
-    visibility = models.IntegerField(choices=TeamVisibility.choices, default=TeamVisibility.PUBLIC)
+    visibility = models.IntegerField(choices=TeamVisibility.choices, default=TeamVisibility.JOINABLE)
 
     def __str__(self):
         return self.name
+
+    def is_joinable(self):
+        return self.visibility <= TeamVisibility.JOINABLE
 
 
 class TeamMembership(models.Model):

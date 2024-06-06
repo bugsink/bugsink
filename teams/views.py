@@ -25,9 +25,16 @@ def team_list(request, ownership_filter="mine"):
     if request.method == 'POST':
         full_action_str = request.POST.get('action')
         action, team_pk = full_action_str.split(":", 1)
-        assert action == "leave", "Invalid action"
-        TeamMembership.objects.filter(team=team_pk, user=request.user.id).delete()
-        # messages.success("User removed from team")  I think this will be obvious enough
+        if action == "leave":
+            TeamMembership.objects.filter(team=team_pk, user=request.user.id).delete()
+        elif action == "join":
+            team = Team.objects.get(id=team_pk)
+            if not team.is_joinable():
+                raise PermissionDenied("This team is not joinable")
+
+            messages.success(request, 'You have joined the team "%s"' % team.name)
+            TeamMembership.objects.create(team_id=team_pk, user_id=request.user.id, role=TeamRole.MEMBER, accepted=True)
+            return redirect('team_member_settings', team_pk=team_pk, user_pk=request.user.id)
 
     my_memberships = TeamMembership.objects.filter(user=request.user)
 
@@ -187,7 +194,8 @@ def team_member_settings(request, team_pk, user_pk):
     if not your_membership.accepted:
         return redirect("team_members_accept", team_pk=team_pk)
 
-    if str(user_pk) != str(request.user.id):
+    this_is_you = str(user_pk) == str(request.user.id)
+    if not this_is_you:
         if not your_membership.role == TeamRole.ADMIN:
             raise PermissionDenied("You are not an admin of this team")
 
@@ -202,13 +210,16 @@ def team_member_settings(request, team_pk, user_pk):
 
         if form.is_valid():
             form.save()
-            return redirect('team_members', team_pk=team_pk)  # actually, for non-admins the path back to "your teams"?  or generally, just go back to where you came from?
+            if this_is_you:
+                # assumption (not always true): when editing yourself, you came from the team list not the team members
+                return redirect('team_list')
+            return redirect('team_members', team_pk=team_pk)
 
     else:
         form = create_form(None)
 
     return render(request, 'teams/team_member_settings.html', {
-        'this_is_you': str(user_pk) == str(request.user.id),
+        'this_is_you': this_is_you,
         'user': User.objects.get(id=user_pk),
         'team': Team.objects.get(id=team_pk),
         'form': form,
