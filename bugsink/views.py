@@ -13,7 +13,7 @@ def home(request):
     project_count = request.user.project_set.all().count()
 
     if project_count == 0:
-        raise NotImplementedError("Onboarding not implemented yet")
+        return redirect("team_list")
 
     elif project_count == 1:
         project = request.user.project_set.get()

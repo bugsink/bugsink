@@ -15,19 +15,6 @@
                 <a href="/"><img src="{% static 'images/bugsink-logo.png' %}" class="p-2 h-12 w-12"></a>
                 <a href="/"><div class="pt-4 pb-4 pl-2 pr-2 font-bold">{{ site_title }}</div></a>
 
-                {# TODO how to handle single-org, single-project #}
-
-                <div class="dropdown">
-                    <a href="TODO"><div class="p-4 hover:bg-slate-400">Group 1&nbsp;&nbsp;🞃 </div></a>
-                     
-                    <div class="dropdown-content-left flex-col">
-                        <a href="TODO"><div class="bg-slate-200 hover:bg-slate-400 p-4 whitespace-nowrap {% if project == loop_project %}italic{% endif %}">Group 1</div></a>
-                        <a href="TODO"><div class="bg-slate-200 hover:bg-slate-400 p-4 whitespace-nowrap {% if project == loop_project %}italic{% endif %}">Group 2</div></a>
-                        <a href="TODO"><div class="bg-slate-200 hover:bg-slate-400 p-4 whitespace-nowrap {% if project == loop_project %}italic{% endif %}">Group 3</div></a>
-                    </div>
-                </div> 
-
-
                 <div class="dropdown">
                     <a href="/issues/{{ project.id }}"><div class="p-4 hover:bg-slate-400">{{ project.name }}&nbsp;&nbsp;🞃 </div></a>
                      
@@ -39,6 +26,8 @@
                         {% endfor %}
                     </div>
                 </div> 
+
+                <a href="{% url "team_list" %}"><div class="p-4 hover:bg-slate-400">Teams</div></a>
 
                 <div class="ml-auto flex">
                 {% if user.is_staff %}

@@ -6,6 +6,7 @@ from .views import (
 
 urlpatterns = [
     path('', team_list, name="team_list"),
+    path('mine/', team_list, kwargs={"ownership_filter": "mine"}, name="team_list_mine"),
     path('other/', team_list, kwargs={"ownership_filter": "other"}, name="team_list_other"),
     path('new/', team_new, name="team_new"),
     path('<str:team_pk>/edit/', team_edit, name="team_edit"),

@@ -22,7 +22,18 @@ from .tasks import send_team_invite_email, send_team_invite_email_new_user
 User = get_user_model()
 
 
-def team_list(request, ownership_filter="mine"):
+def team_list(request, ownership_filter=None):
+    my_memberships = TeamMembership.objects.filter(user=request.user)
+    my_teams = Team.objects.filter(teammembership__in=my_memberships)
+    other_teams = Team.objects.exclude(teammembership__in=my_memberships).distinct()  # TODO visibility-check
+
+    if ownership_filter is None:
+        # if no tab is provided, we redirect to the most informative one. generally we prefer "mine", but not when empty
+        if my_teams.exists() or not other_teams.exists():
+            # "or not other": if there are no teams at all, an empty "mine" is more informative than an empty "other"
+            return redirect('team_list_mine')
+        return redirect('team_list_other')
+
     if request.method == 'POST':
         full_action_str = request.POST.get('action')
         action, team_pk = full_action_str.split(":", 1)
@@ -37,12 +48,10 @@ def team_list(request, ownership_filter="mine"):
             TeamMembership.objects.create(team_id=team_pk, user_id=request.user.id, role=TeamRole.MEMBER, accepted=True)
             return redirect('team_member_settings', team_pk=team_pk, user_pk=request.user.id)
 
-    my_memberships = TeamMembership.objects.filter(user=request.user)
-
     if ownership_filter == "mine":
-        base_qs = Team.objects.filter(teammembership__in=my_memberships)
+        base_qs = my_teams
     elif ownership_filter == "other":
-        base_qs = Team.objects.exclude(teammembership__in=my_memberships).distinct()
+        base_qs = other_teams
     else:
         raise ValueError("Invalid ownership_filter")
 
