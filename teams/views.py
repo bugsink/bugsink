@@ -11,7 +11,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import permission_required
 
 from users.models import EmailVerification
-from bugsink.app_settings import get_settings
+from bugsink.app_settings import get_settings, CB_ANYBODY, CB_ADMINS, CB_MEMBERS
 from bugsink.decorators import login_exempt
 
 from .models import Team, TeamMembership, TeamRole
@@ -143,8 +143,12 @@ def team_members_invite(request, team_pk):
 
     team = Team.objects.get(id=team_pk)
 
-    user_must_exist = True  # TODO implement based on USER_REGISTRATION setting and how it compares to the current user
-    user_must_exist = False
+    if get_settings().USER_REGISTRATION in [CB_ANYBODY, CB_MEMBERS]:
+        user_must_exist = False
+    elif get_settings().USER_REGISTRATION == CB_ADMINS and request.user.has_perm("users.add_user"):
+        user_must_exist = False
+    else:
+        user_must_exist = True
 
     if request.method == 'POST':
         form = TeamMemberInviteForm(user_must_exist, request.POST)
