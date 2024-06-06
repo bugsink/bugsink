@@ -158,4 +158,4 @@ DEBUG_CONTEXTS = {
 
 
 def debug_email(request, template_name):
-    return render(request, 'users/' + template_name + ".html", DEBUG_CONTEXTS[template_name])
+    return render(request, 'mails/' + template_name + ".html", DEBUG_CONTEXTS[template_name])

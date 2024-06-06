@@ -45,9 +45,9 @@ urlpatterns = [
 
 if settings.DEBUG:
     urlpatterns += [
-        path('debug-alerts-email/<path:template_name>/', debug_alerts_email),
-        path('debug-users-email/<path:template_name>/', debug_users_email),
-        path('debug-teams-email/<path:template_name>/', debug_teams_email),
+        path('debug-alerts-email/<str:template_name>/', debug_alerts_email),
+        path('debug-users-email/<str:template_name>/', debug_users_email),
+        path('debug-teams-email/<str:template_name>/', debug_teams_email),
         path('trigger-error/', trigger_error),
         path("__debug__/", include("debug_toolbar.urls")),
     ]

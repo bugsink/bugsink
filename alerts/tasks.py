@@ -35,7 +35,7 @@ def _send_alert(issue_id, state_description, alert_article, alert_reason, **kwar
     for membership in _get_users_for_email_alert(issue):
         send_rendered_email(
             subject=truncatechars(f'"{issue.title()}" in "{issue.project.name}" ({state_description})', 100),
-            base_template_name="alerts/issue_alert",
+            base_template_name="mails/issue_alert",
             recipient_list=[membership.user.email],
             context={
                 "site_title": get_settings().SITE_TITLE,

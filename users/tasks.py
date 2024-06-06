@@ -10,7 +10,7 @@ from bugsink.utils import send_rendered_email
 def send_confirm_email(email, token):
     send_rendered_email(
         subject="Confirm your email address",
-        base_template_name="users/confirm_email",
+        base_template_name="mails/confirm_email",
         recipient_list=[email],
         context={
             "site_title": get_settings().SITE_TITLE,
@@ -24,7 +24,7 @@ def send_confirm_email(email, token):
 def send_reset_email(email, token):
     send_rendered_email(
         subject="Reset your password",
-        base_template_name="users/reset_password_email",
+        base_template_name="mails/reset_password_email",
         recipient_list=[email],
         context={
             "site_title": get_settings().SITE_TITLE,

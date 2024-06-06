@@ -292,13 +292,13 @@ def team_members_accept(request, team_pk):
 
 
 DEBUG_CONTEXTS = {
-    "mails/team_membership_invite_new_user": {
+    "team_membership_invite_new_user": {
         "site_title": get_settings().SITE_TITLE,
         "base_url": get_settings().BASE_URL + "/",
         "team_name": "Some team",
         "url": "http://example.com/confirm-email/1234567890abcdef",  # nonsense to avoid circular import
     },
-    "mails/team_membership_invite": {
+    "team_membership_invite": {
         "site_title": get_settings().SITE_TITLE,
         "base_url": get_settings().BASE_URL + "/",
         "team_name": "Some team",
@@ -308,4 +308,4 @@ DEBUG_CONTEXTS = {
 
 
 def debug_email(request, template_name):
-    return render(request, template_name + ".html", DEBUG_CONTEXTS[template_name])
+    return render(request, "mails/" + template_name + ".html", DEBUG_CONTEXTS[template_name])
