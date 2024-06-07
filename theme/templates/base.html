@@ -13,36 +13,22 @@
         <div id="content">
             <div class="flex pl-4 bg-slate-200">
                 <a href="/"><img src="{% static 'images/bugsink-logo.png' %}" class="p-2 h-12 w-12"></a>
-                <a href="/"><div class="pt-4 pb-4 pl-2 pr-2 font-bold">{{ site_title }}</div></a>
+                <a href="/"><div class="px-2 py-2 my-2 font-bold hover:bg-slate-300 rounded-xl">{{ site_title }}</div></a>
 
-                <a href="{% url "project_list" %}"><div class="p-4 hover:bg-slate-400">Projects</div></a>
+                <a href="{% url "project_list" %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl">Projects</div></a>
 
-                {% comment %}
-                <div class="dropdown">
-                    <a href="/issues/{{ project.id }}"><div class="p-4 hover:bg-slate-400">{{ project.name }}&nbsp;&nbsp;🞃 </div></a>
-                     
-                    <div class="dropdown-content-left flex-col">
-                        {% for loop_project in user_projects %}  
-                            {% if loop_project != project %}
-                                <a href="/issues/{{ loop_project.id }}/"><div class="bg-slate-200 hover:bg-slate-400 p-4 whitespace-nowrap">{{ loop_project.name }}</div></a>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
-                </div> 
-                {% endcomment %}
-
-                <a href="{% url "team_list" %}"><div class="p-4 hover:bg-slate-400">Teams</div></a>
+                <a href="{% url "team_list" %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl">Teams</div></a>
 
                 <div class="ml-auto flex">
                 {% if user.is_staff %}
-                <a href="/admin/"><div class="p-4 hover:bg-slate-400">Admin</div></a>
+                <a href="/admin/"><div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl">Admin</div></a>
                 {% endif %}
 
                 {% if logged_in_user.is_anonymous %}
-                    <a href="/accounts/login/"><div class="p-4 hover:bg-slate-400">Login</div></a>
+                    <a href="/accounts/login/"><div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl">Login</div></a>  {# I don't think this is actually ever shown in practice, because you must always be logged in #}
                 {% else %}
-                    <a href="/accounts/TODO/"><div class="p-4 hover:bg-slate-400">Profile</div></a>
-                    <div class="p-4 hover:bg-slate-400"><form id="logout-form" method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Log out</button></form></div>
+                    <a href="/accounts/TODO/"><div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl">Profile</div></a>
+                    <div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl"><form id="logout-form" method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Log out</button></form></div>
                 {% endif %}
                 </div>
             </div>
