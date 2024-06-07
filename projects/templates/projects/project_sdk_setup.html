@@ -77,9 +77,11 @@ print(highlight(code, lexer, HtmlFormatter()))
             Your event should now appear in the <a href="{% url "issue_list_open" project_pk=project.pk %}" class="text-cyan-500 font-bold">list of open issues</a>.
         </div>
 
-        
-
-
+        <div class="mt-8"> 
+            Alternatively, manage the
+            <a href="{% url "project_members" project_pk=project.pk %}" class="text-cyan-500 font-bold">Project Members</a>
+            or <a href="{% url "project_edit" project_pk=project.pk %}" class="text-cyan-500 font-bold">Project settings</a>.
+        </div>
 
     </div>
 </div>
