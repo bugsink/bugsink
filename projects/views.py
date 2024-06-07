@@ -124,7 +124,7 @@ def project_new(request):
 
             # the user who creates the project is automatically an (accepted) admin of the project
             ProjectMembership.objects.create(project=project, user=request.user, role=ProjectRole.ADMIN, accepted=True)
-            return redirect('project_members', project_pk=project.id)
+            return redirect('project_sdk_setup', project_pk=project.id)
 
     else:
         form = ProjectForm(team_qs=team_qs)
@@ -363,3 +363,15 @@ def project_members_accept(request, project_pk):
         raise Http404("Invalid action")
 
     return render(request, "projects/project_members_accept.html", {"project": project, "membership": membership})
+
+
+def project_sdk_setup(request, project_pk):
+    project = Project.objects.get(id=project_pk)
+
+    if not request.user.is_superuser and not ProjectMembership.objects.filter(project=project, user=request.user,
+                                                                              accepted=True).exists():
+        raise PermissionDenied("You are not a member of this project")
+
+    return render(request, "projects/project_sdk_setup.html", {
+        "project": project,
+    })

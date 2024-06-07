@@ -4,6 +4,7 @@
 {% block title %}Edit {{ project.name }} · {{ site_title }}{% endblock %}
 
 {% block content %}
+{# div class="text-cyan-800" here in an attempt to trigger tailwind, which does not pick up Pyhton code #}
 
 
 <div class="flex items-center justify-center">
@@ -46,6 +47,23 @@
             {% endfor %}
             {% elif form.visibility.help_text %}
                 <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.visibility.help_text|safe }}</div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if form.dsn %}
+        <div class="text-lg mb-8">
+            <div class="text-slate-800 font-bold">{{ form.dsn.label }}</div>
+            <div class="flex items-center">
+                {{ form.dsn }}
+
+            </div>
+            {% if form.dsn.errors %}
+            {% for error in form.dsn.errors %}
+                <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
+            {% endfor %}
+            {% elif form.dsn.help_text %}
+                <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.dsn.help_text|safe }}</div>
             {% endif %}
         </div>
         {% endif %}

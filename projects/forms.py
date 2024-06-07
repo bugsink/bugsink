@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django.template.defaultfilters import yesno
+from django.urls import reverse
 
 from teams.models import TeamMembership
 
@@ -58,19 +59,25 @@ class MyProjectMembershipForm(forms.ModelForm):
 
 class ProjectForm(forms.ModelForm):
 
+    dsn = forms.CharField(label="DSN", disabled=True)
+
     def __init__(self, *args, **kwargs):
         team_qs = kwargs.pop("team_qs", None)
         super().__init__(*args, **kwargs)
-        if self.instance is not None and self.instance.pk is not None:
+        if self.instance is None or self.instance.pk is None:
             # for editing, we disallow changing the team. consideration: it's somewhat hard to see what the consequences
             # for authorization are (from the user's perspective).
             del self.fields["team"]
+            del self.fields["dsn"]
 
             # if we ever push slug to the form, editing it should probably be disallowed as well (but mainly because it
             # has consequences on the issue's short identifier)
             # del self.fields["slug"]
         else:
             self.fields["team"].queryset = team_qs
+            self.fields["dsn"].initial = self.instance.dsn
+            self.fields["dsn"].label = "DSN (read-only)"
+            self.fields["dsn"].help_text = 'Use the DSN to <a href="' + reverse('project_sdk_setup', kwargs={'project_pk': self.instance.pk}) + '" class="text-cyan-800 font-bold">set up the SDK</a>.'
 
     class Meta:
         model = Project

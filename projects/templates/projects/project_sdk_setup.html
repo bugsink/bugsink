@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Set up your SDK · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+
+<div class="flex items-center justify-center">
+
+    <div class="m-4 max-w-4xl flex-auto">
+        <h1 class="text-4xl font-bold">Set up your SDK</h1>
+
+        <div class="mt-4">
+            To get started, you need to set up your SDK. Follow the instructions below to set up your SDK.
+        </div>
+
+        <div class="mt-4 italic">
+            Note: currently, we only support the Python SDK. Other SDKs might actually work, but have not been tested.
+        </div>
+
+        <div class="mt-4">
+            Bugsink is compatible with the Sentry SDK. A basic setup is the following:
+        </div>
+
+        <h2 class="mt-8 text-2xl font-bold">Step 1: Install the SDK</h2>
+
+        <div class="mt-4">
+            Install the SDK using pip:
+        </div>
+
+        <div class="mt-4">
+<div class="p-4 mt-4 bg-slate-50 syntax-coloring"><pre><span>pip install sentry-sdk</span></pre></div>
+        </div>
+
+        <h2 class="mt-8 text-2xl font-bold">Step 2: Initialize the SDK</h2>
+
+        <div class="mt-4">
+            Initialize the SDK with your DSN:
+        </div>
+
+{% comment %}  add hoc construction of highlighted code:
+from pygments import highlight
+from pygments.lexers import PythonLexer
+from pygments.formatters import HtmlFormatter
+lexer = PythonLexer()
+code = """import sentry_sdk
+sentry_sdk.init(
+    "foo",
+    traces_sample_rate=0,  # Bugsink intentionally does not support traces
+)"""
+print(highlight(code, lexer, HtmlFormatter()))
+{% endcomment %}
+
+<div class="p-4 mt-4 bg-slate-50 syntax-coloring"><pre><span></span><span class="kn">import</span> <span class="nn">sentry_sdk</span>
+<span class="n">sentry_sdk</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
+    <span class="s2">&quot;{{ project.dsn }}&quot;</span><span class="p">,</span>
+    <span class="n">traces_sample_rate</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>  <span class="c1"># Bugsink intentionally does not support traces</span>
+<span class="p">)</span>
+</pre></div>
+
+        <div class="mt-4">
+            For integration-specific (Django, Flask, etc) notes, see the <a href="https://docs.sentry.io/platforms/python/" class="text-cyan-500 font-bold" target="_blank">Sentry documentation</a>.
+        </div>
+
+        <h2 class="mt-6 text-2xl font-bold">Step 3: Verify the setup</h2>
+
+        <div class="mt-4">
+            Verify the setup by sending an event:
+        </div>
+
+<div class="p-4 mt-4 bg-slate-50 syntax-coloring"><pre><span></span><span class="kn">import</span> <span class="nn">sentry_sdk</span>
+<span class="n">division_by_zero</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">/</span> <span class="mi">0</span>
+</pre></div>
+
+        <div class="mt-4"> 
+            Your event should now appear in the <a href="{% url "issue_list_open" project_pk=project.pk %}" class="text-cyan-500 font-bold">list of open issues</a>.
+        </div>
+
+        
+
+
+
+    </div>
+</div>
+
+{% endblock %}
