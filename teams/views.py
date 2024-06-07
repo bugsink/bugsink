@@ -225,7 +225,7 @@ def team_member_settings(request, team_pk, user_pk):
 
     this_is_you = str(user_pk) == str(request.user.id)
     if not this_is_you:
-        if not your_membership.role == TeamRole.ADMIN:
+        if not request.user.is_superuser or not your_membership.role == TeamRole.ADMIN:
             raise PermissionDenied("You are not an admin of this team")
 
         membership = TeamMembership.objects.get(team=team_pk, user=user_pk)

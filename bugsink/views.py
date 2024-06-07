@@ -4,24 +4,22 @@ from django.conf import settings
 from django.views.decorators.http import require_GET
 from django.views.decorators.cache import cache_control
 from django.http import FileResponse, HttpRequest, HttpResponse
-from django.shortcuts import render
 
 from bugsink.decorators import login_exempt
 
 
 def home(request):
-    project_count = request.user.project_set.all().count()
-
-    if project_count == 0:
-        return redirect("team_list")
-
-    elif project_count == 1:
+    if request.user.project_set.filter(projectmembership__accepted=True).distinct().count() == 1:
+        # if the user has exactly one project, we redirect them to that project
         project = request.user.project_set.get()
-        return redirect("issue_list_open", project_id=project.id)
+        return redirect("issue_list_open", project_pk=project.id)
 
-    return render(request, "bugsink/home_project_list.html", {
-        # user_projecs is in the context_processor, we don't need to pass it here
-    })
+    elif request.user.project_set.all().distinct().count() > 0:
+        # note: no filter on projectmembership__accepted=True here; if there is _any_ project, we show the project list
+        return redirect("project_list")
+
+    # final fallback: show the team list
+    return redirect("team_list")
 
 
 @login_exempt

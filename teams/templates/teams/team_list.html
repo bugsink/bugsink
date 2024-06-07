@@ -15,7 +15,6 @@
 
     {# align to bottom #}
     <div class="ml-auto"><!-- top, RHS (buttons) -->
-        {# the below is not correct, but what is? #}
         {% if perms.teams.add_team %}
         <div>
             <a class="block font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" href="{% url 'team_new' %}">New Team</a>
@@ -29,7 +28,7 @@
 
 <div class="flex bg-slate-50 mt-4 items-end">
     <div class="flex">
-    <a href="{% url "team_list" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 {% if ownership_filter == "mine" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">My Teams</div></a>
+    <a href="{% url "team_list_mine" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 {% if ownership_filter == "mine" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">My Teams</div></a>
     <a href="{% url "team_list_other" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 {% if ownership_filter == "other" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">Other Teams</div></a>
     </div>
     {% comment %}
@@ -49,14 +48,14 @@
             {% for team in team_list %}
             <tr class="bg-white border-slate-200 border-b-2">
             <td class="w-full p-4">
-                <div class="text-xl font-bold">
+                <div class="text-xl font-bold text-slate-800">
                     {{ team.name }}
                 </div>
                 <div>
                     {{ team.project_count }} projects
                     | {{ team.member_count }} members
                     {% if team.member %}
-                    | <a href="{% url 'team_member_settings' team_pk=team.id user_pk=request.user.id %}" class="font-bold text-cyan-500">personal settings</a>
+                    | <a href="{% url 'team_member_settings' team_pk=team.id user_pk=request.user.id %}" class="font-bold text-cyan-500">my settings</a>
                     {% endif %}
                 </div>
             </td>
@@ -65,7 +64,7 @@
                 {% if team.member %}
                     {% if not team.member.accepted %}
                     <span class="bg-slate-100 rounded-2xl px-4 py-2 ml-2 text-sm">You're&nbsp;invited!</span>
-                    {% elif team.member.role == 1 %} {# NOTE: we intentionally hide admin-ness for non-accepted users; TODO better use of constants #}
+                    {% elif team.member.is_admin %} {# NOTE: we intentionally hide admin-ness for non-accepted users #}
                     <span class="bg-cyan-100 rounded-2xl px-4 py-2 ml-2 text-sm">Admin</span>
                     {% endif %}
                 {% endif %}

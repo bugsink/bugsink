@@ -23,7 +23,7 @@ class Team(models.Model):
     name = models.CharField(max_length=255, blank=False, null=False, unique=True)
     slug = models.SlugField(max_length=50, blank=False, null=False)
 
-    visibility = models.IntegerField(choices=TeamVisibility.choices, default=TeamVisibility.JOINABLE)
+    visibility = models.IntegerField(choices=TeamVisibility.choices, default=TeamVisibility.VISIBLE)
 
     def __str__(self):
         return self.name

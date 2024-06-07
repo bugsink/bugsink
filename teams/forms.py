@@ -28,7 +28,7 @@ class TeamMemberInviteForm(forms.Form):
 
 
 class MyTeamMembershipForm(forms.ModelForm):
-    """Edit your TeamMembership, i.e. email-settings are OK, and role only for admins"""
+    """Edit _your_ TeamMembership, i.e. email-settings, and role only for admins"""
 
     class Meta:
         model = TeamMembership

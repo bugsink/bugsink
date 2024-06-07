@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Member settings · {{ project.name }}  · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+
+<div class="flex items-center justify-center">
+
+    <div class="m-4 max-w-4xl flex-auto">
+        <form action="" method="post">
+        {% csrf_token %}
+
+        {% if messages %}
+        <ul>
+            {% for message in messages %}
+                {# if we introduce different levels we can use{% message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %} #}
+                <li class="bg-cyan-50 border-2 border-cyan-800 p-4 rounded-lg">{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        <div>
+            <h1 class="text-4xl mt-4 font-bold">Membership settings</h1>
+        </div>
+
+        <div class="mt-4 mb-4">
+            {% if this_is_you %}
+                Your membership settings for project "{{ project.name }}".
+            {% else %}
+                Settings for project "{{ project.name }}" and user {{ user.username }}.
+            {% endif %}
+        </div>
+
+        {% if form.role %}
+        <div class="text-lg mb-8">
+            <div class="text-slate-800 font-bold">{{ form.role.label }}</div>
+            <div class="flex items-center">
+                {{ form.role }}
+
+            </div>
+            {% if form.role.errors %}
+            {% for error in form.role.errors %}
+                <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
+            {% endfor %}
+            {% elif form.role.help_text %}
+                <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.role.help_text|safe }}</div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if form.send_email_alerts %}
+        <div class="text-lg mb-8">
+            <div class="text-slate-800 font-bold">{{ form.send_email_alerts.label }}</div>
+            <div class="flex items-center">
+                {{ form.send_email_alerts }}
+
+            </div>
+            {% if form.send_email_alerts.errors %}
+            {% for error in form.send_email_alerts.errors %}
+                <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
+            {% endfor %}
+            {% elif form.send_email_alerts.help_text %}
+                <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.send_email_alerts.help_text|safe }}</div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md">Save</button>
+        {% if this_is_you %}
+            <a href="{% url "project_list" %}" class="text-cyan-500 font-bold ml-2">Cancel</a> {# not quite perfect, because "you" can also click on yourself in the member list #}
+        {% else %}
+            <a href="{% url "project_members" project_pk=project.pk %}" class="text-cyan-500 font-bold ml-2">Cancel</a>
+        {% endif %}
+        </form>
+
+    </div>
+
+</div>
+
+
+{% endblock %}

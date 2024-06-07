@@ -43,6 +43,9 @@ class ProjectAdmin(admin.ModelAdmin):
     inlines = [
         ProjectMembershipInline,
     ]
+    prepopulated_fields = {
+        'slug': ['name'],
+    }
 
 
 # the preferred way to deal with ProjectMembership is actually through the inline above; however, because this may prove

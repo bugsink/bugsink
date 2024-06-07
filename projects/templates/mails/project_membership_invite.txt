@@ -1,0 +1,5 @@
+You have been invited to join the project "{{ project_name }}" on {{ site_title }}.
+
+View, accept or reject the invitation by clicking the link below:
+
+{{ url }}
