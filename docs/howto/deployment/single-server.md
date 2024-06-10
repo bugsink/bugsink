@@ -146,7 +146,8 @@ ls *.sqlite3
 
 You can create a superuser account to access the Bugsink admin interface.
 
-Run the following command and follow the prompts:
+Run the following command and follow the prompts (to stay consistent with usernames in the rest of the system, you may
+want to use your email-address as a username):
 
 ```bash
 bugsink-manage createsuperuser

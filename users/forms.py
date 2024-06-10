@@ -21,6 +21,11 @@ UserModel = get_user_model()
 
 class UserCreationForm(BaseUserCreationForm):
 
+    # Our UserCreationForm is the place where the "use email for usernames" logic is implemented.
+    # We could instead push such logic in the model, and do it more thoroughly (i.e. remove either field, and point the
+    # USERNAME_FIELD to the other). But I'm not sure that this is the most future-proof way forward. In particular,
+    # external systems (AD, OAuth, etc.) may have 2 fields rather than 1.
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['username'].validators = [EmailValidator()]
