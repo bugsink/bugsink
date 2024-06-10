@@ -19,7 +19,7 @@ from bugsink.app_settings import get_settings, CB_ANYBODY, CB_MEMBERS, CB_ADMINS
 from bugsink.decorators import login_exempt
 
 from .models import Project, ProjectMembership, ProjectRole, ProjectVisibility
-from .forms import MyProjectMembershipForm, ProjectMemberInviteForm, ProjectForm
+from .forms import ProjectMembershipForm, MyProjectMembershipForm, ProjectMemberInviteForm, ProjectForm
 from .tasks import send_project_invite_email, send_project_invite_email_new_user
 
 

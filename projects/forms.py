@@ -57,6 +57,14 @@ class MyProjectMembershipForm(forms.ModelForm):
         self.fields['send_email_alerts'].widget.choices[0] = ("unknown", empty_label)
 
 
+class ProjectMembershipForm(forms.ModelForm):
+    """Edit ProjectMembership for not-you, i.e. set a role but not email-settings"""
+
+    class Meta:
+        model = TeamMembership
+        fields = ["role"]
+
+
 class ProjectForm(forms.ModelForm):
 
     dsn = forms.CharField(label="DSN", disabled=True)
