@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
+{% load tailwind_forms %}
 
 {% block title %}New team  · {{ site_title }}{% endblock %}
 
@@ -13,42 +14,11 @@
         {% csrf_token %}
 
         <div>
-            <h1 class="text-4xl mt-4 font-bold">New Team</h1>
+            <h1 class="text-4xl my-4 font-bold">New Team</h1>
         </div>
 
-        {% if form.name %}
-        <div class="text-lg mb-8">
-            <div class="text-slate-800 font-bold">{{ form.name.label }}</div>
-            <div class="flex items-center">
-                {{ form.name }}
-
-            </div>
-            {% if form.name.errors %}
-            {% for error in form.name.errors %}
-                <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
-            {% endfor %}
-            {% elif form.name.help_text %}
-                <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.name.help_text|safe }}</div>
-            {% endif %}
-        </div>
-        {% endif %}
-
-        {% if form.visibility %}
-        <div class="text-lg mb-8">
-            <div class="text-slate-800 font-bold">{{ form.visibility.label }}</div>
-            <div class="flex items-center">
-                {{ form.visibility }}
-
-            </div>
-            {% if form.visibility.errors %}
-            {% for error in form.visibility.errors %}
-                <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
-            {% endfor %}
-            {% elif form.visibility.help_text %}
-                <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.visibility.help_text|safe }}</div>
-            {% endif %}
-        </div>
-        {% endif %}
+        {% tailwind_formfield form.name %}
+        {% tailwind_formfield form.visibility %}
 
         <button name="action" value="invite" class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md">Save</button>
         <a href="{% url "team_list" %}" class="text-cyan-500 font-bold ml-2">Cancel</a>

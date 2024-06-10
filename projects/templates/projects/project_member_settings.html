@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
+{% load tailwind_forms %}
 
 {% block title %}Member settings · {{ project.name }}  · {{ site_title }}{% endblock %}
 
@@ -22,7 +23,7 @@
         {% endif %}
 
         <div>
-            <h1 class="text-4xl mt-4 font-bold">Membership settings</h1>
+            <h1 class="text-4xl my-4 font-bold">Membership settings</h1>
         </div>
 
         <div class="mt-4 mb-4">
@@ -33,39 +34,8 @@
             {% endif %}
         </div>
 
-        {% if form.role %}
-        <div class="text-lg mb-8">
-            <div class="text-slate-800 font-bold">{{ form.role.label }}</div>
-            <div class="flex items-center">
-                {{ form.role }}
-
-            </div>
-            {% if form.role.errors %}
-            {% for error in form.role.errors %}
-                <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
-            {% endfor %}
-            {% elif form.role.help_text %}
-                <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.role.help_text|safe }}</div>
-            {% endif %}
-        </div>
-        {% endif %}
-
-        {% if form.send_email_alerts %}
-        <div class="text-lg mb-8">
-            <div class="text-slate-800 font-bold">{{ form.send_email_alerts.label }}</div>
-            <div class="flex items-center">
-                {{ form.send_email_alerts }}
-
-            </div>
-            {% if form.send_email_alerts.errors %}
-            {% for error in form.send_email_alerts.errors %}
-                <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
-            {% endfor %}
-            {% elif form.send_email_alerts.help_text %}
-                <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.send_email_alerts.help_text|safe }}</div>
-            {% endif %}
-        </div>
-        {% endif %}
+        {% tailwind_formfield form.role %}
+        {% tailwind_formfield form.send_email_alerts %}
 
         <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md">Save</button>
         {% if this_is_you %}

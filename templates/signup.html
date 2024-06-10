@@ -17,9 +17,9 @@
             <form method="post" action=".">
                 {% csrf_token %}
 
-                {% tailwind_formfield form.user %}
-                {% tailwind_formfield form.password1 %}
-                {% tailwind_formfield form.password2 %}
+                {% tailwind_formfield_implicit form.user %}
+                {% tailwind_formfield_implicit form.password1 %}
+                {% tailwind_formfield_implicit form.password2 %}
 
                 <button class="bg-slate-800 font-medium p-2 md:p-4 text-white uppercase w-full">Sign up</button>
 

@@ -22,14 +22,14 @@
         {% endif %}
 
         <div>
-            <h1 class="text-4xl mt-4 font-bold">Invite members ({{ project.name }})</h1>
+            <h1 class="text-4xl my-4 font-bold">Invite members ({{ project.name }})</h1>
         </div>
 
         <div class="mt-4 mb-4">
             Invite a member to join the project "{{ project.name }}". They will receive an email with a link to join.
         </div>
 
-        {% tailwind_formfield form.email %}
+        {% tailwind_formfield_implicit form.email %}
 
         <div class="text-lg ml-1 mb-8">  {# ml-1 is strictly speaking not aligned, but visually it looks better "to me"; perhaps because of all of the round elements? #}
             <div class="text-slate-800 font-bold">{{ form.role.label }}</div>

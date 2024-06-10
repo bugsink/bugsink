@@ -31,7 +31,7 @@
             Invite a member to join the team "{{ team.name }}". They will receive an email with a link to join.
         </div>
 
-        {% tailwind_formfield form.email %}
+        {% tailwind_formfield_implicit form.email %}
 
         <div class="text-lg ml-1 mb-8">  {# ml-1 is strictly speaking not aligned, but visually it looks better "to me"; perhaps because of all of the round elements? #}
             <div class="text-slate-800 font-bold">{{ form.role.label }}</div>

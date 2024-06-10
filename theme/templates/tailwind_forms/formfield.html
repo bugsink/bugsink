@@ -1,6 +1,12 @@
 {% if formfield %}
 <div class="text-lg mb-6 md:mb-8">
-    <input name="{{ formfield.name }}" type="{{ formfield.field.widget.input_type }}" class="{% if formfield.errors %}bg-red-100{% else %}bg-slate-100{% endif %} pl-4 py-2 md:py-4 focus:outline-none w-full" {% if formfield.value %}value="{{ formfield.value }}"{% endif %} placeholder="{{ formfield.label }}" />
+
+    {% if not implicit %}
+        <div class="text-slate-800 font-bold">{{ formfield.label }}:</div>
+    {% endif %}
+
+    {{ formfield }}
+
     {% if formfield.errors %}
     {% for error in formfield.errors %}
         <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
