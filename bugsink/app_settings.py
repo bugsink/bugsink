@@ -22,9 +22,18 @@ DEFAULTS = {
     "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 
     # Users, teams, projects
+    # if True, there is only one user, and all projects are owned by that user; this is somewhat implied by
+    # USER_REGISTRATION: CB_NOBODY, but I'd rather be even more explicit than that. e.g. SINGLE_USER obviously implies
+    # that project members are not a thing, but USER_REGISTRATION: CB_NOBODY might still mean "you can create users in
+    # the DB/AD/whatever, which could then be added to projects".
+    "SINGLE_USER": False,
+
     "USER_REGISTRATION": CB_ANYBODY,  # who can register new users. default: anybody, i.e. users can register themselves
     "USER_REGISTRATION_VERIFY_EMAIL": True,
     "USER_REGISTRATION_VERIFY_EMAIL_EXPIRY": 3 * 24 * 60 * 60,  # 7 days
+
+    # if True, there is only one team, and all projects are in that team
+    "SINGLE_TEAM": False,
     "TEAM_CREATION": CB_MEMBERS,  # who can create new teams. default: members, which means "any member of the site"
 
     # System inner workings:

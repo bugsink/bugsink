@@ -110,6 +110,10 @@ def project_list(request, ownership_filter=None):
 
 @permission_required("projects.add_project")
 def project_new(request):
+    if get_settings().SINGLE_TEAM and Team.objects.count() == 0:
+        # we just create the Single Team if it doesn't exist yet (whatever user triggers this doesn't matter)
+        Team.objects.create(name="Single Team", slug="single-team")
+
     if request.user.is_superuser:
         team_qs = Team.objects.all()
     else:

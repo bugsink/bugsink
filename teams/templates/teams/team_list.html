@@ -70,6 +70,7 @@
                 {% endif %}
             </td>
 
+            {# strictly: if not app_settings.SINGLE_USER; in practice it won't matter much, because in SINGLE_USER mode you won't end up in a team overview anyway #}
             <td class="pr-2">
                 {% if team.member.is_admin or request.user.is_superuser %}
                 <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer" onclick="followContainedLink(this);" >

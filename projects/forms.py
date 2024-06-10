@@ -86,6 +86,9 @@ class ProjectForm(forms.ModelForm):
             # has consequences on the issue's short identifier)
             # del self.fields["slug"]
         else:
+            # for creation, we allow changing the team; (as an additional improvement we _could_ consider hiding this
+            # field if there is only one team, and especially if SINGLE_TEAM is True, but being explicit is fine too as
+            # it suggests at least somewhere that teams are a thing)
             self.fields["team"].queryset = team_qs
 
             # for creation, we don't show the DSN field

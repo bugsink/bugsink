@@ -17,7 +17,9 @@
 
                 <a href="{% url "project_list" %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl">Projects</div></a>
 
+                {% if not app_settings.SINGLE_TEAM %}
                 <a href="{% url "team_list" %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl">Teams</div></a>
+                {% endif %}
 
                 <div class="ml-auto flex">
                 {% if user.is_staff %}

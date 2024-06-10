@@ -58,4 +58,9 @@ BUGSINK = {
     # implied by the "TASK_ALWAYS_EAGER" setting above, but setting DIGEST_IMMEDIATELY to True removes one more step
     # from the process.)
     "DIGEST_IMMEDIATELY": True,
+
+    # You are licenced to run Bugsink locally in single-user mode. By changing the settings below, you may open the door
+    # to more uses; MAKE SURE THAT YOU ARE ALLOWED TO DO SO.
+    "SINGLE_USER": True,
+    "SINGLE_TEAM": True,
 }
