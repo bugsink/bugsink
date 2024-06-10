@@ -80,7 +80,9 @@ class ProjectForm(forms.ModelForm):
             # for editing, the DSN is availabe, but read-only
             self.fields["dsn"].initial = self.instance.dsn
             self.fields["dsn"].label = "DSN (read-only)"
-            self.fields["dsn"].help_text = 'Use the DSN to <a href="' + reverse('project_sdk_setup', kwargs={'project_pk': self.instance.pk}) + '" class="text-cyan-800 font-bold">set up the SDK</a>.'
+            self.fields["dsn"].help_text = 'Use the DSN to <a href="' +\
+                                           reverse('project_sdk_setup', kwargs={'project_pk': self.instance.pk}) +\
+                                           '" class="text-cyan-800 font-bold">set up the SDK</a>.'
 
             # if we ever push slug to the form, editing it should probably be disallowed as well (but mainly because it
             # has consequences on the issue's short identifier)
@@ -90,6 +92,12 @@ class ProjectForm(forms.ModelForm):
             # field if there is only one team, and especially if SINGLE_TEAM is True, but being explicit is fine too as
             # it suggests at least somewhere that teams are a thing)
             self.fields["team"].queryset = team_qs
+            if team_qs.count() == 0:
+                self.fields["team"].help_text = 'You don\'t have any teams yet; <a href="' +\
+                                                reverse("team_new") +\
+                                                '" class="text-cyan-800 font-bold">Create a team first.</a>'
+            elif team_qs.count() == 1:
+                self.fields["team"].initial = team_qs.first()
 
             # for creation, we don't show the DSN field
             del self.fields["dsn"]
