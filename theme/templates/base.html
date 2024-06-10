@@ -28,7 +28,7 @@
                     <a href="/accounts/login/"><div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl">Login</div></a>  {# I don't think this is actually ever shown in practice, because you must always be logged in #}
                 {% else %}
                     <a href="/accounts/TODO/"><div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl">Profile</div></a>
-                    <div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl"><form id="logout-form" method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Log out</button></form></div>
+                    <div class="px-4 py-2 my-2 mr-2 hover:bg-slate-300 rounded-xl"><form id="logout-form" method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Log out</button></form></div>
                 {% endif %}
                 </div>
             </div>
