@@ -1,5 +1,6 @@
 {% extends "barest_base.html" %}
 {% load static %}
+{% load tailwind_forms %}
 
 {% block title %}Sign up · {{ site_title }}{% endblock %}
 
@@ -16,38 +17,9 @@
             <form method="post" action=".">
                 {% csrf_token %}
 
-                <div class="text-lg mb-6 md:mb-8">
-                    <input name="username" type="text" class="{% if form.username.errors %}bg-red-100{% else %}bg-slate-200{% endif %} pl-4 py-2 md:py-4 focus:outline-none w-full" {% if form.username.value %}value="{{ form.username.value }}"{% endif %} placeholder="{{ form.username.label }}" />
-                    {% if form.username.errors %}
-                    {% for error in form.username.errors %}
-                        <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
-                    {% endfor %}
-                    {% elif form.username.help_text %}
-                        <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.username.help_text|safe }}</div>
-                    {% endif %}
-                </div>
-
-                <div class="text-lg mb-6 md:mb-8">
-                    <input name="password1" type="password" class="{% if form.password1.errors %}bg-red-100{% else %}bg-slate-200{% endif %} pl-4 py-2 md:py-4 focus:outline-none w-full" {% if form.password1.value %}value="{{ form.password1.value }}"{% endif %} placeholder="{{ form.password1.label }}" />
-                    {% if form.password1.errors %}
-                    {% for error in form.password1.errors %}
-                        <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
-                    {% endfor %}
-                    {% elif form.password1.help_text %}
-                        <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.password1.help_text|safe }}</div>
-                    {% endif %}
-                </div>
-
-                <div class="text-lg mb-6 md:mb-8">
-                    <input name="password2" type="password" class="{% if form.password2.errors %}bg-red-100{% else %}bg-slate-200{% endif %} pl-4 py-2 md:py-4 focus:outline-none w-full" {% if form.password2.value %}value="{{ form.password2.value }}"{% endif %} placeholder="{{ form.password2.label }}" />
-                    {% if form.password2.errors %}
-                    {% for error in form.password2.errors %}
-                        <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
-                    {% endfor %}
-                    {% elif form.password2.help_text %}
-                        <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.password2.help_text|safe }}</div>
-                    {% endif %}
-                </div>
+                {% tailwind_formfield form.user %}
+                {% tailwind_formfield form.password1 %}
+                {% tailwind_formfield form.password2 %}
 
                 <button class="bg-slate-800 font-medium p-2 md:p-4 text-white uppercase w-full">Sign up</button>
 

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
+{% load tailwind_forms %}
 
 {% block title %}Invite Members · {{ team.name }}  · {{ site_title }}{% endblock %}
 
@@ -30,16 +31,7 @@
             Invite a member to join the team "{{ team.name }}". They will receive an email with a link to join.
         </div>
 
-        <div class="text-lg mb-6 md:mb-8">
-            <input name="email" type="text" class="{% if form.email.errors %}bg-red-100{% else %}bg-slate-100{% endif %} pl-4 py-2 md:py-4 focus:outline-none w-full" {% if form.email.value %}value="{{ form.email.value }}"{% endif %} placeholder="{{ form.email.label }}" />
-            {% if form.email.errors %}
-            {% for error in form.email.errors %}
-                <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
-            {% endfor %}
-            {% elif form.email.help_text %}
-                <div class="text-gray-500 pt-1 px-2 text-sm">{{ form.email.help_text|safe }}</div>
-            {% endif %}
-        </div>
+        {% tailwind_formfield form.email %}
 
         <div class="text-lg ml-1 mb-8">  {# ml-1 is strictly speaking not aligned, but visually it looks better "to me"; perhaps because of all of the round elements? #}
             <div class="text-slate-800 font-bold">{{ form.role.label }}</div>
