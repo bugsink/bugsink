@@ -69,7 +69,7 @@ if SENTRY_DSN is not None:
     )
 
 SNAPPEA = {
-    "TASK_ALWAYS_EAGER": False,
+    "TASK_ALWAYS_EAGER": True,  # at least for (unit) tests, this is a requirement
     "NUM_WORKERS": 1,
 }
 
