@@ -106,6 +106,8 @@ LOGGING["handlers"]["look_below_in_stream"] = {
     "level": "INFO",
     "class": "logging.StreamHandler",
     "formatter": "look_below",
+    # In the default config, LOGGING['handlers']['console']['filters'] = ['require_debug_true']; we mimic this here
+    "filters": ['require_debug_true'],
 }
 
 if I_AM_RUNNING == "SNAPPEA":
