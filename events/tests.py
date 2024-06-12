@@ -1,7 +1,7 @@
 import datetime
 
 from django.test import TestCase as DjangoTestCase, TransactionTestCase
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.utils import timezone
 
@@ -10,6 +10,8 @@ from issues.models import Issue
 from issues.factories import denormalized_issue_fields
 
 from .factories import create_event
+
+User = get_user_model()
 
 
 class ViewTests(TransactionTestCase):

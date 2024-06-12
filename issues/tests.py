@@ -8,7 +8,7 @@ from unittest.mock import patch
 from datetime import datetime, timezone
 
 from django.test import TestCase as DjangoTestCase, TransactionTestCase
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.test import tag
 
 from projects.models import Project, ProjectMembership
@@ -24,6 +24,8 @@ from .models import Issue, IssueStateManager
 from .regressions import is_regression, is_regression_2, issue_is_regression
 from .factories import denormalized_issue_fields
 from .utils import get_issue_grouper_for_data
+
+User = get_user_model()
 
 
 def fresh(obj):
