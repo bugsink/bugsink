@@ -45,14 +45,20 @@ class MyProjectMembershipForm(forms.ModelForm):
         if not edit_role:
             del self.fields['role']
 
-        # True as default ... same TODO as in teams/forms.py
         try:
             tm = TeamMembership.objects.get(team=self.instance.project.team, user=self.instance.user)
-            team_send_email_alerts = tm.send_email_alerts if tm.send_email_alerts is not None else True
-        except TeamMembership.DoesNotExist:
-            team_send_email_alerts = True
+            if tm.send_email_alerts is not None:
+                sea_defined_at = "team membership"
+                sea_default = tm.send_email_alerts
+            else:
+                sea_defined_at = "user"
+                sea_default = self.instance.user.send_email_alerts
 
-        empty_label = "Team-default (currently: %s)" % yesno(team_send_email_alerts)
+        except TeamMembership.DoesNotExist:
+            sea_defined_at = "user"
+            sea_default = self.instance.user.send_email_alerts
+
+        empty_label = 'Default (%s, as per %s settings)' % (yesno(sea_default).capitalize(), sea_defined_at)
         self.fields['send_email_alerts'].empty_label = empty_label
         self.fields['send_email_alerts'].widget.choices[0] = ("unknown", empty_label)
 

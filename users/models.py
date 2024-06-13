@@ -10,6 +10,13 @@ class User(AbstractUser):
     # > User model is sufficient for you. This model behaves identically to the default user model, but you’ll be able
     # > to customize it in the future if the need arises
 
+    # (The above is no longer the only reason for a custom User model, since we started introducing custom fields.
+    # Regarding those fields, there is some pressure in the docs to put UserProfile fields in a separate model, but
+    # as long as the number of fields is small I think the User model makes more sense. We can always push them out
+    # later)
+
+    send_email_alerts = models.BooleanField(default=True, blank=True)
+
     class Meta:
         db_table = 'auth_user'
 

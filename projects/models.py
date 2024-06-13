@@ -112,10 +112,6 @@ class ProjectMembership(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
-    # TODO inheriting True/False for None from either Team (which we also don't have yet) or directly from
-    # User(Profile) is something we'll do later. At that point we'll probably implement it as denormalized here, so
-    # we'll just have to shift the currently existing field into send_email_alerts_denormalized and create a 3-way
-    # field.
     send_email_alerts = models.BooleanField(default=None, null=True)
 
     role = models.IntegerField(choices=ProjectRole.choices, default=ProjectRole.MEMBER)

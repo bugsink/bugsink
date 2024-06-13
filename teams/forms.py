@@ -42,9 +42,8 @@ class MyTeamMembershipForm(forms.ModelForm):
         if not edit_role:
             del self.fields['role']
 
-        # self.instance.user[.profile].send_email_alerts  TODO implement
-        global_send_email_alerts = True
-        empty_label = "User-default (currently: %s)" % yesno(global_send_email_alerts)
+        global_send_email_alerts = self.instance.user.send_email_alerts
+        empty_label = "User-default (%s)" % yesno(global_send_email_alerts).capitalize()
         self.fields['send_email_alerts'].empty_label = empty_label
         self.fields['send_email_alerts'].widget.choices[0] = ("unknown", empty_label)
 
