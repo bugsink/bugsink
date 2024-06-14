@@ -23,9 +23,10 @@ INTERNAL_IPS = [
 # (also for create_example_conf.py)
 ALLOWED_HOSTS = ["*"]
 
-INSTALLED_APPS += [
-    "debug_toolbar",
-]
+if not I_AM_RUNNING == "TEST":
+    INSTALLED_APPS += [
+        "debug_toolbar",
+    ]
 
 MIDDLEWARE = [
     "debug_toolbar.middleware.DebugToolbarMiddleware",
