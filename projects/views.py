@@ -87,7 +87,7 @@ def project_list(request, ownership_filter=None):
         open_issue_count=models.Count('issue', filter=models.Q(issue__is_resolved=False, issue__is_muted=False)),
         member_count=models.Count(
             'projectmembership', distinct=True, filter=models.Q(projectmembership__accepted=True)),
-    )
+    ).select_related('team')
 
     if ownership_filter == "mine":
         # Perhaps there's some Django-native way of doing this, but I can't figure it out soon enough, and this also
