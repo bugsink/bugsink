@@ -1,5 +1,4 @@
 from django.db import migrations, models
-import django.db.models.deletion
 import uuid
 
 
@@ -8,15 +7,15 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('projects', '0002_project_name_project_sentry_key'),
     ]
 
     operations = [
         migrations.CreateModel(
             name='Event',
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('event_id', models.UUIDField(editable=False)),
+                ('id', models.UUIDField(default=uuid.uuid4, editable=False, help_text='Bugsink-internal', primary_key=True, serialize=False)),
+                ('server_side_timestamp', models.DateTimeField(db_index=True)),
+                ('event_id', models.UUIDField(editable=False, help_text='As per the sent data')),
                 ('data', models.TextField()),
                 ('timestamp', models.DateTimeField(db_index=True)),
                 ('platform', models.CharField(choices=[('as3', 'As3'), ('c', 'C'), ('cfml', 'Cfml'), ('cocoa', 'Cocoa'), ('csharp', 'Csharp'), ('elixir', 'Elixir'), ('haskell', 'Haskell'), ('go', 'Go'), ('groovy', 'Groovy'), ('java', 'Java'), ('javascript', 'Javascript'), ('native', 'Native'), ('node', 'Node'), ('objc', 'Objc'), ('other', 'Other'), ('perl', 'Perl'), ('php', 'Php'), ('python', 'Python'), ('ruby', 'Ruby')], max_length=64)),
@@ -29,10 +28,15 @@ class Migration(migrations.Migration):
                 ('environment', models.CharField(blank=True, default='', max_length=64)),
                 ('sdk_name', models.CharField(blank=True, default='', max_length=255)),
                 ('sdk_version', models.CharField(blank=True, default='', max_length=255)),
-                ('project', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, to='projects.project')),
+                ('has_exception', models.BooleanField()),
+                ('has_logentry', models.BooleanField()),
+                ('debug_info', models.CharField(blank=True, default='', max_length=255)),
+                ('calculated_type', models.CharField(blank=True, default='', max_length=255)),
+                ('calculated_value', models.CharField(blank=True, default='', max_length=255)),
+                ('last_frame_filename', models.CharField(blank=True, default='', max_length=255)),
+                ('last_frame_module', models.CharField(blank=True, default='', max_length=255)),
+                ('last_frame_function', models.CharField(blank=True, default='', max_length=255)),
+                ('ingest_order', models.PositiveIntegerField()),
             ],
-            options={
-                'unique_together': {('project', 'event_id')},
-            },
         ),
     ]

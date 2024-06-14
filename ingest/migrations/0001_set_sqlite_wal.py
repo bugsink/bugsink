@@ -69,11 +69,22 @@ class Migration(migrations.Migration):
     atomic = False
 
     dependencies = [
-        ('events', '0018_fill_denormalized_fields'),
-        ('ingest', '0003_decompressedevent_debug_info'),
-        ('issues', '0022_turningpoint'),
-        ('projects', '0008_set_project_slugs'),
-        ('releases', '0003_alter_release_version'),
+    ]
+
+    # strictly speaking, running this migration before the others is not necessary, but it seems like the right thing to
+    # first choose the journaling mode and then create the tables.
+    run_before = [
+        ('admin', '0001_initial'),
+        ('auth', '0001_initial'),
+        ('contenttypes', '0001_initial'),
+        ('sessions', '0001_initial'),
+
+        ('events', '0001_initial'),
+        ('issues', '0001_initial'),
+        ('projects', '0001_initial'),
+        ('releases', '0001_initial'),
+        ('teams', '0001_initial'),
+        ('users', '0001_initial'),
     ]
 
     operations = [

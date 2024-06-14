@@ -4,8 +4,11 @@ import django.db.models.deletion
 
 class Migration(migrations.Migration):
 
+    initial = True
+
     dependencies = [
-        ('events', '0004_event_server_side_timestamp'),
+        ('issues', '0001_initial'),
+        ('events', '0001_initial'),
     ]
 
     operations = [
