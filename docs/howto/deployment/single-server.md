@@ -232,10 +232,10 @@ WantedBy=multi-user.target
 number of CPU cores on your server * 2 + 1, as per the [Gunicorn
 documentation](https://docs.gunicorn.org/en/latest/design.html#how-many-workers))
 
-Enable and start the socket (enabling means it will also start on boot):
+Enable and start the service (enabling means it will also start on boot):
 
 ```bash
-systemctl enable --now gunicorn.socket
+systemctl enable --now gunicorn.service
 ```
 
 Inspect the status of gunicorn using
@@ -247,10 +247,10 @@ systemctl status gunicorn.service
 To test whether gunicorn actually listens on the socket, and whether everything can be reached, use:
 
 ```bash
-sudo -u www-data curl --unix-socket /run/gunicorn.sock http
+curl http://localhost:8000/accounts/login/
 ```
 
-(if no error is displayed, everything is set up correctly)
+This should dump a bunch of html on screen.
 
 
 ## Set up Nginx to run on port 80
@@ -281,13 +281,13 @@ server {
     server_name                 YOURHOST;
     listen                      80;
     location / {
-        proxy_pass              http://unix:/run/gunicorn.sock;
+        proxy_pass              http://127.0.0.1:8000;
         proxy_set_header        Host $host;
     }
 }
 ```
 
-(YOURHOST should be replaced with the hostname of your server).
+(YOURHOST should be replaced with the full hostname of your server).
 
 Create a link from `sites-enabled` to `sites-available`:
 
@@ -309,7 +309,7 @@ systemctl restart nginx
 
 You should now be able to access Bugsink by going to `http://YOURHOST` in your browser.
 
-Congratulations!
+Congratulations! Resist the temptation to log in... set up SSL first.
 
 ## Setting up SSL
 
@@ -352,10 +352,6 @@ A complete nginx configuration file could look like this:
 # Disable nginx version number in headers (unnecessary information for potential attackers)
 server_tokens                       off;
 
-# Set up logging (site-specific logs are set up in the server block below)
-access_log                          /var/log/nginx/bugsink.access.log;
-error_log                           /var/log/nginx/bugsink.error.log;
-
 # Catch-all server block to avoid host spoofing, i.e. to ensure that the server only responds to requests for the
 # correct hostname
 server {
@@ -376,9 +372,13 @@ server {
     # this matches the default configuration for MAX_ENVELOPE_COMPRESSED_SIZE. Note that Nginx's "M" means MiB.
     client_max_body_size 20M;
 
+    access_log                      /var/log/nginx/bugsink.access.log;
+    error_log                       /var/log/nginx/bugsink.error.log;
+
+
     location / {
         # Pass the request to Gunicorn via proxy_pass.
-        proxy_pass                  http://127.0.0.1:8000;
+        proxy_pass                  http://127.0.0.1:8001;
 
         # Set the Host header to the original host.
         proxy_set_header            Host $host;
@@ -489,3 +489,9 @@ This should show a log entry indicating that the task was picked up and executed
 Starting 000-001 for "snappea.example_tasks.fast_task" with (), {}
 Worker done in 0.000s
 ```
+
+## Start using Bugsink
+
+With snappea set up you're ready to actually start using Bugsink.
+
+Log in with the superuser credentials you set up earlier and configure your first project.
