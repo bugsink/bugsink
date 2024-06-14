@@ -123,6 +123,20 @@ probably will need to check or adjust at least:
 * `EMAIL_HOST` and associated variables to match the SMTP server you want to use to send emails
 * `TIME_ZONE` to match your timezone (if you want to see times in your local timezone rather than UTC)
 
+Also noteworthy are the settings that control the "openness" of your particular installation, i.e. whether users can
+sign up themselves or need to be invited and whether anybody can start a new team or whether this is managed. Look for
+ the various `USER_REGISTRATION`-related settings, `SINGLE_USER` and `SINGLE_TEAM` as well as for `TEAM_CREATION`.
+
+    "SINGLE_USER": False,
+
+    "USER_REGISTRATION": CB_ANYBODY,  # who can register new users. default: anybody, i.e. users can register themselves
+    "USER_REGISTRATION_VERIFY_EMAIL": True,
+    "USER_REGISTRATION_VERIFY_EMAIL_EXPIRY": 3 * 24 * 60 * 60,  # 7 days
+
+    # if True, there is only one team, and all projects are in that team
+    "SINGLE_TEAM": False,
+    "TEAM_CREATION": CB_MEMBERS,  # who can create new teams. default: members, which means "any member of the site"
+
 ## Initialize the database
 
 Bugsink uses a database to store the data it collects. When set up with Snappea, it also uses a database as a message

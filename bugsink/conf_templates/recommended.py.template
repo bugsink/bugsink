@@ -61,12 +61,30 @@ DEFAULTS = {
 
 SERVER_EMAIL = DEFAULT_FROM_EMAIL = "Bugsink <bugsink@example.org>"
 
+# constants for "create by" (user/team/project) settings
+CB_ANYBODY = "CB_ANYBODY"
+CB_MEMBERS = "CB_MEMBERS"
+CB_ADMINS = "CB_ADMINS"
+CB_NOBODY = "CB_NOBODY"
+
+
 BUGSINK = {
     # The URL where the Bugsink instance is hosted. This is used in the email notifications and to construct DSNs.
     "BASE_URL": "https://{{ host }}",  # no trailing slash
 
     # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
     "SITE_TITLE": "Bugsink",  
+
+    # Settings for Users, Teams and Projects
+    "SINGLE_USER": False,
+
+    "USER_REGISTRATION": CB_ANYBODY,  # who can register new users. default: anybody, i.e. users can register themselves
+    "USER_REGISTRATION_VERIFY_EMAIL": True,
+    "USER_REGISTRATION_VERIFY_EMAIL_EXPIRY": 3 * 24 * 60 * 60,  # 7 days
+
+    # if True, there is only one team, and all projects are in that team
+    "SINGLE_TEAM": False,
+    "TEAM_CREATION": CB_MEMBERS,  # who can create new teams. default: members, which means "any member of the site"
 
     # See TODO in the docs
     # In the recommended setup, we do not digest events immediately, but instead offload this to Snappea. This ensures a
