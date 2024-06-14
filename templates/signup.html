@@ -17,7 +17,7 @@
             <form method="post" action=".">
                 {% csrf_token %}
 
-                {% tailwind_formfield_implicit form.user %}
+                {% tailwind_formfield_implicit form.username %}
                 {% tailwind_formfield_implicit form.password1 %}
                 {% tailwind_formfield_implicit form.password2 %}
 
