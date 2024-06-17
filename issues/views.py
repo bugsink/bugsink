@@ -15,6 +15,7 @@ from bugsink.transaction import durable_atomic
 
 from events.models import Event
 from compat.timestamp import format_timestamp
+from projects.models import ProjectMembership
 
 from .models import (
     Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind, add_periods_to_datetime)
@@ -210,6 +211,7 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
 
     return render(request, "issues/issue_list.html", {
         "project": project,
+        "member": ProjectMembership.objects.get(project=project, user=request.user),
         "issue_list": issue_list,
         "state_filter": state_filter,
         "mute_options": GLOBAL_MUTE_OPTIONS,
