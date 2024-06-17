@@ -13,7 +13,7 @@ class TeamRole(models.IntegerChoices):
 class TeamVisibility(models.IntegerChoices):
     # PUBLIC = 0  # anyone can see the team and its members  not sure if I want this or always want to require click-in
     JOINABLE = 1  # anyone can join
-    VISIBLE = 10  # the team is visible, you can request to join(?), but this needs to be approved
+    DISCOVERABLE = 10  # the team is visible, you can request to join(?), but this needs to be approved
     HIDDEN = 99  # the team is not visible to non-members; you need to be invited
 
 

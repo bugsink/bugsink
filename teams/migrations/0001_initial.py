@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ('name', models.CharField(max_length=255, unique=True)),
                 ('slug', models.SlugField()),
-                ('visibility', models.IntegerField(choices=[(1, 'Joinable'), (10, 'Visible'), (99, 'Hidden')], default=10)),
+                ('visibility', models.IntegerField(choices=[(1, 'Joinable'), (10, 'Discoverable'), (99, 'Hidden')], default=10)),
             ],
         ),
         migrations.CreateModel(
