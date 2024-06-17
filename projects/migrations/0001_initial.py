@@ -22,7 +22,7 @@ class Migration(migrations.Migration):
                 ('alert_on_new_issue', models.BooleanField(default=True)),
                 ('alert_on_regression', models.BooleanField(default=True)),
                 ('alert_on_unmute', models.BooleanField(default=True)),
-                ('visibility', models.IntegerField(choices=[(1, 'Joinable'), (10, 'Visible'), (99, 'Team Members')], default=99)),
+                ('visibility', models.IntegerField(choices=[(1, 'Joinable'), (10, 'Discoverable'), (99, 'Team Members')], default=99)),
             ],
         ),
         migrations.CreateModel(

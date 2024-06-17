@@ -53,7 +53,11 @@
             <tr class="bg-white border-slate-200 border-b-2">
             <td class="w-full p-4">
                 <div>
+                    {% if project.member or request.user.is_superuser %}
                     <a href="/issues/{{ project.id }}" class="text-xl text-cyan-500 font-bold">{{ project.name }}</a>
+                    {% else %}
+                    <span class="text-xl text-slate-800 font-bold">{{ project.name }}</span>
+                    {% endif %}
                 </div>
                 <div>
                     {{ project.team.name }}
@@ -74,8 +78,8 @@
                 {% endif %}
             </td>
 
-            {% if not app_settings.SINGLE_USER %}
             <td class="pr-2">
+                {% if not app_settings.SINGLE_USER %}{% if project.member.is_admin or request.user.is_superuser %}
                 <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer" onclick="followContainedLink(this);" >
                     <a href="{% url 'project_members' project_pk=project.id %}">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8">
@@ -83,10 +87,11 @@
     </svg>
                     </a>
                 </div>
+                {% endif %}{% endif %}
             </td>
-            {% endif %}
 
             <td class="pr-2">
+                {% if project.member.is_admin or request.user.is_superuser %}
                 <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer"onclick="followContainedLink(this);" >
                     <a href="{% url 'project_edit' project_pk=project.id %}">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8">
@@ -95,9 +100,11 @@
                         </svg>
                     </a>
                 </div>
+                {% endif %}
             </td>
 
             <td class="pr-2">
+                {% if project.member or request.user.is_superuser %}
                 <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer" onclick="followContainedLink(this);" >
                     <a href="{% url 'project_sdk_setup' project_pk=project.id %}">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8">
@@ -105,6 +112,7 @@
                         </svg>
                     </a>
                 </div>
+                {% endif %}
             </td>
 
             <td>

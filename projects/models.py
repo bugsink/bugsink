@@ -19,7 +19,7 @@ class ProjectRole(models.IntegerChoices):
 class ProjectVisibility(models.IntegerChoices):
     # PUBLIC = 0  # anyone can see the project and its members; not sure if I want this or always require click-in
     JOINABLE = 1  # anyone can join
-    VISIBLE = 10  # the project is visible, you can request to join(?), but this needs to be approved
+    DISCOVERABLE = 10  # the project's existance is visible, you can request to join(?), but this needs to be approved
     TEAM_MEMBERS = 99  # the project is only visible to team-members (and for some(?) things they need to click "join")
 
 
@@ -106,6 +106,9 @@ class Project(models.Model):
                 pass
 
         return self.visibility <= ProjectVisibility.JOINABLE
+
+    def is_discoverable(self):
+        return self.visibility <= ProjectVisibility.DISCOVERABLE
 
 
 class ProjectMembership(models.Model):
