@@ -23,46 +23,84 @@ def simulate_epoch(epoch, how_many):
         db[epoch] = {}
     d = db[epoch]
 
-    for outcome in [nonzero_leading_bits(round(random() * (total_till_now + 1 + n) * 2)) for n in range(how_many)]:  # +1 for the new one
+    # +1 for the new one, i.e. the base for the calculation is the 1-based index of the item / the total number of items
+    # after adding the new one
+    for outcome in [nonzero_leading_bits(round(random() * (total_till_now + 1 + n) * 2)) for n in range(how_many)]:
         if outcome not in d:
             d[outcome] = 0
         d[outcome] += 1
 
 
-def evict_at(epoch, threshold):
-    if epoch < 0:
+def evict_at(max_epoch, max_irrelevance):
+    # evicting "at", based on the total irrelevance split out into 2 parts: max item irrelevance, and an epoch as
+    # implied by the age-based irrelevance.
+    #
+    # think of it as a dict equivalent of SQL that says
+    # "delete from db where epoch <= epoch and predetermined_irrelevance > max_irrelevance"
+    #
+    # (max_epoch is _inclusive_, max_irrelevance is _exclusive_)
+
+    assert max_irrelevance >= 0
+    assert max_epoch >= 0
+
+    for epoch in range(max_epoch + 1):  # +1 for inclusivity
+        d = db[epoch]
+
+        for (irrelevance, n) in list(d.items()):
+            if irrelevance > max_irrelevance:
+                del d[irrelevance]
+
+
+def evict(max_total_irrelevance, current_epoch):
+    # max_total_irrelevance, i.e. the total may not exceed this (but it may equal it)
+
+    # age based irrelevance is defined as `log(age + 1, 2)`
+    #
+    # (This is what we chose because we want 0-aged to have an age-based irrelevance of 0); i.e. that's where the +1
+    # comes from.
+    #
+    # at the integer values for irrelevance this works out like so:
+    # age = 0 => irrelevance = 0
+    # age = 1 => irrelevance = 1
+    # age = 2 => irrelevance = 1.58
+    # age = 3 => irrelevance = 2
+    # ...
+    # age = 7 => irrelevance = 3
+    #
+    # to work back from a given integer "budget" of irrelevance (after the (integer) item-based irrelevance has been
+    # subtracted from the total max), we can simply take `2^budget - 1` to get the 'age of eviction', the number of
+    # epochs we must go back. The following code helps me understand this:
+    #
+    # >>> for budget in range(8):
+    # ...     age = pow(2, budget) - 1
+    # ...     print("budget: %s, age: %s" % (budget, age))
+
+    for max_item_irrelevance in range(max_total_irrelevance + 1):
+        budget_for_age = max_total_irrelevance - max_item_irrelevance  # budgets in the range [0, max_total_irrelevance]
+        age_of_eviction = pow(2, budget_for_age) - 1  # ages in the range [0, 2^budget_for_age - 1]
+
+        target_epoch = current_epoch - age_of_eviction
+
+        if target_epoch >= 0:
+            evict_at(target_epoch, max_item_irrelevance)
+
+
+def evict_for_size(max_size, current_epoch):
+    observed_size = sum(sum(d.values()) for d in db.values())
+    if observed_size <= max_size:
+        print("No need to evict, already at %d" % observed_size)
         return
 
-    for at_epoch in range(epoch + 1):
-        d = db[at_epoch]
-
-        for (t, n) in list(d.items()):
-            if t >= threshold:  # TODO CHECK: >= or > ?
-                del d[t]
-
-
-def evict(threshold, current_epoch):
-    for an_irrelevance_threshold in range(threshold + 1):
-        budget_for_age = threshold - an_irrelevance_threshold  # budgets in the range [0, threshold]
-        age_of_death = pow(2, budget_for_age) - 1  # ages in the range [0, 2^threshold - 1]  # -1 is to enable clean-at-current
-        evict_at(current_epoch - age_of_death, an_irrelevance_threshold)
-
-
-def evict_until(max_size, current_epoch):
-    total_size = sum(sum(d.values()) for d in db.values())
-    if total_size <= max_size:
-        print("No need to evict, already at %d" % total_size)
-        return
-
-    threshold = 20  # arbitrary starting point; TODO, start from something that makes sense (e.g. the max irrelevance)
-    while total_size > max_size:
-        evict(threshold, current_epoch)
-        total_size = sum(sum(d.values()) for d in db.values())
-        threshold -= 1
-        if threshold < 0:
+    # i.e. the highest irrelevance; +1 to correct for -= 1 at the beginning of the loop
+    max_total_irrelevance = max(max(d.keys()) for d in db.values()) + 1
+    while observed_size > max_size:
+        max_total_irrelevance -= 1
+        evict(max_total_irrelevance, current_epoch)
+        observed_size = sum(sum(d.values()) for d in db.values())
+        if max_total_irrelevance < 0:
             raise Exception("Threshold went negative")
 
-    print("Evicted down to %d with a threshold of %d" % (total_size, threshold + 1))
+    print("Evicted down to %d with a threshold of %d" % (observed_size, max_total_irrelevance))
 
 
 def main():
@@ -75,15 +113,12 @@ def main():
         simulate_epoch(epoch, HOW_MANY)
         print_db()
 
-        evict_until(10_000, epoch)  # or epoch +1 ?
+        evict_for_size(10_000, epoch)  # or epoch +1 ?
         print("\nAFTER CLEANUP\n")
         print_db()
 
         epoch += 1
         input("next?> ")
-
-
-# TODO NEXT PART OF THE SIMULATION: automating the threshold, based on capacity
 
 
 def print_db():
