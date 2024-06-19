@@ -1,4 +1,5 @@
 from random import random
+from random import seed
 
 HOW_MANY = 100_000
 
@@ -104,13 +105,17 @@ def evict_for_size(max_size, current_epoch):
 
 
 def main():
-    from random import seed
+    how_many = HOW_MANY
     seed(0)
 
     epoch = 0
     while True:
+        this_how_many = input("how many next (%s)> " % how_many)
+        if this_how_many:
+            how_many = int(this_how_many)
+
         print("INFLOW\n")
-        simulate_epoch(epoch, HOW_MANY)
+        simulate_epoch(epoch, how_many)
         print_db()
 
         evict_for_size(10_000, epoch)  # or epoch +1 ?
@@ -118,7 +123,6 @@ def main():
         print_db()
 
         epoch += 1
-        input("next?> ")
 
 
 def print_db():
