@@ -199,10 +199,6 @@ class BaseIngestAPIView(View):
             denormalized_fields,
         )
         if not event_created:
-            # note: previously we created the event before the issue, which allowed for one less query. I don't see
-            # straight away how we can reproduce that now that we create issue-before-event (since creating the issue
-            # first is needed to be able to set the FK in one go)
-
             if issue_created:
                 # this is a weird case that "should not happen" (but can happen in practice). Namely, when some client
                 # sends events with the same event_id (leading to no new event), but different-enough actual data that
