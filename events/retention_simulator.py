@@ -93,15 +93,17 @@ def evict_for_size(max_size, current_epoch):
         return
 
     # i.e. the highest irrelevance; +1 to correct for -= 1 at the beginning of the loop
-    max_total_irrelevance = max(max(d.keys()) for d in db.values()) + 1
+    max_total_irrelevance = max(max(d.keys(), default=0) for d in db.values()) + 1
     while observed_size > max_size:
         max_total_irrelevance -= 1
         evict(max_total_irrelevance, current_epoch)
         observed_size = sum(sum(d.values()) for d in db.values())
         if max_total_irrelevance < 0:
+            # could still happen ('in theory') if there's max_size items of irrelevance 0 (in the real impl. we'll have
+            # to separately deal with that, i.e. evict-and-warn)
             raise Exception("Threshold went negative")
 
-    print("Evicted down to %d with a threshold of %d" % (observed_size, max_total_irrelevance))
+    print("Evicted down to %d with a max_total_irrelevance of %d" % (observed_size, max_total_irrelevance))
 
 
 def main():
@@ -126,18 +128,20 @@ def main():
 
 
 def print_db():
-    max_irrelevance = max(max(d.keys()) for d in db.values())
+    MAX_COLS = 30
+
+    max_irrelevance = max(max(d.keys(), default=0) for d in db.values())
     max_epoch = max(db.keys())
-    max_count = max(max(d.values()) for d in db.values())
+    max_count = max(max(d.values(), default=0) for d in db.values())
 
     foo = "%" + str(len(str(max_count)) + 2) + "d"  # +2: let it breathe
 
     # epochs: headers
-    print("".join([" " * 6] + [foo % e for e in range(max_epoch + 1)]))
+    print("".join([" " * 6] + [foo % e for e in range(max(0, max_epoch + 1 - MAX_COLS), max_epoch + 1)]))
 
     for irrelevance in range(max_irrelevance + 1):
         print("%6d" % irrelevance, end="")
-        for epoch in range(max_epoch + 1):
+        for epoch in range(max(0, max_epoch + 1 - MAX_COLS), max_epoch + 1):
             if epoch in db and irrelevance in db[epoch]:
                 print(foo % db[epoch][irrelevance], end="")
             else:
@@ -145,7 +149,7 @@ def print_db():
         print()
 
     print("total ", end="")
-    for epoch in range(max_epoch + 1):
+    for epoch in range(max(0, max_epoch + 1 - MAX_COLS), max_epoch + 1):
         print(foo % sum(db[epoch].values()), end="")
     print()
 
