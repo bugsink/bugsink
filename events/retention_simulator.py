@@ -2,6 +2,7 @@ from random import random
 from random import seed
 
 HOW_MANY = 100_000
+QUOTA = 10_000
 
 
 def nonzero_leading_bits(n):
@@ -17,7 +18,7 @@ def nonzero_leading_bits(n):
 db = {}
 
 
-def simulate_epoch(epoch, how_many):
+def simulate_epoch(epoch, how_many, max_total_irrelevance):
     total_till_now = sum(sum(d.values()) for d in db.values())
 
     if epoch not in db:
@@ -27,6 +28,9 @@ def simulate_epoch(epoch, how_many):
     # +1 for the new one, i.e. the base for the calculation is the 1-based index of the item / the total number of items
     # after adding the new one
     for outcome in [nonzero_leading_bits(round(random() * (total_till_now + 1 + n) * 2)) for n in range(how_many)]:
+        if max_total_irrelevance is not None and outcome > max_total_irrelevance:
+            continue
+
         if outcome not in d:
             d[outcome] = 0
         d[outcome] += 1
@@ -90,7 +94,7 @@ def evict_for_size(max_size, current_epoch):
     observed_size = sum(sum(d.values()) for d in db.values())
     if observed_size <= max_size:
         print("No need to evict, already at %d" % observed_size)
-        return
+        return None
 
     # i.e. the highest irrelevance; +1 to correct for -= 1 at the beginning of the loop
     max_total_irrelevance = max(max(d.keys(), default=0) for d in db.values()) + 1
@@ -104,9 +108,11 @@ def evict_for_size(max_size, current_epoch):
             raise Exception("Threshold went negative")
 
     print("Evicted down to %d with a max_total_irrelevance of %d" % (observed_size, max_total_irrelevance))
+    return max_total_irrelevance
 
 
 def main():
+    current_max_total_irrelevance = None
     how_many = HOW_MANY
     seed(0)
 
@@ -116,11 +122,16 @@ def main():
         if this_how_many:
             how_many = int(this_how_many)
 
-        print("INFLOW\n")
-        simulate_epoch(epoch, how_many)
+        print("INFLOW (with max %s)\n" % current_max_total_irrelevance)
+        simulate_epoch(epoch, how_many, current_max_total_irrelevance)
         print_db()
 
-        evict_for_size(10_000, epoch)  # or epoch +1 ?
+        resulting_thingie = evict_for_size(QUOTA, epoch)
+        if resulting_thingie is None:
+            current_max_total_irrelevance = None
+        else:
+            current_max_total_irrelevance = resulting_thingie + 1
+
         print("\nAFTER CLEANUP\n")
         print_db()
 
