@@ -17,7 +17,7 @@
             {% if issue.project.has_releases %}
                 <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-s-md" name="action" value="resolved_next">Resolved in next release</button>
 
-                <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 rounded-e-md">🞃</button>
+                <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 rounded-e-md"><svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
                 {# we just hide the whole dropdown; this is the easiest implementation of not-showing the dropdown #}
             {% else %}
                 <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-md" name="action" value="resolved">Resolve</button>
@@ -32,7 +32,7 @@
                 <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-s-md" name="action" value="resolved_next">Resolved in next release</button>
 
                 <div class="dropdown">
-                    <button disabled {# disabled b/c clicking the dropdown does nothing - we have hover for that #} class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 hover:bg-slate-200 active:ring rounded-e-md">🞃</button>
+                    <button disabled {# disabled b/c clicking the dropdown does nothing - we have hover for that #} class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 hover:bg-slate-200 active:ring rounded-e-md"><svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
 
                     {# note that we can depend on get_latest_release being available, because we're in the 'project.has_releases' branch #}
                     <div class="dropdown-content-right flex-col pl-2">
@@ -63,7 +63,7 @@
 
         <div class="dropdown">
             {% if not issue.is_muted and not issue.is_resolved %}
-                <button disabled {# disabled b/c clicking the dropdown does nothing - we have hover for that #} class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 active:ring">Mute for/until&nbsp;&nbsp;&nbsp;🞃</button>
+                <button disabled {# disabled b/c clicking the dropdown does nothing - we have hover for that #} class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 active:ring">Mute for/until&nbsp;&nbsp;<svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
 
                 <div class="dropdown-content-right flex-col">
                     {% for mute_option in mute_options %}
@@ -71,7 +71,7 @@
                     {% endfor %}
                 </div>
             {% else %}
-                <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2">Mute for/until&nbsp;&nbsp;&nbsp;🞃</button>
+                <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2">Mute for/until&nbsp;&nbsp;<svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
                 {# note that when the issue is muted, no further muting is allowed. this is a design decision, I figured this is the easiest-to-understand UI, #}
                 {# both at the point-of-clicking and when displaying the when-will-this-be-unmuted in some place #}
                 {# (the alternative would be to allow multiple simulteneous reasons for unmuting to exist next to each other #}
