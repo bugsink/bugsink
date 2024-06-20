@@ -52,6 +52,14 @@ class Project(models.Model):
     # denormalized/cached fields below
     has_releases = models.BooleanField(editable=False, default=False)
 
+    # alerting conditions
+    alert_on_new_issue = models.BooleanField(default=True)
+    alert_on_regression = models.BooleanField(default=True)
+    alert_on_unmute = models.BooleanField(default=True)
+
+    # visibility
+    visibility = models.IntegerField(choices=ProjectVisibility.choices, default=ProjectVisibility.TEAM_MEMBERS)
+
     def __str__(self):
         return self.name
 
@@ -68,15 +76,6 @@ class Project(models.Model):
         models.Index(fields=["id", "sentry_key"]),
     ]
     """
-
-    # alerting conditions
-    alert_on_new_issue = models.BooleanField(default=True)
-    alert_on_regression = models.BooleanField(default=True)
-    alert_on_unmute = models.BooleanField(default=True)
-
-    # visibility
-    visibility = models.IntegerField(choices=ProjectVisibility.choices, default=ProjectVisibility.TEAM_MEMBERS)
-
     def get_latest_release(self):
         # TODO perfomance considerations... this can be denormalized/cached at the project level
         from releases.models import ordered_releases
