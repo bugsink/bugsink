@@ -188,12 +188,15 @@ class BaseIngestAPIView(View):
             issue = grouping.issue
             issue_created = False
 
+            # update the denormalized fields
+            issue.last_seen = timestamp
+            issue.event_count += 1
+
         # NOTE: an event always has a single (automatically calculated) Grouping associated with it. Since we have that
         # information available here, we could add it to the Event model.
         event, event_created = Event.from_ingested(
             event_metadata,
-            # the assymetry with + 1 is because the event_count is only incremented below for the not issue_created case
-            issue.event_count if issue_created else issue.event_count + 1,
+            issue.event_count,
             issue,
             event_data,
             denormalized_fields,
@@ -251,10 +254,6 @@ class BaseIngestAPIView(View):
                 IssueStateManager.unmute(
                     issue, triggering_event=event,
                     unmute_metadata={"mute_for": {"unmute_after": issue.unmute_after}})
-
-            # update the denormalized fields
-            issue.last_seen = timestamp
-            issue.event_count += 1
 
         if release.version + "\n" not in issue.events_at:
             issue.events_at += release.version + "\n"
