@@ -192,11 +192,22 @@ class BaseIngestAPIView(View):
             issue.last_seen = timestamp
             issue.event_count += 1
 
+        # NOTE: possibly expensive. "in theory" we can just do some bookkeeping for a denormalized value, but that may
+        # be hard to keep in-sync in practice. Let's check the actual cost first.
+        stored_event_count = issue.event_set.count()
+
+        if should_evict(project, timestamp, stored_event_count):
+            project.retention_last_eviction = timestamp
+            project.retention_max_total_irrelevance = evict_for_max_events(project, timestamp, stored_event_count)
+            # TODO: actually save the project? or use an update call?
+            # TODO: the idea of cooling off the max_total_irrelevance
+
         # NOTE: an event always has a single (automatically calculated) Grouping associated with it. Since we have that
         # information available here, we could add it to the Event model.
         event, event_created = Event.from_ingested(
             event_metadata,
             issue.event_count,
+            stored_event_count,
             issue,
             event_data,
             denormalized_fields,

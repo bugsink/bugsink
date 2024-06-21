@@ -10,6 +10,8 @@ from compat.timestamp import parse_timestamp
 
 from issues.utils import get_title_for_exception_type_and_value
 
+from .retention import get_random_irrelevance
+
 
 class Platform(models.TextChoices):
     AS3 = "as3"
@@ -147,6 +149,10 @@ class Event(models.Model):
     # anything with this value other than showing it to humans is super-confusing. Sorry Dijkstra!
     ingest_order = models.PositiveIntegerField(blank=False, null=False)
 
+    # irrelevance_for_retention is set on-ingest based on the number of available events for an issue; it is combined
+    # with age-based-irrelevance to determine which events will be evicted when retention quota are met.
+    irrelevance_for_retention = models.PositiveIntegerField(blank=False, null=False)
+
     class Meta:
         unique_together = [
             ("project", "event_id"),
@@ -168,10 +174,13 @@ class Event(models.Model):
         return get_title_for_exception_type_and_value(self.calculated_type, self.calculated_value)
 
     @classmethod
-    def from_ingested(cls, event_metadata, ingest_order, issue, parsed_data, denormalized_fields):
+    def from_ingested(cls, event_metadata, ingest_order, stored_event_count, issue, parsed_data, denormalized_fields):
         # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
         # objects etc).
+
+        # +1 because we're about to add a new event and want the number for _that_ event
+        irrelevance_for_retention = get_random_irrelevance(stored_event_count + 1)
 
         try:
             event = cls.objects.create(
@@ -203,6 +212,7 @@ class Event(models.Model):
                 debug_info=event_metadata["debug_info"],
 
                 ingest_order=ingest_order,
+                irrelevance_for_retention=irrelevance_for_retention,
 
                 **denormalized_fields,
             )

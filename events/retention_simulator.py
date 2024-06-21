@@ -97,7 +97,10 @@ def evict_for_size(max_size, current_epoch):
         return None
 
     # i.e. the highest irrelevance; +1 to correct for -= 1 at the beginning of the loop
+    # NOTE WRONG: this takes the max event-irrelevance, but does not include age-based irrelevance. This means we'd
+    # prune too much in scenarios where the high values for event-irrelevance are some while back
     max_total_irrelevance = max(max(d.keys(), default=0) for d in db.values()) + 1
+
     while observed_size > max_size:
         max_total_irrelevance -= 1
         evict(max_total_irrelevance, current_epoch)
