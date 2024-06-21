@@ -61,11 +61,12 @@ class Project(models.Model):
     visibility = models.IntegerField(choices=ProjectVisibility.choices, default=ProjectVisibility.TEAM_MEMBERS)
 
     # retention quota
-    retention_event_count_quota = models.PositiveIntegerField(default=10_000)
+    retention_max_event_count = models.PositiveIntegerField(default=10_000)
 
     # bookkeeping of the eviction algorithm
-    retention_last_eviction = models.DateTimeField(null=True, blank=True)
-    retention_max_total_irrelevance = models.PositiveIntegerField(null=True, blank=True)
+    # this will be needed if/when we take an approach of 'drop immediately'
+    # retention_last_eviction = models.DateTimeField(null=True, blank=True)
+    # retention_max_total_irrelevance = models.PositiveIntegerField(null=True, blank=True)
 
     def __str__(self):
         return self.name

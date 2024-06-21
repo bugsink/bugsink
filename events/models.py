@@ -179,8 +179,7 @@ class Event(models.Model):
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
         # objects etc).
 
-        # +1 because we're about to add a new event and want the number for _that_ event
-        irrelevance_for_retention = get_random_irrelevance(stored_event_count + 1)
+        irrelevance_for_retention = get_random_irrelevance(stored_event_count)
 
         try:
             event = cls.objects.create(

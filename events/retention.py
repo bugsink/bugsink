@@ -22,7 +22,7 @@ def get_epoch_bounds(lower, upper=None):
         return Q()
 
     if lower is None:
-        return Q(timestamp__gte=datetime_for_epoch(lower))
+        return Q(timestamp__lt=datetime_for_epoch(upper))
 
     if upper is None:
         return Q(timestamp__gte=datetime_for_epoch(lower))
@@ -39,7 +39,6 @@ def nonzero_leading_bits(n):
     101000 -> 3
     110001 -> 6
     """
-
     s = format(n, 'b')
     return len(s.rstrip('0'))
 
@@ -58,14 +57,12 @@ def get_random_irrelevance(event_count):
 
 
 def should_evict(project, timestamp, stored_event_count):
-    if stored_event_count is None:
-        return False  # no events, nothing to evict
+    # if/when we implement 'just drop' this might go somewhere (maybe not here)
+    # if (project.retention_last_eviction is not None and
+    #         get_epoch(project.retention_last_eviction) != get_epoch(timestamp)):
+    #     return True
 
-    if (project.retention_last_eviction is not None and
-            get_epoch(project.retention_last_eviction) != get_epoch(timestamp)):
-        return True
-
-    if stored_event_count >= project.retention_max_event_count:  # >= because this function is called right before add
+    if stored_event_count > project.retention_max_event_count:  # > because: do something when _over_ the max
         return True
 
     return False
@@ -101,15 +98,17 @@ def get_epoch_bounds_with_irrelevance(project, current_timestamp):
     from .models import Event
 
     # TODO 'first_seen' is cheaper? I don't think it exists at project-level though.
-    first_epoch = get_epoch(Event.objects.filter(project=project).aggregate(Min('timestamp')))
+    # We can safely assume some Event exists when this point is reached because of the conditions in `should_evict`
+    first_epoch = get_epoch(Event.objects.filter(project=project).aggregate(val=Min('server_side_timestamp'))['val'])
     current_epoch = get_epoch(current_timestamp)
 
     difference = current_epoch - first_epoch
 
-    bounds = pairwise(
+    # because we construct in reverse order (from the most recent to the oldest) we end up with the pairs swapped
+    swapped_bounds = pairwise(
         [None] + [current_epoch - n for n in list(map_N_until(get_age_for_irrelevance, difference))] + [None])
 
-    return [(bound, age_based_irrelevance) for age_based_irrelevance, bound in enumerate(bounds)]
+    return [((lb, ub), age_based_irrelevance) for age_based_irrelevance, (ub, lb) in enumerate(swapped_bounds)]
 
 
 def get_irrelevance_pairs(project, epoch_bounds_with_irrelevance):
@@ -117,9 +116,10 @@ def get_irrelevance_pairs(project, epoch_bounds_with_irrelevance):
     from .models import Event
 
     for (lower_bound, upper_bound), age_based_irrelevance in epoch_bounds_with_irrelevance:
-        max_event_irrelevance = \
-            Event.objects.filter(get_epoch_bounds(lower_bound, upper_bound)).aggregate(Max('irrelevance_for_retention'))
-        yield age_based_irrelevance, max_event_irrelevance
+        d = Event.objects.filter(get_epoch_bounds(lower_bound, upper_bound)).aggregate(Max('irrelevance_for_retention'))
+        max_event_irrelevance = d["irrelevance_for_retention__max"] or 0
+
+        yield (age_based_irrelevance, max_event_irrelevance)
 
 
 def map_N_until(f, until, onemore=False):
@@ -144,21 +144,36 @@ def pairwise(it):
         prev = current
 
 
+def filter_for_work(epoch_bounds_with_irrelevance, pairs, max_total_irrelevance):
+    # Here, we filter out epoch bounds for which there is obviously no work to be done, based on the pairs that we have
+    # selected at the beginning of the algo. We compare the selected irrelevances with the total, and if they do not
+    # exceed it no work will need to be done for that set of epochs.
+
+    # Since it uses only the (already available) information that was gathered at the beginning of the algo, it is not a
+    # full filter for avoiding useless deletions, but at least we use the available info (from queries) to the fullest.
+    for pair, ebwi in zip(pairs, epoch_bounds_with_irrelevance):
+        if sum(pair) > max_total_irrelevance:  # > because only if it is strictly greater will anything be evicted.
+            yield ebwi
+
+
 def evict_for_max_events(project, timestamp, stored_event_count=None):
     from .models import Event
 
     if stored_event_count is None:
         # allowed as a pass-in to save a query (we generally start off knowing this)
-        stored_event_count = Event.objects.filter(project=project).count()
+        stored_event_count = Event.objects.filter(project=project).count() + 1
 
     epoch_bounds_with_irrelevance = get_epoch_bounds_with_irrelevance(project, timestamp)
 
     # we start off with the currently observed max total irrelevance
-    # +1 to correct for -= 1 at the beginning of the loop
-    max_total_irrelevance = max(sum(pair) for pair in get_irrelevance_pairs(project, epoch_bounds_with_irrelevance)) + 1
+    pairs = get_irrelevance_pairs(project, epoch_bounds_with_irrelevance)
+    max_total_irrelevance = max(sum(pair) for pair in pairs)
 
-    while stored_event_count >= project.retention_max_event_count:  # >= as elsewhere: eviction is before add-new
+    while stored_event_count > project.retention_max_event_count:  # > as in `should_evict`
+        # -1 at the beginning of the loop; this means the actually observed max value is precisely the first thing that
+        # will be evicted (since `evict_for_irrelevance` will evict anything above (but not including) the given value)
         max_total_irrelevance -= 1
+
         evict_for_irrelevance(max_total_irrelevance, epoch_bounds_with_irrelevance)
 
         stored_event_count = Event.objects.filter(project=project).count()
@@ -173,27 +188,25 @@ def evict_for_max_events(project, timestamp, stored_event_count=None):
 
 
 def evict_for_irrelevance(max_total_irrelevance, epoch_bounds_with_irrelevance):
+    # print("evict_for_irrelevance(%d, %s)" % (max_total_irrelevance, epoch_bounds_with_irrelevance))
+
     # max_total_irrelevance, i.e. the total may not exceed this (but it may equal it)
 
     for (_, epoch_ub_exclusive), irrelevance_for_age in epoch_bounds_with_irrelevance:
         max_item_irrelevance = max_total_irrelevance - irrelevance_for_age
 
-        if max_item_irrelevance < -1:
+        evict_for_epoch_and_irrelevance(epoch_ub_exclusive, max_item_irrelevance)
+
+        if max_item_irrelevance <= -1:
             # in the actual eviction, the test on max_item_irrelevance is done exclusively, i.e. only items of greater
             # irrelevance are evicted. The minimal actually occuring value is 0. Such items can be evicted with a call
-            # with max_item_irrelevance = -1. Once the value is smaller than that, there's nothing to evict left.
-
-            # (the above is true under conditions, which we meet, namely):
-            # * the actual eviction takes only an UB for the epochs, so older epochs are always cleaned as part of the
-            #   newer ones (see picture below)
-            # * we always have at least a single pass throught the loop for the current epoch (which has 0 irrelevance)
-            #       and we always have at least one call with at least 0 max_total_irrelevance
+            # with max_item_irrelevance = -1. This means that if we just did such an eviction, we're done for all epochs
             break
-
-        evict_for_epoch_and_irrelevance(epoch_ub_exclusive, max_item_irrelevance)
 
 
 def evict_for_epoch_and_irrelevance(max_epoch, max_irrelevance):
+    # print("evict_for_epoch_and_irrelevance(%s, %s)" % (max_epoch, max_irrelevance))
+
     from .models import Event
     # evicting "at", based on the total irrelevance split out into 2 parts: max item irrelevance, and an epoch as
     # implied by the age-based irrelevance.

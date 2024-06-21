@@ -28,6 +28,7 @@ from bugsink.streams import content_encoding_reader, MaxDataReader, MaxDataWrite
 from bugsink.app_settings import get_settings
 
 from events.models import Event
+from events.retention import evict_for_max_events, should_evict
 from releases.models import create_release_if_needed
 from alerts.tasks import send_new_issue_alert, send_regression_alert
 from compat.timestamp import format_timestamp, parse_timestamp
@@ -194,20 +195,30 @@ class BaseIngestAPIView(View):
 
         # NOTE: possibly expensive. "in theory" we can just do some bookkeeping for a denormalized value, but that may
         # be hard to keep in-sync in practice. Let's check the actual cost first.
-        stored_event_count = issue.event_set.count()
+        # +1 because we're about to add one event.
+        project_stored_event_count = (project.event_set.count() or 0) + 1
+        issue_stored_event_count = (issue.event_set.count() or 0) + 1
 
-        if should_evict(project, timestamp, stored_event_count):
-            project.retention_last_eviction = timestamp
-            project.retention_max_total_irrelevance = evict_for_max_events(project, timestamp, stored_event_count)
-            # TODO: actually save the project? or use an update call?
-            # TODO: the idea of cooling off the max_total_irrelevance
+        if should_evict(project, timestamp, project_stored_event_count):
+            # Note: I considered pushing this into some async process, but it makes reasoning much harder, and it's
+            # doubtful whether it would help, because in the end there's just a single pipeline of ingested-related
+            # stuff todo, might as well do the work straight away. Similar thoughts about pushing this into something
+            # cron-like. (not exactly the same, because for cron-like time savings are possible if the cron-likeness
+            # causes the work to be outside of the 'rush hour' -- OTOH this also introduces a lot of complexity about
+            # "what is a limit anyway, if you can go either over it, or work is done before the limit is reached")
+            evict_for_max_events(project, timestamp, project_stored_event_count)
+
+            # project.retention_last_eviction = timestamp
+            # project.retention_max_total_irrelevance
+            # TODO-if-the-above: actually save the project? or use an update call?
+            # TODO-if-the-above: the idea of cooling off the max_total_irrelevance
 
         # NOTE: an event always has a single (automatically calculated) Grouping associated with it. Since we have that
         # information available here, we could add it to the Event model.
         event, event_created = Event.from_ingested(
             event_metadata,
             issue.event_count,
-            stored_event_count,
+            issue_stored_event_count,
             issue,
             event_data,
             denormalized_fields,
