@@ -458,7 +458,7 @@ class TurningPoint(models.Model):
     # "milestone", "state_change", "transition", "annotation", "episode"
 
     issue = models.ForeignKey("Issue", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
-    triggering_event = models.ForeignKey("events.Event", blank=True, null=True, on_delete=models.SET_NULL)
+    triggering_event = models.ForeignKey("events.Event", blank=True, null=True, on_delete=models.DO_NOTHING)
 
     # null: the system-user
     user = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=models.SET_NULL)

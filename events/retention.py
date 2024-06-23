@@ -160,7 +160,7 @@ def evict_for_max_events(project, timestamp, stored_event_count=None):
     from .models import Event
 
     if stored_event_count is None:
-        # allowed as a pass-in to save a query (we generally start off knowing this)
+        # allowed as a pass-in to save a query (we generally start off knowing this); +1 because call-before-add
         stored_event_count = Event.objects.filter(project=project).count() + 1
 
     epoch_bounds_with_irrelevance = get_epoch_bounds_with_irrelevance(project, timestamp)
@@ -174,9 +174,11 @@ def evict_for_max_events(project, timestamp, stored_event_count=None):
         # will be evicted (since `evict_for_irrelevance` will evict anything above (but not including) the given value)
         max_total_irrelevance -= 1
 
-        evict_for_irrelevance(max_total_irrelevance, epoch_bounds_with_irrelevance)
+        evict_for_irrelevance(
+            max_total_irrelevance,
+            list(filter_for_work(epoch_bounds_with_irrelevance, pairs, max_total_irrelevance)))
 
-        stored_event_count = Event.objects.filter(project=project).count()
+        stored_event_count = Event.objects.filter(project=project).count() + 1
 
         if max_total_irrelevance < -1:  # < -1: see test below for why.
             # could still happen ('in theory') if there's max_size items of irrelevance 0 (in the real impl. we'll have
