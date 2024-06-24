@@ -5,7 +5,12 @@ from datetime import timezone, datetime
 
 
 def get_epoch(datetime_obj):
-    # the basic rythm for eviction is 'hourly'; we define an 'epoch' for eviction as the number of hours since 1970.
+    # The basic rythm for eviction is 'hourly'; we define an 'epoch' for eviction as the number of hours since 1970.
+    # Why pick hours rather than something else? It's certainly granular enough for our purposes, and it makes it
+    # possible for actual humans to understand what's going on (e.g. when debugging). Note that w.r.t. the outcome of
+    # our algorithm, the choice of epoch size translates into a constant addition to the age-based irrelevance. (i.e.
+    # when switching to days the age-based irrelvance would come out approximately 4 lower. But this would be corrected
+    # in the search for a cut-off value for the total irrelevance, so it doesn't matter in the end.)
 
     # assuming we use model fields this 'just works' because Django's stores its stuff in timezone-aware UTC in the DB.
     assert datetime_obj.tzinfo == timezone.utc
@@ -97,7 +102,6 @@ def get_age_for_irrelevance(age_based_irrelevance):
 def get_epoch_bounds_with_irrelevance(project, current_timestamp):
     from .models import Event
 
-    # TODO 'first_seen' is cheaper? I don't think it exists at project-level though.
     # We can safely assume some Event exists when this point is reached because of the conditions in `should_evict`
     first_epoch = get_epoch(Event.objects.filter(project=project).aggregate(val=Min('server_side_timestamp'))['val'])
     current_epoch = get_epoch(current_timestamp)
@@ -116,7 +120,10 @@ def get_irrelevance_pairs(project, epoch_bounds_with_irrelevance):
     from .models import Event
 
     for (lower_bound, upper_bound), age_based_irrelevance in epoch_bounds_with_irrelevance:
-        d = Event.objects.filter(get_epoch_bounds(lower_bound, upper_bound)).aggregate(Max('irrelevance_for_retention'))
+        d = Event.objects.filter(
+            get_epoch_bounds(lower_bound, upper_bound),
+            project=project,
+        ).aggregate(Max('irrelevance_for_retention'))
         max_event_irrelevance = d["irrelevance_for_retention__max"] or 0
 
         yield (age_based_irrelevance, max_event_irrelevance)
@@ -165,7 +172,8 @@ def lowered_target(max_event_count):
     # eviction (checking for the need to evict is a different story, but that's a different problem).
     # A reason to pick 95% instead of 90% is that eviction, as we've implemented it, also has its own 'overshooting'
     # (i.e. it will evict more than strictly necessary, because it evicts all items with an irrelevance strictly greater
-    # than the given value). We don't want to be "doubly conservative" in this regard.
+    # than the given value). We don't want to be "doubly conservative" in this regard. (Alternatively we could work with
+    # a [maxed] constant value of e.g. n - 500)
     return int(max_event_count * 0.95)
 
 
@@ -194,15 +202,11 @@ def evict_for_max_events(project, timestamp, stored_event_count=None):
 
         stored_event_count = Event.objects.filter(project=project).count() + 1
 
-        if max_total_irrelevance < -1:  # < -1: see test below for why.
-            # could still happen ('in theory') if there's max_size items of irrelevance 0 (in the real impl. we'll have
-            # to separately deal with that, i.e. evict-and-warn) TODO
+        if max_total_irrelevance < -1:  # < -1: as in `evict_for_irrelevance`
+            # could still happen if there's max_size items that cannot be evicted at all
             raise Exception("No more effective eviction possible but target not reached")
 
     # print("Evicted down to %d with a max_total_irrelevance of %d" % (observed_size, max_total_irrelevance)) TODO log
-    for query in connection.queries[pre:]:
-        print(query['sql'])
-    print("Reached", stored_event_count, "events")
     return max_total_irrelevance
 
 

@@ -60,7 +60,10 @@ def retention_insight(project):
     for irrelevance in range(max_irrelevance + 1):
         print("%3d| " % irrelevance, end="")
         for epoch, results in data:
-            print("%14d  " % results.get(irrelevance, 0), end="")
+            if results.get(irrelevance, 0) == 0:
+                print(" " * 13 + ".  ", end="")
+            else:
+                print("%14d  " % results.get(irrelevance, 0), end="")
         print()
 
     print("Total: ", sum(sum(d.values()) for _, d in data))
