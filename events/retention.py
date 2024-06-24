@@ -1,7 +1,12 @@
+import logging
 from django.db.models import Q, Min, Max
 
 from random import random
 from datetime import timezone, datetime
+
+from performance.context_managers import time_and_query_count
+
+performance_logger = logging.getLogger("bugsink.performance.retention")
 
 
 def get_epoch(datetime_obj):
@@ -180,33 +185,42 @@ def lowered_target(max_event_count):
 def evict_for_max_events(project, timestamp, stored_event_count=None):
     from .models import Event
 
-    if stored_event_count is None:
-        # allowed as a pass-in to save a query (we generally start off knowing this); +1 because call-before-add
-        stored_event_count = Event.objects.filter(project=project).count() + 1
+    with time_and_query_count() as phase0:
+        if stored_event_count is None:
+            # allowed as a pass-in to save a query (we generally start off knowing this); +1 because call-before-add
+            stored_event_count = Event.objects.filter(project=project).count() + 1
 
-    epoch_bounds_with_irrelevance = get_epoch_bounds_with_irrelevance(project, timestamp)
+        epoch_bounds_with_irrelevance = get_epoch_bounds_with_irrelevance(project, timestamp)
 
-    # we start off with the currently observed max total irrelevance
-    pairs = list(get_irrelevance_pairs(project, epoch_bounds_with_irrelevance))
-    max_total_irrelevance = max(sum(pair) for pair in pairs)
+        # we start off with the currently observed max total irrelevance
+        pairs = list(get_irrelevance_pairs(project, epoch_bounds_with_irrelevance))
+        max_total_irrelevance = orig_max_total_irrelevance = max(sum(pair) for pair in pairs)
 
-    while stored_event_count > lowered_target(project.retention_max_event_count):  # > as in `should_evict`
-        # -1 at the beginning of the loop; this means the actually observed max value is precisely the first thing that
-        # will be evicted (since `evict_for_irrelevance` will evict anything above (but not including) the given value)
-        max_total_irrelevance -= 1
+    with time_and_query_count() as phase1:
+        while stored_event_count > lowered_target(project.retention_max_event_count):  # > as in `should_evict`
+            # -1 at the beginning of the loop; this means the actually observed max value is precisely the first thing
+            # that will be evicted (since `evict_for_irrelevance` will evict anything above (but not including) the
+            # given value)
+            max_total_irrelevance -= 1
 
-        evict_for_irrelevance(
-            project,
-            max_total_irrelevance,
-            list(filter_for_work(epoch_bounds_with_irrelevance, pairs, max_total_irrelevance)))
+            evict_for_irrelevance(
+                project,
+                max_total_irrelevance,
+                list(filter_for_work(epoch_bounds_with_irrelevance, pairs, max_total_irrelevance)))
 
-        stored_event_count = Event.objects.filter(project=project).count() + 1
+            stored_event_count = Event.objects.filter(project=project).count() + 1
 
-        if max_total_irrelevance < -1:  # < -1: as in `evict_for_irrelevance`
-            # could still happen if there's max_size items that cannot be evicted at all
-            raise Exception("No more effective eviction possible but target not reached")
+            if max_total_irrelevance < -1:  # < -1: as in `evict_for_irrelevance`
+                # could still happen if there's max_size items that cannot be evicted at all
+                raise Exception("No more effective eviction possible but target not reached")
 
-    # print("Evicted down to %d with a max_total_irrelevance of %d" % (observed_size, max_total_irrelevance)) TODO log
+    # phase 0: SELECT statements to identify per-epoch observed irrelevances
+    # phase 1: DELETE (evictions) and SELECT total count ("are we there yet?")
+    performance_logger.info(
+        "%6.2fms EVICT; down to %d, max irr. from %d to %d in %dms+%dms and %d+%d queries",
+        phase0.took + phase1.took, stored_event_count, orig_max_total_irrelevance, max_total_irrelevance, phase0.took,
+        phase1.took, phase0.count, phase1.count)
+
     return max_total_irrelevance
 
 
