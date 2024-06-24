@@ -22,12 +22,12 @@ def get_epoch_bounds(lower, upper=None):
         return Q()
 
     if lower is None:
-        return Q(timestamp__lt=datetime_for_epoch(upper))
+        return Q(server_side_timestamp__lt=datetime_for_epoch(upper))
 
     if upper is None:
-        return Q(timestamp__gte=datetime_for_epoch(lower))
+        return Q(server_side_timestamp__gte=datetime_for_epoch(lower))
 
-    return Q(timestamp__gte=datetime_for_epoch(lower), timestamp__lt=datetime_for_epoch(upper))
+    return Q(server_side_timestamp__gte=datetime_for_epoch(lower), server_side_timestamp__lt=datetime_for_epoch(upper))
 
 
 def nonzero_leading_bits(n):
@@ -188,6 +188,7 @@ def evict_for_max_events(project, timestamp, stored_event_count=None):
         max_total_irrelevance -= 1
 
         evict_for_irrelevance(
+            project,
             max_total_irrelevance,
             list(filter_for_work(epoch_bounds_with_irrelevance, pairs, max_total_irrelevance)))
 
@@ -199,10 +200,13 @@ def evict_for_max_events(project, timestamp, stored_event_count=None):
             raise Exception("No more effective eviction possible but target not reached")
 
     # print("Evicted down to %d with a max_total_irrelevance of %d" % (observed_size, max_total_irrelevance)) TODO log
+    for query in connection.queries[pre:]:
+        print(query['sql'])
+    print("Reached", stored_event_count, "events")
     return max_total_irrelevance
 
 
-def evict_for_irrelevance(max_total_irrelevance, epoch_bounds_with_irrelevance):
+def evict_for_irrelevance(project, max_total_irrelevance, epoch_bounds_with_irrelevance):
     # print("evict_for_irrelevance(%d, %s)" % (max_total_irrelevance, epoch_bounds_with_irrelevance))
 
     # max_total_irrelevance, i.e. the total may not exceed this (but it may equal it)
@@ -210,7 +214,7 @@ def evict_for_irrelevance(max_total_irrelevance, epoch_bounds_with_irrelevance):
     for (_, epoch_ub_exclusive), irrelevance_for_age in epoch_bounds_with_irrelevance:
         max_item_irrelevance = max_total_irrelevance - irrelevance_for_age
 
-        evict_for_epoch_and_irrelevance(epoch_ub_exclusive, max_item_irrelevance)
+        evict_for_epoch_and_irrelevance(project, epoch_ub_exclusive, max_item_irrelevance)
 
         if max_item_irrelevance <= -1:
             # in the actual eviction, the test on max_item_irrelevance is done exclusively, i.e. only items of greater
@@ -219,7 +223,7 @@ def evict_for_irrelevance(max_total_irrelevance, epoch_bounds_with_irrelevance):
             break
 
 
-def evict_for_epoch_and_irrelevance(max_epoch, max_irrelevance):
+def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance):
     # print("evict_for_epoch_and_irrelevance(%s, %s)" % (max_epoch, max_irrelevance))
 
     from .models import Event
@@ -244,7 +248,7 @@ def evict_for_epoch_and_irrelevance(max_epoch, max_irrelevance):
     # this call, and only when `B` is cleaned will the points `x` be cleaned. (as-is, they are part of the selection,
     # but will already have been deleted)
 
-    qs = Event.objects.filter(irrelevance_for_retention__gt=max_irrelevance)
+    qs = Event.objects.filter(project=project, irrelevance_for_retention__gt=max_irrelevance)
 
     if max_epoch is not None:
         qs = qs.filter(server_side_timestamp__lt=datetime_for_epoch(max_epoch))
