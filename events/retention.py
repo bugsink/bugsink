@@ -156,6 +156,19 @@ def filter_for_work(epoch_bounds_with_irrelevance, pairs, max_total_irrelevance)
             yield ebwi
 
 
+def lowered_target(max_event_count):
+    # we want to evict down to 95% of the max event count; this is a bit arbitrary but it's a good starting point.
+    # the reason is: we want to avoid having to evict again immediately after we've just evicted. because eviction is
+    # relatively expensive, we want to avoid doing it too often. when using e.g. 10_000 as a max event count (completely
+    # reasonable), we evict at least 500 events at a time. We do "a lot" (perhaps 10s, but certainly not 500) of queries
+    # per eviction, so after amortization this is far less than 1 query extra per event as a result of the actual
+    # eviction (checking for the need to evict is a different story, but that's a different problem).
+    # A reason to pick 95% instead of 90% is that eviction, as we've implemented it, also has its own 'overshooting'
+    # (i.e. it will evict more than strictly necessary, because it evicts all items with an irrelevance strictly greater
+    # than the given value). We don't want to be "doubly conservative" in this regard.
+    return int(max_event_count * 0.95)
+
+
 def evict_for_max_events(project, timestamp, stored_event_count=None):
     from .models import Event
 
@@ -169,7 +182,7 @@ def evict_for_max_events(project, timestamp, stored_event_count=None):
     pairs = list(get_irrelevance_pairs(project, epoch_bounds_with_irrelevance))
     max_total_irrelevance = max(sum(pair) for pair in pairs)
 
-    while stored_event_count > project.retention_max_event_count:  # > as in `should_evict`
+    while stored_event_count > lowered_target(project.retention_max_event_count):  # > as in `should_evict`
         # -1 at the beginning of the loop; this means the actually observed max value is precisely the first thing that
         # will be evicted (since `evict_for_irrelevance` will evict anything above (but not including) the given value)
         max_total_irrelevance -= 1
