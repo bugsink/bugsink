@@ -158,6 +158,9 @@ class Event(models.Model):
             ("project", "event_id"),
             ("issue", "ingest_order"),
         ]
+        indexes = [
+            models.Index(fields=["project", "server_side_timestamp", "irrelevance_for_retention"]),
+        ]
 
     def get_absolute_url(self):
         return f"/issues/issue/{ self.issue_id }/event/{ self.id }/"
