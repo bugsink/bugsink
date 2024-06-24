@@ -166,7 +166,7 @@ def evict_for_max_events(project, timestamp, stored_event_count=None):
     epoch_bounds_with_irrelevance = get_epoch_bounds_with_irrelevance(project, timestamp)
 
     # we start off with the currently observed max total irrelevance
-    pairs = get_irrelevance_pairs(project, epoch_bounds_with_irrelevance)
+    pairs = list(get_irrelevance_pairs(project, epoch_bounds_with_irrelevance))
     max_total_irrelevance = max(sum(pair) for pair in pairs)
 
     while stored_event_count > project.retention_max_event_count:  # > as in `should_evict`
