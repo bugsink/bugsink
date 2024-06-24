@@ -152,6 +152,7 @@ class Event(models.Model):
     # irrelevance_for_retention is set on-ingest based on the number of available events for an issue; it is combined
     # with age-based-irrelevance to determine which events will be evicted when retention quota are met.
     irrelevance_for_retention = models.PositiveIntegerField(blank=False, null=False)
+    never_evict = models.BooleanField(blank=False, null=False, default=False)
 
     class Meta:
         unique_together = [
@@ -159,7 +160,7 @@ class Event(models.Model):
             ("issue", "ingest_order"),
         ]
         indexes = [
-            models.Index(fields=["project", "server_side_timestamp", "irrelevance_for_retention"]),
+            models.Index(fields=["project", "never_evict", "server_side_timestamp", "irrelevance_for_retention"]),
         ]
 
     def get_absolute_url(self):

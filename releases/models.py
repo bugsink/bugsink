@@ -108,6 +108,7 @@ def create_release_if_needed(project, version, event):
                     metadata=json.dumps({"actual_release": release.version}), timestamp=event.server_side_timestamp)
                 for issue in resolved_by_next_qs
             ])
+            event.never_evict = True  # .save() will be called by the caller of this function
 
             resolved_by_next_qs.update(
                 fixed_at=Concat("fixed_at", Value(release.version + "\n")),

@@ -260,6 +260,7 @@ class IssueStateManager(object):
                 TurningPoint.objects.create(
                     issue=issue, triggering_event=triggering_event, timestamp=triggering_event.server_side_timestamp,
                     kind=TurningPointKind.UNMUTED, metadata=json.dumps(unmute_metadata))
+                triggering_event.never_evict = True  # .save() will be called by the caller of this function
 
     @staticmethod
     def set_unmute_handlers(by_issue, issue, now):

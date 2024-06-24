@@ -107,8 +107,9 @@ def get_age_for_irrelevance(age_based_irrelevance):
 def get_epoch_bounds_with_irrelevance(project, current_timestamp):
     from .models import Event
 
-    # We can safely assume some Event exists when this point is reached because of the conditions in `should_evict`
-    first_epoch = get_epoch(Event.objects.filter(project=project).aggregate(val=Min('server_side_timestamp'))['val'])
+    oldest = Event.objects.filter(project=project, never_evict=False).aggregate(val=Min('server_side_timestamp'))['val']
+    first_epoch = get_epoch(oldest) if oldest is not None else get_epoch(current_timestamp)
+
     current_epoch = get_epoch(current_timestamp)
 
     difference = current_epoch - first_epoch
@@ -121,13 +122,14 @@ def get_epoch_bounds_with_irrelevance(project, current_timestamp):
 
 
 def get_irrelevance_pairs(project, epoch_bounds_with_irrelevance):
-    """tuples of `age_based_irrelevance` and, per associated period, the max observed event irrelevance"""
+    """tuples of `age_based_irrelevance` and, per associated period, the max observed (evictable) event irrelevance"""
     from .models import Event
 
     for (lower_bound, upper_bound), age_based_irrelevance in epoch_bounds_with_irrelevance:
         d = Event.objects.filter(
             get_epoch_bounds(lower_bound, upper_bound),
             project=project,
+            never_evict=False,
         ).aggregate(Max('irrelevance_for_retention'))
         max_event_irrelevance = d["irrelevance_for_retention__max"] or 0
 
@@ -266,7 +268,7 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance):
     # this call, and only when `B` is cleaned will the points `x` be cleaned. (as-is, they are part of the selection,
     # but will already have been deleted)
 
-    qs = Event.objects.filter(project=project, irrelevance_for_retention__gt=max_irrelevance)
+    qs = Event.objects.filter(project=project, irrelevance_for_retention__gt=max_irrelevance, never_evict=False)
 
     if max_epoch is not None:
         qs = qs.filter(server_side_timestamp__lt=datetime_for_epoch(max_epoch))

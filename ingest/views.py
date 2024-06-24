@@ -245,6 +245,7 @@ class BaseIngestAPIView(View):
             TurningPoint.objects.create(
                 issue=issue, triggering_event=event, timestamp=timestamp,
                 kind=TurningPointKind.FIRST_SEEN)
+            event.never_evict = True
 
             if project.alert_on_new_issue:
                 delay_on_commit(send_new_issue_alert, str(issue.id))
@@ -255,6 +256,7 @@ class BaseIngestAPIView(View):
                 TurningPoint.objects.create(
                     issue=issue, triggering_event=event, timestamp=timestamp,
                     kind=TurningPointKind.REGRESSED)
+                event.never_evict = True
 
                 if project.alert_on_regression:
                     delay_on_commit(send_regression_alert, str(issue.id))
@@ -276,6 +278,14 @@ class BaseIngestAPIView(View):
                 IssueStateManager.unmute(
                     issue, triggering_event=event,
                     unmute_metadata={"mute_for": {"unmute_after": issue.unmute_after}})
+
+        if event.never_evict:
+            # as a sort of poor man's django-dirtyfields (which we haven't adopted for simplicity's sake) we simply do
+            # this manually for a single field; we know that if never_evict has been set, it's always been set after the
+            # .create call, i.e. its results still need to be saved. We accept the cost of the extra .save call, since
+            # TurningPoints are relatively rare (and hence so is this setting of `never_evict` and the associated save
+            # call)
+            event.save()
 
         if release.version + "\n" not in issue.events_at:
             issue.events_at += release.version + "\n"
