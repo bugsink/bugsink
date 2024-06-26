@@ -4,6 +4,7 @@ from django.db.models import Q, Min, Max
 from random import random
 from datetime import timezone, datetime
 
+from bugsink.moreiterutils import pairwise, map_N_until
 from performance.context_managers import time_and_query_count
 
 performance_logger = logging.getLogger("bugsink.performance.retention")
@@ -116,7 +117,7 @@ def get_epoch_bounds_with_irrelevance(project, current_timestamp, qs_kwargs={"ne
 
     # because we construct in reverse order (from the most recent to the oldest) we end up with the pairs swapped
     swapped_bounds = pairwise(
-        [None] + [current_epoch - n for n in list(map_N_until(get_age_for_irrelevance, difference))] + [None])
+        [None] + [current_epoch - age for age in list(map_N_until(get_age_for_irrelevance, difference))] + [None])
 
     return [((lb, ub), age_based_irrelevance) for age_based_irrelevance, (ub, lb) in enumerate(swapped_bounds)]
 
@@ -134,28 +135,6 @@ def get_irrelevance_pairs(project, epoch_bounds_with_irrelevance, qs_kwargs={"ne
         max_event_irrelevance = d["irrelevance_for_retention__max"] or 0
 
         yield (age_based_irrelevance, max_event_irrelevance)
-
-
-def map_N_until(f, until, onemore=False):
-    n = 0
-    result = f(n)
-    while result < until:
-        yield result
-        n += 1
-        result = f(n)
-    if onemore:
-        yield result
-
-
-def pairwise(it):
-    it = iter(it)
-    try:
-        prev = next(it)
-    except StopIteration:
-        return
-    for current in it:
-        yield (prev, current)
-        prev = current
 
 
 def filter_for_work(epoch_bounds_with_irrelevance, pairs, max_total_irrelevance):

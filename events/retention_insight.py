@@ -13,14 +13,6 @@ def retention_insight_values(project):
     epoch_bounds_with_irrelevance = get_epoch_bounds_with_irrelevance(project, timestamp, qs_kwargs={})
     pairs = list(get_irrelevance_pairs(project, epoch_bounds_with_irrelevance, qs_kwargs={}))
 
-    print("epoch_bounds_with_irrelevance")
-    for x in epoch_bounds_with_irrelevance:
-        print(x)
-
-    print("pairs")
-    for x in pairs:
-        print(x)
-
     yielded = 0
     for (age_based_irrelevance, max_obsered_irrelevance), ((lb, ub), _) in reversed(list(zip(pairs, epoch_bounds_with_irrelevance))):
         print("?", age_based_irrelevance, max_obsered_irrelevance, lb, ub)
