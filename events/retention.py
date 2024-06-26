@@ -149,7 +149,7 @@ def filter_for_work(epoch_bounds_with_irrelevance, pairs, max_total_irrelevance)
             yield ebwi
 
 
-def lowered_target(max_event_count):
+def eviction_target(max_event_count, stored_event_count):
     # We always evict at least 500 events, or 5% of the max event count, whichever is less. The reason is: we want to
     # avoid having to evict again immediately after we've just evicted. Because eviction is relatively expensive, we
     # want to avoid doing it too often. For the completely reasonable quota of 10_000 events or more, this just means
@@ -160,62 +160,77 @@ def lowered_target(max_event_count):
     # different story). A reason to pick 5% instead of 10% is that eviction, as we've implemented it, also has its own
     # 'overshooting' (i.e. it will evict more than strictly necessary, because it evicts all items with an irrelevance
     # strictly greater than the given value). We don't want to be "doubly conservative" in this regard.
-    return min(500, int(max_event_count * 0.95))
+    #
+    # We also evict at least the number of events that we are over the max event count; this takes care of 2 scenarios:
+    # * a quota that has been adjusted downwards (we want to get rid of the excess);
+    # * quota so ridiculously low that 5% rounds down to 0, in those cases at least delete 1
+    return max(
+        min(500, int(max_event_count * 0.05)),
+        stored_event_count - max_event_count,
+    )
 
 
-def evict_for_max_events(project, timestamp, stored_event_count=None):
+def evict_for_max_events(project, timestamp, stored_event_count=None, include_never_evict=False):
     from .models import Event
+    qs_kwargs = {} if include_never_evict else {"never_evict": False}
 
     with time_and_query_count() as phase0:
         if stored_event_count is None:
             # allowed as a pass-in to save a query (we generally start off knowing this); +1 because call-before-add
             stored_event_count = Event.objects.filter(project=project).count() + 1
 
-        epoch_bounds_with_irrelevance = get_epoch_bounds_with_irrelevance(project, timestamp)
+        epoch_bounds_with_irrelevance = get_epoch_bounds_with_irrelevance(project, timestamp, qs_kwargs)
 
         # we start off with the currently observed max total irrelevance
-        pairs = list(get_irrelevance_pairs(project, epoch_bounds_with_irrelevance))
+        pairs = list(get_irrelevance_pairs(project, epoch_bounds_with_irrelevance, qs_kwargs))
         max_total_irrelevance = orig_max_total_irrelevance = max(sum(pair) for pair in pairs)
 
     with time_and_query_count() as phase1:
-        deleted = 0
-        while stored_event_count - deleted > lowered_target(project.retention_max_event_count):  # > as in should_evict
+        evicted = 0
+        target = eviction_target(project.retention_max_event_count, stored_event_count)
+        while evicted < target:
             # -1 at the beginning of the loop; this means the actually observed max value is precisely the first thing
             # that will be evicted (since `evict_for_irrelevance` will evict anything above (but not including) the
             # given value)
             max_total_irrelevance -= 1
 
-            deleted += evict_for_irrelevance(
+            evicted += evict_for_irrelevance(
                 project,
                 max_total_irrelevance,
                 list(filter_for_work(epoch_bounds_with_irrelevance, pairs, max_total_irrelevance)),
-                (project.retention_max_event_count - lowered_target(project.retention_max_event_count)) - deleted,
+                include_never_evict,
+                target - evicted,
             )
 
             if max_total_irrelevance < -1:  # < -1: as in `evict_for_irrelevance`
-                # could still happen if there's max_size items that cannot be evicted at all
-                raise Exception("No more effective eviction possible but target not reached")
+                if not include_never_evict:
+                    return evict_for_max_events(project, timestamp, stored_event_count - evicted, True)
+
+                raise Exception("No more effective eviction possible but target not reached")  # "should not happen"
 
     # phase 0: SELECT statements to identify per-epoch observed irrelevances
     # phase 1: DELETE (evictions) and SELECT total count ("are we there yet?")
     performance_logger.info(
         "%6.2fms EVICT; down to %d, max irr. from %d to %d in %dms+%dms and %d+%d queries",
-        phase0.took + phase1.took, stored_event_count - deleted, orig_max_total_irrelevance, max_total_irrelevance,
-        phase0.took, phase1.took, phase0.count, phase1.count)
+        phase0.took + phase1.took,
+        stored_event_count - evicted - 1,  # down to: -1, because the +1 happens post-eviction
+        orig_max_total_irrelevance, max_total_irrelevance, phase0.took, phase1.took, phase0.count, phase1.count)
 
     return max_total_irrelevance
 
 
-def evict_for_irrelevance(project, max_total_irrelevance, epoch_bounds_with_irrelevance, max_event_count=None):
+def evict_for_irrelevance(
+        project, max_total_irrelevance, epoch_bounds_with_irrelevance, include_never_evict=False, max_event_count=None):
     # max_total_irrelevance: the total may not exceed this (but it may equal it)
     # max_event_count is optional in anticipation of non-count (i.e. size-based) based methods of eviction
 
-    deleted = 0
+    evicted = 0
 
     for (_, epoch_ub_exclusive), irrelevance_for_age in epoch_bounds_with_irrelevance:
         max_item_irrelevance = max_total_irrelevance - irrelevance_for_age
 
-        deleted += evict_for_epoch_and_irrelevance(project, epoch_ub_exclusive, max_item_irrelevance)
+        evicted += evict_for_epoch_and_irrelevance(
+            project, epoch_ub_exclusive, max_item_irrelevance, include_never_evict)
 
         if max_item_irrelevance <= -1:
             # in the actual eviction, the test on max_item_irrelevance is done exclusively, i.e. only items of greater
@@ -223,19 +238,17 @@ def evict_for_irrelevance(project, max_total_irrelevance, epoch_bounds_with_irre
             # with max_item_irrelevance = -1. This means that if we just did such an eviction, we're done for all epochs
             break
 
-        if max_event_count is not None and deleted >= max_event_count:
+        if max_event_count is not None and evicted >= max_event_count:
             # We've reached the target; we can stop early. In this case not all events with greater than max_total_irr
             # will have been evicted; if this is the case older items are more likely to be spared (because epochs are
             # visited in reverse order).
-            print("BREAKING as just programmed")
             break
 
-    return deleted
+    return evicted
 
 
-def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance):
-    # print("evict_for_epoch_and_irrelevance(%s, %s)" % (max_epoch, max_irrelevance))
-
+def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, include_never_evict):
+    from issues.models import TurningPoint
     from .models import Event
     # evicting "at", based on the total irrelevance split out into 2 parts: max item irrelevance, and an epoch as
     # implied by the age-based irrelevance.
@@ -258,10 +271,15 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance):
     # this call, and only when `B` is cleaned will the points `x` be cleaned. (as-is, they are part of the selection,
     # but will already have been deleted)
 
-    qs = Event.objects.filter(project=project, irrelevance_for_retention__gt=max_irrelevance, never_evict=False)
+    qs_kwargs = {} if include_never_evict else {"never_evict": False}
+    qs = Event.objects.filter(project=project, irrelevance_for_retention__gt=max_irrelevance, **qs_kwargs)
 
     if max_epoch is not None:
         qs = qs.filter(server_side_timestamp__lt=datetime_for_epoch(max_epoch))
+
+    if include_never_evict:
+        # we need to manually ensure that no FKs to the deleted items exist:
+        TurningPoint.objects.filter(triggering_event__in=qs).update(triggering_event=None)
 
     # NOTE: we could take the idea of limiting the number of deletions to a desired maximum a bit further here; however,
     # Django does not support this out of the box (i.e. it does not support LIMIT in DELETE queries). Sqlite does in
