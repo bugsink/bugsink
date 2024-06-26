@@ -35,6 +35,7 @@ def create_event(project=None, issue=None, timestamp=None, event_data=None):
         has_logentry=True,
         data=json.dumps(event_data),
         ingest_order=issue_ingest_order,
+        irrelevance_for_retention=0,
     )
 
 
