@@ -104,10 +104,10 @@ def get_age_for_irrelevance(age_based_irrelevance):
     return pow(2, age_based_irrelevance) - 1
 
 
-def get_epoch_bounds_with_irrelevance(project, current_timestamp):
+def get_epoch_bounds_with_irrelevance(project, current_timestamp, qs_kwargs={"never_evict": False}):
     from .models import Event
 
-    oldest = Event.objects.filter(project=project, never_evict=False).aggregate(val=Min('server_side_timestamp'))['val']
+    oldest = Event.objects.filter(project=project, **qs_kwargs).aggregate(val=Min('server_side_timestamp'))['val']
     first_epoch = get_epoch(oldest) if oldest is not None else get_epoch(current_timestamp)
 
     current_epoch = get_epoch(current_timestamp)
@@ -121,7 +121,7 @@ def get_epoch_bounds_with_irrelevance(project, current_timestamp):
     return [((lb, ub), age_based_irrelevance) for age_based_irrelevance, (ub, lb) in enumerate(swapped_bounds)]
 
 
-def get_irrelevance_pairs(project, epoch_bounds_with_irrelevance):
+def get_irrelevance_pairs(project, epoch_bounds_with_irrelevance, qs_kwargs={"never_evict": False}):
     """tuples of `age_based_irrelevance` and, per associated period, the max observed (evictable) event irrelevance"""
     from .models import Event
 
@@ -129,7 +129,7 @@ def get_irrelevance_pairs(project, epoch_bounds_with_irrelevance):
         d = Event.objects.filter(
             get_epoch_bounds(lower_bound, upper_bound),
             project=project,
-            never_evict=False,
+            **qs_kwargs,
         ).aggregate(Max('irrelevance_for_retention'))
         max_event_irrelevance = d["irrelevance_for_retention__max"] or 0
 

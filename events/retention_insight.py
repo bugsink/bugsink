@@ -7,8 +7,11 @@ from .models import Event
 def retention_insight_values(project):
     timestamp = datetime.now(tz=timezone.utc)
 
-    epoch_bounds_with_irrelevance = get_epoch_bounds_with_irrelevance(project, timestamp)
-    pairs = list(get_irrelevance_pairs(project, epoch_bounds_with_irrelevance))
+    # we call with qs_kwargs={} here, because we want to see what actually exists including any never_evict=True events.
+    # (the default (used during actual eviction) is to ignore such events when creating bounds and pairs, because they
+    # cannot be deleted anyway)
+    epoch_bounds_with_irrelevance = get_epoch_bounds_with_irrelevance(project, timestamp, qs_kwargs={})
+    pairs = list(get_irrelevance_pairs(project, epoch_bounds_with_irrelevance, qs_kwargs={}))
 
     print("epoch_bounds_with_irrelevance")
     for x in epoch_bounds_with_irrelevance:
