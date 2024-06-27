@@ -25,6 +25,7 @@ class Command(BaseCommand):
         parser.add_argument("--fresh-timestamp", action="store_true")
         parser.add_argument("--compress", action="store", choices=["gzip", "deflate", "br"], default=None)
         parser.add_argument("--use-envelope", action="store_true")
+        parser.add_argument("--random-type", action="store_true", default=False)  # generate random exception type
 
         parser.add_argument("filename")
 
@@ -82,6 +83,13 @@ class Command(BaseCommand):
 
         if options["fresh_id"]:
             data["event_id"] = uuid.uuid4().hex
+
+        if options["random_type"]:
+            # avoids numbers in the type because I imagine numbers may at some point be ignored in the grouping.
+            into_chars = lambda i: "".join([chr(ord("A") + int(c)) for c in str(i)])  # noqa
+
+            unevenly_distributed_number = int(1 / (random.random() + 0.0000001))
+            data["exception"]["values"][0]["type"] = "Exception" + into_chars(unevenly_distributed_number)
 
         data_bytes = json.dumps(data).encode("utf-8")
 
