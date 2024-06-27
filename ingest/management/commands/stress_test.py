@@ -1,3 +1,4 @@
+import random
 import io
 import uuid
 import brotli
@@ -19,7 +20,7 @@ class Command(BaseCommand):
         parser.add_argument("--threads", type=int, default=1)
         parser.add_argument("--requests", type=int, default=1)
 
-        parser.add_argument("--dsn")
+        parser.add_argument("--dsn", nargs="+", action="extend")
         parser.add_argument("--fresh-id", action="store_true")
         parser.add_argument("--fresh-timestamp", action="store_true")
         parser.add_argument("--compress", action="store", choices=["gzip", "deflate", "br"], default=None)
@@ -35,7 +36,7 @@ class Command(BaseCommand):
         # usually not what we want to do our stress-tests for. (if this assumption is still true later in 2024, we can
         # just remove the non-envelope mode support completely.)
         assert use_envelope, "Only envelope mode is supported"
-        dsn = options['dsn']
+        dsns = options['dsn']
 
         json_filename = options["filename"]
         with open(json_filename) as f:
@@ -56,7 +57,7 @@ class Command(BaseCommand):
         t0 = time.time()
         for i in range(options["threads"]):
             t = threading.Thread(target=self.loop_send_to_server, args=(
-                dsn, options, use_envelope, compress, prepared_data[i], timings[i]))
+                dsns, options, use_envelope, compress, prepared_data[i], timings[i]))
             t.start()
 
         print("waiting for threads to finish")
@@ -107,8 +108,10 @@ class Command(BaseCommand):
         return compressed_data
 
     @staticmethod
-    def loop_send_to_server(dsn, options, use_envelope, compress, compressed_datas, timings):
+    def loop_send_to_server(dsns, options, use_envelope, compress, compressed_datas, timings):
         for compressed_data in compressed_datas.values():
+            dsn = random.choice(dsns)
+
             t0 = time.time()
             Command.send_to_server(dsn, options, use_envelope, compress, compressed_data)
             taken = time.time() - t0
