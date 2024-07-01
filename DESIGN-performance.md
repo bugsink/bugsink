@@ -1,5 +1,14 @@
 ## Some thoughts on performance
 
+### Thoughts after implementing eviction
+
+(See also contents of ./performance/stress-with-eviction/)
+
+* Surprise 1: 50 events/s (60% more than what I found below)
+* Surprise 2: in this config, I _am_ getting snappea backlog.
+
+### Original thoughts
+
 Now that we have playground.bugsink.com, I could get some real data on that system too.
 
 I suppose the most "interesting" finding is that the ~30/s events I can handle seem to be entirely limited by the
