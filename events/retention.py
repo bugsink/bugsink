@@ -170,10 +170,13 @@ def eviction_target(max_event_count, stored_event_count):
     # We also evict at least the number of events that we are over the max event count; this takes care of 2 scenarios:
     # * a quota that has been adjusted downwards (we want to get rid of the excess);
     # * quota so ridiculously low that 5% rounds down to 0, in those cases at least delete 1
-    return max(
-        min(500, int(max_event_count * 0.05)),
-        stored_event_count - max_event_count,
-    )
+    return min(
+               max(
+                   int(max_event_count * 0.05),
+                   stored_event_count - max_event_count,
+               ),
+               500,
+           )
 
 
 def evict_for_max_events(project, timestamp, stored_event_count=None, include_never_evict=False):
