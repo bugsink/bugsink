@@ -4,6 +4,9 @@ from django.db.models import Q, Min, Max
 from random import random
 from datetime import timezone, datetime
 
+from django.db.models.sql.compiler import SQLDeleteCompiler
+from django.db import connection
+
 from bugsink.moreiterutils import pairwise, map_N_until
 from performance.context_managers import time_and_query_count
 
@@ -155,11 +158,14 @@ def eviction_target(max_event_count, stored_event_count):
     # want to avoid doing it too often. For the completely reasonable quota of 10_000 events or more, this just means
     # 500; for lower quota we take 5% to avoid evicting too much (at a small performance penalty).
     #
+    # One reason to pick no higher than 500 (and to delete_with_limit) is that we want to avoid blocking too long on a
+    # single eviction. (both on a single query, to avoid timeouts, but also on the eviciton as a whole, because it
+    # would block other threads/processes and trigger timeouts there). On the slow VPS we've observed deletions taking
+    # in the order of 1-4ms per event, so 500 would put us at 2s, which is still less than 50% of the timeout value.
+    #
     # Although eviction triggers "a lot" of queries, "a lot" is in the order of 25, so after amortization this is far
     # less than 1 query extra per event (as a result of the actual eviction, checking for the need to evict is a
-    # different story). A reason to pick 5% instead of 10% is that eviction, as we've implemented it, also has its own
-    # 'overshooting' (i.e. it will evict more than strictly necessary, because it evicts all items with an irrelevance
-    # strictly greater than the given value). We don't want to be "doubly conservative" in this regard.
+    # different story). 5% seems close enough to the limit to stem the "why was so much deleted" questions.
     #
     # We also evict at least the number of events that we are over the max event count; this takes care of 2 scenarios:
     # * a quota that has been adjusted downwards (we want to get rid of the excess);
@@ -230,8 +236,9 @@ def evict_for_irrelevance(
     for (_, epoch_ub_exclusive), irrelevance_for_age in epoch_bounds_with_irrelevance:
         max_item_irrelevance = max_total_irrelevance - irrelevance_for_age
 
+        current_max = max_event_count - evicted if max_event_count is not None else None
         evicted += evict_for_epoch_and_irrelevance(
-            project, epoch_ub_exclusive, max_item_irrelevance, include_never_evict)
+            project, epoch_ub_exclusive, max_item_irrelevance, current_max, include_never_evict)
 
         if max_item_irrelevance <= -1:
             # in the actual eviction, the test on max_item_irrelevance is done exclusively, i.e. only items of greater
@@ -248,7 +255,21 @@ def evict_for_irrelevance(
     return evicted
 
 
-def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, include_never_evict):
+def delete_with_limit(qs, limit):
+    # Django does not support this out of the box (i.e. it does not support LIMIT in DELETE queries). Sqlite does in
+    # fact support it (whereas many other DBs do not), so we reach down into Django's internals to get this done.
+    sql, params = SQLDeleteCompiler(qs.query, connection, 'default').as_sql()
+    limited_sql = sql + " LIMIT %s"
+    limited_params = params + (limit,)
+
+    with connection.cursor() as cursor:
+        cursor.execute(limited_sql, limited_params)
+        nr_of_deletions = cursor.rowcount
+
+    return nr_of_deletions
+
+
+def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_event_count, include_never_evict):
     from issues.models import TurningPoint
     from .models import Event
     # evicting "at", based on the total irrelevance split out into 2 parts: max item irrelevance, and an epoch as
@@ -282,8 +303,8 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, include
         # we need to manually ensure that no FKs to the deleted items exist:
         TurningPoint.objects.filter(triggering_event__in=qs).update(triggering_event=None)
 
-    # NOTE: we could take the idea of limiting the number of deletions to a desired maximum a bit further here; however,
-    # Django does not support this out of the box (i.e. it does not support LIMIT in DELETE queries). Sqlite does in
-    # fact support it (whereas many other DBs do not), so we have this available as a future improvement.
-    nr_of_deletions, _ = qs.delete()
+    if max_event_count is None:
+        nr_of_deletions, _ = qs.delete()
+    else:
+        nr_of_deletions = delete_with_limit(qs, max_event_count)
     return nr_of_deletions
