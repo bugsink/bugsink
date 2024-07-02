@@ -83,29 +83,42 @@ def should_evict(project, timestamp, stored_event_count):
 
 
 def get_age_for_irrelevance(age_based_irrelevance):
-    #
-    # age based irrelevance is defined as `log(age + 1, 2)`
+    # age based irrelevance is defined as `log(age + 1, 4)`
     #
     # (This is what we chose because we want 0-aged to have an age-based irrelevance of 0); i.e. that's where the +1
     # comes from.
     #
+    # The base of 4 was chosen after some experimentation/consideration; it's certainly not a scientific choice. Note
+    # that the age based irrelevance is the easiest to tune out of the 2, because it's a simple logarithm (i.e. we don't
+    # need to count bits/leading zeroes) and because it is calculated on demand rather than stored in the DB.
+    #
+    # Why we picked 4: if you consider quota in the range of 10_000 - 1_000_000, the nonzero_leading_bits will lead to
+    # event-irrelevances of max 15 - 21 respectively. However, after evicting for max events I've observed this to be in
+    # the 8 - 12 range for the 10_000 case. Choosing 4 as the base for age-based means that the irrelevance for an event
+    # that is 1 year old is about 6.5 (log(24 * 365, 4)), which makes it so that even 1 year old events are not
+    # necessarily evicted if they were "the most relevant ones".
+    #
+    # Another way of thinking about this: for the value of 4, the change in irrelevance for an event going from one week
+    # old to one month old, or an event going from a bit over a day to a week old is comparable to an event being one of
+    # twice as many events. This feels more correct than e.g. using base 2, where the change in irrelevance takes a
+    # "step" at each doubling.
+    #
     # at the integer values for irrelevance this works out like so:
     # age = 0 => irrelevance = 0
-    # age = 1 => irrelevance = 1
-    # age = 2 => irrelevance = 1.58
-    # age = 3 => irrelevance = 2
-    # ...
-    # age = 7 => irrelevance = 3
+    # age = 1 => irrelevance = 0.5
+    # age = 2 => irrelevance = 0.792
+    # age = 3 => irrelevance = 1
+    # age = 15 => irrelevance = 2
     #
     # to work back from a given integer "budget" of irrelevance (after the (integer) item-based irrelevance has been
-    # subtracted from the total max), we can simply take `2^budget - 1` to get the 'age of eviction', the number of
+    # subtracted from the total max), we can simply take `4^budget - 1` to get the 'age of eviction', the number of
     # epochs we must go back. The following code helps me understand this:
     #
-    # >>> for budget in range(8):
-    # ...     age = pow(2, budget) - 1
+    # >>> for budget in range(20):
+    # ...     age = pow(4, budget) - 1
     # ...     print("budget: %s, age: %s" % (budget, age))
 
-    return pow(2, age_based_irrelevance) - 1
+    return pow(4, age_based_irrelevance) - 1
 
 
 def get_epoch_bounds_with_irrelevance(project, current_timestamp, qs_kwargs={"never_evict": False}):
