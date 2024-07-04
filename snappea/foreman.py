@@ -12,6 +12,7 @@ from inotify_simple import INotify, flags
 from sentry_sdk import capture_exception
 
 from django.conf import settings
+from django.db import connection
 
 from performance.context_managers import time_to_logger
 from bugsink.transaction import durable_atomic
@@ -126,6 +127,48 @@ class Foreman:
         with durable_atomic():
             get_pc_registry()
 
+        self.connection_close()
+
+    def connection_close(self):
+        # (as a method to allow for a single point of documentation)
+
+        # As per Django's doc: https://docs.djangoproject.com/en/5.0/ref/databases/#caveats
+        #
+        # > If a connection is created in a long-running process, outside of Django’s request-response cycle, the
+        # > connection will remain open until explicitly closed, or timeout occurs.
+        #
+        # This is precisely what we have here in the foreman, so we close "manually".
+        #
+        # The direct cause was: on my test-server, I noticed .wal files "hanging around". These were significantly
+        # larger than 4MB (which is what you'd get with the default settings of 1000 pages of 4KB). In fact, "at rest",
+        # i.e. after some stress test has run and no more requests are coming in, you'd expect no .wal file at all! This
+        # file disappeared after stopping runsnappea.
+        #
+        # The sqlite docs explain why this happens: https://sqlite.org/wal.html#avoiding_excessively_large_wal_files
+        #
+        # > Checkpoint starvation. [..] If another connection has a read transaction open, then the checkpoint cannot
+        # > reset the WAL file because doing so might delete content out from under the reader.
+        #
+        # I have personally not been able to cleanly reproduce this, though I have been able to "roughly" reproduce it.
+        # In particular, I'm (intermettendly) able to get this behavior even if there are (AFAICS) no transactions open,
+        # but the connection is still open. Solution: just close the connection. This indeed makes the .wal files
+        # disappear.
+        #
+        # I am aware that calling connection.close() rolls back any open transactions, but it is assumed that this is
+        # unlikely to happen accidentally because of our style of programming and Django's toolchain. Namely: explicit
+        # transactions are programmed using context_processors or method decorators. Calling connection.close() inside
+        # those constructs stands out. And outside of such decorators you're in autocommit because that's what Django
+        # does.
+        #
+        # Calling connection.close unnecessarily does not incur extra cost, because of `if self.connection is not None`
+        # in django.db.backends.base.base.DatabaseWrapper. (this is also the reason repeated calls to connection.close()
+        # are not a problem). (`connection` below is actually a ConnectionProxy, but it delegates to a DatabaseWrapper).
+        # Note that just calling .close() is hitting the right one because Django has a connection-per-thread model.
+        #
+        # None of the above is a problem in the runserver/gunicorn setup because Django does per-request cleanup in
+        # those cases.
+        connection.close()
+
     def run_in_thread(self, task_id, function, *args, **kwargs):
         # NOTE: we expose args & kwargs in the logs; as it stands no sensitive stuff lives there in our case, but this
         # is something to keep an eye on
@@ -142,6 +185,8 @@ class Foreman:
                 logger.warning("Snappea caught Exception: %s", str(e))
                 capture_exception(e)
             finally:
+                self.connection_close()
+
                 logger.info("Worker done in %.3fs", time.time() - t0)
                 self.workers.stopped(task_id)
                 self.worker_semaphore.release()

@@ -16,6 +16,10 @@ def set_pragmas(sender, connection, **kwargs):
             # > mode. **The synchronous=NORMAL setting is a good choice for most applications running in WAL mode.**
             #
             # (the default is FULL, which is the most conservative setting and one that comes with a performance cost)
+            #
+            # Note: while searching for the reason .wal files were kept around, the execution of out-of-transaction SQL
+            # became a suspect briefly. I tried to push this into the transaction, but that fails ("Safety level may not
+            # be changed inside a transaction") and it seemed that this particular query was not at fault anyhow.
             cursor.execute('PRAGMA synchronous = NORMAL;')
 
 

@@ -142,6 +142,10 @@ DATABASES = {
 
 DATABASE_ROUTERS = ("bugsink.dbrouters.SeparateSnappeaDBRouter",)
 
+# This is the default, but we're being explicit. In our setup (sqlite) we assume a low cost for reconnecting to the DB,
+# but a potential high cost ("checkpoint starvation") for keeping connections open.
+CONN_MAX_AGE = 0
+
 
 LOGIN_REDIRECT_URL = "/"
 
