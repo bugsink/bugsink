@@ -296,6 +296,7 @@ class Foreman:
                 with time_to_logger(performance_logger, "Snappea delete Task"):
                     task.delete()  # we delete the task because we can't do anything with it, and we don't want to hang
                 capture_exception(e)
+                self.worker_semaphore.release()
                 continue
 
             self.check_for_stopping()  # check_for_stopping() right before taking on the work
