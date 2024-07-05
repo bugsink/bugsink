@@ -24,7 +24,26 @@ def limit_runtime(conn, seconds):
     conn.set_progress_handler(None, 0)
 
 
+class PrintOnClose(object):
+    def __init__(self, conn):
+        self.conn = conn
+
+    def __getattr__(self, item):
+        return getattr(self.conn, item)
+
+    def close(self):
+        print("Connection closed", id(self.conn))
+        self.conn.close()
+
+
 class DatabaseWrapper(UnpatchedDatabaseWrapper):
+
+    # def get_new_connection(self, conn_params):
+    #     result = super().get_new_connection(conn_params)
+    #     import threading
+    #     print("Connection created", conn_params["database"], id(result), threading.current_thread().name)
+    #     return PrintOnClose(result)
+
     def create_cursor(self, name=None):
         return self.connection.cursor(factory=SQLiteCursorWrapper)
 
