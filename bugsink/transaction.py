@@ -2,10 +2,32 @@ import logging
 import time
 from functools import partial
 import types
+import threading
+
 from django.db import transaction as django_db_transaction
 from django.db import DEFAULT_DB_ALIAS
 
 performance_logger = logging.getLogger("bugsink.performance.db")
+
+# as per https://sqlite.org/forum/forumpost/f2427b925c1669b7 (the text below is slightly improved)
+#
+# All DB-altering work that the threads do is wrapped in BEGIN IMMEDIATELY transactions, which thus serve as a mutex of
+# sorts, because the threads cannot start a transaction when another thread is in a transaction. However, it seems that
+# this mechanism does not serve as a mutex from the perspective of checkpointing. My hypothesis/understanding is that
+# when thread A does a COMMIT, thread B's transaction can start. It is at that point that thread A attempts its
+# checkpointing, which it cannot do because thread B has already started a new transaction.
+#
+# (Additional evidence for this theory, not mentioned on the internet is: in the pre-semaphore setup, I see the log for
+# "BEGIN" appearing (sometimes a few miliseconds) before "IMMEDIATE" (which is when the __exit__ is complete). I
+# temporarily added an extra "ABOUT TO BEGIN" log statement for clarification.
+#
+# Supporting evidence for this hypothesis is: when I wrap a Python lock around the transaction (which makes thread B
+# wait until thread A has returned from its COMMIT), checkpointing does succeed.
+#
+# The immediate_semaphore is TSTTCPW to serialize writes more aggressively than just using IMMEDIATE. (For cross-process
+# locking that's still no help, but [a] in the recommended setup there is barely any cross-process locking and [b] this
+# lock only is only there to prevent WAL-growth, it's not for correctness (IMMEDIATE is for correctness).)
+immediate_semaphore = threading.Semaphore(1)
 
 
 class SuperDurableAtomic(django_db_transaction.Atomic):
@@ -99,6 +121,8 @@ class ImmediateAtomic(SuperDurableAtomic):
     # have the patched method; get_connection is thread_local, so monkey-patching is thread-safe.
 
     def __enter__(self):
+        immediate_semaphore.acquire()
+
         connection = django_db_transaction.get_connection(self.using)
 
         if hasattr(connection, "_start_transaction_under_autocommit"):
@@ -122,6 +146,8 @@ class ImmediateAtomic(SuperDurableAtomic):
         if hasattr(connection, "_start_transaction_under_autocommit"):
             connection._start_transaction_under_autocommit = connection._start_transaction_under_autocommit_original
             del connection._start_transaction_under_autocommit_original
+
+        immediate_semaphore.release()
 
 
 def immediate_atomic(using=None, savepoint=True, durable=True):
