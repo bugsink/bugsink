@@ -28,6 +28,9 @@ def shared_task(function):
             # lock" and "actually write".
             Task.objects.create(task_name=name, args=json.dumps(args), kwargs=json.dumps(kwargs))
 
+            # not necessary: `connections["snappea"].close()`; Django does this at the end of the request and the
+            # foreman's thread cleanup code does it for worker threads.
+
         wakeup_server()
 
     name = function.__module__ + "." + function.__name__
