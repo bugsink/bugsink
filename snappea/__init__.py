@@ -16,6 +16,8 @@ class Registry:
     def __getitem__(self, key):
         if key not in self.registry:
             logger.debug(f"Task '{key}' not found in registry. Trying to import the module.")
+            if key.count('.') == 0:
+                raise ValueError(f'Task name "{key}" is not in the format "module[s].function".')
             module_name, function = key.rsplit('.', 1)
             try:
                 # importing the module will register the task if it has the shared_task decorator
