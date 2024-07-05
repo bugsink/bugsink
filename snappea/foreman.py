@@ -137,22 +137,12 @@ class Foreman:
         # > If a connection is created in a long-running process, outside of Django’s request-response cycle, the
         # > connection will remain open until explicitly closed, or timeout occurs.
         #
-        # This is precisely what we have here in the foreman, so we close "manually".
+        # In addition to that (not explicitly mentioned): thread-close does not close the connection automatically. The
+        # present method is thus called for both the long-running foreman, and the individual worker-threads on-close.
         #
-        # The direct cause was: on my test-server, I noticed .wal files "hanging around". These were significantly
-        # larger than 4MB (which is what you'd get with the default settings of 1000 pages of 4KB). In fact, "at rest",
-        # i.e. after some stress test has run and no more requests are coming in, you'd expect no .wal file at all! This
-        # file disappeared after stopping runsnappea.
-        #
-        # The sqlite docs explain why this happens: https://sqlite.org/wal.html#avoiding_excessively_large_wal_files
-        #
-        # > Checkpoint starvation. [..] If another connection has a read transaction open, then the checkpoint cannot
-        # > reset the WAL file because doing so might delete content out from under the reader.
-        #
-        # I have personally not been able to cleanly reproduce this, though I have been able to "roughly" reproduce it.
-        # In particular, I'm (intermettendly) able to get this behavior even if there are (AFAICS) no transactions open,
-        # but the connection is still open. Solution: just close the connection. This indeed makes the .wal files
-        # disappear.
+        # Cleaning up after ourselves is "probably a good idea", i.e. not doing that will probably cause various
+        # hard-to-track problems. (the particular problem that put me on this path was a growing WAL file); details:
+        # https://sqlite.org/forum/forumpost/579fe4a0f9d1e1fd
         #
         # I am aware that calling connection.close() rolls back any open transactions, but it is assumed that this is
         # unlikely to happen accidentally because of our style of programming and Django's toolchain. Namely: explicit
@@ -165,8 +155,13 @@ class Foreman:
         # are not a problem). (`connection` below is actually a ConnectionProxy, but it delegates to a DatabaseWrapper).
         # Note that just calling .close() is hitting the right one because Django has a connection-per-thread model.
         #
-        # None of the above is a problem in the runserver/gunicorn setup because Django does per-request cleanup in
-        # those cases.
+        # None of the above is a problem in the gunicorn setup because Django does per-request cleanup in those cases.
+        # For runserver there's this caveat: https://code.djangoproject.com/ticket/35577
+        #
+        # Regarding the fear of e.g. `kill -9` not closing the connection, I have found the following quote: 'the
+        # user-visible consequence of not closing "the db" before the application exits should be precisely the same as
+        # if it was closed before exiting'. https://sqlite.org/forum/info/fc8d6e0ee055fef88a08f5092061108261445d17153457
+        # I have checked this myself (using `kill -9`) and it seems correct.
         connection.close()
 
     def run_in_thread(self, task_id, function, *args, **kwargs):
