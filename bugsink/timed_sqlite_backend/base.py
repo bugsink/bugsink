@@ -28,8 +28,16 @@ class PrintOnClose(object):
     def __init__(self, conn):
         self.conn = conn
 
+    def __setattr__(self, item, value):
+        if item == "conn":
+            return super().__setattr__(item, value)
+        return setattr(self.conn, item, value)
+
     def __getattr__(self, item):
         return getattr(self.conn, item)
+
+    def __hasattr__(self, item):
+        return hasattr(self.conn, item)
 
     def close(self):
         print("Connection closed", id(self.conn))
