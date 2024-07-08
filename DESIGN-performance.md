@@ -1,5 +1,12 @@
 ## Some thoughts on performance
 
+### Thoughts after -wal cleanup (better connection closing)
+
+There seems to be a small drop in ingestion performance, to approx. 30/s events. Given that this was (in "Original
+thoughts") the max, this is fine (for the increased (presumed) stability). (Pre-wal-cleanup this was approx 40/s)
+
+If this becomes a problem, the thing to consider is "keeping threads, and associated connections, open in the foreman".
+
 ### Thoughts after implementing eviction
 
 (See also contents of ./performance/stress-with-eviction/)
