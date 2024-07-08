@@ -150,6 +150,8 @@ class Foreman:
         # those constructs stands out. And outside of such decorators you're in autocommit because that's what Django
         # does.
         #
+        # Connection close (and subsequent reopen) has a cost that's documented in DESIGN-connections.md.
+        #
         # Calling connection.close unnecessarily does not incur extra cost, because of `if self.connection is not None`
         # in django.db.backends.base.base.DatabaseWrapper. (this is also the reason repeated calls to connection.close()
         # are not a problem). (`connection` below is actually a ConnectionProxy, but it delegates to a DatabaseWrapper).
