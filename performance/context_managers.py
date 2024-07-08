@@ -31,3 +31,18 @@ def time_and_query_count():
     finally:
         result.took = (time.time() - t0) * 1000
         result.count = len(connection.queries) - pre
+
+
+class Time:
+    def __init__(self):
+        self.took = None
+
+
+@contextmanager
+def time_it():
+    result = Time()
+    t0 = time.time()
+    try:
+        yield result
+    finally:
+        result.took = (time.time() - t0) * 1000
