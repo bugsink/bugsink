@@ -130,7 +130,7 @@ DATABASES = {
         },
     },
     "snappea": {
-        'ENGINE': 'django.db.backends.sqlite3',
+        'ENGINE': 'bugsink.timed_sqlite_backend',
         'NAME': os.getenv("SNAPPEA_DATABASE_PATH", 'snappea.sqlite3'),
         # 'TEST': {  postponed, for starters we'll do something like SNAPPEA_ALWAYS_EAGER
         'OPTIONS': {
