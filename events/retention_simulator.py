@@ -171,3 +171,13 @@ def print_db():
 
 
 main()
+
+
+# Notes on 'just drop', put here for lack of a better place.
+# While designing the eviction algorithm I also considered the idea of "just drop", i.e. to just never store certain
+# events if the calculated irrelvance exceeds some threshold. Such a threshold would typically be: the total threshold
+# of the last eviction, with some "cool down" algorithm (the threshold should increase over time) The idea: don't do
+# expensive stuff that you know is useless.  This idea is fine (even though eviction is cheap when amortized, the actual
+# add is still expensive), but the implementation is hardish: the annoying bit is that we need lots of conditionals in
+# our code, because we cannot deal with unsaved and saved Django objects in the same way (FKs). And in some paths
+# (basically, the never_evict ones) we still would need to do the save anyway.
