@@ -140,7 +140,7 @@ class ImmediateAtomic(SuperDurableAtomic):
         super(ImmediateAtomic, self).__exit__(exc_type, exc_value, traceback)
 
         took = (time.time() - self.t0) * 1000
-        performance_logger.info(f"{took:6.2f}ms IMMEDIATE transaction'")
+        performance_logger.info(f"{took:6.2f}ms IMMEDIATE transaction")
 
         connection = django_db_transaction.get_connection(self.using)
         if hasattr(connection, "_start_transaction_under_autocommit"):
