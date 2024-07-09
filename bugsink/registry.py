@@ -68,8 +68,3 @@ def reset_pc_registry():
     # needed for tests
     global _registry
     _registry = None
-
-
-# some TODOs:
-#
-# * quotas (per project, per issue)
