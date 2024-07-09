@@ -124,9 +124,10 @@ class BaseIngestAPIView(View):
 
         timestamp = parse_timestamp(event_metadata["timestamp"])
 
-        # leave this at the top -- the point is to trigger load_from_scratch if needed, which may involve reading from
-        # the DB which should come before any DB writing. A note on locking the PC: because period_counter accesses are
-        # inside an immediate transaction, they are serialized already, so threading will "just work".
+        # Leave this at the top to ensure that when load_from_scratch is triggered the pre-digest counts are correct.
+        # (if load_from_scratch would be triggered after Event-creation, but before the call to `.inc` the first event
+        # to be digested would be double-counted). A note on locking: period_counter accesses are serialized
+        # "automatically" because they are inside an immediate transaction, so threading will "just work".
         get_pc_registry()
 
         # NOTE: we don't do anything with project-period-counting yet; we'll revisit this bit, and its desired location,
