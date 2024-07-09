@@ -13,12 +13,12 @@ from django.test import tag
 
 from projects.models import Project, ProjectMembership
 from releases.models import create_release_if_needed
-from bugsink.registry import reset_pc_registry, get_pc_registry
-from bugsink.period_counter import PeriodCounter, TL_DAY
+from bugsink.registry import reset_pc_registry
 from events.factories import create_event
 from ingest.management.commands.send_json import Command as SendJsonCommand
 from compat.dsn import get_header_value
 from events.models import Event
+from ingest.views import BaseIngestAPIView
 
 from .models import Issue, IssueStateManager
 from .regressions import is_regression, is_regression_2, issue_is_regression
@@ -302,7 +302,8 @@ class MuteUnmuteTestCase(TransactionTestCase):
     """
     Somewhat of an integration test. The unit-under-test here is the whole of
     * the pc_registry
-    * PeriodCounter (counting, event listeners)
+    * BaseIngestAPIView.count_periods_and_act_on_it
+    * PeriodCounter (counting, thresholds)
     * IssueStateManager.unmute
     """
 
@@ -334,36 +335,12 @@ class MuteUnmuteTestCase(TransactionTestCase):
         IssueStateManager.mute(issue, "[]")
         issue.save()
 
-        registry = get_pc_registry()
-        self.assertEquals(0, len(registry.by_issue[issue.id].event_listeners[TL_DAY]))
-
     def test_mute_simple_case(self):
         project = Project.objects.create()
 
         issue = Issue.objects.create(project=project, **denormalized_issue_fields())
         IssueStateManager.mute(issue, "[{\"period\": \"day\", \"nr_of_periods\": 1, \"volume\": 1}]")
         issue.save()
-
-        registry = get_pc_registry()
-        self.assertEquals((1, 1), list(registry.by_issue[issue.id].event_listeners[TL_DAY].keys())[0])
-
-    def test_mute_with_already_satisfied_mute_condition(self):
-        registry = get_pc_registry()
-        project = Project.objects.create()
-
-        issue = Issue.objects.create(
-            project=project,
-            unmute_on_volume_based_conditions='[{"period": "day", "nr_of_periods": 1, "volume": 1}]',
-            is_muted=True,
-            **denormalized_issue_fields(),
-        )
-        event = create_event(project, issue)
-
-        pc = registry.by_issue[issue.id] = PeriodCounter()
-        pc.inc(datetime.now(timezone.utc), counted_entity=event)
-
-        with self.assertRaises(Exception):
-            IssueStateManager.mute(issue, "[{\"period\": \"day\", \"nr_of_periods\": 1, \"volume\": 1}]")
 
     @patch("issues.models.send_unmute_alert")
     def test_unmute_alerts_should_not_be_sent_when_users_click_unmute(self, send_unmute_alert):
@@ -393,16 +370,12 @@ class MuteUnmuteTestCase(TransactionTestCase):
             **denormalized_issue_fields(),
         )
 
-        # because we create our objects before getting the lazy registry, event-listeners will be correctly set by
-        # registry.load_from_scratch()
-        registry = get_pc_registry()
-
         event = create_event(project, issue)
-        registry.by_issue[issue.id].inc(datetime.now(timezone.utc), counted_entity=event)
+        BaseIngestAPIView.count_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
+        issue.save()
 
         self.assertFalse(Issue.objects.get(id=issue.id).is_muted)
         self.assertEquals("[]", Issue.objects.get(id=issue.id).unmute_on_volume_based_conditions)
-        self.assertEquals({}, registry.by_issue[issue.id].event_listeners[TL_DAY])
 
         self.assertEquals(1, send_unmute_alert.delay.call_count)
 
@@ -419,16 +392,13 @@ class MuteUnmuteTestCase(TransactionTestCase):
             is_muted=True,
             **denormalized_issue_fields(),
         )
-        # because we create our objects before getting the lazy registry, event-listeners will be correctly set by
-        # registry.load_from_scratch()
-        registry = get_pc_registry()
 
         event = create_event(project, issue)
-        registry.by_issue[issue.id].inc(datetime.now(timezone.utc), counted_entity=event)
+        BaseIngestAPIView.count_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
+        issue.save()
 
         self.assertFalse(Issue.objects.get(id=issue.id).is_muted)
         self.assertEquals("[]", Issue.objects.get(id=issue.id).unmute_on_volume_based_conditions)
-        self.assertEquals({}, registry.by_issue[issue.id].event_listeners[TL_DAY])
 
         self.assertEquals(1, send_unmute_alert.delay.call_count)
 

@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 import json
 import uuid
 from dateutil.relativedelta import relativedelta
@@ -208,25 +207,17 @@ class IssueStateManager(object):
 
     @staticmethod
     def mute(issue, unmute_on_volume_based_conditions="[]", unmute_after=None):
-        from bugsink.registry import get_pc_registry  # avoid circular import
         if issue.is_resolved:
             raise IncongruentStateException("Cannot mute a resolved issue")
 
-        now = datetime.now(timezone.utc)  # NOTE: clock-reading going on here... should it be passed-in?
-
         issue.is_muted = True
         issue.unmute_on_volume_based_conditions = unmute_on_volume_based_conditions
-
-        transaction.on_commit(partial(IssueStateManager.set_unmute_handlers,
-                                      get_pc_registry().by_issue, issue, now))
 
         if unmute_after is not None:
             issue.unmute_after = unmute_after
 
     @staticmethod
     def unmute(issue, triggering_event=None, unmute_metadata=None):
-        from bugsink.registry import get_pc_registry, UNMUTE_PURPOSE  # avoid circular import
-
         if issue.is_muted:
             # we check on is_muted explicitly: it may be so that multiple unmute conditions happens simultaneously (and
             # not just in "funny configurations"). i.e. a single event could push you past more than 3 events per day or
@@ -235,10 +226,6 @@ class IssueStateManager(object):
             issue.is_muted = False
             issue.unmute_on_volume_based_conditions = "[]"
             issue.unmute_after = None
-
-            # NOTE I'm not sure how I feel about reaching out to the global registry here; consider pass-along.
-            # Keep the pc_registry and the value of issue.unmute_on_volume_based_conditions in-sync:
-            get_pc_registry().by_issue[issue.id].remove_event_listener(UNMUTE_PURPOSE)
 
             if triggering_event is not None:
                 # (note: we can expect project to be set, because it will be None only when projects are deleted, in
@@ -263,44 +250,15 @@ class IssueStateManager(object):
                 triggering_event.never_evict = True  # .save() will be called by the caller of this function
 
     @staticmethod
-    def set_unmute_handlers(by_issue, issue, now):
-        from bugsink.registry import UNMUTE_PURPOSE  # avoid circular import
-        issue_pc = by_issue[issue.id]
-
+    def get_unmute_thresholds(issue):
         unmute_vbcs = [
             VolumeBasedCondition.from_dict(vbc_s)
             for vbc_s in json.loads(issue.unmute_on_volume_based_conditions)
         ]
 
-        # remove_event_listener(UNMUTE_PURPOSE) is (given the current constraints in our UI) not needed here, because we
-        # can only reach this point for currently unmuted (and hence without listeners) issues. Somewhat related note
-        # about this for-loop: with our current UI this loop always contains 0 or 1 elements, adding another unmute
-        # condition for an already-muted issue is simply not possible. If the UI ever changes, we need to double-check
-        # whether this still holds up.
-        for vbc in unmute_vbcs:
-            initial_state = issue_pc.add_event_listener(
-                period_name=vbc.period,
-                nr_of_periods=vbc.nr_of_periods,
-                gte_threshold=vbc.volume,
-                when_becomes_true=create_unmute_issue_handler(issue.id, vbc.to_dict()),
-                tup=now.timetuple(),
-                purpose=UNMUTE_PURPOSE,
-            )
-            if initial_state:
-                # What do you really mean when passing an unmute-condition that is immediately true? Probably: not what
-                # you asked for (you asked for muting, but provided a condition that would immediately unmute).
-                #
-                # We guard for this also because in our implementation, having passed the "become true" point means that
-                # in fact the condition will only become true _after_ it has become false once. (i.e. the opposite of
-                # what you'd expect).
-                #
-                # Whether to raise an Exception (rather than e.g. validate, or warn, or whatever) is an open question.
-                # For now we do it to avoid surprises.
-                #
-                # One alternative implementation would be: immediately unmute (but that's surprising too!)
-                # (All of the above applies equally well to at-unmute as it does for load_from_scratch (at which point
-                # we also just expect unmute conditions to only be set when they can still be triggered)
-                raise Exception("The unmute condition is already true")
+        # the for-loop in the below always contains 0 or 1 elements in our current UI (adding another unmute condition
+        # for an already-muted issue is simply not possible) but would be robust for more elements.
+        return [(vbc.period, vbc.nr_of_periods, vbc.volume, vbc.to_dict()) for vbc in unmute_vbcs]
 
 
 class IssueQuerysetStateManager(object):
@@ -379,23 +337,16 @@ class IssueQuerysetStateManager(object):
 
     @staticmethod
     def mute(issue_qs, unmute_on_volume_based_conditions="[]", unmute_after=None):
-        from bugsink.registry import get_pc_registry  # avoid circular import
         if issue_qs.filter(is_resolved=True).exists():
             # we might remove this check for performance reasons later (it's more expensive here than in the non-bulk
             # case because we have to do a query to check for it). For now we leave it in to avoid surprises while we're
             # still heavily in development.
             raise IncongruentStateException("Cannot mute a resolved issue")
 
-        now = datetime.now(timezone.utc)  # NOTE: clock-reading going on here... should it be passed-in?
-
         issue_qs.update(
             is_muted=True,
             unmute_on_volume_based_conditions=unmute_on_volume_based_conditions,
         )
-
-        transaction.on_commit(partial(
-            IssueQuerysetStateManager.set_unmute_handlers,
-            get_pc_registry().by_issue, [i for i in issue_qs], now))
 
         if unmute_after is not None:
             issue_qs.update(unmute_after=unmute_after)
@@ -414,28 +365,6 @@ class IssueQuerysetStateManager(object):
         # (for this remark to be true triggering_event must be None, which is asserted for in the above)
         for issue in issue_qs:
             IssueStateManager.unmute(issue, triggering_event)
-
-    @staticmethod
-    def set_unmute_handlers(by_issue, issue_list, now):
-        # in this method there's no fancy queryset based stuff (we don't actually do updates on the DB)
-        # the use of 'issue_list' as opposed to 'issue_qs' is a (non-enforced) indication that for correct usage (in
-        # on_commit) as QS should be evaluated inside the commit and the resulting list should be dealt with afterwards.
-
-        for issue in issue_list:
-            IssueStateManager.set_unmute_handlers(by_issue, issue, now)
-
-
-def create_unmute_issue_handler(issue_id, vbc_dict):
-    # as an alternative solution to storing vbc_dict in the closure I considered passing the (period, gte_threshold)
-    # info from the PeriodCounter (in the when_becomes_true call), but the current solution works just as well and
-    # requires less rework.
-
-    def unmute(counted_entity):
-        issue = Issue.objects.get(id=issue_id)
-        IssueStateManager.unmute(issue, triggering_event=counted_entity, unmute_metadata={"mute_until": vbc_dict})
-        issue.save()
-
-    return unmute
 
 
 class TurningPointKind(models.IntegerChoices):

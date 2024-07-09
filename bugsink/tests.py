@@ -6,12 +6,12 @@ from unittest import TestCase as RegularTestCase
 from django.test import TestCase as DjangoTestCase
 
 from projects.models import Project
-from issues.models import Issue
+from issues.models import Issue, IssueStateManager
 from issues.factories import denormalized_issue_fields
 from events.models import Event
 from events.factories import create_event
 
-from .period_counter import PeriodCounter, _prev_tup, TL_DAY, TL_MONTH, TL_YEAR
+from .period_counter import PeriodCounter, _prev_tup
 from .volume_based_condition import VolumeBasedCondition
 from .registry import PeriodCounterRegistry
 from .streams import (
@@ -23,14 +23,6 @@ def apply_n(f, n, v):
     for i in range(n):
         v = f(v)
     return v
-
-
-class callback(object):
-    def __init__(self):
-        self.calls = 0
-
-    def __call__(self, counted_entity):
-        self.calls += 1
 
 
 class PeriodCounterTestCase(RegularTestCase):
@@ -81,82 +73,49 @@ class PeriodCounterTestCase(RegularTestCase):
         pc = PeriodCounter()
         pc.inc(datetime_utc)
 
-    def test_event_listeners_for_total(self):
+    def test_thresholds_for_total(self):
         timepoint = datetime(2020, 1, 1, 10, 15, tzinfo=timezone.utc)
 
         pc = PeriodCounter()
-        wbt = callback()
-        wbf = callback()
-        pc.add_event_listener("total", 1, 2, wbt, wbf, initial_event_state=False)
+        thresholds = {"unmute": [("total", 1, 2, "meta")]}
 
-        # first inc: should not yet trigger
-        pc.inc(timepoint)
-        self.assertEquals(0, wbt.calls)
+        # first inc: should not yet be True
+        states = pc.inc(timepoint, thresholds=thresholds)
+        self.assertEquals({"unmute": [(False, "meta")]}, states)
 
-        # second inc: should trigger (threshold of 2)
-        pc.inc(timepoint)
-        self.assertEquals(1, wbt.calls)
+        # second inc: should be True (threshold of 2)
+        states = pc.inc(timepoint, thresholds=thresholds)
+        self.assertEquals({"unmute": [(True, "meta")]}, states)
 
-        # third inc: should not trigger again
-        pc.inc(timepoint)
-        self.assertEquals(1, wbt.calls)
+        # third inc: should still be True
+        states = pc.inc(timepoint, thresholds=thresholds)
+        self.assertEquals({"unmute": [(True, "meta")]}, states)
 
-    def test_event_listeners_for_year(self):
+    def test_thresholds_for_year(self):
         tp_2020 = datetime(2020, 1, 1, 10, 15, tzinfo=timezone.utc)
         tp_2021 = datetime(2021, 1, 1, 10, 15, tzinfo=timezone.utc)
         tp_2022 = datetime(2022, 1, 1, 10, 15, tzinfo=timezone.utc)
 
         pc = PeriodCounter()
-        wbt = callback()
-        wbf = callback()
-        pc.add_event_listener("year", 2, 3, wbt, wbf, initial_event_state=False)
+        thresholds = {"unmute": [("year", 2, 3, "meta")]}
 
-        pc.inc(tp_2020)
-        self.assertEquals(0, wbt.calls)
+        states = pc.inc(tp_2020, thresholds=thresholds)
+        self.assertEquals({"unmute": [(False, "meta")]}, states)
 
-        pc.inc(tp_2020)
-        self.assertEquals(0, wbt.calls)
+        states = pc.inc(tp_2020, thresholds=thresholds)
+        self.assertEquals({"unmute": [(False, "meta")]}, states)
 
         # 3rd in total: become True
-        pc.inc(tp_2021)
-        self.assertEquals(1, wbt.calls)
+        states = pc.inc(tp_2021, thresholds=thresholds)
+        self.assertEquals({"unmute": [(True, "meta")]}, states)
 
         # into a new year, total == 2: become false
-        self.assertEquals(0, wbf.calls)
-        pc.inc(tp_2022)
-        self.assertEquals(1, wbf.calls)
-        self.assertEquals(1, wbt.calls)  # unchanged
+        states = pc.inc(tp_2022, thresholds=thresholds)
+        self.assertEquals({"unmute": [(False, "meta")]}, states)
 
         # 3rd in (new) total: become True again
-        pc.inc(tp_2022)
-        self.assertEquals(2, wbt.calls)
-        self.assertEquals(1, wbf.calls)  # unchanged
-
-    def test_event_listeners_purpose(self):
-        tp_2020 = datetime(2020, 1, 1, 10, 15, tzinfo=timezone.utc)
-
-        pc = PeriodCounter()
-        wbt = callback()
-
-        class destructive_callback(object):
-            def __init__(self):
-                self.calls = 0
-
-            def __call__(self, counted_entity):
-                pc.remove_event_listener("foo")
-                self.calls += 1
-
-        wbf = callback()
-        pc.add_event_listener("year", 1, 1, wbt, wbf, purpose="foo", initial_event_state=False)
-        pc.add_event_listener("month", 1, 1, destructive_callback(), wbf, purpose="foo", initial_event_state=False)
-
-        self.assertEquals(0, wbt.calls)
-        pc.inc(tp_2020)
-
-        self.assertEquals(1, wbt.calls)
-
-        self.assertEquals({}, pc.event_listeners[TL_YEAR])
-        self.assertEquals({}, pc.event_listeners[TL_MONTH])
+        states = pc.inc(tp_2022, thresholds=thresholds)
+        self.assertEquals({"unmute": [(True, "meta")]}, states)
 
 
 class VolumeBasedConditionTestCase(RegularTestCase):
@@ -200,7 +159,10 @@ class PCRegistryTestCase(DjangoTestCase):
 
         self.assertEquals({project.id}, by_project.keys())
         self.assertEquals({issue.id}, by_issue.keys())
-        self.assertEquals({(1, 100)}, by_issue[issue.id].event_listeners[TL_DAY].keys())
+
+        self.assertEquals("day", IssueStateManager.get_unmute_thresholds(issue)[0][0])
+        self.assertEquals(1, IssueStateManager.get_unmute_thresholds(issue)[0][1])
+        self.assertEquals(100, IssueStateManager.get_unmute_thresholds(issue)[0][2])
 
 
 class StreamsTestCase(RegularTestCase):

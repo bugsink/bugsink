@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from projects.models import Project
 from events.models import Event
-from issues.models import Issue, IssueStateManager
+from issues.models import Issue
 from performance.context_managers import time_to_logger
 
 from .period_counter import PeriodCounter
@@ -13,7 +13,6 @@ performance_logger = logging.getLogger("bugsink.performance.registry")
 
 
 _registry = None
-UNMUTE_PURPOSE = "unmute"
 
 
 class PeriodCounterRegistry(object):
@@ -41,17 +40,10 @@ class PeriodCounterRegistry(object):
         # load all events (one by one, let's measure the slowness of the naive implementation before making it faster)
         for event in ordered_events.iterator():
             project_pc = by_project[event.project_id]
-            project_pc.inc(event.timestamp)  # `counted_entity` needs not be passed since no unmute_handers are set yet
+            project_pc.inc(event.timestamp)
 
             issue_pc = by_issue[event.issue_id]
-            issue_pc.inc(event.timestamp)  # `counted_entity` needs not be passed since no unmute_handers are set yet
-
-        # connect all volume-based conditions to their respective period counters' event listeners
-        # this is done after the events are loaded (as opposed to before they are loaded) because:
-        # 1. this ensures we don't trigger any events as a side effect of load_from_scratch
-        # 2. not having to evalutate the handlers each time is more performant
-        for issue in issues.filter(is_muted=True).iterator():
-            IssueStateManager.set_unmute_handlers(by_issue, issue, now)
+            issue_pc.inc(event.timestamp)
 
         return by_project, by_issue
 

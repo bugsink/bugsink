@@ -115,13 +115,8 @@ class BaseIngestAPIView(View):
         }
 
     @classmethod
-    def digest_event(cls, event_metadata, event_data, project=None):
-        event, issue = cls._digest_event_to_db(event_metadata, event_data, project=project)
-        cls._digest_event_python_postprocessing(parse_timestamp(event_metadata["timestamp"]), event, issue)
-
-    @classmethod
     @immediate_atomic()
-    def _digest_event_to_db(cls, event_metadata, event_data, project=None):
+    def digest_event(cls, event_metadata, event_data, project=None):
         if project is None:
             # having project as an optional argument allows us to pass this in when we have the information available
             # (in the DIGEST_IMMEDIATELY case) which saves us a query.
@@ -133,9 +128,6 @@ class BaseIngestAPIView(View):
         # the DB which should come before any DB writing. A note on locking the PC: because period_counter accesses are
         # inside an immediate transaction, they are serialized "for free", so threading will "just work". Even inside
         # snappea and the django dev server.
-        # TODO however, in a multi-processing context (gunicon itself and gunicorn/snappea), the PC will not be shared
-        # between processes. We need to think of something (or fall back to database-based counting, or set up gunicorn
-        # in threaded-worker mode).
         get_pc_registry()
 
         # NOTE: we don't do anything with project-period-counting yet; we'll revisit this bit, and its desired location,
@@ -146,7 +138,7 @@ class BaseIngestAPIView(View):
         #     get_pc_registry().by_project[project.id] = PeriodCounter()
         #
         # project_pc = get_pc_registry().by_project[project.id]
-        # project_pc.inc(now)  # counted_entity (event) is not available yet, since we don't use it we don't pass it.
+        # project_pc.inc(now)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
@@ -289,16 +281,34 @@ class BaseIngestAPIView(View):
 
         if release.version + "\n" not in issue.events_at:
             issue.events_at += release.version + "\n"
+
+        cls.count_periods_and_act_on_it(issue, event, timestamp)
+
         issue.save()
-        return event, issue
 
     @classmethod
-    def _digest_event_python_postprocessing(cls, timestamp, event, issue):
+    def count_periods_and_act_on_it(cls, issue, event, timestamp):
         pc_registry = get_pc_registry()
         if issue.id not in pc_registry.by_issue:
             pc_registry.by_issue[issue.id] = PeriodCounter()
         issue_pc = pc_registry.by_issue[issue.id]
-        issue_pc.inc(timestamp, counted_entity=event)
+
+        thresholds_by_purpose = {
+            "unmute":  IssueStateManager.get_unmute_thresholds(issue),
+        }
+        states_by_purpose = issue_pc.inc(timestamp, thresholds=thresholds_by_purpose)
+
+        for (state, vbc_dict) in states_by_purpose["unmute"]:
+            if not state:
+                continue
+
+            IssueStateManager.unmute(issue, triggering_event=event, unmute_metadata={"mute_until": vbc_dict})
+
+            # In the (in the current UI impossible, and generally unlikely) case that multiple unmute conditions are met
+            # simultaneously, we arbitrarily break after the first. (this makes it so that a single TurningPoint is
+            # created and that the detail that there was also another reason to unmute doesn't show us, but that's
+            # perfectly fine); it also matches what we do elsewhere (i.e. 'if is_muted` in `IssueStateManager.unmute`)
+            break
 
 
 class IngestEventAPIView(BaseIngestAPIView):

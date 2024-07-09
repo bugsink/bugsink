@@ -1,4 +1,3 @@
-from collections import namedtuple
 from datetime import datetime, timezone, timedelta
 
 # these constants are quite arbitrary; it can easily be argued that 90 minutes is an interesting time-frame (because of
@@ -24,18 +23,6 @@ TL_MONTH = 2
 TL_DAY = 3
 TL_HOUR = 4
 TL_MINUTE = 5
-
-
-EventListener = namedtuple("EventListener", "when_becomes_true when_becomes_false purpose is_true")
-
-
-def change_state(listener, is_true):
-    return EventListener(
-        when_becomes_true=listener.when_becomes_true,
-        when_becomes_false=listener.when_becomes_false,
-        purpose=listener.purpose,
-        is_true=is_true,
-    )
 
 
 def noop():
@@ -78,10 +65,7 @@ def _prev_tup(tup, n=1):
 
 
 def _inc(counts_for_tl, tup, n, max_age):
-    is_new_period = False
-
     if tup not in counts_for_tl:
-        is_new_period = True
         min_tup = _prev_tup(tup, max_age - 1)
         for k, v in list(counts_for_tl.items()):
             if k < min_tup:
@@ -92,77 +76,53 @@ def _inc(counts_for_tl, tup, n, max_age):
 
     # inc
     counts_for_tl[tup] += n
-    return is_new_period
+
+
+def _reorganize_by_tl(thresholds_by_purpose):
+    by_tl = {}
+
+    for purpose, items in thresholds_by_purpose.items():
+        for (period_name, nr_of_periods, gte_threshold, metadata) in items:
+            tl = PeriodCounter._tl_for_period(period_name)
+
+            if tl not in by_tl:
+                by_tl[tl] = []
+
+            by_tl[tl].append((nr_of_periods, gte_threshold, metadata, purpose))
+
+    return by_tl
 
 
 class PeriodCounter(object):
 
     def __init__(self):
         self.counts = {tuple_length: {} for tuple_length in range(TL_MINUTE + 1)}
-        self.event_listeners = {tuple_length: {} for tuple_length in range(TL_MINUTE + 1)}
 
-    def inc(self, datetime_utc, n=1, counted_entity=None):
+    def inc(self, datetime_utc, n=1, thresholds={}):
+        # thresholds :: purpose -> [(period_name, nr_of_periods, gte_threshold, metadata), ...]
+
         # we only allow UTC, and we generally use Django model fields, which are UTC, so this should be good:
         assert datetime_utc.tzinfo == timezone.utc
 
         tup = datetime_utc.timetuple()
 
+        thresholds_by_tl = _reorganize_by_tl(thresholds)
+        states_with_metadata_by_purpose = {purpose: [] for purpose in thresholds.keys()}
+
         for tl, mx in enumerate([MAX_TOTALS, MAX_YEARS, MAX_MONTHS, MAX_DAYS, MAX_HOURS, MAX_MINUTES]):
-            is_new_period = _inc(self.counts[tl], tup[:tl], n, mx)
+            _inc(self.counts[tl], tup[:tl], n, mx)
 
-            event_listeners_for_tl = self.event_listeners[tl]
-            for ((nr_of_periods, gte_threshold), listener) in list(event_listeners_for_tl.items()):
-                if listener.is_true:
-                    if not is_new_period:
-                        continue  # no new period means: never becomes false, because no old period becomes irrelevant
+            thresholds_for_tl = thresholds_by_tl.get(tl, {})
+            for (nr_of_periods, gte_threshold, metadata, purpose) in thresholds_for_tl:
+                state = self._get_event_state(tup[:tl], tl, nr_of_periods, gte_threshold)
+                states_with_metadata_by_purpose[purpose].append((state, metadata))
 
-                    if not self._get_event_state(tup[:tl], tl, nr_of_periods, gte_threshold):
-                        event_listeners_for_tl[(nr_of_periods, gte_threshold)] = change_state(listener, False)
-                        listener.when_becomes_false(counted_entity=counted_entity)
+        # we return tuples of (state, metadata) where metadata is something arbitrary that can be passed in (it allows
+        # us to tie back to "what caused this to be true/false?"
+        return states_with_metadata_by_purpose
 
-                else:
-                    if self._get_event_state(tup[:tl], tl, nr_of_periods, gte_threshold):
-                        event_listeners_for_tl[(nr_of_periods, gte_threshold)] = change_state(listener, True)
-                        listener.when_becomes_true(counted_entity=counted_entity)
-
-    def add_event_listener(self, period_name, nr_of_periods, gte_threshold, when_becomes_true=noop,
-                           when_becomes_false=noop, purpose=None, initial_event_state=None, tup=None):
-        # NOTE as it stands we store only a single event_listener at the key (nr_of_periods, gte_threshold); this means
-        # that if you add a second event_listener with the same key, it will overwrite the first one. As long as we have
-        # a single event-listener per goal (e.g. unmuting) this may actually be a feature; but if we start monitoring
-        # both quota/unmuting in a single period_counter, these things will conflict and we'll need to keep a list as
-        # the values in our dict.
-
-        # note: the 'events' here are not bugsink-events; but the more general concept of 'an event'; we may consider a
-        # different name for this in the future because of that.
-
-        # tup means: tup for the current time, which can be used to determine the initial state of the event listener.
-
-        if len([arg for arg in [initial_event_state, tup] if arg is None]) != 1:
-            # either be explicit, or let us deduce
-            raise ValueError("Provide exactly one of (initial_event_state, tup)")
-
-        tl = self._tl_for_period(period_name)
-        if initial_event_state is None:
-            initial_event_state = self._get_event_state(tup[:tl], tl, nr_of_periods, gte_threshold)
-
-        self.event_listeners[tl][(nr_of_periods, gte_threshold)] = \
-            EventListener(when_becomes_true, when_becomes_false, purpose, initial_event_state)
-
-        return initial_event_state
-
-    def remove_event_listener(self, purpose):
-        """
-        Remove all event listeners with the given purpose. The purpose is a string that can be used to identify the
-        event listener. (The idea is: callbacks are organized by purpose, and when you want to remove a callback, you
-        can do so by specifying the purpose.)
-        """
-        for tl, mx in enumerate([MAX_TOTALS, MAX_YEARS, MAX_MONTHS, MAX_DAYS, MAX_HOURS, MAX_MINUTES]):
-            for k, (wbt, wbf, this_purp, state) in list(self.event_listeners[tl].items()):
-                if this_purp == purpose:
-                    del self.event_listeners[tl][k]
-
-    def _tl_for_period(self, period_name):
+    @staticmethod
+    def _tl_for_period(period_name):
         return {
             "total": 0,
             "year": 1,
