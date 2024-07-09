@@ -120,9 +120,7 @@ class Foreman:
         self.worker_semaphore = threading.Semaphore(self.settings.NUM_WORKERS)
 
         # "initialize" the application.
-        # this is likely in the wrong place, but I want to have it "somewhere" (before the workers start). And thinking
-        # of the right place is something I want to postpone (it's also something we need to do for gunicorn, where it's
-        # even harder because multi-process means the n (number of workers) don't share the same instance.
+        # this might be in the wrong place, but I want to have it "somewhere" (before the workers start).
         from bugsink.registry import get_pc_registry
         with durable_atomic():
             get_pc_registry()

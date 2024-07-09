@@ -126,8 +126,7 @@ class BaseIngestAPIView(View):
 
         # leave this at the top -- the point is to trigger load_from_scratch if needed, which may involve reading from
         # the DB which should come before any DB writing. A note on locking the PC: because period_counter accesses are
-        # inside an immediate transaction, they are serialized "for free", so threading will "just work". Even inside
-        # snappea and the django dev server.
+        # inside an immediate transaction, they are serialized already, so threading will "just work".
         get_pc_registry()
 
         # NOTE: we don't do anything with project-period-counting yet; we'll revisit this bit, and its desired location,

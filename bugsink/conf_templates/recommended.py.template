@@ -96,6 +96,5 @@ BUGSINK = {
     # "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
     # "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
 
-      
     "INGEST_STORE_BASE_DIR": "/home/bugsink/ingestion",
 }
