@@ -358,7 +358,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
                     return MaxDataWriter("MAX_EVENT_SIZE", io.BytesIO())
 
                 # envelope_headers["event_id"] is required when type=event per the spec (and takes precedence over the
-                # payload's event_id), so we can relay on it having been set.
+                # payload's event_id), so we can rely on it having been set.
                 if "event_id" not in envelope_headers:
                     raise ParseError("event_id not found in envelope headers")
                 filename = get_filename_for_event_id(envelope_headers["event_id"])
