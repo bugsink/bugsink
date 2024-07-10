@@ -378,7 +378,7 @@ server {
 
     location / {
         # Pass the request to Gunicorn via proxy_pass.
-        proxy_pass                  http://127.0.0.1:8001;
+        proxy_pass                  http://127.0.0.1:8000;
 
         # Set the Host header to the original host.
         proxy_set_header            Host $host;

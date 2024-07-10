@@ -1,3 +1,4 @@
+import contextlib
 import os
 import glob
 
@@ -242,11 +243,22 @@ class Foreman:
             logger.debug("Main loop: Waiting for wakeup call")
             for event in self.wakeup_calls.read():
                 logger.debug("Main loop: Removing wakeup notification %s", event.name)
-                # I think we can just do os.unlink(), without being afraid of an error either here or on the side where
-                # we write the file. I don't have a link to the man page to back this up, but when running "many" calls
-                # (using 2 processes with each simple tight loop, one creating the files and one deleting them, I did
-                # not get any errors)
-                os.unlink(os.path.join(self.settings.WAKEUP_CALLS_DIR, event.name))
+                # I used to think we could just do os.unlink(), without being afraid of an error either here or on the
+                # side where we write the file. I don't have a link to the man page to back this up, but when running
+                # "many" calls (using 2 processes with each simple tight loop, one creating the files and one deleting
+                # them, I did not get any errors). However, later I did get an error in production:
+                # https://dogfood.bugsink.com/issues/issue/48055b00-ddc3-4148-b77a-52379d6d8233/event/last/
+                # I find it really hard to understand where this error came from... AFAICT the following would always
+                # happen in sequence:
+                # * if not exists
+                # * create          (optional on the previous)
+                # * creation detected through inotify
+                # * delete.
+                # A point of debuggin could be: adding the result of self.wakeup_calls.read() to the local variables
+                # such that dogfood Bugsink will pick up on it. But in the end it's not really that relevant (despite
+                # being interesting) so I just catch the error.
+                with contextlib.suppress(FileNotFoundError):
+                    os.unlink(os.path.join(self.settings.WAKEUP_CALLS_DIR, event.name))
 
             self.check_for_stopping()  # always check after .read()
             while self.create_workers() == self.settings.TASK_QS_LIMIT:
