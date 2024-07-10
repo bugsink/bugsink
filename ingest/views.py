@@ -53,9 +53,9 @@ class BaseIngestAPIView(View):
         try:
             return self._post(request, project_pk)
         except MaxLengthExceeded as e:
-            return JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST)  # NOTE untested behavior
+            return JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST)
         except exceptions.ValidationError as e:
-            return JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST)  # NOTE untested behavior
+            return JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST)
 
     @classmethod
     def get_sentry_key_for_request(cls, request):
