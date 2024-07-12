@@ -49,3 +49,8 @@ def get_header_value(sentry_dsn):
         # https://github.com/getsentry/develop/blob/b24a602de05b/src/docs/sdk/overview.mdx#L188
         "sentry_client": "bugsink/0.0.1",
     }.items())
+
+
+def get_sentry_key(sentry_dsn):
+    parts = urllib.parse.urlsplit(sentry_dsn)
+    return parts.username

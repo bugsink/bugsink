@@ -14,6 +14,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 
 from compat.auth import parse_auth_header_value
+from compat.dsn import get_sentry_key
 
 from projects.models import Project
 from issues.models import Issue, IssueStateManager, Grouping, TurningPoint, TurningPointKind
@@ -75,12 +76,16 @@ class BaseIngestAPIView(View):
         raise exceptions.NotAuthenticated("Unable to find authentication information")
 
     @classmethod
-    def get_project(cls, request, project_pk):
+    def get_project(cls, project_pk, sentry_key):
         # NOTE this gives a 404 for non-properly authorized. Is this really something we care about, i.e. do we want to
         # raise NotAuthenticated? In that case we need to get the project first, and then do a constant-time-comp on the
         # sentry_key
-        sentry_key = cls.get_sentry_key_for_request(request)
         return get_object_or_404(Project, pk=project_pk, sentry_key=sentry_key)
+
+    @classmethod
+    def get_project_for_request(cls, project_pk, request):
+        sentry_key = cls.get_sentry_key_for_request(request)
+        return cls.get_project(project_pk, sentry_key)
 
     @classmethod
     def process_event(cls, event_id, event_data_stream, project, request):
@@ -314,7 +319,7 @@ class BaseIngestAPIView(View):
 class IngestEventAPIView(BaseIngestAPIView):
 
     def _post(self, request, project_pk=None):
-        project = self.get_project(request, project_pk)
+        project = self.get_project_for_request(project_pk, request)
 
         # This endpoint is deprecated. Personally, I think it's the simpler (and given my goals therefore better) of the
         # two, but fighting windmills and all... given that it's deprecated, I'm not going to give it quite as much love
@@ -339,8 +344,6 @@ class IngestEventAPIView(BaseIngestAPIView):
 class IngestEnvelopeAPIView(BaseIngestAPIView):
 
     def _post(self, request, project_pk=None):
-        project = self.get_project(request, project_pk)
-
         # Note: wrapping the COMPRESSES_SIZE checks arount request makes it so that when clients do not compress their
         # requests, they are still subject to the (smaller) maximums that apply pre-uncompress. This is exactly what we
         # want.
@@ -348,9 +351,11 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
                     MaxDataReader("MAX_ENVELOPE_SIZE", content_encoding_reader(
                         MaxDataReader("MAX_ENVELOPE_COMPRESSED_SIZE", request))))
 
-        # TODO: use the envelope_header's DSN if it is available (exact order-of-operations will depend on load-shedding
-        # mechanisms)
         envelope_headers = parser.get_envelope_headers()
+        if "dsn" in envelope_headers:
+            project = self.get_project(project_pk, get_sentry_key(envelope_headers["dsn"]))
+        else:
+            project = self.get_project_for_request(project_pk, request)
 
         def factory(item_headers):
             if item_headers.get("type") == "event":
