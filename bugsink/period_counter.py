@@ -32,34 +32,42 @@ def noop():
 def _prev_tup(tup, n=1):
     aslist = list(tup)
 
-    # if n > 1 we try to first remove the largest possible chunk from the last element of the tuple, so that we can
-    # then do the remainder in the loop (for performance reasons)
+    # if n > 1 we try to first remove the largest possible chunk from the last element of the tuple (for performance
+    # reasons), so that we can then do the remainder in the loop (always 1) and the recursive call (the rest)
     if n > 1:
         DONE_IN_LOOP = 1
-        first_chunk = min(n - DONE_IN_LOOP, max(0, tup[-1] - MIN_VALUE_AT_TUP_INDEX[-1] - DONE_IN_LOOP))
+        first_chunk = max(min(  # the minimum of:
+            n - DONE_IN_LOOP,  # [A] the work to be done minus 1 in the loop-over-digits below
+            tup[-1] - MIN_VALUE_AT_TUP_INDEX[len(tup) - 1],  # [B] jump to roll-over right before entering that loop
+            ), 0)  # but never less than 0
         aslist[-1] -= first_chunk
-        remainder = n - first_chunk - DONE_IN_LOOP
+        n_for_recursive_call = n - first_chunk - DONE_IN_LOOP
     else:
-        remainder = 0
+        n_for_recursive_call = 0
 
+    # In this loop we just decrease by 1;
     for tup_index, val in reversed(list(enumerate(aslist))):
+        # we inspect the parts of the tuple right-to-left and continue to decrease until there is no more roll-over.
+
         if aslist[tup_index] == MIN_VALUE_AT_TUP_INDEX[tup_index]:
+            # we've reached the min value which is the case that influences more than the current digit.
             if tup_index == 2:
-                # day roll-over: just use a datetime
+                # day roll-over: just use a datetime because the max value is one of 28, 29, 30, 31.
                 aslist = list((datetime(*aslist, tzinfo=timezone.utc) - timedelta(days=1)).timetuple()[:len(tup)])
                 break  # we've used a timedelta, so we don't need to do months/years "by hand" in the loop
 
             else:
                 # roll over to max
                 aslist[tup_index] = MAX_VALUE_AT_TUP_INDEX[tup_index]
-                # implied because no break: continue with the left hand side of the tuple
+                # implied because no break: continue with the next more significant digit of the tuple
 
         else:
+            # no min-value reached, just dec at this point and stop.
             aslist[tup_index] -= 1
             break
 
-    if remainder > 0:
-        return _prev_tup(aslist, remainder)
+    if n_for_recursive_call > 0:
+        return _prev_tup(aslist, n_for_recursive_call)
 
     return tuple(aslist)
 
