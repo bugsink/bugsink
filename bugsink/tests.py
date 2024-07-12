@@ -68,8 +68,9 @@ class PeriodCounterTestCase(RegularTestCase):
         # the meaninglessness of prev_tup is not extended to the case of n > 1, because "2 total periods" makes no sense
         # self.assertEquals((), _prev_tup((), 2))
 
-    def test_foo(self):
-        datetime_utc = datetime.now(timezone.utc)  # basically I just want to write this down somewhere
+    def test_how_to_create_datetime_utc_objects(self):
+        # basically I just want to write this down somewhere
+        datetime_utc = datetime.now(timezone.utc)
         pc = PeriodCounter()
         pc.inc(datetime_utc)
 
