@@ -69,7 +69,14 @@ class StreamingEnvelopeParser:
 
     This is a streaming parser. We're not radical about performance (no Rust) but given [1] the relative maximum sizes
     (envelope: 100MiB, event: 1MiB -- in other words: 99% bloat is possible) and [2] our goal of being robust even on
-    second rate hardware it seems prudent to not just load everything into memory.
+    second rate hardware, it seems prudent to not just load everything into memory.
+
+    Don't take the existance of a Streaming Parser here to mean that there's an actual end-to-end streaming connection
+    between the SDK and our server though, because there may be many things in your stack preventing that:
+
+    * nginx may do request buffering (it's the default, and recommended for Gunicorn)
+    * nginx will do connection-close buffering (unpreventable AFAICT) - https://forum.nginx.org/read.php?11,299875
+    * if running uvicorn, Django's asgi stack will do request buffering - https://code.djangoproject.com/ticket/33699
     """
 
     def __init__(self, input_stream, chunk_size=1024):
