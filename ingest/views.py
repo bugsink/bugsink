@@ -297,8 +297,9 @@ class BaseIngestAPIView(View):
 
         thresholds_by_purpose = {
             "quota":  [
-                ("minute", 5, get_settings().MAX_EVENTS_PER_PROJECT_PER_5_MINUTES, None),
-                ("minute", 60, get_settings().MAX_EVENTS_PER_PROJECT_PER_HOUR, None),
+                # +1, because the PC tests inclusively, but we want to trigger only on-exceed.
+                ("minute", 5, get_settings().MAX_EVENTS_PER_PROJECT_PER_5_MINUTES + 1, None),
+                ("minute", 60, get_settings().MAX_EVENTS_PER_PROJECT_PER_HOUR + 1, None),
             ],
         }
         states_by_purpose = project_pc.inc(timestamp, thresholds=thresholds_by_purpose)
