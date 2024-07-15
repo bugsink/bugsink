@@ -21,8 +21,6 @@ from issues.models import Issue, IssueStateManager, Grouping, TurningPoint, Turn
 from issues.utils import get_type_and_value_for_data, get_issue_grouper_for_data, get_denormalized_fields_for_data
 from issues.regressions import issue_is_regression
 
-from bugsink.registry import get_pc_registry
-from bugsink.period_counter import PeriodCounter
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.exceptions import ViolatedExpectation
 from bugsink.streams import content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded
@@ -37,6 +35,7 @@ from compat.timestamp import format_timestamp, parse_timestamp
 from .parsers import StreamingEnvelopeParser, ParseError
 from .filestore import get_filename_for_event_id
 from .tasks import digest
+from .event_counter import check_for_thresholds
 
 
 HTTP_429_TOO_MANY_REQUESTS = 429
@@ -289,43 +288,30 @@ class BaseIngestAPIView(View):
         # Note on the division of work between ingest/digest: on ingest we just look at a (more or less) boolean "do you
         # accept anything" (and if not: when will you?). Here we do the actual work.
 
-        pc_registry = get_pc_registry()
-        # Projects may be created from the UI, which may run in a separate process, we create the PC here on demand.
-        if project.id not in pc_registry.by_project:
-            pc_registry.by_project[project.id] = PeriodCounter()
-        project_pc = pc_registry.by_project[project.id]
+        thresholds = [
+            # +1, because the PC tests inclusively, but we want to trigger only on-exceed.
+            ("minute", 5, get_settings().MAX_EVENTS_PER_PROJECT_PER_5_MINUTES + 1, None),
+            ("minute", 60, get_settings().MAX_EVENTS_PER_PROJECT_PER_HOUR + 1, None),
+        ]
 
-        thresholds_by_purpose = {
-            "quota":  [
-                # +1, because the PC tests inclusively, but we want to trigger only on-exceed.
-                ("minute", 5, get_settings().MAX_EVENTS_PER_PROJECT_PER_5_MINUTES + 1, None),
-                ("minute", 60, get_settings().MAX_EVENTS_PER_PROJECT_PER_HOUR + 1, None),
-            ],
-        }
-        states_by_purpose = project_pc.inc(timestamp, thresholds=thresholds_by_purpose)
+        states = check_for_thresholds(Event.objects.filter(project=project), timestamp, thresholds)
 
-        until = max([below_from for (state, below_from, _) in states_by_purpose["quota"] if state], default=None)
+        until = max([below_from for (state, below_from, _) in states if state], default=None)
         _save_if_needed(project, "quota_exceeded_until", until)
 
     @classmethod
     def count_issue_periods_and_act_on_it(cls, issue, event, timestamp):
-        pc_registry = get_pc_registry()
-        if issue.id not in pc_registry.by_issue:
-            pc_registry.by_issue[issue.id] = PeriodCounter()
-        issue_pc = pc_registry.by_issue[issue.id]
-
         # We just have "unmute" as a purpose here, not "quota". I thought I'd have per-issue quota earlier (which would
         # ensure some kind of fairness within a project) but:
         # * that doesn't quite work, because to determine the issue, you'd have to incur almost all of the digest cost.
         # * quota are expected to be set "high enough" anyway, i.e. only as a last line of defense against run-away
         #     clients
         # * "even if" you'd get this to work there'd be scenarios where it's useless, e.g. misbehaving groupers.
-        thresholds_by_purpose = {
-            "unmute":  IssueStateManager.get_unmute_thresholds(issue),
-        }
-        states_by_purpose = issue_pc.inc(timestamp, thresholds=thresholds_by_purpose)
+        thresholds = IssueStateManager.get_unmute_thresholds(issue)
 
-        for (state, until, vbc_dict) in states_by_purpose["unmute"]:
+        states = check_for_thresholds(Event.objects.filter(issue=issue), timestamp, thresholds)
+
+        for (state, until, vbc_dict) in states:
             if not state:
                 continue
 

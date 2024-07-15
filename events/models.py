@@ -161,6 +161,7 @@ class Event(models.Model):
         ]
         indexes = [
             models.Index(fields=["project", "never_evict", "server_side_timestamp", "irrelevance_for_retention"]),
+            models.Index(fields=["issue", "server_side_timestamp"]),
         ]
 
     def get_absolute_url(self):
