@@ -30,6 +30,7 @@ def noop():
 
 
 def _prev_tup(tup, n=1):
+    # TODO: isn't this a premature optimization? We could just use a datetime/timedelta?
     aslist = list(tup)
 
     # if n > 1 we try to first remove the largest possible chunk from the last element of the tuple (for performance
@@ -177,6 +178,8 @@ class PeriodCounter(object):
 
         # we return tuples of (state, below_threshold_from, metadata) where metadata is something arbitrary that can be
         # passed in (it allows us to tie back to "what caused this to be true/false?"
+        # TODO: I think that in practice the metadata is always implied by the thresholds, i.e. instead of
+        # passing-through we could just return the thresholds that were met.
         return states_with_metadata_by_purpose
 
     @staticmethod

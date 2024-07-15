@@ -24,6 +24,18 @@ _registry = None
 
 
 class PeriodCounterRegistry(object):
+    # A few notes on observed memory consumption:
+
+    # >>> (4_000_000_000 *.02) / (1024*1024)
+    # 76MB
+
+    # >>> _ / 6954  (nr of issues)
+    # 0.01097123171016681
+    # i.e. 10K per issue.
+
+    # >>> c. 15ms _average_ initialization time per issue
+
+    # Ways forward: I could just make it lazy (this is also good for startup times!)
 
     def __init__(self):
         self.by_project, self.by_issue = self.load_from_scratch(
