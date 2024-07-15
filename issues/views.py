@@ -12,13 +12,13 @@ from django.core.exceptions import PermissionDenied
 
 from bugsink.decorators import project_membership_required, issue_membership_required, atomic_for_request_method
 from bugsink.transaction import durable_atomic
+from bugsink.period_utils import add_periods_to_datetime
 
 from events.models import Event
 from compat.timestamp import format_timestamp
 from projects.models import ProjectMembership
 
-from .models import (
-    Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind, add_periods_to_datetime)
+from .models import Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind
 from .forms import CommentForm
 
 

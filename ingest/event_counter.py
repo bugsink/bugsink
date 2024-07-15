@@ -2,10 +2,10 @@ from datetime import timezone, datetime
 
 from django.db.models import Min
 
+from bugsink.period_utils import add_periods_to_datetime, sub_periods_from_datetime
+
 
 def _filter_for_periods(qs, period_name, nr_of_periods, now):
-    from issues.models import sub_periods_from_datetime  # I'll move this soon
-
     if period_name == "total":
         return qs
 
@@ -13,7 +13,6 @@ def _filter_for_periods(qs, period_name, nr_of_periods, now):
 
 
 def check_for_thresholds(qs, now, thresholds):
-    from issues.models import add_periods_to_datetime  # I'll move this soon
     # thresholds :: [(period_name, nr_of_periods, gte_threshold, metadata), ...]
 
     # we only allow UTC, and we generally use Django model fields, which are UTC, so this should be good:
