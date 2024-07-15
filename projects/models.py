@@ -64,11 +64,6 @@ class Project(models.Model):
     quota_exceeded_until = models.DateTimeField(null=True, blank=True)
     retention_max_event_count = models.PositiveIntegerField(default=10_000)
 
-    # bookkeeping of the eviction algorithm
-    # this will be needed if/when we take an approach of 'drop immediately'
-    # retention_last_eviction = models.DateTimeField(null=True, blank=True)
-    # retention_max_total_irrelevance = models.PositiveIntegerField(null=True, blank=True)
-
     def __str__(self):
         return self.name
 

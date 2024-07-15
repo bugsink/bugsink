@@ -203,11 +203,6 @@ class BaseIngestAPIView(View):
             # "what is a limit anyway, if you can go either over it, or work is done before the limit is reached")
             evict_for_max_events(project, timestamp, project_stored_event_count)
 
-            # project.retention_last_eviction = timestamp
-            # project.retention_max_total_irrelevance
-            # TODO-if-the-above: actually save the project? or use an update call?
-            # TODO-if-the-above: the idea of cooling off the max_total_irrelevance
-
         # NOTE: an event always has a single (automatically calculated) Grouping associated with it. Since we have that
         # information available here, we could add it to the Event model.
         event, event_created = Event.from_ingested(
