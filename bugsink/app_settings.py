@@ -45,6 +45,12 @@ DEFAULTS = {
     "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
     "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
 
+    # Bugsink-specific limits:
+    # The default values are 1_000 and 5_000 respectively; which corresponds to ~6% and ~2.7% of the total capacity of
+    # 50 requests/s (ingestion) on low-grade hardware that I measured, and with 50% of the default value for retention.
+    "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": 1_000,
+    "MAX_EVENTS_PER_PROJECT_PER_HOUR": 5_000,
+
     # I don't think Sentry specifies this one, but we do: given the spec 8KiB should be enough by an order of magnitude.
     "MAX_HEADER_SIZE": 8 * _KIBIBYTE,
 

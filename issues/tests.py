@@ -302,7 +302,7 @@ class MuteUnmuteTestCase(TransactionTestCase):
     """
     Somewhat of an integration test. The unit-under-test here is the whole of
     * the pc_registry
-    * BaseIngestAPIView.count_periods_and_act_on_it
+    * BaseIngestAPIView.count_issue_periods_and_act_on_it
     * PeriodCounter (counting, thresholds)
     * IssueStateManager.unmute
     """
@@ -371,7 +371,7 @@ class MuteUnmuteTestCase(TransactionTestCase):
         )
 
         event = create_event(project, issue)
-        BaseIngestAPIView.count_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
+        BaseIngestAPIView.count_issue_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
         issue.save()
 
         self.assertFalse(Issue.objects.get(id=issue.id).is_muted)
@@ -394,7 +394,7 @@ class MuteUnmuteTestCase(TransactionTestCase):
         )
 
         event = create_event(project, issue)
-        BaseIngestAPIView.count_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
+        BaseIngestAPIView.count_issue_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
         issue.save()
 
         self.assertFalse(Issue.objects.get(id=issue.id).is_muted)

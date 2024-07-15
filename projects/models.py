@@ -60,7 +60,8 @@ class Project(models.Model):
     # visibility
     visibility = models.IntegerField(choices=ProjectVisibility.choices, default=ProjectVisibility.TEAM_MEMBERS)
 
-    # retention quota
+    # quota
+    quota_exceeded_until = models.DateTimeField(null=True, blank=True)
     retention_max_event_count = models.PositiveIntegerField(default=10_000)
 
     # bookkeeping of the eviction algorithm

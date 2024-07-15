@@ -72,6 +72,37 @@ def _prev_tup(tup, n=1):
     return tuple(aslist)
 
 
+def _next_tup(tup, n=1):
+    aslist = list(tup)
+
+    # no 'first_chunk' implementation here, calls to _next_tup() are not a hot path in our code anyway.
+
+    for i in range(n):
+        # In this loop we just increase by 1;
+        for tup_index, val in reversed(list(enumerate(aslist))):
+            # we inspect the parts of the tuple right-to-left and continue to decrease until there is no more roll-over.
+
+            if (tup_index == 2 and aslist[tup_index] >= 28) or aslist[tup_index] == MAX_VALUE_AT_TUP_INDEX[tup_index]:
+                # we've reached the min value which is the case that influences more than the current digit.
+                if tup_index == 2:
+                    # day roll-over (potentially, 28 and up): just use a datetime (the max value is one of 28, 29, 30,
+                    # 31)
+                    aslist = list((datetime(*aslist, tzinfo=timezone.utc) + timedelta(days=1)).timetuple()[:len(tup)])
+                    break  # we've used a timedelta, so we don't need to do months/years "by hand" in the loop
+
+                else:
+                    # roll over to min
+                    aslist[tup_index] = MIN_VALUE_AT_TUP_INDEX[tup_index]
+                    # implied because no break: continue with the next more significant digit of the tuple
+
+            else:
+                # no min-value reached, just inc at this point and stop.
+                aslist[tup_index] += 1
+                break
+
+    return tuple(aslist)
+
+
 def _inc(counts_for_tl, tup, n, max_age):
     if tup not in counts_for_tl:
         min_tup = _prev_tup(tup, max_age - 1)
@@ -122,11 +153,30 @@ class PeriodCounter(object):
 
             thresholds_for_tl = thresholds_by_tl.get(tl, {})
             for (nr_of_periods, gte_threshold, metadata, purpose) in thresholds_for_tl:
-                state = self._get_event_state(tup[:tl], tl, nr_of_periods, gte_threshold)
-                states_with_metadata_by_purpose[purpose].append((state, metadata))
+                state = self._state_for_threshold(tup[:tl], tl, nr_of_periods, gte_threshold)
+                if state:
+                    if tl > 0:
+                        # `below_threshold_from` is the first moment in time where the condition no longer applies.
+                        below_threshold_tup = _next_tup(
+                            self._get_first_tup_contributing_to_threshold(tup[:tl], tl, nr_of_periods),
 
-        # we return tuples of (state, metadata) where metadata is something arbitrary that can be passed in (it allows
-        # us to tie back to "what caused this to be true/false?"
+                            # +1 for "next period" (the first where the condition no longer applies), -1 for "first
+                            # period counts" hence no +/- correction.
+                            n=nr_of_periods,
+                        ) + MIN_VALUE_AT_TUP_INDEX[tl:]  # fill with min values for the non-given ones
+                        below_threshold_from = datetime(*below_threshold_tup, tzinfo=timezone.utc)
+                    else:
+                        # when counting the 'total', there will never be a time when the condition becomes false. We
+                        # just pick an arbitrarily large date; we'll deal with it by the end of the myria-annum.
+                        # unlikely to actually end up in the DB (because it would imply the use of a quota for total).
+                        below_threshold_from = datetime(9999, 12, 31, 23, 59, tzinfo=timezone.utc)
+                else:
+                    below_threshold_from = None
+
+                states_with_metadata_by_purpose[purpose].append((state, below_threshold_from, metadata))
+
+        # we return tuples of (state, below_threshold_from, metadata) where metadata is something arbitrary that can be
+        # passed in (it allows us to tie back to "what caused this to be true/false?"
         return states_with_metadata_by_purpose
 
     @staticmethod
@@ -140,9 +190,18 @@ class PeriodCounter(object):
             "minute": 5,
         }[period_name]
 
-    def _get_event_state(self, tup, tl, nr_of_periods, gte_threshold):
-        min_tup = _prev_tup(tup, nr_of_periods - 1) if tup != () else ()
+    def _state_for_threshold(self, tup, tl, nr_of_periods, gte_threshold):
+        min_tup = _prev_tup(tup, nr_of_periods - 1) if tup != () else ()  # -1 because the current one also counts
         counts_for_tl = self.counts[tl]
         total = sum([v for k, v in counts_for_tl.items() if k >= min_tup])
 
         return total >= gte_threshold
+
+    def _get_first_tup_contributing_to_threshold(self, tup, tl, nr_of_periods):
+        # there's code duplication here with _state_for_threshold which also results in stuff being executed twice when
+        # the state is True; however, getting rid of this would be a "premature optimization", because states "flip to
+        # true" only very irregularly (for unmute flip-to-true results in removal from the 'watch list', and for quota
+        # flip-to-true results in 'no more ingestion for a while')
+        min_tup = _prev_tup(tup, nr_of_periods - 1) if tup != () else ()
+        counts_for_tl = self.counts[tl]
+        return min([k for k, v in counts_for_tl.items() if k >= min_tup and v > 0])

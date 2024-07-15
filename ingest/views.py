@@ -39,12 +39,19 @@ from .filestore import get_filename_for_event_id
 from .tasks import digest
 
 
+HTTP_429_TOO_MANY_REQUESTS = 429
 HTTP_400_BAD_REQUEST = 400
 HTTP_501_NOT_IMPLEMENTED = 501
 
 
 logger = logging.getLogger("bugsink.ingest")
 performance_logger = logging.getLogger("bugsink.performance.ingest")
+
+
+def _save_if_needed(obj, fieldname, value):
+    if getattr(obj, fieldname) != value:
+        setattr(obj, fieldname, value)
+        obj.save()
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -129,21 +136,12 @@ class BaseIngestAPIView(View):
 
         timestamp = parse_timestamp(event_metadata["timestamp"])
 
-        # Leave this at the top to ensure that when load_from_scratch is triggered the pre-digest counts are correct.
-        # (if load_from_scratch would be triggered after Event-creation, but before the call to `.inc` the first event
-        # to be digested would be double-counted). A note on locking: period_counter accesses are serialized
-        # "automatically" because they are inside an immediate transaction, so threading will "just work".
-        get_pc_registry()
-
-        # NOTE: we don't do anything with project-period-counting yet; we'll revisit this bit, and its desired location,
-        # once we start with quotas.
-        # # JIT-creation of the PeriodCounter for the project; alternatively we could monitor the project creation and
-        # # create the PeriodCounter there.
-        # if project.id not in get_pc_registry().by_project:
-        #     get_pc_registry().by_project[project.id] = PeriodCounter()
-        #
-        # project_pc = get_pc_registry().by_project[project.id]
-        # project_pc.inc(now)
+        # Leave counting at the top to ensure that get_pc_registry() is called so that when load_from_scratch is
+        # triggered the pre-digest counts are correct. (if load_from_scratch would be triggered after Event-creation,
+        # but before the call to `.inc` the first event to be digested would be double-counted). A note on locking:
+        # period_counter accesses are serialized "automatically" because they are inside an immediate transaction, so
+        # threading will "just work".
+        cls.count_project_periods_and_act_on_it(project, timestamp)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
@@ -287,12 +285,31 @@ class BaseIngestAPIView(View):
         if release.version + "\n" not in issue.events_at:
             issue.events_at += release.version + "\n"
 
-        cls.count_periods_and_act_on_it(issue, event, timestamp)
+        cls.count_issue_periods_and_act_on_it(issue, event, timestamp)
 
         issue.save()
 
     @classmethod
-    def count_periods_and_act_on_it(cls, issue, event, timestamp):
+    def count_project_periods_and_act_on_it(cls, project, timestamp):
+        pc_registry = get_pc_registry()
+        # Projects may be created from the UI, which may run in a separate process, we create the PC here on demand.
+        if project.id not in pc_registry.by_project:
+            pc_registry.by_project[project.id] = PeriodCounter()
+        project_pc = pc_registry.by_project[project.id]
+
+        thresholds_by_purpose = {
+            "quota":  [
+                ("minute", 5, get_settings().MAX_EVENTS_PER_PROJECT_PER_5_MINUTES, None),
+                ("minute", 60, get_settings().MAX_EVENTS_PER_PROJECT_PER_HOUR, None),
+            ],
+        }
+        states_by_purpose = project_pc.inc(timestamp, thresholds=thresholds_by_purpose)
+
+        until = max([below_from for (state, below_from, _) in states_by_purpose["quota"] if state], default=None)
+        _save_if_needed(project, "quota_exceeded_until", until)
+
+    @classmethod
+    def count_issue_periods_and_act_on_it(cls, issue, event, timestamp):
         pc_registry = get_pc_registry()
         if issue.id not in pc_registry.by_issue:
             pc_registry.by_issue[issue.id] = PeriodCounter()
@@ -303,7 +320,7 @@ class BaseIngestAPIView(View):
         }
         states_by_purpose = issue_pc.inc(timestamp, thresholds=thresholds_by_purpose)
 
-        for (state, vbc_dict) in states_by_purpose["unmute"]:
+        for (state, until, vbc_dict) in states_by_purpose["unmute"]:
             if not state:
                 continue
 
@@ -347,6 +364,8 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         # Note: wrapping the COMPRESSES_SIZE checks arount request makes it so that when clients do not compress their
         # requests, they are still subject to the (smaller) maximums that apply pre-uncompress. This is exactly what we
         # want.
+        now = datetime.now(timezone.utc)
+
         parser = StreamingEnvelopeParser(
                     MaxDataReader("MAX_ENVELOPE_SIZE", content_encoding_reader(
                         MaxDataReader("MAX_ENVELOPE_COMPRESSED_SIZE", request))))
@@ -356,6 +375,11 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             project = self.get_project(project_pk, get_sentry_key(envelope_headers["dsn"]))
         else:
             project = self.get_project_for_request(project_pk, request)
+
+        if project.quota_exceeded_until is not None and now < project.quota_exceeded_until:
+            # Sentry has x-sentry-rate-limits, but for now 429 is just fine. Client-side this is implemented as a 60s
+            # backoff.
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         def factory(item_headers):
             if item_headers.get("type") == "event":
