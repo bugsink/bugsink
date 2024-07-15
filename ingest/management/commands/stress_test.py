@@ -121,9 +121,9 @@ class Command(BaseCommand):
             dsn = random.choice(dsns)
 
             t0 = time.time()
-            Command.send_to_server(dsn, options, use_envelope, compress, compressed_data)
+            success = Command.send_to_server(dsn, options, use_envelope, compress, compressed_data)
             taken = time.time() - t0
-            timings.append(taken)
+            timings.append((success, taken))
 
     @staticmethod
     def send_to_server(dsn, options, use_envelope, compress, compressed_data):
@@ -168,7 +168,8 @@ class Command(BaseCommand):
     @staticmethod
     def print_stats(threads, requests, total_time, timings):
         # flatten the dict of lists to a single list:
-        all_timings = [timing for sublist in timings.values() for timing in sublist]
+        all_tups = [tup for sublist in timings.values() for tup in sublist]
+        all_timings = [timing for (_, timing) in all_tups]
 
         print("==============")
         print("Results")
@@ -177,6 +178,9 @@ class Command(BaseCommand):
         print("threads: %d" % threads)
         print("requests per thread: %d" % requests)
         print("total requests: %d" % (threads * requests))
+        print("total errors: %d, i.e. %d%%" % (
+            len([success for (success, _) in all_tups if not success]),
+            100 * len([success for (success, _) in all_tups if not success]) / len(all_tups)))
         print("total time: %.3fs" % total_time)
         print("requests per second: %.3f" % (threads * requests / total_time))
 
