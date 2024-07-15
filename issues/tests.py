@@ -13,7 +13,6 @@ from django.test import tag
 
 from projects.models import Project, ProjectMembership
 from releases.models import create_release_if_needed
-from bugsink.registry import reset_pc_registry
 from events.factories import create_event
 from ingest.management.commands.send_json import Command as SendJsonCommand
 from compat.dsn import get_header_value
@@ -301,32 +300,10 @@ seen as an undo rather than anything else.
 class MuteUnmuteTestCase(TransactionTestCase):
     """
     Somewhat of an integration test. The unit-under-test here is the whole of
-    * the pc_registry
     * BaseIngestAPIView.count_issue_periods_and_act_on_it
-    * PeriodCounter (counting, thresholds)
+    * threshold-counting
     * IssueStateManager.unmute
     """
-
-    def setUp(self):
-        """
-        (TODO The below is not implemented yet; we may need it at some point)
-
-        To avoid unintentional modifications to the pc_registry in tests without a recent reset, consider the following
-
-        1. In each setup method, explicitly set a testing flag to indicate that it is safe to interact
-           with the pc_registry. For example, include the line:
-              `set_testing_flag(True)` (as well as resetting the pc_registry)
-
-        2. In each tearDown method, reset the testing flag to indicate that further modifications
-           to the pc_registry should be avoided. For example, include the line:
-              `set_testing_flag(False)`
-
-        This approach helps prevent accidental influences of one test on another via the pc_registry.
-        """
-        reset_pc_registry()
-
-    def tearDown(self):
-        reset_pc_registry()
 
     def test_mute_no_vbc_for_unmute(self):
         project = Project.objects.create()

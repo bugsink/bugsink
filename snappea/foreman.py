@@ -120,14 +120,6 @@ class Foreman:
         # stops. (the value of this semaphore is implicitly NUM_WORKERS - active_workers)
         self.worker_semaphore = threading.Semaphore(self.settings.NUM_WORKERS)
 
-        # "initialize" the application.
-        # this might be in the wrong place, but I want to have it "somewhere" (before the workers start).
-        from bugsink.registry import get_pc_registry
-        with durable_atomic():
-            get_pc_registry()
-
-        self.connection_close()  # close the connection that was created as part of `get_pc_registry()`.
-
     def connection_close(self, using="default"):
         # (as a method to allow for a single point of documentation)
 

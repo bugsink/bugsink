@@ -131,7 +131,7 @@ The recommended way to run Bugsink is using Gunicorn, a WSGI server.
 You can start the Bugsink server by running:
 
 ```bash
-PYTHONUNBUFFERED=1 gunicorn --bind="127.0.0.1:9000" --workers=1 --access-logfile - --capture-output --error-logfile - bugsink.wsgi
+PYTHONUNBUFFERED=1 gunicorn --bind="127.0.0.1:9000" --workers=2 --access-logfile - --capture-output --error-logfile - bugsink.wsgi
 ```
 
 You should see output indicating that the server is running. You can now access Bugsink by visiting

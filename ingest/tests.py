@@ -17,7 +17,6 @@ from projects.models import Project
 from events.factories import create_event_data
 from issues.factories import get_or_create_issue
 from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
-from bugsink.registry import reset_pc_registry
 from bugsink.app_settings import override_settings
 from compat.timestamp import format_timestamp
 from compat.dsn import get_header_value
@@ -30,8 +29,7 @@ from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, Streami
 def _digest_params(event_data, project, request, now=None):
     if now is None:
         # because we want to count events before having created event objects (quota may block the latter) we cannot
-        # depend on event.timestamp; instead, we look on the clock once here, and then use that for both the project
-        # and issue period counters.
+        # depend on event.timestamp; instead, we look on the clock once here, and then use that everywhere
         now = datetime.datetime.now(timezone.utc)
 
     # adapter to quickly reuse existing tests on refactored code. let's see where the code ends up before spending
@@ -71,10 +69,6 @@ class IngestViewTestCase(TransactionTestCase):
             alert_on_regression=False,
             alert_on_unmute=False,
         )
-        reset_pc_registry()  # see notes in issues/tests.py for possible improvement; needed because we test unmuting.
-
-    def tearDown(self):
-        reset_pc_registry()
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")

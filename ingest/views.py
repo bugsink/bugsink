@@ -96,8 +96,7 @@ class BaseIngestAPIView(View):
     @classmethod
     def process_event(cls, event_id, event_data_stream, project, request):
         # because we want to count events before having created event objects (quota may block the latter) we cannot
-        # depend on event.timestamp; instead, we look on the clock once here, and then use that for both the project
-        # and issue period counters.
+        # depend on event.timestamp; instead, we look on the clock once here, and then use that everywhere.
         now = datetime.now(timezone.utc)
 
         event_metadata = cls.get_event_meta(now, request, project)
@@ -135,11 +134,6 @@ class BaseIngestAPIView(View):
 
         timestamp = parse_timestamp(event_metadata["timestamp"])
 
-        # Leave counting at the top to ensure that get_pc_registry() is called so that when load_from_scratch is
-        # triggered the pre-digest counts are correct. (if load_from_scratch would be triggered after Event-creation,
-        # but before the call to `.inc` the first event to be digested would be double-counted). A note on locking:
-        # period_counter accesses are serialized "automatically" because they are inside an immediate transaction, so
-        # threading will "just work".
         cls.count_project_periods_and_act_on_it(project, timestamp)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
