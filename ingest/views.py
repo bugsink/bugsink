@@ -291,6 +291,9 @@ class BaseIngestAPIView(View):
 
     @classmethod
     def count_project_periods_and_act_on_it(cls, project, timestamp):
+        # Note on the division of work between ingest/digest: on ingest we just look at a (more or less) boolean "do you
+        # accept anything" (and if not: when will you?). Here we do the actual work.
+
         pc_registry = get_pc_registry()
         # Projects may be created from the UI, which may run in a separate process, we create the PC here on demand.
         if project.id not in pc_registry.by_project:
@@ -315,6 +318,12 @@ class BaseIngestAPIView(View):
             pc_registry.by_issue[issue.id] = PeriodCounter()
         issue_pc = pc_registry.by_issue[issue.id]
 
+        # We just have "unmute" as a purpose here, not "quota". I thought I'd have per-issue quota earlier (which would
+        # ensure some kind of fairness within a project) but:
+        # * that doesn't quite work, because to determine the issue, you'd have to incur almost all of the digest cost.
+        # * quota are expected to be set "high enough" anyway, i.e. only as a last line of defense against run-away
+        #     clients
+        # * "even if" you'd get this to work there'd be scenarios where it's useless, e.g. misbehaving groupers.
         thresholds_by_purpose = {
             "unmute":  IssueStateManager.get_unmute_thresholds(issue),
         }
@@ -379,6 +388,17 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         if project.quota_exceeded_until is not None and now < project.quota_exceeded_until:
             # Sentry has x-sentry-rate-limits, but for now 429 is just fine. Client-side this is implemented as a 60s
             # backoff.
+            #
+            # Note "what's the use of this?": in my actual setups I have observed that we're almost entirely limited by
+            # (nginx's) SSL processing on-ingest, and that digest is (almost) able to keep up. Because of request
+            # buffering, the cost of such processing will already have been incurred once you reach this point. So is
+            # the entire idea of quota useless? No, because the SDK will generally back off on 429, this does create
+            # some relief.
+            #
+            # Another aspect is: the quota serve as a first threshold for retention/evictions, i.e. some quota will mean
+            # that retention is not too heavily favoring "most recent" when there are very many requests coming in.
+            #
+            # Note that events that exceed the quota will not be seen (not even counted) in any way.
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         def factory(item_headers):
