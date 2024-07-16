@@ -147,7 +147,7 @@ class Event(models.Model):
 
     # 1-based, because this is for human consumption only, and using 0-based internally when we don't actually do
     # anything with this value other than showing it to humans is super-confusing. Sorry Dijkstra!
-    ingest_order = models.PositiveIntegerField(blank=False, null=False)
+    digest_order = models.PositiveIntegerField(blank=False, null=False)
 
     # irrelevance_for_retention is set on-ingest based on the number of available events for an issue; it is combined
     # with age-based-irrelevance to determine which events will be evicted when retention quota are met.
@@ -157,7 +157,7 @@ class Event(models.Model):
     class Meta:
         unique_together = [
             ("project", "event_id"),
-            ("issue", "ingest_order"),
+            ("issue", "digest_order"),
         ]
         indexes = [
             models.Index(fields=["project", "never_evict", "server_side_timestamp", "irrelevance_for_retention"]),
@@ -179,7 +179,7 @@ class Event(models.Model):
         return get_title_for_exception_type_and_value(self.calculated_type, self.calculated_value)
 
     @classmethod
-    def from_ingested(cls, event_metadata, ingest_order, stored_event_count, issue, parsed_data, denormalized_fields):
+    def from_ingested(cls, event_metadata, digest_order, stored_event_count, issue, parsed_data, denormalized_fields):
         # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
         # objects etc).
@@ -215,7 +215,7 @@ class Event(models.Model):
 
                 debug_info=event_metadata["debug_info"],
 
-                ingest_order=ingest_order,
+                digest_order=digest_order,
                 irrelevance_for_retention=irrelevance_for_retention,
 
                 **denormalized_fields,

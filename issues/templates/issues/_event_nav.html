@@ -1,5 +1,5 @@
-                {% if event.ingest_order > 1 %}
-                <a href="{% url this_view issue_pk=issue.pk ingest_order=event.ingest_order|add:"-1" %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center">
+                {% if event.digest_order > 1 %}
+                <a href="{% url this_view issue_pk=issue.pk digest_order=event.digest_order|add:"-1" %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M9.78 4.22a.75.75 0 0 1 0 1.06L7.06 8l2.72 2.72a.75.75 0 1 1-1.06 1.06L5.47 8.53a.75.75 0 0 1 0-1.06l3.25-3.25a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}
@@ -8,8 +8,8 @@
                 </div>
                 {% endif %}
 
-                {% if event.ingest_order < issue.event_count %}
-                <a href="{% url this_view issue_pk=issue.pk ingest_order=event.ingest_order|add:"1" %}"" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center">
+                {% if event.digest_order < issue.digested_event_count %}
+                <a href="{% url this_view issue_pk=issue.pk digest_order=event.digest_order|add:"1" %}"" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M6.22 4.22a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06L8.94 8 6.22 5.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}

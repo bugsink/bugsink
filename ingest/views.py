@@ -150,15 +150,15 @@ class BaseIngestAPIView(View):
         if not Grouping.objects.filter(project_id=event_metadata["project_id"], grouping_key=grouping_key).exists():
             # we don't have Project.issue_count here ('premature optimization') so we just do an aggregate instead.
             max_current = Issue.objects.filter(project_id=event_metadata["project_id"]).aggregate(
-                Max("ingest_order"))["ingest_order__max"]
-            issue_ingest_order = max_current + 1 if max_current is not None else 1
+                Max("digest_order"))["digest_order__max"]
+            issue_digest_order = max_current + 1 if max_current is not None else 1
 
             issue = Issue.objects.create(
-                ingest_order=issue_ingest_order,
+                digest_order=issue_digest_order,
                 project_id=event_metadata["project_id"],
                 first_seen=timestamp,
                 last_seen=timestamp,
-                event_count=1,
+                digested_event_count=1,
                 **denormalized_fields,
             )
             # even though in our data-model a given grouping does not imply a single Issue (in fact, that's the whole
@@ -179,7 +179,7 @@ class BaseIngestAPIView(View):
 
             # update the denormalized fields
             issue.last_seen = timestamp
-            issue.event_count += 1
+            issue.digested_event_count += 1
 
         # NOTE: possibly expensive. "in theory" we can just do some bookkeeping for a denormalized value, but that may
         # be hard to keep in-sync in practice. Let's check the actual cost first.
@@ -200,7 +200,7 @@ class BaseIngestAPIView(View):
         # information available here, we could add it to the Event model.
         event, event_created = Event.from_ingested(
             event_metadata,
-            issue.event_count,
+            issue.digested_event_count,
             issue_stored_event_count,
             issue,
             event_data,

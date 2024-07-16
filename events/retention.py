@@ -57,7 +57,7 @@ def nonzero_leading_bits(n):
     return len(s.rstrip('0'))
 
 
-def get_random_irrelevance(event_count):
+def get_random_irrelevance(stored_event_count):
     """
     gets a fixed-at-creation irrelevance-score for an Event; the basic idea is: the more events you have for a certain
     issue, the less relevant any new event will be _on average_; but when you have many events you will on average still
@@ -67,7 +67,7 @@ def get_random_irrelevance(event_count):
     if `cnt` "hovers" around a certain value (which is likely to happen when there's repeated eviction/fill-up). ×2 is
     simply to correct for random() (which returns .5 on average).
     """
-    return nonzero_leading_bits(round(random() * event_count * 2))
+    return nonzero_leading_bits(round(random() * stored_event_count * 2))
 
 
 def should_evict(project, timestamp, stored_event_count):

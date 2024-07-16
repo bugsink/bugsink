@@ -257,7 +257,7 @@ def _handle_post(request, issue):
     return HttpResponseRedirect(request.path_info)
 
 
-def _get_event(issue, event_pk, ingest_order):
+def _get_event(issue, event_pk, digest_order):
     if event_pk is not None:
         # we match on both internal and external id, trying internal first
         try:
@@ -265,19 +265,19 @@ def _get_event(issue, event_pk, ingest_order):
         except Event.DoesNotExist:
             return get_object_or_404(Event, issue=issue, event_id=event_pk)
 
-    elif ingest_order is not None:
-        return get_object_or_404(Event, issue=issue, ingest_order=ingest_order)
+    elif digest_order is not None:
+        return get_object_or_404(Event, issue=issue, digest_order=digest_order)
     else:
-        raise ValueError("either event_pk or ingest_order must be provided")
+        raise ValueError("either event_pk or digest_order must be provided")
 
 
 @atomic_for_request_method
 @issue_membership_required
-def issue_event_stacktrace(request, issue, event_pk=None, ingest_order=None):
+def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event = _get_event(issue, event_pk, ingest_order)
+    event = _get_event(issue, event_pk, digest_order)
 
     parsed_data = json.loads(event.data)
 
@@ -320,11 +320,11 @@ def issue_event_stacktrace(request, issue, event_pk=None, ingest_order=None):
 
 @atomic_for_request_method
 @issue_membership_required
-def issue_event_breadcrumbs(request, issue, event_pk=None, ingest_order=None):
+def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event = _get_event(issue, event_pk, ingest_order)
+    event = _get_event(issue, event_pk, digest_order)
 
     parsed_data = json.loads(event.data)
 
@@ -348,11 +348,11 @@ def _date_with_milis_html(timestamp):
 
 @atomic_for_request_method
 @issue_membership_required
-def issue_event_details(request, issue, event_pk=None, ingest_order=None):
+def issue_event_details(request, issue, event_pk=None, digest_order=None):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event = _get_event(issue, event_pk, ingest_order)
+    event = _get_event(issue, event_pk, digest_order)
     parsed_data = json.loads(event.data)
 
     key_info = [

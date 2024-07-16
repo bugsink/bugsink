@@ -22,8 +22,8 @@ def create_event(project=None, issue=None, timestamp=None, event_data=None):
         event_data = create_event_data()
 
     max_current = Event.objects.filter(project=project).aggregate(
-        Max("ingest_order"))["ingest_order__max"]
-    issue_ingest_order = max_current + 1 if max_current is not None else 1
+        Max("digest_order"))["digest_order__max"]
+    issue_digest_order = max_current + 1 if max_current is not None else 1
 
     return Event.objects.create(
         project=project,
@@ -34,7 +34,7 @@ def create_event(project=None, issue=None, timestamp=None, event_data=None):
         has_exception=True,
         has_logentry=True,
         data=json.dumps(event_data),
-        ingest_order=issue_ingest_order,
+        digest_order=issue_digest_order,
         irrelevance_for_retention=0,
     )
 

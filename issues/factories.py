@@ -53,5 +53,5 @@ def denormalized_issue_fields():
     return {
         "first_seen": timezone.now(),
         "last_seen": timezone.now(),
-        "event_count": 1,
+        "digested_event_count": 1,
     }

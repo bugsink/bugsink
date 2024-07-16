@@ -31,13 +31,13 @@ class Issue(models.Model):
     project = models.ForeignKey(
         "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
 
-    # 1-based for the same reasons as Event.ingest_order
-    ingest_order = models.PositiveIntegerField(blank=False, null=False)
+    # 1-based for the same reasons as Event.digest_order
+    digest_order = models.PositiveIntegerField(blank=False, null=False)
 
     # denormalized/cached fields:
     last_seen = models.DateTimeField(blank=False, null=False)  # based on event.server_side_timestamp
     first_seen = models.DateTimeField(blank=False, null=False)  # based on event.server_side_timestamp
-    event_count = models.IntegerField(blank=False, null=False)
+    digested_event_count = models.IntegerField(blank=False, null=False)
     calculated_type = models.CharField(max_length=255, blank=True, null=False, default="")
     calculated_value = models.CharField(max_length=255, blank=True, null=False, default="")
     transaction = models.CharField(max_length=200, blank=True, null=False, default="")
@@ -60,15 +60,15 @@ class Issue(models.Model):
     unmute_after = models.DateTimeField(blank=True, null=True)
 
     def save(self, *args, **kwargs):
-        if self.ingest_order is None:
+        if self.digest_order is None:
             # testing-only; in production this should never happen and instead have been done in the ingest view.
-            max_current = self.ingest_order = Issue.objects.filter(project=self.project).aggregate(
-                models.Max("ingest_order"))["ingest_order__max"]
-            self.ingest_order = max_current + 1 if max_current is not None else 1
+            max_current = self.digest_order = Issue.objects.filter(project=self.project).aggregate(
+                models.Max("digest_order"))["digest_order__max"]
+            self.digest_order = max_current + 1 if max_current is not None else 1
         super().save(*args, **kwargs)
 
     def friendly_id(self):
-        return f"{ self.project.slug.upper() }-{ self.ingest_order }"
+        return f"{ self.project.slug.upper() }-{ self.digest_order }"
 
     def get_absolute_url(self):
         return f"/issues/issue/{ self.id }/event/last/"
@@ -104,7 +104,7 @@ class Issue(models.Model):
 
     class Meta:
         unique_together = [
-            ("project", "ingest_order"),
+            ("project", "digest_order"),
         ]
         indexes = [
             models.Index(fields=["first_seen"]),
