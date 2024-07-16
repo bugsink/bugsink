@@ -49,8 +49,9 @@ class Project(models.Model):
     # > supplied, future versions of Sentry will entirely ignore it.
     # private_key = ...
 
-    # denormalized/cached fields below
+    # denormalized/cached/counted fields below
     has_releases = models.BooleanField(editable=False, default=False)
+    ingested_event_count = models.PositiveIntegerField(null=False, blank=False, default=0, editable=False)
 
     # alerting conditions
     alert_on_new_issue = models.BooleanField(default=True)
