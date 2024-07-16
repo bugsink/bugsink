@@ -47,12 +47,6 @@ logger = logging.getLogger("bugsink.ingest")
 performance_logger = logging.getLogger("bugsink.performance.ingest")
 
 
-def _save_if_needed(obj, fieldname, value):
-    if getattr(obj, fieldname) != value:
-        setattr(obj, fieldname, value)
-        obj.save()
-
-
 @method_decorator(csrf_exempt, name='dispatch')
 class BaseIngestAPIView(View):
 
@@ -291,7 +285,10 @@ class BaseIngestAPIView(View):
         states = check_for_thresholds(Event.objects.filter(project=project), timestamp, thresholds)
 
         until = max([below_from for (state, below_from, _) in states if state], default=None)
-        _save_if_needed(project, "quota_exceeded_until", until)
+
+        project.projectquota_exceeded_until = until
+        project.digested_event_count += 1
+        project.save()
 
     @classmethod
     def count_issue_periods_and_act_on_it(cls, issue, event, timestamp):
@@ -356,17 +353,10 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
                         MaxDataReader("MAX_ENVELOPE_COMPRESSED_SIZE", request))))
 
         envelope_headers = parser.get_envelope_headers()
-        with immediate_atomic():
-            # the transaction goes around the whole of the Project.get-then-update, to ensure ingested_event_count is
-            # correctly updated. We release the transaction right after that (keep it as short as possible); the value
-            # is still used after that, but it is with a correct-in-time (i.e. time of ingestion) value.
-            if "dsn" in envelope_headers:
-                project = self.get_project(project_pk, get_sentry_key(envelope_headers["dsn"]))
-            else:
-                project = self.get_project_for_request(project_pk, request)
-            project.ingested_event_count += 1
-            print("Happens", project.ingested_event_count)
-            project.save()
+        if "dsn" in envelope_headers:
+            project = self.get_project(project_pk, get_sentry_key(envelope_headers["dsn"]))
+        else:
+            project = self.get_project_for_request(project_pk, request)
 
         if project.quota_exceeded_until is not None and now < project.quota_exceeded_until:
             # Sentry has x-sentry-rate-limits, but for now 429 is just fine. Client-side this is implemented as a 60s
