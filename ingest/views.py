@@ -443,7 +443,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
                     continue
 
                 self.process_event(envelope_headers["event_id"], event_output_stream, project, request)
-                break  # From the spec of type=event: This Item may occur at most once per Envelope. i.e. seen=done
+                break  # From the spec of type=event: This Item may occur at most once per Envelope. once seen: done
 
             finally:
                 event_output_stream.close()

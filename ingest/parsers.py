@@ -72,11 +72,18 @@ class StreamingEnvelopeParser:
     second rate hardware, it seems prudent to not just load everything into memory.
 
     Don't take the existance of a Streaming Parser here to mean that there's an actual end-to-end streaming connection
-    between the SDK and our server though, because there may be many things in your stack preventing that:
+    between the SDK and our server though (which would enable "low latency parsing" and "full hangup on-error"), because
+    there may be many things in your stack preventing that:
 
-    * nginx may do request buffering (it's the default, and recommended for Gunicorn)
-    * nginx will do connection-close buffering (unpreventable AFAICT) - https://forum.nginx.org/read.php?11,299875
-    * if running uvicorn, Django's asgi stack will do request buffering - https://code.djangoproject.com/ticket/33699
+    1. nginx may do request buffering (it's the default, and recommended for Gunicorn); so our work starts when the
+       client is done sending.
+    2. nginx will do connection-close buffering (unpreventable AFAICT) - https://forum.nginx.org/read.php?11,299875
+       so attempts to notify the client to stop sending are prevented.
+    3. if request-buffering is turned off, and the upstream server manages to send out its response and close the
+       connection before the whole request is streamed to it, nginx will (sometimes?) respond with a 502 (which would
+       prevent the useful response, e.g. a 429, from reaching the client). Nginx's reason:
+       "writev() failed (104: Connection reset by peer) while sending request to upstream"
+    4. if running uvicorn, Django's asgi stack will do request buffering - https://code.djangoproject.com/ticket/33699
     """
 
     def __init__(self, input_stream, chunk_size=1024):
