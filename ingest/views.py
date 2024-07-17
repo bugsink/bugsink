@@ -290,6 +290,8 @@ class BaseIngestAPIView(View):
             # nothing to check (otherwise) or update on project in this case, also abort further event-processing
             return False
 
+        project.digested_event_count += 1
+
         if project.digested_event_count >= project.next_quota_check:
             # check_for_thresholds is relatively expensive (SQL group by); we do it as little as possible
 
@@ -314,33 +316,41 @@ class BaseIngestAPIView(View):
             # next_quota_check (the if-statement) and the setting (the statement below) we're good.
             project.next_quota_check = project.digested_event_count + check_again_after
 
-        project.digested_event_count += 1
         project.save()
         return True
 
     @classmethod
     def count_issue_periods_and_act_on_it(cls, issue, event, timestamp):
+        # See the project-version for various off-by-one notes (not reproduced here).
+        #
         # We just have "unmute" as a purpose here, not "quota". I thought I'd have per-issue quota earlier (which would
         # ensure some kind of fairness within a project) but:
+        #
         # * that doesn't quite work, because to determine the issue, you'd have to incur almost all of the digest cost.
         # * quota are expected to be set "high enough" anyway, i.e. only as a last line of defense against run-away
         #     clients
         # * "even if" you'd get this to work there'd be scenarios where it's useless, e.g. misbehaving groupers.
         thresholds = IssueStateManager.get_unmute_thresholds(issue)
 
-        states = check_for_thresholds(Event.objects.filter(issue=issue), timestamp, thresholds)
+        if thresholds and issue.digested_event_count >= issue.next_unmute_check:
+            states = check_for_thresholds(Event.objects.filter(issue=issue), timestamp, thresholds)
 
-        for (state, until, _, vbc_dict) in states:
-            if not state:
-                continue
+            check_again_after = max(1, min([check_after for (_, _, check_after, _) in states], default=1))
 
-            IssueStateManager.unmute(issue, triggering_event=event, unmute_metadata={"mute_until": vbc_dict})
+            issue.next_unmute_check = issue.digested_event_count + check_again_after
 
-            # In the (in the current UI impossible, and generally unlikely) case that multiple unmute conditions are met
-            # simultaneously, we arbitrarily break after the first. (this makes it so that a single TurningPoint is
-            # created and that the detail that there was also another reason to unmute doesn't show us, but that's
-            # perfectly fine); it also matches what we do elsewhere (i.e. 'if is_muted` in `IssueStateManager.unmute`)
-            break
+            for (state, until, _, vbc_dict) in states:
+                if not state:
+                    continue
+
+                IssueStateManager.unmute(issue, triggering_event=event, unmute_metadata={"mute_until": vbc_dict})
+
+                # In the (in the current UI impossible, and generally unlikely) case that multiple unmute conditions are
+                # met simultaneously, we arbitrarily break after the first. (this makes it so that a single TurningPoint
+                # is created and that the detail that there was also another reason to unmute doesn't show us, but
+                # that's perfectly fine); it also matches what we do elsewhere (i.e. `IssueStateManager.unmute` where we
+                # have `if is_muted`)
+                break
 
 
 class IngestEventAPIView(BaseIngestAPIView):

@@ -58,6 +58,7 @@ class Issue(models.Model):
     is_muted = models.BooleanField(default=False)
     unmute_on_volume_based_conditions = models.TextField(blank=False, null=False, default="[]")  # json string
     unmute_after = models.DateTimeField(blank=True, null=True)
+    next_unmute_check = models.PositiveIntegerField(null=False, default=0)
 
     def save(self, *args, **kwargs):
         if self.digest_order is None:
@@ -199,6 +200,10 @@ class IssueStateManager(object):
 
         issue.is_muted = True
         issue.unmute_on_volume_based_conditions = unmute_on_volume_based_conditions
+        # 0 is "incorrect" but works just fine; it simply means that the first (real, but expensive) check is done
+        # on-digest. However, to calculate the correct value we'd need to do that work right now, so postponing is
+        # actually better. Setting to 0 is still needed to ensure the check is done when there was already a value.
+        issue.next_unmute_check = 0
 
         if unmute_after is not None:
             issue.unmute_after = unmute_after
@@ -333,6 +338,7 @@ class IssueQuerysetStateManager(object):
         issue_qs.update(
             is_muted=True,
             unmute_on_volume_based_conditions=unmute_on_volume_based_conditions,
+            next_unmute_check=0,
         )
 
         if unmute_after is not None:
