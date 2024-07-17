@@ -12,8 +12,19 @@ def _filter_for_periods(qs, period_name, nr_of_periods, now):
     return qs.filter(server_side_timestamp__gte=sub_periods_from_datetime(now, nr_of_periods, period_name))
 
 
-def check_for_thresholds(qs, now, thresholds):
+def check_for_thresholds(qs, now, thresholds, add_for_current=0):
     # thresholds :: [(period_name, nr_of_periods, gte_threshold, metadata), ...]
+
+    # This function does aggregation, so it's reasonably expensive (I haven't measured exactly, but it seems to be at
+    # least as expensive per-call as the whole of the rest of digestion). We solve this by not calling it often, using
+    # the `check_again_after` mechanism (which relies on simple counting, and the fact that a threshold for any given
+    # period of time will certainly not be crossed sooner than that the number of observations over _any_ time period
+    # exceeds the given threshold. The amorization then happens over the difference between the threshold and the
+    # actually observed number of events over the relevant time-period; in other words, unless for some weird reason you
+    # are consitently super-close to the quota but not over-quota the amortization will happen over a reasonable
+    # fraction of the quota, and if the quota is reasonably high (which is the only relevant-for-performance case
+    # anyway) this means the cost will be amortized away. (e.g. quota of 1_000; a check every 100 events in a bad case).
+    # The only relevant cost that this mechanism thus adds is the per-project counting of digested events.
 
     # we only allow UTC, and we generally use Django model fields, which are UTC, so this should be good:
     assert now.tzinfo == timezone.utc
@@ -21,7 +32,7 @@ def check_for_thresholds(qs, now, thresholds):
     states_with_metadata = []
 
     for (period_name, nr_of_periods, gte_threshold, metadata) in thresholds:
-        count = _filter_for_periods(qs, period_name, nr_of_periods, now).count()
+        count = _filter_for_periods(qs, period_name, nr_of_periods, now).count() + add_for_current
         state = count >= gte_threshold
 
         if state:
@@ -33,21 +44,30 @@ def check_for_thresholds(qs, now, thresholds):
                 below_threshold_from = datetime(9999, 12, 31, 23, 59, tzinfo=timezone.utc)
 
             else:
-                # `below_threshold_from` is the first moment in time where the condition no longer applies.
-                # just get the min value of server-time over the qs:
-
+                # `below_threshold_from` is the first moment in time where the condition no longer applies. Assuming
+                # the present function is called "often enough" (i.e is called for the moment the switch to state=True
+                # happens, and not thereafter), there will be _excactly_ `gte_threshold` items in the qs (potentially
+                # with 1 implied one if `add_for_current` applies). Taking the min of those and adding the time period
+                # brings us to the point in time where the condition will become False again.
+                #
+                # (The assumption of "often enough, and no more" holds for us because for quota we stop accepting events
+                # once the quota is met; for muted we remove the vbc once unmuted). For the "overshoot" case (see tests,
+                # not really expected) this has the consequence of seeing a result that is "too old", and hence going
+                # back to accepting too soon. But this is self-correcting, so no need to deal with it.
                 below_threshold_from = add_periods_to_datetime(
                     _filter_for_periods(qs, period_name, nr_of_periods, now).aggregate(
-                        agg=Min('server_side_timestamp'))['agg'],
+                        agg=Min('server_side_timestamp'))['agg'] or now,  # `or now` to handle funny `gte_threshold==0`
                     nr_of_periods, period_name)
 
         else:
             below_threshold_from = None
 
-        states_with_metadata.append((state, below_threshold_from, metadata))
+        check_again_after = gte_threshold - count
 
-    # we return tuples of (state, below_threshold_from, metadata) where metadata is something arbitrary that can be
-    # passed in (it allows us to tie back to "what caused this to be true/false?"
-    # TODO: I think that in practice the metadata is always implied by the thresholds, i.e. instead of
-    # passing-through we could just return the thresholds that were met.
+        states_with_metadata.append((state, below_threshold_from, check_again_after, metadata))
+
+    # we return tuples of (state, below_threshold_from, check_again_after, metadata) where metadata is something
+    # arbitrary that can be passed in (it allows us to tie back to "what caused this to be true/false?"
+    # TODO: I think that in practice the metadata is always implied by the thresholds, i.e. instead of passing-through
+    # we could just return the thresholds that were met.
     return states_with_metadata

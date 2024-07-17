@@ -128,7 +128,8 @@ class BaseIngestAPIView(View):
 
         timestamp = parse_timestamp(event_metadata["timestamp"])
 
-        cls.count_project_periods_and_act_on_it(project, timestamp)
+        if not cls.count_project_periods_and_act_on_it(project, timestamp):
+            return  # if over-quota: just return (any cleanup is done calling-side)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
@@ -272,23 +273,50 @@ class BaseIngestAPIView(View):
         issue.save()
 
     @classmethod
-    def count_project_periods_and_act_on_it(cls, project, timestamp):
-        # Note on the division of work between ingest/digest: on ingest we just look at a (more or less) boolean "do you
-        # accept anything" (and if not: when will you?). Here we do the actual work.
+    def count_project_periods_and_act_on_it(cls, project, now):
+        # returns: True if any further processing should be done.
 
         thresholds = [
-            # +1, because the PC tests inclusively, but we want to trigger only on-exceed.
-            ("minute", 5, get_settings().MAX_EVENTS_PER_PROJECT_PER_5_MINUTES + 1, None),
-            ("minute", 60, get_settings().MAX_EVENTS_PER_PROJECT_PER_HOUR + 1, None),
+            ("minute", 5, get_settings().MAX_EVENTS_PER_PROJECT_PER_5_MINUTES, None),
+            ("minute", 60, get_settings().MAX_EVENTS_PER_PROJECT_PER_HOUR, None),
         ]
 
-        states = check_for_thresholds(Event.objects.filter(project=project), timestamp, thresholds)
+        if project.quota_exceeded_until is not None and now < project.quota_exceeded_until:
+            # This is the same check that we do on-ingest. Naively, one might think that it is superfluous. However,
+            # because by design there is the potential for a digestion backlog to exist, it is possible that the update
+            # of `project.quota_exceeded_until` happens only after any number of events have already passed through
+            # ingestion and have entered the pipeline. Hence we double-check on-digest.
 
-        until = max([below_from for (state, below_from, _) in states if state], default=None)
+            # nothing to check (otherwise) or update on project in this case, also abort further event-processing
+            return False
 
-        project.projectquota_exceeded_until = until
+        if project.digested_event_count >= project.next_quota_check:
+            # check_for_thresholds is relatively expensive (SQL group by); we do it as little as possible
+
+            # Notes on off-by-one:
+            # * check_for_thresholds tests for "gte"; this means it will trigger once the quota is reached (not
+            #   exceeded). We act accordingly by accepting this final event (returning True, count += 1) and closing the
+            #   door (setting quota_exceeded_until).
+            # * add_for_current=1 because we're called before the event is digested (it's not in Event.objects.filter),
+            #   and because of the previous bullet we know that it will always be digested.
+            states = check_for_thresholds(Event.objects.filter(project=project), now, thresholds, 1)
+
+            until = max([below_from for (state, below_from, _, _) in states if state], default=None)
+
+            # "at least 1" is a matter of taste; because the actual usage of `next_quota_check` is with a gte, leaving
+            # it out would result in the same behavior. But once we reach this point we know that digested_event_count
+            # will increase, so we know that a next check cannot happen before current + 1, we might as well be explicit
+            check_again_after = max(1, min([check_after for (_, _, check_after, _) in states], default=1))
+
+            project.quota_exceeded_until = until
+
+            # note on correction of `digested_event_count += 1`: as long as we don't do that between the check on
+            # next_quota_check (the if-statement) and the setting (the statement below) we're good.
+            project.next_quota_check = project.digested_event_count + check_again_after
+
         project.digested_event_count += 1
         project.save()
+        return True
 
     @classmethod
     def count_issue_periods_and_act_on_it(cls, issue, event, timestamp):
@@ -302,7 +330,7 @@ class BaseIngestAPIView(View):
 
         states = check_for_thresholds(Event.objects.filter(issue=issue), timestamp, thresholds)
 
-        for (state, until, vbc_dict) in states:
+        for (state, until, _, vbc_dict) in states:
             if not state:
                 continue
 
@@ -366,7 +394,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             # (nginx's) SSL processing on-ingest, and that digest is (almost) able to keep up. Because of request
             # buffering, the cost of such processing will already have been incurred once you reach this point. So is
             # the entire idea of quota useless? No, because the SDK will generally back off on 429, this does create
-            # some relief.
+            # some relief. Also: avoid backlogging the digestion pipeline.
             #
             # Another aspect is: the quota serve as a first threshold for retention/evictions, i.e. some quota will mean
             # that retention is not too heavily favoring "most recent" when there are very many requests coming in.

@@ -7,6 +7,7 @@ import time
 import datetime
 from unittest.mock import patch
 from unittest import TestCase as RegularTestCase
+from dateutil.relativedelta import relativedelta
 
 from django.test import TransactionTestCase
 from django.utils import timezone
@@ -14,7 +15,7 @@ from django.test.client import RequestFactory
 from django.core.exceptions import ValidationError
 
 from projects.models import Project
-from events.factories import create_event_data
+from events.factories import create_event_data, create_event
 from issues.factories import get_or_create_issue
 from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
 from bugsink.app_settings import override_settings
@@ -24,6 +25,7 @@ from ingest.management.commands.send_json import Command as SendJsonCommand
 
 from .views import BaseIngestAPIView
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
+from .event_counter import check_for_thresholds
 
 
 def _digest_params(event_data, project, request, now=None):
@@ -282,6 +284,130 @@ class IngestViewTestCase(TransactionTestCase):
     def test_envelope_endpoint_digest_non_immediate(self):
         with override_settings(DIGEST_IMMEDIATELY=False):
             self.test_envelope_endpoint()
+
+    @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=0)
+    @patch("ingest.views.check_for_thresholds")
+    def test_count_project_periods_and_act_on_it_zero(self, patched_check_for_thresholds):
+        # doing this would be nonsensical but let's at least not crash for that case
+        patched_check_for_thresholds.side_effect = check_for_thresholds
+        now = timezone.now()
+
+        project = Project.objects.create(name="test")
+
+        BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+
+        # I don't care much for the exact handling of the nonsensical case, as long as "quota_exceeded" gets marked
+        self.assertEquals(now + relativedelta(minutes=5), project.quota_exceeded_until)
+
+    @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=3)
+    @patch("ingest.views.check_for_thresholds")
+    def test_count_project_periods_and_act_on_it_simple_case(self, patched_check_for_thresholds):
+        patched_check_for_thresholds.side_effect = check_for_thresholds
+        now = timezone.now()
+
+        project = Project.objects.create(name="test")
+
+        # first call
+        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+
+        self.assertEquals(True, result)
+        self.assertEquals(1, project.digested_event_count)
+        self.assertIsNone(project.quota_exceeded_until)
+        self.assertEquals(1, patched_check_for_thresholds.call_count)
+
+        create_event(project, timestamp=now)  # result was True, proceed accordingly
+
+        # second call
+        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+
+        self.assertEquals(True, result)
+        self.assertEquals(2, project.digested_event_count)
+        self.assertIsNone(project.quota_exceeded_until)
+        self.assertEquals(1, patched_check_for_thresholds.call_count)  # no new call to the expensive check is done
+
+        create_event(project, timestamp=now)  # result was True, proceed accordingly
+
+        # third call (equals but does not exceed quota, so this event should still be accepted, but the door should be
+        # closed right after it)
+        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+
+        self.assertEquals(True, result)
+        self.assertEquals(3, project.digested_event_count)
+        self.assertEquals(now + relativedelta(minutes=5), project.quota_exceeded_until)
+        self.assertEquals(2, patched_check_for_thresholds.call_count)  # the check was done right at the lower bound
+
+        create_event(project, timestamp=now)  # result was True, proceed accordingly
+
+        # fourth call
+        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+
+        self.assertEquals(False, result)  # should be droped immediately
+        self.assertEquals(3, project.digested_event_count)  # nothing is digested
+        self.assertEquals(now + relativedelta(minutes=5), project.quota_exceeded_until)  # unchanged
+        self.assertEquals(2, patched_check_for_thresholds.call_count)  # no expensive check (use quota_exceeded_until)
+
+        # xth call (after a while)
+        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now + relativedelta(minutes=6))
+
+        self.assertEquals(True, result)
+        self.assertEquals(4, project.digested_event_count)
+        self.assertIsNone(project.quota_exceeded_until)
+        self.assertEquals(3, patched_check_for_thresholds.call_count)  # the check is done on "re-enter"
+
+    @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=3)
+    @patch("ingest.views.check_for_thresholds")
+    def test_count_project_periods_and_act_on_it_new_check_done_but_below_threshold(self, patched_check_for_thresholds):
+        patched_check_for_thresholds.side_effect = check_for_thresholds
+        now = timezone.now()
+
+        project = Project.objects.create(name="test")
+
+        # first and second call as in "simple_case" test
+        BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+        create_event(project, timestamp=now)  # result was True, proceed accordingly
+
+        BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+        create_event(project, timestamp=now)  # result was True, proceed accordingly
+
+        # third call must trigger the check; if it happens outside of the 5-minute period the result should be OK though
+        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now + relativedelta(minutes=6))
+
+        self.assertEquals(True, result)
+        self.assertIsNone(project.quota_exceeded_until)
+        self.assertEquals(2, patched_check_for_thresholds.call_count)  # the check was done right at the lower bound
+
+    @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=3)
+    @patch("ingest.views.check_for_thresholds")
+    def test_count_project_periods_and_act_on_it_immediate_overshoot(self, patched_check_for_thresholds):
+        # a test that documents the current behavior for an edge case, rather than make a value-judgement about it. The
+        # scenario is: what if an event comes into the digestion pipeline that is over budget (as opposed to being the
+        # last in-budget item) while the project is still in accepting (quota_exceeded_until is None) state? Because we
+        # digest serially, I don't see how this could happen except by changing the quota in flight or through a
+        # programming error; in any case, the current test documents what happens in that case.
+        patched_check_for_thresholds.side_effect = check_for_thresholds
+        now = timezone.now()
+
+        project = Project.objects.create(name="test")
+
+        # first call (assertions implied, as in simple_case)
+        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+        create_event(project, timestamp=now)  # result was True, proceed accordingly
+
+        with override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=1):
+            # the path described in this test only works if the next_quota_check are simultaneously reset
+            project.next_quota_check = 0
+            project.save()
+
+            # second call, with down-tuned quota; the 2nd event would be immediately over-quota
+            result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+
+            # despite being over-quota, we still accept it. This is the "document without value judgement" part of the
+            # test.
+            self.assertEquals(True, result)
+            self.assertEquals(2, project.digested_event_count)
+
+            # but at least this closes the door for the next event
+            self.assertEquals(now + relativedelta(minutes=5), project.quota_exceeded_until)
 
 
 class TestParser(RegularTestCase):

@@ -61,8 +61,11 @@ class Project(models.Model):
     # visibility
     visibility = models.IntegerField(choices=ProjectVisibility.choices, default=ProjectVisibility.TEAM_MEMBERS)
 
-    # quota
+    # ingestion/digestion quota
     quota_exceeded_until = models.DateTimeField(null=True, blank=True)
+    next_quota_check = models.PositiveIntegerField(null=False, default=0)
+
+    # retention
     retention_max_event_count = models.PositiveIntegerField(default=10_000)
 
     def __str__(self):
