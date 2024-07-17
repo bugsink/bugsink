@@ -3,6 +3,7 @@ import io
 import uuid
 import brotli
 import threading
+import signal
 
 import time
 import json
@@ -30,6 +31,9 @@ class Command(BaseCommand):
         parser.add_argument("filename")
 
     def handle(self, *args, **options):
+        self.stopping = False
+        signal.signal(signal.SIGINT, self.handle_signal)
+
         compress = options['compress']
         use_envelope = options['use_envelope']
 
@@ -115,9 +119,10 @@ class Command(BaseCommand):
 
         return compressed_data
 
-    @staticmethod
-    def loop_send_to_server(dsns, options, use_envelope, compress, compressed_datas, timings):
+    def loop_send_to_server(self, dsns, options, use_envelope, compress, compressed_datas, timings):
         for compressed_data in compressed_datas.values():
+            if self.stopping:
+                return
             dsn = random.choice(dsns)
 
             t0 = time.time()
@@ -165,24 +170,27 @@ class Command(BaseCommand):
             print("Error %s, %s" % (e, getattr(getattr(e, 'response', None), 'content', None)))
             return False
 
-    @staticmethod
-    def print_stats(threads, requests, total_time, timings):
+    def print_stats(self, threads, requests, total_time, timings):
         # flatten the dict of lists to a single list:
         all_tups = [tup for sublist in timings.values() for tup in sublist]
         all_timings = [timing for (_, timing) in all_tups]
+        actual_requests = len(all_tups)
 
         print("==============")
-        print("Results")
+        if self.stopping:
+            print("Results (interrupted)")
+        else:
+            print("Results")
         print("==============")
 
         print("threads: %d" % threads)
         print("requests per thread: %d" % requests)
-        print("total requests: %d" % (threads * requests))
+        print("total requests: %d" % actual_requests)
         print("total errors: %d, i.e. %d%%" % (
             len([success for (success, _) in all_tups if not success]),
             100 * len([success for (success, _) in all_tups if not success]) / len(all_tups)))
         print("total time: %.3fs" % total_time)
-        print("requests per second: %.3f" % (threads * requests / total_time))
+        print("requests per second: %.3f" % (actual_requests / total_time))
 
         # print the avg, mean, 90th, 95th and 99th percentiles
         print("==============")
@@ -197,3 +205,6 @@ class Command(BaseCommand):
         print("99.5th:  %.3fs" % sorted(all_timings)[int(len(all_timings) * 0.995)])
         print("99.9th:  %.3fs" % sorted(all_timings)[int(len(all_timings) * 0.999)])
         print("99.99th: %.3fs" % sorted(all_timings)[int(len(all_timings) * 0.9999)])
+
+    def handle_signal(self, sig, frame):
+        self.stopping = True
