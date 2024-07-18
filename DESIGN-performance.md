@@ -38,7 +38,7 @@ Some things I played with (more or less in order I did them):
 
 Some numbers:
 
-All measurements are with a 50k event.
+All measurements are with a 50k event. (NOTE: after removal of whitespace this is actually a 40k event)
 
 * Starting point is ~30/s. local to playground; actual (non-immediate) handling of events. varying number of gunicorn
   and snappea workers doesn't seem to do much.
