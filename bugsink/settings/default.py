@@ -16,11 +16,12 @@ if sys.argv[1:2] == ['runsnappea']:
     I_AM_RUNNING = "SNAPPEA"
 elif sys.argv[1:2] == ['test']:
     I_AM_RUNNING = "TEST"
+elif sys.argv[1:2] == ['migrate']:
+    I_AM_RUNNING = "MIGRATE"
 elif [s.endswith("gunicorn") for s in sys.argv[:1]] == [True]:
     I_AM_RUNNING = "GUNICORN"
 else:
     I_AM_RUNNING = "OTHER"
-
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent

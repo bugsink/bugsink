@@ -1,5 +1,6 @@
 import time
 from contextlib import contextmanager
+from django.conf import settings
 
 from django.db.backends.sqlite3.base import (
     DatabaseWrapper as UnpatchedDatabaseWrapper, SQLiteCursorWrapper as UnpatchedSQLiteCursorWrapper,
@@ -59,9 +60,17 @@ class DatabaseWrapper(UnpatchedDatabaseWrapper):
 class SQLiteCursorWrapper(UnpatchedSQLiteCursorWrapper):
 
     def execute(self, query, params=None):
+        if settings.I_AM_RUNNING == "MIGRATE":
+            # migrations in Sqlite are often slow (drop/recreate tables, etc); so we don't want to limit them
+            return super().execute(query, params)
+
         with limit_runtime(self.connection, 5.0):
             return super().execute(query, params)
 
     def executemany(self, query, param_list):
+        if settings.I_AM_RUNNING == "MIGRATE":
+            # migrations in Sqlite are often slow (drop/recreate tables, etc); so we don't want to limit them
+            return super().executemany(query, param_list)
+
         with limit_runtime(self.connection, 5.0):
             return super().executemany(query, param_list)
