@@ -412,7 +412,9 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             # Another aspect is: the quota serve as a first threshold for retention/evictions, i.e. some quota will mean
             # that retention is not too heavily favoring "most recent" when there are very many requests coming in.
             #
-            # Note that events that exceed the quota will not be seen (not even counted) in any way.
+            # Note that events that exceed the quota will not be seen (not even counted) in any way; if we ever want to
+            # do that we could make a specific task for it and delay that here (at a limited performance cost, but
+            # keeping with the "don't block the main DB on-ingest" design)
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         def factory(item_headers):
