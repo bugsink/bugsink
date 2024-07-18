@@ -356,7 +356,10 @@ class BaseIngestAPIView(View):
 class IngestEventAPIView(BaseIngestAPIView):
 
     def _post(self, request, project_pk=None):
+        now = datetime.now(timezone.utc)
         project = self.get_project_for_request(project_pk, request)
+        if project.quota_exceeded_until is not None and now < project.quota_exceeded_until:
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         # This endpoint is deprecated. Personally, I think it's the simpler (and given my goals therefore better) of the
         # two, but fighting windmills and all... given that it's deprecated, I'm not going to give it quite as much love
@@ -381,11 +384,11 @@ class IngestEventAPIView(BaseIngestAPIView):
 class IngestEnvelopeAPIView(BaseIngestAPIView):
 
     def _post(self, request, project_pk=None):
+        now = datetime.now(timezone.utc)
+
         # Note: wrapping the COMPRESSES_SIZE checks arount request makes it so that when clients do not compress their
         # requests, they are still subject to the (smaller) maximums that apply pre-uncompress. This is exactly what we
         # want.
-        now = datetime.now(timezone.utc)
-
         parser = StreamingEnvelopeParser(
                     MaxDataReader("MAX_ENVELOPE_SIZE", content_encoding_reader(
                         MaxDataReader("MAX_ENVELOPE_COMPRESSED_SIZE", request))))
