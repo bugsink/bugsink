@@ -38,7 +38,7 @@ def get_or_create_issue(project=None, event_data=None):
 
 
 def denormalized_issue_fields():
-    """return a dict of fields that are expected to be denormalized on Issue; for testing purposes"""
+    """placeholder values for the "denormalized" (cached, calculated) fields on Issue for which there is no default"""
     return {
         "first_seen": timezone.now(),
         "last_seen": timezone.now(),
