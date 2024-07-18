@@ -13,7 +13,8 @@ def _filter_for_periods(qs, period_name, nr_of_periods, now):
 
 
 def check_for_thresholds(qs, now, thresholds, add_for_current=0):
-    # thresholds :: [(period_name, nr_of_periods, gte_threshold, metadata), ...]
+    # thresholds :: [(period_name, nr_of_periods, gte_threshold), ...]
+    # returns [(state, below_threshold_from, check_again_after, (period_name, nr_of_periods, gte_threshold)), ...]
 
     # This function does aggregation, so it's reasonably expensive (I haven't measured exactly, but it seems to be at
     # least as expensive per-call as the whole of the rest of digestion). We solve this by not calling it often, using
@@ -29,9 +30,9 @@ def check_for_thresholds(qs, now, thresholds, add_for_current=0):
     # we only allow UTC, and we generally use Django model fields, which are UTC, so this should be good:
     assert now.tzinfo == timezone.utc
 
-    states_with_metadata = []
+    states = []
 
-    for (period_name, nr_of_periods, gte_threshold, metadata) in thresholds:
+    for (period_name, nr_of_periods, gte_threshold) in thresholds:
         count = _filter_for_periods(qs, period_name, nr_of_periods, now).count() + add_for_current
         state = count >= gte_threshold
 
@@ -64,10 +65,6 @@ def check_for_thresholds(qs, now, thresholds, add_for_current=0):
 
         check_again_after = gte_threshold - count
 
-        states_with_metadata.append((state, below_threshold_from, check_again_after, metadata))
+        states.append((state, below_threshold_from, check_again_after, (period_name, nr_of_periods, gte_threshold)))
 
-    # we return tuples of (state, below_threshold_from, check_again_after, metadata) where metadata is something
-    # arbitrary that can be passed in (it allows us to tie back to "what caused this to be true/false?"
-    # TODO: I think that in practice the metadata is always implied by the thresholds, i.e. instead of passing-through
-    # we could just return the thresholds that were met.
-    return states_with_metadata
+    return states

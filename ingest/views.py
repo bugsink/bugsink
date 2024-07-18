@@ -277,8 +277,8 @@ class BaseIngestAPIView(View):
         # returns: True if any further processing should be done.
 
         thresholds = [
-            ("minute", 5, get_settings().MAX_EVENTS_PER_PROJECT_PER_5_MINUTES, None),
-            ("minute", 60, get_settings().MAX_EVENTS_PER_PROJECT_PER_HOUR, None),
+            ("minute", 5, get_settings().MAX_EVENTS_PER_PROJECT_PER_5_MINUTES),
+            ("minute", 60, get_settings().MAX_EVENTS_PER_PROJECT_PER_HOUR),
         ]
 
         if project.quota_exceeded_until is not None and now < project.quota_exceeded_until:
@@ -339,11 +339,12 @@ class BaseIngestAPIView(View):
 
             issue.next_unmute_check = issue.digested_event_count + check_again_after
 
-            for (state, until, _, vbc_dict) in states:
+            for (state, until, _, (period_name, nr_of_periods, gte_threshold)) in states:
                 if not state:
                     continue
 
-                IssueStateManager.unmute(issue, triggering_event=event, unmute_metadata={"mute_until": vbc_dict})
+                IssueStateManager.unmute(issue, triggering_event=event, unmute_metadata={"mute_until": {
+                    "period": period_name, "nr_of_periods": nr_of_periods, "volume": gte_threshold}})
 
                 # In the (in the current UI impossible, and generally unlikely) case that multiple unmute conditions are
                 # met simultaneously, we arbitrarily break after the first. (this makes it so that a single TurningPoint

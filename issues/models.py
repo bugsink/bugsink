@@ -250,7 +250,7 @@ class IssueStateManager(object):
 
         # the for-loop in the below always contains 0 or 1 elements in our current UI (adding another unmute condition
         # for an already-muted issue is simply not possible) but would be robust for more elements.
-        return [(vbc.period, vbc.nr_of_periods, vbc.volume, vbc.to_dict()) for vbc in unmute_vbcs]
+        return [(vbc.period, vbc.nr_of_periods, vbc.volume) for vbc in unmute_vbcs]
 
 
 class IssueQuerysetStateManager(object):
