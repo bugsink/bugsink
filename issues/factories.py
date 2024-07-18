@@ -1,5 +1,3 @@
-import uuid
-
 from django.utils import timezone
 
 from projects.models import Project
@@ -11,6 +9,7 @@ from .utils import get_issue_grouper_for_data
 def get_or_create_issue(project=None, event_data=None):
     """create issue for testing purposes (code basically stolen from ingest/views.py)"""
     if event_data is None:
+        from events.factories import create_event_data
         event_data = create_event_data()
     if project is None:
         project = Project.objects.create(name="Test project")
@@ -36,16 +35,6 @@ def get_or_create_issue(project=None, event_data=None):
         issue_created = False
 
     return issue, issue_created
-
-
-def create_event_data():
-    """create minimal event data that is valid as per from_json()"""
-
-    return {
-        "event_id": uuid.uuid4().hex,
-        "timestamp": timezone.now().isoformat(),
-        "platform": "python",
-    }
 
 
 def denormalized_issue_fields():
