@@ -28,7 +28,8 @@ def create_event(project=None, issue=None, timestamp=None, event_data=None):
     return Event.objects.create(
         project=project,
         issue=issue,
-        server_side_timestamp=timestamp,
+        ingested_at=timestamp,
+        digested_at=timestamp,
         timestamp=timestamp,
         event_id=uuid.uuid4().hex,
         has_exception=True,

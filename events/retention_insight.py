@@ -23,9 +23,9 @@ def retention_insight_values(project):
                 irrelevance_for_retention=irrelevance
             )
             if lb is not None:
-                qs = qs.filter(server_side_timestamp__gte=datetime_for_epoch(lb))
+                qs = qs.filter(digested_at__gte=datetime_for_epoch(lb))
             if ub is not None:
-                qs = qs.filter(server_side_timestamp__lt=datetime_for_epoch(ub))
+                qs = qs.filter(digested_at__lt=datetime_for_epoch(ub))
 
             howmany = qs.count()
             results[irrelevance] = howmany

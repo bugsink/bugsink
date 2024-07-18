@@ -105,7 +105,7 @@ def create_release_if_needed(project, version, event):
 
             TurningPoint.objects.bulk_create([TurningPoint(
                     issue=issue, kind=TurningPointKind.NEXT_MATERIALIZED, triggering_event=event,
-                    metadata=json.dumps({"actual_release": release.version}), timestamp=event.server_side_timestamp)
+                    metadata=json.dumps({"actual_release": release.version}), timestamp=event.ingested_at)
                 for issue in resolved_by_next_qs
             ])
             event.never_evict = True  # .save() will be called by the caller of this function

@@ -54,7 +54,8 @@ class Event(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, help_text="Bugsink-internal")
 
-    server_side_timestamp = models.DateTimeField(db_index=True, blank=False, null=False)
+    ingested_at = models.DateTimeField(blank=False, null=False)
+    digested_at = models.DateTimeField(db_index=True, blank=False, null=False)
 
     # not actually expected to be null, but we want to be able to delete issues without deleting events (cleanup later)
     issue = models.ForeignKey("issues.Issue", blank=False, null=True, on_delete=models.SET_NULL)
@@ -160,8 +161,8 @@ class Event(models.Model):
             ("issue", "digest_order"),
         ]
         indexes = [
-            models.Index(fields=["project", "never_evict", "server_side_timestamp", "irrelevance_for_retention"]),
-            models.Index(fields=["issue", "server_side_timestamp"]),
+            models.Index(fields=["project", "never_evict", "digested_at", "irrelevance_for_retention"]),
+            models.Index(fields=["issue", "digested_at"]),
         ]
 
     def get_absolute_url(self):
@@ -179,7 +180,9 @@ class Event(models.Model):
         return get_title_for_exception_type_and_value(self.calculated_type, self.calculated_value)
 
     @classmethod
-    def from_ingested(cls, event_metadata, digest_order, stored_event_count, issue, parsed_data, denormalized_fields):
+    def from_ingested(cls, event_metadata, digested_at, digest_order, stored_event_count, issue, parsed_data,
+                      denormalized_fields):
+
         # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
         # objects etc).
@@ -191,7 +194,8 @@ class Event(models.Model):
                 event_id=parsed_data["event_id"],
                 project_id=event_metadata["project_id"],
                 issue=issue,
-                server_side_timestamp=event_metadata["timestamp"],
+                ingested_at=event_metadata["ingested_at"],
+                digested_at=digested_at,
                 data=json.dumps(parsed_data),
 
                 timestamp=parse_timestamp(parsed_data["timestamp"]),

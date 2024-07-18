@@ -35,8 +35,8 @@ class Issue(models.Model):
     digest_order = models.PositiveIntegerField(blank=False, null=False)
 
     # denormalized/cached fields:
-    last_seen = models.DateTimeField(blank=False, null=False)  # based on event.server_side_timestamp
-    first_seen = models.DateTimeField(blank=False, null=False)  # based on event.server_side_timestamp
+    last_seen = models.DateTimeField(blank=False, null=False)  # based on event.ingested_at
+    first_seen = models.DateTimeField(blank=False, null=False)  # based on event.ingested_at
     digested_event_count = models.IntegerField(blank=False, null=False)
     calculated_type = models.CharField(max_length=255, blank=True, null=False, default="")
     calculated_value = models.CharField(max_length=255, blank=True, null=False, default="")
@@ -237,7 +237,7 @@ class IssueStateManager(object):
                 # path is never reached via UI-based paths (because those are by definition not event-triggered); thus
                 # the 2 ways of creating TurningPoints do not collide.
                 TurningPoint.objects.create(
-                    issue=issue, triggering_event=triggering_event, timestamp=triggering_event.server_side_timestamp,
+                    issue=issue, triggering_event=triggering_event, timestamp=triggering_event.ingested_at,
                     kind=TurningPointKind.UNMUTED, metadata=json.dumps(unmute_metadata))
                 triggering_event.never_evict = True  # .save() will be called by the caller of this function
 

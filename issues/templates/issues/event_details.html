@@ -7,7 +7,7 @@
 {# this is here to fool tailwind (because we're foolish enough to put html in python) <span class="text-xs"></span> #}
 <div class="flex">
     <div class="overflow-hidden">
-        <div class="italic">{{ event.server_side_timestamp|date:"j M G:i T" }} (Event {{ event.digest_order }} of {{ issue.digested_event_count }})</div>
+        <div class="italic">{{ event.ingested_at|date:"j M G:i T" }} (Event {{ event.digest_order }} of {{ issue.digested_event_count }})</div>
     </div>
 
     <div class="ml-auto flex-none">

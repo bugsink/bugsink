@@ -13,8 +13,6 @@ logger = logging.getLogger("bugsink.ingest")
 
 @shared_task
 def digest(event_id, event_metadata):
-    # we'll put this in a separate place "soon" -- this is no longer view-specific
-    # speaking of separate places: the task "digest" now lives in the "ingest" app :-D
     from .views import BaseIngestAPIView
 
     with open(get_filename_for_event_id(event_id), "rb") as f:

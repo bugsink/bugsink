@@ -30,16 +30,15 @@ from .event_counter import check_for_thresholds
 
 def _digest_params(event_data, project, request, now=None):
     if now is None:
-        # because we want to count events before having created event objects (quota may block the latter) we cannot
-        # depend on event.timestamp; instead, we look on the clock once here, and then use that everywhere
         now = datetime.datetime.now(timezone.utc)
 
     # adapter to quickly reuse existing tests on refactored code. let's see where the code ends up before spending
     # considerable time on rewriting the tests
     return {
-        "event_metadata": {"project_id": project.id, "timestamp": format_timestamp(now), "debug_info": ""},
+        "event_metadata": {"project_id": project.id, "ingested_at": format_timestamp(now), "debug_info": ""},
         "event_data": event_data,
         "project": project,
+        "digested_at": now,
     }
 
 

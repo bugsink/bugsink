@@ -361,7 +361,8 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None):
         ("bugsink_internal_id", event.id),
         ("issue_id", issue.id),
         ("timestamp", _date_with_milis_html(event.timestamp)),
-        ("server_side_timestamp", _date_with_milis_html(event.server_side_timestamp)),
+        ("ingested_at", _date_with_milis_html(event.ingested_at)),
+        ("digested_at", _date_with_milis_html(event.digested_at)),
     ]
     if parsed_data.get("logger"):
         key_info.append(("logger", parsed_data["logger"]))

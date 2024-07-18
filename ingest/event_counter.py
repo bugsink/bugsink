@@ -9,7 +9,7 @@ def _filter_for_periods(qs, period_name, nr_of_periods, now):
     if period_name == "total":
         return qs
 
-    return qs.filter(server_side_timestamp__gte=sub_periods_from_datetime(now, nr_of_periods, period_name))
+    return qs.filter(digested_at__gte=sub_periods_from_datetime(now, nr_of_periods, period_name))
 
 
 def check_for_thresholds(qs, now, thresholds, add_for_current=0):
@@ -57,7 +57,7 @@ def check_for_thresholds(qs, now, thresholds, add_for_current=0):
                 # back to accepting too soon. But this is self-correcting, so no need to deal with it.
                 below_threshold_from = add_periods_to_datetime(
                     _filter_for_periods(qs, period_name, nr_of_periods, now).aggregate(
-                        agg=Min('server_side_timestamp'))['agg'] or now,  # `or now` to handle funny `gte_threshold==0`
+                        agg=Min('digested_at'))['agg'] or now,  # `or now` to handle funny `gte_threshold==0`
                     nr_of_periods, period_name)
 
         else:

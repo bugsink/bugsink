@@ -36,12 +36,12 @@ def get_epoch_bounds(lower, upper=None):
         return Q()
 
     if lower is None:
-        return Q(server_side_timestamp__lt=datetime_for_epoch(upper))
+        return Q(digested_at__lt=datetime_for_epoch(upper))
 
     if upper is None:
-        return Q(server_side_timestamp__gte=datetime_for_epoch(lower))
+        return Q(digested_at__gte=datetime_for_epoch(lower))
 
-    return Q(server_side_timestamp__gte=datetime_for_epoch(lower), server_side_timestamp__lt=datetime_for_epoch(upper))
+    return Q(digested_at__gte=datetime_for_epoch(lower), digested_at__lt=datetime_for_epoch(upper))
 
 
 def nonzero_leading_bits(n):
@@ -124,7 +124,7 @@ def get_age_for_irrelevance(age_based_irrelevance):
 def get_epoch_bounds_with_irrelevance(project, current_timestamp, qs_kwargs={"never_evict": False}):
     from .models import Event
 
-    oldest = Event.objects.filter(project=project, **qs_kwargs).aggregate(val=Min('server_side_timestamp'))['val']
+    oldest = Event.objects.filter(project=project, **qs_kwargs).aggregate(val=Min('digested_at'))['val']
     first_epoch = get_epoch(oldest) if oldest is not None else get_epoch(current_timestamp)
 
     current_epoch = get_epoch(current_timestamp)
@@ -313,7 +313,7 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_eve
     qs = Event.objects.filter(project=project, irrelevance_for_retention__gt=max_irrelevance, **qs_kwargs)
 
     if max_epoch is not None:
-        qs = qs.filter(server_side_timestamp__lt=datetime_for_epoch(max_epoch))
+        qs = qs.filter(digested_at__lt=datetime_for_epoch(max_epoch))
 
     if include_never_evict:
         # we need to manually ensure that no FKs to the deleted items exist:

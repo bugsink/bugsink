@@ -88,12 +88,8 @@ class BaseIngestAPIView(View):
         return cls.get_project(project_pk, sentry_key)
 
     @classmethod
-    def process_event(cls, event_id, event_data_stream, project, request):
-        # because we want to count events before having created event objects (quota may block the latter) we cannot
-        # depend on event.timestamp; instead, we look on the clock once here, and then use that everywhere.
-        now = datetime.now(timezone.utc)
-
-        event_metadata = cls.get_event_meta(now, request, project)
+    def process_event(cls, ingested_at, event_id, event_data_stream, project, request):
+        event_metadata = cls.get_event_meta(ingested_at, request, project)
 
         if get_settings().DIGEST_IMMEDIATELY:
             # in this case the stream will be an BytesIO object, so we can actually call .get_value() on it.
@@ -110,25 +106,41 @@ class BaseIngestAPIView(View):
             digest.delay(event_id, event_metadata)
 
     @classmethod
-    def get_event_meta(cls, now, request, project):
+    def get_event_meta(cls, ingested_at, request, project):
+        # Meta means: not part of the event data. Basically: information that is available at the time of ingestion, and
+        # that must be passed to digest() in a serializable form.
         debug_info = request.META.get("HTTP_X_BUGSINK_DEBUGINFO", "")
         return {
             "project_id": project.id,
-            "timestamp": format_timestamp(now),
+            "ingested_at": format_timestamp(ingested_at),
             "debug_info": debug_info,
         }
 
     @classmethod
     @immediate_atomic()
-    def digest_event(cls, event_metadata, event_data, project=None):
+    def digest_event(cls, event_metadata, event_data, project=None, digested_at=None):
+        # ingested_at is passed from the point-of-ingestion; digested_at is determined here. Because this happens inside
+        # `immediate_atomic`, we know digestions are serialized, and assuming non-decreasing server clocks, not decrea-
+        # sing. (no so for ingestion times: clock-watching happens outside the snappe transaction, and threading in the
+        # foreman is another source of shuffling).
+        #
+        # Because of this property we use digested_at for eviction and quota, and, because quota is a VBC-based and so
+        # is unmuting, in all ummuting-related checks. This saves us from having to precisely reason about edge-cases
+        # for non-increasing time, and the drawbacks are minimal, because the differences in time between ingest and
+        # digest are assumed to be relatively small, and as a user you don't really care (to the second) which
+        # timestamps trigger the quota/eviction.
+        #
+        # For other user-facing elements in the UI we prefer ingested_at though, because that's closer to the time
+        # something actually happened, and that's usually what you care for while debugging.
+        ingested_at = parse_timestamp(event_metadata["ingested_at"])
+        digested_at = datetime.now(timezone.utc) if digested_at is None else digested_at  # explicit passing: test only
+
         if project is None:
             # having project as an optional argument allows us to pass this in when we have the information available
             # (in the DIGEST_IMMEDIATELY case) which saves us a query.
             project = Project.objects.get(pk=event_metadata["project_id"])
 
-        timestamp = parse_timestamp(event_metadata["timestamp"])
-
-        if not cls.count_project_periods_and_act_on_it(project, timestamp):
+        if not cls.count_project_periods_and_act_on_it(project, digested_at):
             return  # if over-quota: just return (any cleanup is done calling-side)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
@@ -151,8 +163,8 @@ class BaseIngestAPIView(View):
             issue = Issue.objects.create(
                 digest_order=issue_digest_order,
                 project_id=event_metadata["project_id"],
-                first_seen=timestamp,
-                last_seen=timestamp,
+                first_seen=ingested_at,
+                last_seen=ingested_at,
                 digested_event_count=1,
                 **denormalized_fields,
             )
@@ -173,7 +185,7 @@ class BaseIngestAPIView(View):
             issue_created = False
 
             # update the denormalized fields
-            issue.last_seen = timestamp
+            issue.last_seen = ingested_at
             issue.digested_event_count += 1
 
         # NOTE: possibly expensive. "in theory" we can just do some bookkeeping for a denormalized value, but that may
@@ -182,19 +194,20 @@ class BaseIngestAPIView(View):
         project_stored_event_count = (project.event_set.count() or 0) + 1
         issue_stored_event_count = (issue.event_set.count() or 0) + 1
 
-        if should_evict(project, timestamp, project_stored_event_count):
+        if should_evict(project, digested_at, project_stored_event_count):
             # Note: I considered pushing this into some async process, but it makes reasoning much harder, and it's
             # doubtful whether it would help, because in the end there's just a single pipeline of ingested-related
             # stuff todo, might as well do the work straight away. Similar thoughts about pushing this into something
             # cron-like. (not exactly the same, because for cron-like time savings are possible if the cron-likeness
             # causes the work to be outside of the 'rush hour' -- OTOH this also introduces a lot of complexity about
             # "what is a limit anyway, if you can go either over it, or work is done before the limit is reached")
-            evict_for_max_events(project, timestamp, project_stored_event_count)
+            evict_for_max_events(project, digested_at, project_stored_event_count)
 
         # NOTE: an event always has a single (automatically calculated) Grouping associated with it. Since we have that
         # information available here, we could add it to the Event model.
         event, event_created = Event.from_ingested(
             event_metadata,
+            ingested_at,
             issue.digested_event_count,
             issue_stored_event_count,
             issue,
@@ -221,7 +234,7 @@ class BaseIngestAPIView(View):
 
         if issue_created:
             TurningPoint.objects.create(
-                issue=issue, triggering_event=event, timestamp=timestamp,
+                issue=issue, triggering_event=event, timestamp=ingested_at,
                 kind=TurningPointKind.FIRST_SEEN)
             event.never_evict = True
 
@@ -232,7 +245,7 @@ class BaseIngestAPIView(View):
             # new issues cannot be regressions by definition, hence this is in the 'else' branch
             if issue_is_regression(issue, event.release):
                 TurningPoint.objects.create(
-                    issue=issue, triggering_event=event, timestamp=timestamp,
+                    issue=issue, triggering_event=event, timestamp=ingested_at,
                     kind=TurningPointKind.REGRESSED)
                 event.never_evict = True
 
@@ -246,7 +259,7 @@ class BaseIngestAPIView(View):
             # 'muted' issue is thus not treated as something to more deeply ignore than an unresolved issue (and in
             # fact, conversely, it may be more loud when the for/until condition runs out). This is in fact analogous to
             # "resolved" issues which are _also_ treated with more "suspicion" than their unresolved counterparts.
-            if issue.is_muted and issue.unmute_after is not None and timestamp > issue.unmute_after:
+            if issue.is_muted and issue.unmute_after is not None and digested_at > issue.unmute_after:
                 # note that unmuting on-ingest implies that issues that no longer occur stay muted. I'd say this is what
                 # you want: things that no longer happen should _not_ draw your attention, and if you've nicely moved
                 # some issue away from the "Open" tab it should not reappear there if a certain amount of time passes.
@@ -268,7 +281,7 @@ class BaseIngestAPIView(View):
         if release.version + "\n" not in issue.events_at:
             issue.events_at += release.version + "\n"
 
-        cls.count_issue_periods_and_act_on_it(issue, event, timestamp)
+        cls.count_issue_periods_and_act_on_it(issue, event, digested_at)
 
         issue.save()
 
@@ -357,9 +370,9 @@ class BaseIngestAPIView(View):
 class IngestEventAPIView(BaseIngestAPIView):
 
     def _post(self, request, project_pk=None):
-        now = datetime.now(timezone.utc)
+        ingested_at = datetime.now(timezone.utc)
         project = self.get_project_for_request(project_pk, request)
-        if project.quota_exceeded_until is not None and now < project.quota_exceeded_until:
+        if project.quota_exceeded_until is not None and ingested_at < project.quota_exceeded_until:
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         # This endpoint is deprecated. Personally, I think it's the simpler (and given my goals therefore better) of the
@@ -368,9 +381,7 @@ class IngestEventAPIView(BaseIngestAPIView):
         # internal methods quite changed a bit recently, and this one did not keep up. In particular: in our current set
         # of interfaces we need an event_id before parsing (or after parsing but then we have double work). Easiest
         # solution: just copy/paste from process_event(), and take only one branch.
-        now = datetime.now(timezone.utc)
-
-        event_metadata = self.get_event_meta(now, request, project)
+        event_metadata = self.get_event_meta(ingested_at, request, project)
 
         # if get_settings().DIGEST_IMMEDIATELY:  this is the only branch we implemented here.
         event_data = json.loads(
@@ -385,7 +396,7 @@ class IngestEventAPIView(BaseIngestAPIView):
 class IngestEnvelopeAPIView(BaseIngestAPIView):
 
     def _post(self, request, project_pk=None):
-        now = datetime.now(timezone.utc)
+        ingested_at = datetime.now(timezone.utc)
 
         # Note: wrapping the COMPRESSES_SIZE checks arount request makes it so that when clients do not compress their
         # requests, they are still subject to the (smaller) maximums that apply pre-uncompress. This is exactly what we
@@ -400,7 +411,8 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         else:
             project = self.get_project_for_request(project_pk, request)
 
-        if project.quota_exceeded_until is not None and now < project.quota_exceeded_until:
+        # TODO note not a problem
+        if project.quota_exceeded_until is not None and ingested_at < project.quota_exceeded_until:
             # Sentry has x-sentry-rate-limits, but for now 429 is just fine. Client-side this is implemented as a 60s
             # backoff.
             #
@@ -448,7 +460,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
                     continue
 
-                self.process_event(envelope_headers["event_id"], event_output_stream, project, request)
+                self.process_event(ingested_at, envelope_headers["event_id"], event_output_stream, project, request)
                 break  # From the spec of type=event: This Item may occur at most once per Envelope. once seen: done
 
             finally:
