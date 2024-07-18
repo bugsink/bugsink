@@ -1,5 +1,9 @@
 ## Some thoughts on performance
 
+### 18 July surprise
+
+In the last few days I've been observing 85/s requests ingestion. What has changed? No idea...
+
 ### Thoughts after -wal cleanup (better connection closing)
 
 There seems to be a small drop in ingestion performance, to approx. 30/s events. Given that this was (in "Original
