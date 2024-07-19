@@ -9,6 +9,7 @@ from django.utils.safestring import mark_safe
 from django.template.defaultfilters import date
 from django.urls import reverse
 from django.core.exceptions import PermissionDenied
+from django.http import Http404
 
 from bugsink.decorators import project_membership_required, issue_membership_required, atomic_for_request_method
 from bugsink.transaction import durable_atomic
@@ -235,14 +236,6 @@ def event_by_internal_id(request, event_pk):
     return redirect(issue_event_stacktrace, issue_pk=issue.pk, event_pk=event.pk)
 
 
-@atomic_for_request_method
-@issue_membership_required
-def issue_last_event(request, issue):
-    last_event = issue.event_set.order_by("timestamp").last()
-
-    return redirect(issue_event_stacktrace, issue_pk=issue.pk, event_pk=last_event.pk)
-
-
 def _handle_post(request, issue):
     if _is_valid_action(request.POST["action"], issue):
         _apply_action(IssueStateManager, issue, request.POST["action"], request.user)
@@ -257,27 +250,49 @@ def _handle_post(request, issue):
     return HttpResponseRedirect(request.path_info)
 
 
-def _get_event(issue, event_pk, digest_order):
+def _get_event(issue, event_pk, digest_order, nav):
+    if nav is not None:
+        if nav == "first":
+            return Event.objects.filter(issue=issue).order_by("digest_order").first()
+        if nav == "last":
+            return Event.objects.filter(issue=issue).order_by("digest_order").last()
+
+        if nav in ["prev", "next"]:
+            if nav == "prev":
+                result = Event.objects.filter(
+                    issue=issue, digest_order__lt=digest_order).order_by("-digest_order").first()
+            elif nav == "next":
+                result = Event.objects.filter(
+                    issue=issue, digest_order__gt=digest_order).order_by("digest_order").first()
+            if result is None:
+                raise Event.DoesNotExist
+            return result
+
+        raise Http404("Cannot look up with '%s'" % nav)
+
     if event_pk is not None:
         # we match on both internal and external id, trying internal first
         try:
             return Event.objects.get(pk=event_pk)
         except Event.DoesNotExist:
-            return get_object_or_404(Event, issue=issue, event_id=event_pk)
+            return Event.objects.get(issue=issue, event_id=event_pk)
 
     elif digest_order is not None:
-        return get_object_or_404(Event, issue=issue, digest_order=digest_order)
+        return Event.objects.get(issue=issue, digest_order=digest_order)
     else:
         raise ValueError("either event_pk or digest_order must be provided")
 
 
 @atomic_for_request_method
 @issue_membership_required
-def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None):
+def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav=None):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event = _get_event(issue, event_pk, digest_order)
+    try:
+        event = _get_event(issue, event_pk, digest_order, nav)
+    except Event.DoesNotExist:
+        return issue_event_404(request, issue, "stacktrace", "event_stacktrace")
 
     parsed_data = json.loads(event.data)
 
@@ -318,13 +333,31 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None):
     })
 
 
+def issue_event_404(request, issue, tab, this_view):
+    """If the Event is 404, but the issue is not, we can still show the issue page; we show a message for the event"""
+
+    last_event = issue.event_set.order_by("timestamp").last()  # the template needs this for the tabs, we pick the last
+    return render(request, "issues/event_404.html", {
+        "tab": tab,
+        "this_view": this_view,
+        "project": issue.project,
+        "issue": issue,
+        "event": last_event,
+        "is_event_page": False,  # this variable is used to denote "we have event-related info", which we don't
+        "mute_options": GLOBAL_MUTE_OPTIONS,
+    })
+
+
 @atomic_for_request_method
 @issue_membership_required
-def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None):
+def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, nav=None):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event = _get_event(issue, event_pk, digest_order)
+    try:
+        event = _get_event(issue, event_pk, digest_order, nav)
+    except Event.DoesNotExist:
+        return issue_event_404(request, issue, "breadcrumbs", "event_breadcrumbs")
 
     parsed_data = json.loads(event.data)
 
@@ -348,11 +381,14 @@ def _date_with_milis_html(timestamp):
 
 @atomic_for_request_method
 @issue_membership_required
-def issue_event_details(request, issue, event_pk=None, digest_order=None):
+def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=None):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event = _get_event(issue, event_pk, digest_order)
+    try:
+        event = _get_event(issue, event_pk, digest_order, nav)
+    except Event.DoesNotExist:
+        return issue_event_404(request, issue, "event-details", "event_details")
     parsed_data = json.loads(event.data)
 
     key_info = [
@@ -361,8 +397,9 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None):
         ("bugsink_internal_id", event.id),
         ("issue_id", issue.id),
         ("timestamp", _date_with_milis_html(event.timestamp)),
-        ("ingested_at", _date_with_milis_html(event.ingested_at)),
-        ("digested_at", _date_with_milis_html(event.digested_at)),
+        ("ingested at", _date_with_milis_html(event.ingested_at)),
+        ("digested at", _date_with_milis_html(event.digested_at)),
+        ("digest order", event.digest_order),
     ]
     if parsed_data.get("logger"):
         key_info.append(("logger", parsed_data["logger"]))

@@ -1,0 +1,47 @@
+{% extends "issues/base.html" %}
+{% load static %}
+{% load stricter_templates %}
+
+{% block tab_content %}
+
+{# this is here to fool tailwind (because we're foolish enough to put html in python) <span class="text-xs"></span> #}
+<div class="flex">
+
+    <div class="overflow-hidden">
+        <div class="italic">xxxx xx xx xx:xx (Event xxx of {{ issue.digested_event_count }})</div>
+    </div>
+
+    <div class="ml-auto flex-none">
+        <div class="flex place-content-end">
+            {# copy/paste of _event_nav, but not based on any event (we have none), prev/next are meaningless also #}
+            {# so we have first/last enabled, and the middle ones disabled #}
+
+                <a href="{% url this_view issue_pk=issue.pk nav="first" %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M3.22 7.595a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 0 0 1.06-1.06l-2.72-2.72 2.72-2.72a.75.75 0 0 0-1.06-1.06l-3.25 3.25Zm8.25-3.25-3.25 3.25a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 1 0 1.06-1.06l-2.72-2.72 2.72-2.72a.75.75 0 0 0-1.06-1.06Z" clip-rule="evenodd" />
+</svg>
+                </a>
+
+                <div class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md inline-flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M9.78 4.22a.75.75 0 0 1 0 1.06L7.06 8l2.72 2.72a.75.75 0 1 1-1.06 1.06L5.47 8.53a.75.75 0 0 1 0-1.06l3.25-3.25a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" /></svg>
+                </div>
+
+                <div class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md inline-flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M6.22 4.22a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06L8.94 8 6.22 5.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>
+                </div>
+
+                <a href="{% url this_view issue_pk=issue.pk nav="last" %}"" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M12.78 7.595a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06l2.72-2.72-2.72-2.72a.75.75 0 0 1 1.06-1.06l3.25 3.25Zm-8.25-3.25 3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06l2.72-2.72-2.72-2.72a.75.75 0 0 1 1.06-1.06Z" clip-rule="evenodd" /></svg>
+                </a>
+
+        </div>
+    </div>
+</div>
+
+
+<h1 class="text-2xl font-bold mt-4">404: Event missing from Bugsink</h1>
+
+<div class="mb-6">
+    This event cannot be found. It could have been removed manually or as part of the eviction process.
+</div>
+
+{% endblock %}

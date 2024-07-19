@@ -407,11 +407,6 @@ class ViewTests(TransactionTestCase):
         response = self.client.get(f"/issues/issue/{self.issue.id}/history/")
         self.assertContains(response, self.issue.title())
 
-    def test_issue_last_event(self):
-        response = self.client.get(f"/issues/issue/{self.issue.id}/event/last/")
-        self.assertEquals(302, response.status_code)
-        self.assertTrue(str(self.event.id) in response.url)
-
     def test_issue_event_list(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/events/")
         self.assertContains(response, self.issue.title())

@@ -4,6 +4,7 @@ import uuid
 
 from django.db import models
 from django.db.utils import IntegrityError
+from django.db.models import Min, Max
 
 from projects.models import Project
 from compat.timestamp import parse_timestamp
@@ -230,3 +231,15 @@ class Event(models.Model):
             assert re.match(
                 r".*unique constraint failed.*events_event.*project_id.*events_event.*event_id", str(e).lower())
             return None, False
+
+    def get_digest_order_bounds(self):
+        if not hasattr(self, "_digest_order_bounds"):
+            d = Event.objects.filter(issue_id=self.issue.id).aggregate(lo=Min("digest_order"), hi=Max("digest_order"))
+            self._digest_order_bounds = d["lo"], d["hi"]
+        return self._digest_order_bounds
+
+    def has_prev(self):
+        return self.digest_order > self.get_digest_order_bounds()[0]
+
+    def has_next(self):
+        return self.digest_order < self.get_digest_order_bounds()[1]
