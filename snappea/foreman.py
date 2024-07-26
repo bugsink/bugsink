@@ -75,6 +75,9 @@ class Foreman:
         self.workers = Workers()
         self.stopping = False
 
+        # We deal with both of these in the same way: gracefully terminate. SIGINT is sent (at least) when running this
+        # in a terminal and pressing Ctrl-C. IIRC SIGTERM is sent by the systemd when it wants to stop a service, e.g.
+        # on `sytstemctl stop snappea`, `systemctl restart snappea`, and when the RunTimeMaxSec is reached.
         signal.signal(signal.SIGINT, self.handle_signal)
         signal.signal(signal.SIGTERM, self.handle_signal)
 
@@ -198,7 +201,9 @@ class Foreman:
         # We set a flag and release a semaphore. The advantage is that we don't have to think about e.g. handle_signal()
         # being called while we're handling a previous call to it. The (slight) disadvantage is that we need to sprinkle
         # calls to check_for_stopping() in more locations (at least after every semaphore is acquired)
-        logger.debug("Received %s signal", signal.strsignal(sig))  # NOTE: calling logger in handle_xxx is a bad idea
+
+        # NOTE: calling logger in handle_xxx is a bad idea; but the impact is limited here by `debug` level.
+        logger.debug("Received %s signal", signal.strsignal(sig))
 
         if not self.stopping:  # without this if-statement, repeated signals would extend the deadline
             self.stopping = True
