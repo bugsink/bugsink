@@ -38,7 +38,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "")
 DEBUG = False
 
 # Replacing "*" with your actual hostname forms an extra layer of security if your proxy/webserver is misconfigured.
-# The default (production) create-conf template adds a line for ALLOWED_HOSTS to point this out.
+# The default (production) create-conf template does this for you.
 ALLOWED_HOSTS = ["*"]
 
 INSTALLED_APPS = [
