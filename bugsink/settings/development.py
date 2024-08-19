@@ -73,6 +73,29 @@ if SENTRY_DSN is not None:
         # messages that are too big. If so, we might monkey-patch sentry_sdk/serializer.py 's 2 variables named
         # MAX_DATABAG_DEPTH and MAX_DATABAG_BREADTH (esp. the latter)
         max_request_body_size="always",
+
+        # In actual development, the list below is not needed, because in that case Sentry's SDK is able to distinguish
+        # based on the os.cwd() v.s. site-packages. For cases where the Production installation instructions are
+        # followed, that doesn't fly though, because we "just install everything" (using pip install), and we need to be
+        # explicit. The notation below (no trailing dot or slash) is the correct one (despite not being documented) as
+        # evidenced by the line `if item == name or name.startswith(item + "."):` in the sentry_sdk source:
+        in_app_include=[
+            "alerts",
+            "bugsink",
+            "compat",
+            "events",
+            "ingest",
+            "issues",
+            "performance",
+            "projects",
+            "releases",
+            "sentry",
+            "sentry_sdk_extensions",
+            "snappea",
+            "teams",
+            "theme",
+            "users",
+        ],
     )
 
 SNAPPEA = {
