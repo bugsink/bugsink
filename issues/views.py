@@ -85,7 +85,7 @@ def _q_for_invalid_for_action(action):
 
 def _make_history(issue_or_qs, action, user):
     if action == "resolve":
-        kind = TurningPointKind.FIRST_SEEN
+        kind = TurningPointKind.RESOLVED
     elif action.startswith("resolved"):
         kind = TurningPointKind.RESOLVED
     elif action.startswith("mute"):
