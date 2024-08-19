@@ -67,6 +67,12 @@ if SENTRY_DSN is not None:
         traces_sample_rate=0,
         send_default_pii=True,
         transport=MoreLoudlyFailingTransport,
+
+        # see (e.g.) https://github.com/getsentry/sentry-python/issues/377 for why this is necessary; I really really
+        # dislike Sentry's silent dropping of local variables; let's see whether "just send everything" makes for
+        # messages that are too big. If so, we might monkey-patch sentry_sdk/serializer.py 's 2 variables named
+        # MAX_DATABAG_DEPTH and MAX_DATABAG_BREADTH (esp. the latter)
+        max_request_body_size="always",
     )
 
 SNAPPEA = {
