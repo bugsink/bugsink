@@ -29,4 +29,4 @@ jobs:
         # but not worth breaking the build).
         # https://github.com/PyCQA/flake8/issues/515 shows a dead end of doing this "properly"
         # so we just specify it on the command line
-        flake8 --extend-ignore=E127,E741,E501 `git ls-files | grep py$
+        flake8 --extend-ignore=E127,E741,E501 `git ls-files | grep py$`
