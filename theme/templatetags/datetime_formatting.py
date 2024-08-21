@@ -32,6 +32,6 @@ def short_given_now(value):
     # because I want to compare 2 local times here (e.g. to know what the date boundary is)
 
     # useful bits:
-    now = timezone.now()
+    now = timezone.now()  # noqa
     default_timezone = timezone.get_current_timezone()
     timezone.localtime(value, default_timezone)

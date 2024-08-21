@@ -34,9 +34,9 @@ class Command(BaseCommand):
         raise ValueError(msg)
 
     def raise_exception_from(self, msg, e):
-        s = "foo"
-        l = ["bar", 1, None, ["bar", 1, None]]
-        d = {
+        s = "foo"  # noqa unused variable, but we want to test that it shows up in the local variables in Bugsink
+        l = ["bar", 1, None, ["bar", 1, None]] # noqa
+        d = {  # noqa
             "foo": "bar",
             "baz": 1,
             "snu": None,
