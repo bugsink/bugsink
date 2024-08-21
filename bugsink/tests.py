@@ -19,10 +19,10 @@ class VolumeBasedConditionTestCase(RegularTestCase):
 
     def test_serialization(self):
         vbc = VolumeBasedCondition("day", 1, 100)
-        self.assertEquals({"period": "day", "nr_of_periods": 1, "volume": 100}, vbc.to_dict())
+        self.assertEqual({"period": "day", "nr_of_periods": 1, "volume": 100}, vbc.to_dict())
 
         vbc2 = VolumeBasedCondition.from_dict(vbc.to_dict())
-        self.assertEquals(vbc, vbc2)
+        self.assertEqual(vbc, vbc2)
 
 
 class StreamsTestCase(RegularTestCase):
@@ -42,7 +42,7 @@ class StreamsTestCase(RegularTestCase):
             if chunk == b"":
                 break
 
-        self.assertEquals(myself_times_ten, result)
+        self.assertEqual(myself_times_ten, result)
 
     def test_compress_decompress_deflate(self):
         myself_times_ten = open(__file__, 'rb').read() * 10
@@ -59,7 +59,7 @@ class StreamsTestCase(RegularTestCase):
             if chunk == b"":
                 break
 
-        self.assertEquals(myself_times_ten, result)
+        self.assertEqual(myself_times_ten, result)
 
     def test_compress_decompress_brotli(self):
         myself_times_ten = open(__file__, 'rb').read() * 10
@@ -75,7 +75,7 @@ class StreamsTestCase(RegularTestCase):
             if chunk == b"":
                 break
 
-        self.assertEquals(myself_times_ten, result)
+        self.assertEqual(myself_times_ten, result)
 
     def test_compress_decompress_read_none(self):
         myself_times_ten = open(__file__, 'rb').read() * 10
@@ -87,25 +87,25 @@ class StreamsTestCase(RegularTestCase):
         reader = GeneratorReader(zlib_generator(compressed_stream, WBITS_PARAM_FOR_DEFLATE))
 
         result = reader.read(None)
-        self.assertEquals(myself_times_ten, result)
+        self.assertEqual(myself_times_ten, result)
 
     def test_max_data_reader(self):
         stream = io.BytesIO(b"hello" * 100)
         reader = MaxDataReader(250, stream)
 
         for i in range(25):
-            self.assertEquals(b"hellohello", reader.read(10))
+            self.assertEqual(b"hellohello", reader.read(10))
 
         with self.assertRaises(ValueError) as e:
             reader.read(10)
 
-        self.assertEquals("Max length (250) exceeded", str(e.exception))
+        self.assertEqual("Max length (250) exceeded", str(e.exception))
 
     def test_max_data_reader_none_ok(self):
         stream = io.BytesIO(b"hello" * 10)
         reader = MaxDataReader(250, stream)
 
-        self.assertEquals(b"hello" * 10, reader.read(None))
+        self.assertEqual(b"hello" * 10, reader.read(None))
 
     def test_max_data_reader_none_fail(self):
         stream = io.BytesIO(b"hello" * 100)
@@ -114,7 +114,7 @@ class StreamsTestCase(RegularTestCase):
         with self.assertRaises(ValueError) as e:
             reader.read(None)
 
-        self.assertEquals("Max length (250) exceeded", str(e.exception))
+        self.assertEqual("Max length (250) exceeded", str(e.exception))
 
     def test_max_data_writer(self):
         stream = io.BytesIO()

@@ -115,24 +115,24 @@ class RegressionUtilTestCase(RegularTestCase):
         events_at = ["a", "e"]
         fixed_at = ["c", "f"]
 
-        self.assertEquals(False, is_regression(self.releases, fixed_at, events_at, current_event_at="a"))
-        self.assertEquals(False, is_regression(self.releases, fixed_at, events_at, current_event_at="b"))
-        self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="c"))
-        self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="d"))
-        self.assertEquals(False, is_regression(self.releases, fixed_at, events_at, current_event_at="e"))
-        self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="f"))
-        self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="g"))
-        self.assertEquals(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="h"))
+        self.assertEqual(False, is_regression(self.releases, fixed_at, events_at, current_event_at="a"))
+        self.assertEqual(False, is_regression(self.releases, fixed_at, events_at, current_event_at="b"))
+        self.assertEqual(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="c"))
+        self.assertEqual(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="d"))
+        self.assertEqual(False, is_regression(self.releases, fixed_at, events_at, current_event_at="e"))
+        self.assertEqual(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="f"))
+        self.assertEqual(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="g"))
+        self.assertEqual(True,  is_regression(self.releases, fixed_at, events_at, current_event_at="h"))
 
-        self.assertEquals((False, True), is_regression_2(self.releases, fixed_at, events_at, current_event_at="a"))
-        self.assertEquals((False, True), is_regression_2(self.releases, fixed_at, events_at, current_event_at="b"))
+        self.assertEqual((False, True), is_regression_2(self.releases, fixed_at, events_at, current_event_at="a"))
+        self.assertEqual((False, True), is_regression_2(self.releases, fixed_at, events_at, current_event_at="b"))
         # the interesting bit from this block: a regression, but fixed already (for a later version)
-        self.assertEquals((True,  True), is_regression_2(self.releases, fixed_at, events_at, current_event_at="c"))
-        self.assertEquals((True,  True), is_regression_2(self.releases, fixed_at, events_at, current_event_at="d"))
-        self.assertEquals((False, True), is_regression_2(self.releases, fixed_at, events_at, current_event_at="e"))
-        self.assertEquals((True,  False), is_regression_2(self.releases, fixed_at, events_at, current_event_at="f"))
-        self.assertEquals((True,  False), is_regression_2(self.releases, fixed_at, events_at, current_event_at="g"))
-        self.assertEquals((True,  False), is_regression_2(self.releases, fixed_at, events_at, current_event_at="h"))
+        self.assertEqual((True,  True), is_regression_2(self.releases, fixed_at, events_at, current_event_at="c"))
+        self.assertEqual((True,  True), is_regression_2(self.releases, fixed_at, events_at, current_event_at="d"))
+        self.assertEqual((False, True), is_regression_2(self.releases, fixed_at, events_at, current_event_at="e"))
+        self.assertEqual((True,  False), is_regression_2(self.releases, fixed_at, events_at, current_event_at="f"))
+        self.assertEqual((True,  False), is_regression_2(self.releases, fixed_at, events_at, current_event_at="g"))
+        self.assertEqual((True,  False), is_regression_2(self.releases, fixed_at, events_at, current_event_at="h"))
 
     def test_documented_thoughts_about_minor_and_patch_releases(self):
         # this test-case documents the limitation of our approach in the following combination of circumstances:
@@ -334,7 +334,7 @@ class MuteUnmuteTestCase(TransactionTestCase):
         issue.save()
 
         self.assertFalse(Issue.objects.get(id=issue.id).is_muted)
-        self.assertEquals(0, send_unmute_alert.delay.call_count)
+        self.assertEqual(0, send_unmute_alert.delay.call_count)
 
     @patch("issues.models.send_unmute_alert")
     def test_unmute_simple_case(self, send_unmute_alert):
@@ -352,9 +352,9 @@ class MuteUnmuteTestCase(TransactionTestCase):
         issue.save()
 
         self.assertFalse(Issue.objects.get(id=issue.id).is_muted)
-        self.assertEquals("[]", Issue.objects.get(id=issue.id).unmute_on_volume_based_conditions)
+        self.assertEqual("[]", Issue.objects.get(id=issue.id).unmute_on_volume_based_conditions)
 
-        self.assertEquals(1, send_unmute_alert.delay.call_count)
+        self.assertEqual(1, send_unmute_alert.delay.call_count)
 
     @patch("issues.models.send_unmute_alert")
     def test_unmute_two_simultaneously_should_lead_to_one_alert(self, send_unmute_alert):
@@ -375,9 +375,9 @@ class MuteUnmuteTestCase(TransactionTestCase):
         issue.save()
 
         self.assertFalse(Issue.objects.get(id=issue.id).is_muted)
-        self.assertEquals("[]", Issue.objects.get(id=issue.id).unmute_on_volume_based_conditions)
+        self.assertEqual("[]", Issue.objects.get(id=issue.id).unmute_on_volume_based_conditions)
 
-        self.assertEquals(1, send_unmute_alert.delay.call_count)
+        self.assertEqual(1, send_unmute_alert.delay.call_count)
 
 
 class ViewTests(TransactionTestCase):
@@ -451,7 +451,7 @@ class IntegrationTest(TransactionTestCase):
                     "X-BugSink-DebugInfo": filename,
                 },
             )
-            self.assertEquals(
+            self.assertEqual(
                 200, response.status_code, response.content if response.status_code != 302 else response.url)
 
         for event in Event.objects.all():
@@ -468,7 +468,7 @@ class IntegrationTest(TransactionTestCase):
                 try:
                     # we just check for a 200; this at least makes sure we have no failing template rendering
                     response = self.client.get(url)
-                    self.assertEquals(
+                    self.assertEqual(
                         200, response.status_code, response.content if response.status_code != 302 else response.url)
                 except Exception as e:
                     # we want to know _which_ event failed, hence the raise-from-e here
@@ -478,21 +478,21 @@ class IntegrationTest(TransactionTestCase):
 class GroupingUtilsTestCase(DjangoTestCase):
 
     def test_empty_data(self):
-        self.assertEquals("Log Message: <no log message> ⋄ <no transaction>", get_issue_grouper_for_data({}))
+        self.assertEqual("Log Message: <no log message> ⋄ <no transaction>", get_issue_grouper_for_data({}))
 
     def test_logentry_message_takes_precedence(self):
-        self.assertEquals("Log Message: msg: ? ⋄ <no transaction>", get_issue_grouper_for_data({"logentry": {
+        self.assertEqual("Log Message: msg: ? ⋄ <no transaction>", get_issue_grouper_for_data({"logentry": {
             "message": "msg: ?",
             "formatted": "msg: foobar",
         }}))
 
     def test_logentry_with_formatted_only(self):
-        self.assertEquals("Log Message: msg: foobar ⋄ <no transaction>", get_issue_grouper_for_data({"logentry": {
+        self.assertEqual("Log Message: msg: foobar ⋄ <no transaction>", get_issue_grouper_for_data({"logentry": {
             "formatted": "msg: foobar",
         }}))
 
     def test_logentry_with_transaction(self):
-        self.assertEquals("Log Message: msg ⋄ transaction", get_issue_grouper_for_data({
+        self.assertEqual("Log Message: msg ⋄ transaction", get_issue_grouper_for_data({
             "logentry": {
                 "message": "msg",
             },
@@ -500,37 +500,37 @@ class GroupingUtilsTestCase(DjangoTestCase):
         }))
 
     def test_exception_empty_trace(self):
-        self.assertEquals("<unknown> ⋄ <no transaction>", get_issue_grouper_for_data({"exception": {
+        self.assertEqual("<unknown> ⋄ <no transaction>", get_issue_grouper_for_data({"exception": {
             "values": [],
         }}))
 
     def test_exception_trace_no_data(self):
-        self.assertEquals("<unknown> ⋄ <no transaction>", get_issue_grouper_for_data({"exception": {
+        self.assertEqual("<unknown> ⋄ <no transaction>", get_issue_grouper_for_data({"exception": {
             "values": [{}],
         }}))
 
     def test_exception_value_only(self):
-        self.assertEquals("Error: exception message ⋄ <no transaction>", get_issue_grouper_for_data({"exception": {
+        self.assertEqual("Error: exception message ⋄ <no transaction>", get_issue_grouper_for_data({"exception": {
             "values": [{"value": "exception message"}],
         }}))
 
     def test_exception_type_only(self):
-        self.assertEquals("KeyError ⋄ <no transaction>", get_issue_grouper_for_data({"exception": {
+        self.assertEqual("KeyError ⋄ <no transaction>", get_issue_grouper_for_data({"exception": {
             "values": [{"type": "KeyError"}],
         }}))
 
     def test_exception_type_value(self):
-        self.assertEquals("KeyError: exception message ⋄ <no transaction>", get_issue_grouper_for_data({"exception": {
+        self.assertEqual("KeyError: exception message ⋄ <no transaction>", get_issue_grouper_for_data({"exception": {
             "values": [{"type": "KeyError", "value": "exception message"}],
         }}))
 
     def test_exception_multiple_frames(self):
-        self.assertEquals("KeyError: exception message ⋄ <no transaction>", get_issue_grouper_for_data({"exception": {
+        self.assertEqual("KeyError: exception message ⋄ <no transaction>", get_issue_grouper_for_data({"exception": {
             "values": [{}, {}, {}, {"type": "KeyError", "value": "exception message"}],
         }}))
 
     def test_exception_transaction(self):
-        self.assertEquals("KeyError ⋄ transaction", get_issue_grouper_for_data({
+        self.assertEqual("KeyError ⋄ transaction", get_issue_grouper_for_data({
             "transaction": "transaction",
             "exception": {
                 "values": [{"type": "KeyError"}],
@@ -540,7 +540,7 @@ class GroupingUtilsTestCase(DjangoTestCase):
     def test_exception_function_is_ignored_unless_specifically_synthetic(self):
         # I make no value-judgement here on whether this is something we want to replicate in the future; as it stands
         # this test just documents the somewhat surprising behavior that we inherited from GlitchTip/Sentry.
-        self.assertEquals("Error ⋄ <no transaction>", get_issue_grouper_for_data({
+        self.assertEqual("Error ⋄ <no transaction>", get_issue_grouper_for_data({
             "exception": {
                 "values": [{
                     "stacktrace": {
@@ -551,7 +551,7 @@ class GroupingUtilsTestCase(DjangoTestCase):
         }))
 
     def test_synthetic_exception_only(self):
-        self.assertEquals("<unknown> ⋄ <no transaction>", get_issue_grouper_for_data({
+        self.assertEqual("<unknown> ⋄ <no transaction>", get_issue_grouper_for_data({
             "exception": {
                 "values": [{
                     "mechanism": {"synthetic": True},
@@ -560,7 +560,7 @@ class GroupingUtilsTestCase(DjangoTestCase):
         }))
 
     def test_synthetic_exception_ignores_value(self):
-        self.assertEquals("<unknown> ⋄ <no transaction>", get_issue_grouper_for_data({
+        self.assertEqual("<unknown> ⋄ <no transaction>", get_issue_grouper_for_data({
             "exception": {
                 "values": [{
                     "mechanism": {"synthetic": True},
@@ -570,7 +570,7 @@ class GroupingUtilsTestCase(DjangoTestCase):
         }))
 
     def test_exception_uses_function_when_top_level_exception_is_synthetic(self):
-        self.assertEquals("foo ⋄ <no transaction>", get_issue_grouper_for_data({
+        self.assertEqual("foo ⋄ <no transaction>", get_issue_grouper_for_data({
             "exception": {
                 "values": [{
                     "mechanism": {"synthetic": True},
@@ -584,13 +584,13 @@ class GroupingUtilsTestCase(DjangoTestCase):
     def test_exception_with_non_string_value(self):
         # In the GlitchTip code there is a mention of value sometimes containing a non-string value. Whether this
         # happens in practice is unknown to me, but let's build something that can handle it.
-        self.assertEquals("KeyError: 123 ⋄ <no transaction>", get_issue_grouper_for_data({"exception": {
+        self.assertEqual("KeyError: 123 ⋄ <no transaction>", get_issue_grouper_for_data({"exception": {
             "values": [{"type": "KeyError", "value": 123}],
         }}))
 
     def test_simple_fingerprint(self):
-        self.assertEquals("fixed string", get_issue_grouper_for_data({"fingerprint": ["fixed string"]}))
+        self.assertEqual("fixed string", get_issue_grouper_for_data({"fingerprint": ["fixed string"]}))
 
     def test_fingerprint_with_default(self):
-        self.assertEquals("Log Message: <no log message> ⋄ <no transaction> ⋄ fixed string",
+        self.assertEqual("Log Message: <no log message> ⋄ <no transaction> ⋄ fixed string",
                           get_issue_grouper_for_data({"fingerprint": ["{{ default }}", "fixed string"]}))

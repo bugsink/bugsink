@@ -55,42 +55,42 @@ class TimeZoneTestCase(DjangoTestCase):
 
     def test_datetimes_are_in_utc_when_retrieved_from_the_database_with_default_conf(self):
         # check our default (test) conf
-        self.assertEquals("Europe/Amsterdam", settings.TIME_ZONE)
+        self.assertEqual("Europe/Amsterdam", settings.TIME_ZONE)
 
         # save an event in the database; it will be saved in UTC (because that's what Django does)
         e = create_event()
 
         # we activate a timezone that is not UTC to ensure our tests run even when we're in a different timezone
         with timezone.override('America/Chicago'):
-            self.assertEquals(datetime.timezone.utc, e.timestamp.tzinfo)
+            self.assertEqual(datetime.timezone.utc, e.timestamp.tzinfo)
 
     def test_datetimes_are_in_utc_when_retrieved_from_the_database_no_matter_the_active_timezone_when_creating(self):
         with timezone.override('America/Chicago'):
             # save an event in the database; it will be saved in UTC (because that's what Django does); even when a
             # different timezone is active
             e = create_event()
-            self.assertEquals(datetime.timezone.utc, e.timestamp.tzinfo)
+            self.assertEqual(datetime.timezone.utc, e.timestamp.tzinfo)
 
 
 class RetentionTestCase(RegularTestCase):
     def test_eviction_target(self):
         # over-target with low max: evict 5%
-        self.assertEquals(5, eviction_target(100, 101))
+        self.assertEqual(5, eviction_target(100, 101))
 
         # over-target with high max: evict 500
-        self.assertEquals(500, eviction_target(10_000, 10_001))
-        self.assertEquals(500, eviction_target(100_000, 100_001))
+        self.assertEqual(500, eviction_target(10_000, 10_001))
+        self.assertEqual(500, eviction_target(100_000, 100_001))
 
         # adapted target, i.e. over target but by (much) more than 1: evict 500
         # (we chose this over the alternative of evicting all of the excess at once, because the latter could very well
         # lead to timeouts. this has the slightly surprising effect that eviction happens only in 500-event steps, and
         # because we don't trigger such steps unless new events come in, it could take a while to get back under target.
         # if this turns out to be a problem, we should just do that triggering ourselves rather than per-event).
-        self.assertEquals(500, eviction_target(100, 10_001))
+        self.assertEqual(500, eviction_target(100, 10_001))
 
         # ridiciulously low max: evict 1
-        self.assertEquals(1, eviction_target(6, 7))
+        self.assertEqual(1, eviction_target(6, 7))
 
         # Note that we have no special-casing for under-target (yet); not needed because should_evict (which does a
         # simple comparison) is always called first.
-        # self.assertEquals(0, eviction_target(10_000, 9_999))
+        # self.assertEqual(0, eviction_target(10_000, 9_999))

@@ -82,10 +82,10 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertTrue(send_new_issue_alert.delay.called)
         self.assertFalse(send_regression_alert.delay.called)
         self.assertFalse(send_unmute_alert.delay.called)
-        self.assertEquals(1, Issue.objects.count())
-        self.assertEquals("\n", Issue.objects.get().events_at)
-        self.assertEquals(1, TurningPoint.objects.count())
-        self.assertEquals(TurningPointKind.FIRST_SEEN, TurningPoint.objects.first().kind)
+        self.assertEqual(1, Issue.objects.count())
+        self.assertEqual("\n", Issue.objects.get().events_at)
+        self.assertEqual(1, TurningPoint.objects.count())
+        self.assertEqual(TurningPointKind.FIRST_SEEN, TurningPoint.objects.first().kind)
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
@@ -104,8 +104,8 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertTrue(send_regression_alert.delay.called)
         self.assertFalse(send_unmute_alert.delay.called)
-        self.assertEquals(1, TurningPoint.objects.count())
-        self.assertEquals(TurningPointKind.REGRESSED, TurningPoint.objects.first().kind)
+        self.assertEqual(1, TurningPoint.objects.count())
+        self.assertEqual(TurningPointKind.REGRESSED, TurningPoint.objects.first().kind)
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
@@ -129,8 +129,8 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertTrue(send_regression_alert.delay.called)
         self.assertFalse(send_unmute_alert.delay.called)
-        self.assertEquals(1, TurningPoint.objects.count())
-        self.assertEquals(TurningPointKind.REGRESSED, TurningPoint.objects.first().kind)
+        self.assertEqual(1, TurningPoint.objects.count())
+        self.assertEqual(TurningPointKind.REGRESSED, TurningPoint.objects.first().kind)
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
@@ -150,10 +150,10 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertFalse(send_regression_alert.delay.called)
         self.assertTrue(send_unmute_alert.delay.called)
-        self.assertEquals(1, TurningPoint.objects.count())
-        self.assertEquals(TurningPointKind.UNMUTED, TurningPoint.objects.first().kind)
-        self.assertEquals(send_unmute_alert.delay.call_args[0][0], str(issue.id))
-        self.assertEquals(
+        self.assertEqual(1, TurningPoint.objects.count())
+        self.assertEqual(TurningPointKind.UNMUTED, TurningPoint.objects.first().kind)
+        self.assertEqual(send_unmute_alert.delay.call_args[0][0], str(issue.id))
+        self.assertEqual(
             send_unmute_alert.delay.call_args[0][1], "More than 1 events per 1 day occurred, unmuting the issue.")
 
     @patch("ingest.views.send_new_issue_alert")
@@ -178,9 +178,9 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertFalse(send_regression_alert.delay.called)
         self.assertTrue(send_unmute_alert.delay.called)
-        self.assertEquals(1, TurningPoint.objects.count())
-        self.assertEquals(TurningPointKind.UNMUTED, TurningPoint.objects.first().kind)
-        self.assertEquals(send_unmute_alert.delay.call_args[0][0], str(issue.id))
+        self.assertEqual(1, TurningPoint.objects.count())
+        self.assertEqual(TurningPointKind.UNMUTED, TurningPoint.objects.first().kind)
+        self.assertEqual(send_unmute_alert.delay.call_args[0][0], str(issue.id))
         self.assertTrue("An event was observed after the mute-deadline of" in send_unmute_alert.delay.call_args[0][1])
 
     @patch("ingest.views.send_new_issue_alert")
@@ -195,7 +195,7 @@ class IngestViewTestCase(TransactionTestCase):
             # new event
             BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), project, request))
 
-            self.assertEquals(expected_called, send_new_issue_alert.delay.called)
+            self.assertEqual(expected_called, send_new_issue_alert.delay.called)
 
             issue = Issue.objects.get(project=project)
             issue.is_resolved = True
@@ -204,7 +204,7 @@ class IngestViewTestCase(TransactionTestCase):
             # regression
             BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), project, request))
 
-            self.assertEquals(expected_called, send_regression_alert.delay.called)
+            self.assertEqual(expected_called, send_regression_alert.delay.called)
 
             # mute
             issue = Issue.objects.get(project=project)
@@ -214,7 +214,7 @@ class IngestViewTestCase(TransactionTestCase):
             # unmute via API
             BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), project, request))
 
-            self.assertEquals(expected_called, send_unmute_alert.delay.called)
+            self.assertEqual(expected_called, send_unmute_alert.delay.called)
 
     def test_deal_with_double_event_ids(self):
         request = self.request_factory.post("/api/1/store/")
@@ -238,8 +238,8 @@ class IngestViewTestCase(TransactionTestCase):
 
         BaseIngestAPIView().digest_event(**_digest_params(event_data, self.loud_project, request))
 
-        self.assertEquals(1, Issue.objects.count())
-        self.assertEquals("1.0\n", Issue.objects.get().events_at)
+        self.assertEqual(1, Issue.objects.count())
+        self.assertEqual("1.0\n", Issue.objects.get().events_at)
 
     def test_envelope_endpoint(self):
         # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
@@ -277,7 +277,7 @@ class IngestViewTestCase(TransactionTestCase):
                 },
                 data=data_bytes,
             )
-            self.assertEquals(
+            self.assertEqual(
                 200, response.status_code, response.content if response.status_code != 302 else response.url)
 
     def test_envelope_endpoint_digest_non_immediate(self):
@@ -296,7 +296,7 @@ class IngestViewTestCase(TransactionTestCase):
         BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
 
         # I don't care much for the exact handling of the nonsensical case, as long as "quota_exceeded" gets marked
-        self.assertEquals(now + relativedelta(minutes=5), project.quota_exceeded_until)
+        self.assertEqual(now + relativedelta(minutes=5), project.quota_exceeded_until)
 
     @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=3)
     @patch("ingest.views.check_for_thresholds")
@@ -309,20 +309,20 @@ class IngestViewTestCase(TransactionTestCase):
         # first call
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
 
-        self.assertEquals(True, result)
-        self.assertEquals(1, project.digested_event_count)
+        self.assertEqual(True, result)
+        self.assertEqual(1, project.digested_event_count)
         self.assertIsNone(project.quota_exceeded_until)
-        self.assertEquals(1, patched_check_for_thresholds.call_count)
+        self.assertEqual(1, patched_check_for_thresholds.call_count)
 
         create_event(project, timestamp=now)  # result was True, proceed accordingly
 
         # second call
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
 
-        self.assertEquals(True, result)
-        self.assertEquals(2, project.digested_event_count)
+        self.assertEqual(True, result)
+        self.assertEqual(2, project.digested_event_count)
         self.assertIsNone(project.quota_exceeded_until)
-        self.assertEquals(1, patched_check_for_thresholds.call_count)  # no new call to the expensive check is done
+        self.assertEqual(1, patched_check_for_thresholds.call_count)  # no new call to the expensive check is done
 
         create_event(project, timestamp=now)  # result was True, proceed accordingly
 
@@ -330,28 +330,28 @@ class IngestViewTestCase(TransactionTestCase):
         # closed right after it)
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
 
-        self.assertEquals(True, result)
-        self.assertEquals(3, project.digested_event_count)
-        self.assertEquals(now + relativedelta(minutes=5), project.quota_exceeded_until)
-        self.assertEquals(2, patched_check_for_thresholds.call_count)  # the check was done right at the lower bound
+        self.assertEqual(True, result)
+        self.assertEqual(3, project.digested_event_count)
+        self.assertEqual(now + relativedelta(minutes=5), project.quota_exceeded_until)
+        self.assertEqual(2, patched_check_for_thresholds.call_count)  # the check was done right at the lower bound
 
         create_event(project, timestamp=now)  # result was True, proceed accordingly
 
         # fourth call
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
 
-        self.assertEquals(False, result)  # should be droped immediately
-        self.assertEquals(3, project.digested_event_count)  # nothing is digested
-        self.assertEquals(now + relativedelta(minutes=5), project.quota_exceeded_until)  # unchanged
-        self.assertEquals(2, patched_check_for_thresholds.call_count)  # no expensive check (use quota_exceeded_until)
+        self.assertEqual(False, result)  # should be droped immediately
+        self.assertEqual(3, project.digested_event_count)  # nothing is digested
+        self.assertEqual(now + relativedelta(minutes=5), project.quota_exceeded_until)  # unchanged
+        self.assertEqual(2, patched_check_for_thresholds.call_count)  # no expensive check (use quota_exceeded_until)
 
         # xth call (after a while)
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now + relativedelta(minutes=6))
 
-        self.assertEquals(True, result)
-        self.assertEquals(4, project.digested_event_count)
+        self.assertEqual(True, result)
+        self.assertEqual(4, project.digested_event_count)
         self.assertIsNone(project.quota_exceeded_until)
-        self.assertEquals(3, patched_check_for_thresholds.call_count)  # the check is done on "re-enter"
+        self.assertEqual(3, patched_check_for_thresholds.call_count)  # the check is done on "re-enter"
 
     @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=3)
     @patch("ingest.views.check_for_thresholds")
@@ -371,9 +371,9 @@ class IngestViewTestCase(TransactionTestCase):
         # third call must trigger the check; if it happens outside of the 5-minute period the result should be OK though
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now + relativedelta(minutes=6))
 
-        self.assertEquals(True, result)
+        self.assertEqual(True, result)
         self.assertIsNone(project.quota_exceeded_until)
-        self.assertEquals(2, patched_check_for_thresholds.call_count)  # the check was done right at the lower bound
+        self.assertEqual(2, patched_check_for_thresholds.call_count)  # the check was done right at the lower bound
 
     @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=3)
     @patch("ingest.views.check_for_thresholds")
@@ -402,11 +402,11 @@ class IngestViewTestCase(TransactionTestCase):
 
             # despite being over-quota, we still accept it. This is the "document without value judgement" part of the
             # test.
-            self.assertEquals(True, result)
-            self.assertEquals(2, project.digested_event_count)
+            self.assertEqual(True, result)
+            self.assertEqual(2, project.digested_event_count)
 
             # but at least this closes the door for the next event
-            self.assertEquals(now + relativedelta(minutes=5), project.quota_exceeded_until)
+            self.assertEqual(now + relativedelta(minutes=5), project.quota_exceeded_until)
 
 
 class TestParser(RegularTestCase):
@@ -420,9 +420,9 @@ class TestParser(RegularTestCase):
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertFalse(at_eof)
-        self.assertEquals(b"line 0", output_stream.getvalue())
-        self.assertEquals(b"line 1\n", remainder)
-        self.assertEquals(b"line 2\nline 3\n", input_stream.read())
+        self.assertEqual(b"line 0", output_stream.getvalue())
+        self.assertEqual(b"line 1\n", remainder)
+        self.assertEqual(b"line 2\nline 3\n", input_stream.read())
 
     def test_readuntil_newline_with_initial_chunk(self):
         input_stream = io.BytesIO(b"e 0\nline 1\nline 2\nline 3\n")
@@ -433,9 +433,9 @@ class TestParser(RegularTestCase):
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertFalse(at_eof)
-        self.assertEquals(b"line 0", output_stream.getvalue())
-        self.assertEquals(b"li", remainder)
-        self.assertEquals(b"ne 1\nline 2\nline 3\n", input_stream.read())
+        self.assertEqual(b"line 0", output_stream.getvalue())
+        self.assertEqual(b"li", remainder)
+        self.assertEqual(b"ne 1\nline 2\nline 3\n", input_stream.read())
 
     def test_readuntil_newline_no_initial_chunk(self):
         input_stream = io.BytesIO(b"line 0\nline 1\nline 2\nline 3\n")
@@ -446,9 +446,9 @@ class TestParser(RegularTestCase):
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertFalse(at_eof)
-        self.assertEquals(b"line 0", output_stream.getvalue())
-        self.assertEquals(b"li", remainder)
-        self.assertEquals(b"ne 1\nline 2\nline 3\n", input_stream.read())
+        self.assertEqual(b"line 0", output_stream.getvalue())
+        self.assertEqual(b"li", remainder)
+        self.assertEqual(b"ne 1\nline 2\nline 3\n", input_stream.read())
 
     def test_readuntil_newline_until_eof(self):
         input_stream = io.BytesIO(b"line 0")
@@ -459,9 +459,9 @@ class TestParser(RegularTestCase):
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertTrue(at_eof)
-        self.assertEquals(b"line 0", output_stream.getvalue())
-        self.assertEquals(b"", remainder)
-        self.assertEquals(b"", input_stream.read())
+        self.assertEqual(b"line 0", output_stream.getvalue())
+        self.assertEqual(b"", remainder)
+        self.assertEqual(b"", input_stream.read())
 
     def test_readuntil_newline_bigger_chunk(self):
         input_stream = io.BytesIO(b"e 0\nline 1\nline 2\nline 3\n")
@@ -472,9 +472,9 @@ class TestParser(RegularTestCase):
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 1024)
 
         self.assertFalse(at_eof)
-        self.assertEquals(b"line 0", output_stream.getvalue())
-        self.assertEquals(b"line 1\nline 2\nline 3\n", remainder)
-        self.assertEquals(b"", input_stream.read())
+        self.assertEqual(b"line 0", output_stream.getvalue())
+        self.assertEqual(b"line 1\nline 2\nline 3\n", remainder)
+        self.assertEqual(b"", input_stream.read())
 
     def test_readuntil_length(self):
         input_stream = io.BytesIO(b"e 0\nline 1\nline 2\nline 3\n")
@@ -485,9 +485,9 @@ class TestParser(RegularTestCase):
         remainder, at_eof = readuntil(input_stream, initial_chunk, LengthFinder(10, "eof not ok"), output_stream, 3)
 
         self.assertFalse(at_eof)
-        self.assertEquals(b"line 0\nlin", output_stream.getvalue())
-        self.assertEquals(b"e ", remainder)
-        self.assertEquals(b"1\nline 2\nline 3\n", input_stream.read())
+        self.assertEqual(b"line 0\nlin", output_stream.getvalue())
+        self.assertEqual(b"e ", remainder)
+        self.assertEqual(b"1\nline 2\nline 3\n", input_stream.read())
 
     def test_readuntil_length_eof_is_exception(self):
         input_stream = io.BytesIO(b"e 0\nline 1\nline 2\nline 3\n")
@@ -507,7 +507,7 @@ class TestParser(RegularTestCase):
         parser = StreamingEnvelopeParser(io.BytesIO(b"""{"event_id":"9ec79c33ec9942ab8353589fcb2e04dc","dsn":"https://e12d836b15bb49d7bbf99e64295d995b:@sentry.io/42"}\n{"type":"attachment","length":10,"content_type":"text/plain","filename":"hello.txt"}\n\xef\xbb\xbfHello\r\n\n{"type":"event","length":41,"content_type":"application/json","filename":"application.log"}\n{"message":"hello world","level":"error"}\n"""))  # noqa
 
         envelope_headers = parser.get_envelope_headers()
-        self.assertEquals(
+        self.assertEqual(
             {"event_id": "9ec79c33ec9942ab8353589fcb2e04dc",
              "dsn": "https://e12d836b15bb49d7bbf99e64295d995b:@sentry.io/42"},
             envelope_headers)
@@ -515,13 +515,13 @@ class TestParser(RegularTestCase):
         items = parser.get_items_directly()
 
         header, item = next(items)
-        self.assertEquals(
+        self.assertEqual(
             {"type": "attachment", "length": 10, "content_type": "text/plain", "filename": "hello.txt"},
             header)  # we check item-header parsing once, should be enough.
-        self.assertEquals(b"\xef\xbb\xbfHello\r\n", item)
+        self.assertEqual(b"\xef\xbb\xbfHello\r\n", item)
 
         header, item = next(items)
-        self.assertEquals(b'{"message":"hello world","level":"error"}', item)
+        self.assertEqual(b'{"message":"hello world","level":"error"}', item)
 
         with self.assertRaises(StopIteration):
             next(items)
@@ -532,10 +532,10 @@ class TestParser(RegularTestCase):
         items = parser.get_items_directly()
 
         header, item = next(items)
-        self.assertEquals(b"\xef\xbb\xbfHello\r\n", item)
+        self.assertEqual(b"\xef\xbb\xbfHello\r\n", item)
 
         header, item = next(items)
-        self.assertEquals(b'{"message":"hello world","level":"error"}', item)
+        self.assertEqual(b'{"message":"hello world","level":"error"}', item)
 
         with self.assertRaises(StopIteration):
             next(items)
@@ -546,10 +546,10 @@ class TestParser(RegularTestCase):
         items = parser.get_items_directly()
 
         header, item = next(items)
-        self.assertEquals(b"", item)
+        self.assertEqual(b"", item)
 
         header, item = next(items)
-        self.assertEquals(b"", item)
+        self.assertEqual(b"", item)
 
         with self.assertRaises(StopIteration):
             next(items)
@@ -560,10 +560,10 @@ class TestParser(RegularTestCase):
         items = parser.get_items_directly()
 
         header, item = next(items)
-        self.assertEquals(b"", item)
+        self.assertEqual(b"", item)
 
         header, item = next(items)
-        self.assertEquals(b"", item)
+        self.assertEqual(b"", item)
 
         with self.assertRaises(StopIteration):
             next(items)
@@ -574,7 +574,7 @@ class TestParser(RegularTestCase):
         items = parser.get_items_directly()
 
         header, item = next(items)
-        self.assertEquals(b"helloworld", item)
+        self.assertEqual(b"helloworld", item)
 
         with self.assertRaises(StopIteration):
             next(items)
@@ -585,7 +585,7 @@ class TestParser(RegularTestCase):
         items = parser.get_items_directly()
 
         header, item = next(items)
-        self.assertEquals(b"helloworld", item)
+        self.assertEqual(b"helloworld", item)
 
         with self.assertRaises(StopIteration):
             next(items)
@@ -596,7 +596,7 @@ class TestParser(RegularTestCase):
         items = parser.get_items_directly()
 
         header, item = next(items)
-        self.assertEquals(b'{"started": "2020-02-07T14:16:00Z","attrs":{"release":"sentry-test@1.0.0"}}', item)
+        self.assertEqual(b'{"started": "2020-02-07T14:16:00Z","attrs":{"release":"sentry-test@1.0.0"}}', item)
 
         with self.assertRaises(StopIteration):
             next(items)
@@ -614,7 +614,7 @@ class TestParser(RegularTestCase):
 
         with self.assertRaises(ParseError) as e:
             header, item = next(items)
-        self.assertEquals("EOF while reading item with explicitly specified length", str(e.exception))
+        self.assertEqual("EOF while reading item with explicitly specified length", str(e.exception))
 
     def test_too_much_content_aka_length_too_short(self):
         # based on test_envelope_with_2_items_last_newline_omitted, but with length "41" replaced by "40"
@@ -627,7 +627,7 @@ class TestParser(RegularTestCase):
 
         with self.assertRaises(ParseError) as e:
             header, item = next(items)
-        self.assertEquals("Item with explicit length not terminated by newline/EOF", str(e.exception))
+        self.assertEqual("Item with explicit length not terminated by newline/EOF", str(e.exception))
 
     def test_non_json_header(self):
         parser = StreamingEnvelopeParser(io.BytesIO(b"""{"event_id":"9ec79c33ec9942ab8353589fcb2e04dc","dsn":"https://e12d836b15bb49d7bbf99e64295d995b:@sentry.io/42"}\nTHIS IS NOT JSON\n{"message":"hello world","level":"error"}"""))  # noqa
@@ -636,7 +636,7 @@ class TestParser(RegularTestCase):
 
         with self.assertRaises(ParseError) as e:
             header, item = next(items)
-        self.assertEquals("Header not JSON", str(e.exception))
+        self.assertEqual("Header not JSON", str(e.exception))
 
     def test_eof_after_envelope_headers(self):
         # whether this is valid or not: not entirely clear from the docs. It won't matter in practice, of course
@@ -657,7 +657,7 @@ class TestParser(RegularTestCase):
 
         with self.assertRaises(ParseError) as e:
             header, item = next(items)
-        self.assertEquals("EOF when reading headers; what is this a header for then?", str(e.exception))
+        self.assertEqual("EOF when reading headers; what is this a header for then?", str(e.exception))
 
     def test_item_headers_but_no_item(self):
         # another edge case that we don't care about much (no data)
@@ -668,7 +668,7 @@ class TestParser(RegularTestCase):
         items = parser.get_items_directly()
 
         header, item = next(items)
-        self.assertEquals(b"", item)
+        self.assertEqual(b"", item)
 
         with self.assertRaises(StopIteration):
             header, item = next(items)
