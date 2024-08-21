@@ -28,7 +28,8 @@ class VolumeBasedConditionTestCase(RegularTestCase):
 class StreamsTestCase(RegularTestCase):
 
     def test_compress_decompress_gzip(self):
-        myself_times_ten = open(__file__, 'rb').read() * 10
+        with open(__file__, 'rb') as f:
+            myself_times_ten = f.read() * 10
         plain_stream = io.BytesIO(myself_times_ten)
 
         compressed_stream = io.BytesIO(compress_with_zlib(plain_stream, WBITS_PARAM_FOR_GZIP))
@@ -45,7 +46,8 @@ class StreamsTestCase(RegularTestCase):
         self.assertEqual(myself_times_ten, result)
 
     def test_compress_decompress_deflate(self):
-        myself_times_ten = open(__file__, 'rb').read() * 10
+        with open(__file__, 'rb') as f:
+            myself_times_ten = f.read() * 10
         plain_stream = io.BytesIO(myself_times_ten)
 
         compressed_stream = io.BytesIO(compress_with_zlib(plain_stream, WBITS_PARAM_FOR_DEFLATE))
@@ -62,7 +64,8 @@ class StreamsTestCase(RegularTestCase):
         self.assertEqual(myself_times_ten, result)
 
     def test_compress_decompress_brotli(self):
-        myself_times_ten = open(__file__, 'rb').read() * 10
+        with open(__file__, 'rb') as f:
+            myself_times_ten = f.read() * 10
 
         compressed_stream = io.BytesIO(brotli.compress(myself_times_ten))
 
@@ -78,7 +81,8 @@ class StreamsTestCase(RegularTestCase):
         self.assertEqual(myself_times_ten, result)
 
     def test_compress_decompress_read_none(self):
-        myself_times_ten = open(__file__, 'rb').read() * 10
+        with open(__file__, 'rb') as f:
+            myself_times_ten = f.read() * 10
         plain_stream = io.BytesIO(myself_times_ten)
 
         compressed_stream = io.BytesIO(compress_with_zlib(plain_stream, WBITS_PARAM_FOR_DEFLATE))
