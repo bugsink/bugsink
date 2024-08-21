@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.12"]  # any modern version will do
+        python-version: ["3.11"]  # below 3.12 to avoid false positives inside f-strings
 
     steps:
     - uses: actions/checkout@v4
