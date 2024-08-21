@@ -30,7 +30,7 @@ from .event_counter import check_for_thresholds
 
 def _digest_params(event_data, project, request, now=None):
     if now is None:
-        now = datetime.datetime.now(timezone.utc)
+        now = datetime.datetime.now(datetime.timezone.utc)
 
     # adapter to quickly reuse existing tests on refactored code. let's see where the code ends up before spending
     # considerable time on rewriting the tests
