@@ -1,0 +1,32 @@
+name: Django CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]  # any modern version will do
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install Flake8
+      run: |
+        python -m pip install --upgrade flake8
+    - name: Run Flake8
+      run: |
+        # We ignore 2 classes of whitespace errors (which are useful in the local context,
+        # but not worth breaking the build).
+        # https://github.com/PyCQA/flake8/issues/515 shows a dead end of doing this "properly"
+        # so we just specify it on the command line
+        flake8 --extend-ignore=E127,E741,E501 `git ls-files | grep py$
