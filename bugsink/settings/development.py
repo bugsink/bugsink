@@ -63,7 +63,6 @@ if SENTRY_DSN is not None:
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         integrations=[DjangoIntegration()],
-        auto_session_tracking=False,
         traces_sample_rate=0,
         send_default_pii=True,
         transport=MoreLoudlyFailingTransport,
