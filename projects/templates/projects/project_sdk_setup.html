@@ -46,19 +46,62 @@ from pygments.formatters import HtmlFormatter
 lexer = PythonLexer()
 code = """import sentry_sdk
 sentry_sdk.init(
-    "foo",
-    traces_sample_rate=0,  # Bugsink intentionally does not support traces
+    "REPLACEME",
+
+    # The SDK's default is to not send PII; for a SaaS solution this is probably
+    # the right choice, but when you're using Bugsink (i.e. self-hosted), it's
+    # more likely that you want to send everything (and e.g. be able to see
+    # which user was affected by a certain event). Uncomment the following line
+    # to send PII.
+    # send_default_pii=True,
+
+    # The SDK's default is to be quite conservative with the nr of local
+    # variables it sends per frame (the default is is 10). If you want to see
+    # more, you may either proceed with the monkey patching described in the
+    # issue below, or set max_request_body_size to "always" (which will send
+    # everything). Note that this may lead to very large messages, which may be
+    # dropped by the server (but the server is under your control, so you can
+    # change that). see https://github.com/getsentry/sentry-python/issues/377
+    # max_request_body_size="always",
+
+    # Setting up the release is highly recommended. The SDK will try to infer
+    # it, but explicitly setting it is more reliable.
+    # release=...,
+
+    # Bugsink intentionally does not support traces. No need to send them then
+    traces_sample_rate=0,  
 )"""
-print(highlight(code, lexer, HtmlFormatter()))
+print(highlight(code, lexer, HtmlFormatter()).replace("highlight", "p-4 mt-4 bg-slate-50 syntax-coloring").replace("REPLACEME", "{{ project.dsn }}"))
 {% endcomment %}
 
 <div class="p-4 mt-4 bg-slate-50 syntax-coloring"><pre><span></span><span class="kn">import</span> <span class="nn">sentry_sdk</span>
 <span class="n">sentry_sdk</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
     <span class="s2">&quot;{{ project.dsn }}&quot;</span><span class="p">,</span>
-    <span class="n">traces_sample_rate</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>  <span class="c1"># Bugsink intentionally does not support traces</span>
+
+    <span class="c1"># The SDK&#39;s default is to not send PII; for a SaaS solution this is probably</span>
+    <span class="c1"># the right choice, but when you&#39;re using Bugsink (i.e. self-hosted), it&#39;s</span>
+    <span class="c1"># more likely that you want to send everything (and e.g. be able to see</span>
+    <span class="c1"># which user was affected by a certain event). Uncomment the following line</span>
+    <span class="c1"># to send PII.</span>
+    <span class="c1"># send_default_pii=True,</span>
+
+    <span class="c1"># The SDK&#39;s default is to be quite conservative with the nr of local</span>
+    <span class="c1"># variables it sends per frame (the default is is 10). If you want to see</span>
+    <span class="c1"># more, you may either proceed with the monkey patching described in the</span>
+    <span class="c1"># issue below, or set max_request_body_size to &quot;always&quot; (which will send</span>
+    <span class="c1"># everything). Note that this may lead to very large messages, which may be</span>
+    <span class="c1"># dropped by the server (but the server is under your control, so you can</span>
+    <span class="c1"># change that). see https://github.com/getsentry/sentry-python/issues/377</span>
+    <span class="c1"># max_request_body_size=&quot;always&quot;,</span>
+
+    <span class="c1"># Setting up the release is highly recommended. The SDK will try to infer</span>
+    <span class="c1"># it, but explicitly setting it is more reliable.</span>
+    <span class="c1"># release=...,</span>
+
+    <span class="c1"># Bugsink intentionally does not support traces. No need to send them then.</span>
+    <span class="n">traces_sample_rate</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>  
 <span class="p">)</span>
 </pre></div>
-
         <div class="mt-4">
             For integration-specific (Django, Flask, etc) notes, see the <a href="https://docs.sentry.io/platforms/python/" class="text-cyan-500 font-bold" target="_blank">Sentry documentation</a>.
         </div>
