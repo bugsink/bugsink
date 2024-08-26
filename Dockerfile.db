@@ -1,0 +1,7 @@
+FROM mysql
+
+ENV MYSQL_DATABASE=bugsink
+ENV MYSQL_USER=bugsink
+
+# Expose the default port
+EXPOSE 3306
