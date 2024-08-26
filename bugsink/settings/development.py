@@ -47,9 +47,17 @@ DEBUG_TOOLBAR_CONFIG = {
 # In development, we just keep the databases inside the root directory of the source-code. In production this is "not
 # recommended" (very foolish): this path maps to the virualenv's root directory, which is not a good place to store
 # databases.
-DATABASES["default"]["NAME"] = BASE_DIR / 'db.sqlite3'
-DATABASES["default"]["TEST"]["NAME"] = BASE_DIR / 'test.sqlite3'
 DATABASES["snappea"]["NAME"] = BASE_DIR / 'snappea.sqlite3'
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'bugsink',
+        "USER": "bugsink",
+        "PASSWORD": "bugsink",
+        "HOST": "localhost",
+    },
+}
 
 # {  postponed, for starters we'll do something like SNAPPEA_ALWAYS_EAGER
 # DATABASES["snappea"]["TEST"]["NAME"] = BASE_DIR / 'test.snappea.sqlite3'
@@ -113,7 +121,7 @@ EMAIL_USE_TLS = True
 SERVER_EMAIL = DEFAULT_FROM_EMAIL = 'Klaas van Schelven <klaas@vanschelven.com>'
 
 BUGSINK = {
-    "DIGEST_IMMEDIATELY": False,
+    "DIGEST_IMMEDIATELY": True,
 
     # "MAX_EVENT_SIZE": _MEBIBYTE,
     # "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,

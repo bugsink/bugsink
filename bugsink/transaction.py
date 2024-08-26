@@ -132,6 +132,14 @@ class ImmediateAtomic(SuperDurableAtomic):
 
         self.t0 = time.time()
         super(ImmediateAtomic, self).__enter__()
+
+        if connection.vendor != 'sqlite':
+            # we just do a "select everything" query on the ContentType table to make sure we have a global write lock
+            # (for sqlite, this is not necessary, because BEGIN IMMEDIATE already does that). (We prefer ContentType
+            # over User because of the whole users.get_user_model() thing.) we get a specific row to trigger evaluation
+            from django.contrib.contenttypes.models import ContentType
+            ContentType.objects.select_for_update().order_by("pk").first()
+
         took = (time.time() - self.t0) * 1_000
         performance_logger.info(f"{took:6.2f}ms BEGIN IMMEDIATE, A.K.A. get-write-lock")
         self.t0 = time.time()
