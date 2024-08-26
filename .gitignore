@@ -11,7 +11,7 @@ __pycache__
 /lib64
 /pyvenv.cfg
 /share/
-/Bugsink.egg-info/
+/bugsink.egg-info/
 /bugsink/_version.py
 /dist/
 
