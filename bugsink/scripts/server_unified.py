@@ -66,5 +66,9 @@ class ParentProcess:
             child.send_signal(signum)
 
 
-if __name__ == "__main__":
+def main():
     ParentProcess()
+
+
+if __name__ == "__main__":
+    main()

@@ -27,6 +27,8 @@ RUN --mount=type=cache,target=/var/cache/buildkit/pip \
 
 COPY bugsink_conf.py .
 
+RUN ["bugsink-manage", "migrate", "snappea", "--database=snappea"]
+
 EXPOSE 9000
 
-CMD ["gunicorn", "--bind=0.0.0.0:9000", "--access-logfile", "-", "bugsink.wsgi"]
+CMD [ "bugsink-server-unified", "gunicorn", "--bind=0.0.0.0:9000", "--workers=10", "--access-logfile", "-", "bugsink.wsgi",       "UNIFIED_WITH",    "bugsink-runsnappea"]
