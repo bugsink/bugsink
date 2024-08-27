@@ -257,7 +257,7 @@ class Foreman:
                 with contextlib.suppress(FileNotFoundError):
                     os.unlink(os.path.join(self.settings.WAKEUP_CALLS_DIR, event.name))
 
-            self.check_for_stopping()  # always check after .read()
+            self.check_for_stopping()  # check after .read() - it may have unblocked via handle_signal()
             while self.create_workers() == self.settings.TASK_QS_LIMIT:
                 pass  # `== TASK_QS_LIMIT`: as documented above
 
@@ -297,7 +297,7 @@ class Foreman:
             logger.debug("Create workers: Checking (maybe waiting) for available worker slots")
             self.worker_semaphore.acquire()
             logger.debug("Create workers: Worker slot available")
-            self.check_for_stopping()  # always check after .acquire()
+            self.check_for_stopping()  # check after .acquire() - it may have unblocked via handle_signal()
 
             task_id = task.id
             try:
