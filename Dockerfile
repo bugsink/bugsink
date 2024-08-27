@@ -15,6 +15,7 @@ FROM python:${PYTHON_VERSION}-slim
 
 # ARGs are not inherited from the build stage; https://stackoverflow.com/a/56748289/339144
 ARG WHEEL_FILE
+ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
