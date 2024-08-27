@@ -7,7 +7,7 @@ ARG WHEEL_FILE=wheelfile-not-specified.whoops
 
 COPY dist/$WHEEL_FILE /wheels/
 RUN --mount=type=cache,target=/var/cache/buildkit/pip \
-    pip wheel --wheel-dir /wheels /wheels/${WHEEL_FILE}
+    pip wheel --wheel-dir /wheels /wheels/${WHEEL_FILE} mysqlclient
 
 
 # Actual image (based on slim)
@@ -23,7 +23,7 @@ RUN apt update && apt install default-libmysqlclient-dev -y
 
 COPY --from=build /wheels /wheels
 RUN --mount=type=cache,target=/var/cache/buildkit/pip \
-    pip install --find-links /wheels --no-index /wheels/$WHEEL_FILE
+    pip install --find-links /wheels --no-index /wheels/$WHEEL_FILE mysqlclient
 
 COPY bugsink_conf.py .
 

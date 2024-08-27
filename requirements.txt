@@ -10,7 +10,6 @@ inotify_simple
 brotli
 python-dateutil
 whitenoise
-mysqlclient>=1.4.3
 
 # testing/development only:
 requests
