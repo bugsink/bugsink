@@ -3,25 +3,29 @@ ARG PYTHON_VERSION=3.12
 # Build image: non-slim, in particular to build the mysqlclient wheel
 FROM python:${PYTHON_VERSION} AS build
 
-COPY ./requirements.txt .
+ARG WHEEL_FILE=wheelfile-not-specified.whoops
+
+COPY dist/$WHEEL_FILE /wheels/
 RUN --mount=type=cache,target=/var/cache/buildkit/pip \
-    pip wheel --wheel-dir /wheels -r requirements.txt
+    pip wheel --wheel-dir /wheels /wheels/${WHEEL_FILE}
 
 
 # Actual image (based on slim)
 FROM python:${PYTHON_VERSION}-slim
+
+# ARGs are not inherited from the build stage; https://stackoverflow.com/a/56748289/339144
+ARG WHEEL_FILE
 
 WORKDIR /app
 
 # mysqlclient dependencies; needed here too, because the built wheel depends on .o files
 RUN apt update && apt install default-libmysqlclient-dev -y
 
-COPY requirements.txt ./
 COPY --from=build /wheels /wheels
 RUN --mount=type=cache,target=/var/cache/buildkit/pip \
-    pip install --find-links /wheels --no-index -r requirements.txt
+    pip install --find-links /wheels --no-index /wheels/$WHEEL_FILE
 
-COPY . .
+COPY bugsink_conf.py .
 
 EXPOSE 9000
 
