@@ -1,23 +1,28 @@
-# Purpose: Dockerfile for the Bugsink project
-# Ubuntu 24.04 rather than the Python image: I want to stick as closely to the "recommended" (single server) deployment
-# as possible
-FROM ubuntu:24.04
+ARG PYTHON_VERSION=3.12
+
+# Build image: non-slim, in particular to build the mysqlclient wheel
+FROM python:${PYTHON_VERSION} AS build
+
+COPY ./requirements.txt .
+RUN --mount=type=cache,target=/var/cache/buildkit/pip \
+    pip wheel --wheel-dir /wheels -r requirements.txt
+
+
+# Actual image (based on slim)
+FROM python:${PYTHON_VERSION}-slim
+
 WORKDIR /app
 
-COPY requirements.txt .
+# mysqlclient dependencies; needed here too, because the built wheel depends on .o files
+RUN apt update && apt install default-libmysqlclient-dev -y
 
-RUN apt update
-RUN apt install python3 python3-pip python3-venv -y
-
-# mysqlclient dependencies
-RUN apt install default-libmysqlclient-dev pkg-config -y
-
-# Venv inside Docker? I'd say yes because [1] PEP 668 and [2] harmonization with "recommended" (single server) deployment
-RUN python3 -m venv venv
-RUN venv/bin/python3 -m pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt ./
+COPY --from=build /wheels /wheels
+RUN --mount=type=cache,target=/var/cache/buildkit/pip \
+    pip install --find-links /wheels --no-index -r requirements.txt
 
 COPY . .
 
 EXPOSE 9000
 
-CMD ["venv/bin/gunicorn", "--bind=0.0.0.0:9000", "--access-logfile", "-", "bugsink.wsgi"]
+CMD ["gunicorn", "--bind=0.0.0.0:9000", "--access-logfile", "-", "bugsink.wsgi"]
