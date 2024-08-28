@@ -287,8 +287,6 @@ class Foreman:
             # > connection Y from before the write in connection X.
             #
             # Note the list(...) in the below to ensure the QS is evaluated inside the transaction.
-            # (I introduced this transaction later, and before I did I did not notice any problems, presumably because
-            # when in autocommit mode you get fresh transactions per query...)
             tasks = list(Task.objects.all()[:self.settings.TASK_QS_LIMIT])
 
         task_i = -1
