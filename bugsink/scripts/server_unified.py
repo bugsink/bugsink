@@ -2,6 +2,7 @@
 import subprocess
 import signal
 import sys
+import os
 from time import sleep
 
 
@@ -19,6 +20,8 @@ class ParentProcess:
         The script is written to be able to run the two parts of Bugsink in a single Docker container. It may, however,
         be useful in other contexts as well, i.e. for [developer] ergonomics when running in a terminal.
         """
+        print("Server-unified starting with pid", os.getpid())
+
         self.children = []
 
         # I think Docker will send a SIGTERM to the main process when it wants to stop the container; SIGINT is for
@@ -29,7 +32,9 @@ class ParentProcess:
         # Start the server
         # Leaving stdout and stderr as None will make the output of the child processes be passed as our own.
         for args in self.parse_args():
-            self.children.append(subprocess.Popen(args))
+            child = subprocess.Popen(args)
+            print("Server-unified started process %s:" % child.pid, " ".join(args))
+            self.children.append(child)
 
         # Check if any of the children have exited
         children_are_alive = True
