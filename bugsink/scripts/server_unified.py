@@ -2,6 +2,7 @@
 import subprocess
 import signal
 import sys
+from time import sleep
 
 
 class ParentProcess:
@@ -33,6 +34,8 @@ class ParentProcess:
         # Check if any of the children have exited
         children_are_alive = True
         while children_are_alive:
+            sleep(.05)  # Sleep in the busy loop to avoid 100% CPU usage
+
             for child in self.children:
                 if child.poll() is not None:
                     # One of the children has exited
