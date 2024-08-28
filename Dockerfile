@@ -30,6 +30,6 @@ COPY bugsink/conf_templates/docker.py.template bugsink_conf.py
 
 RUN ["bugsink-manage", "migrate", "snappea", "--database=snappea"]
 
-EXPOSE 9000
+EXPOSE 8000
 
-CMD [ "bugsink-server-unified", "gunicorn", "--bind=0.0.0.0:9000", "--workers=10", "--access-logfile", "-", "bugsink.wsgi",       "UNIFIED_WITH",    "bugsink-runsnappea"]
+CMD [ "bugsink-server-unified", "gunicorn", "--bind=0.0.0.0:8000", "--workers=10", "--access-logfile", "-", "bugsink.wsgi",       "UNIFIED_WITH",    "bugsink-runsnappea"]

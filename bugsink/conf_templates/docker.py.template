@@ -76,7 +76,7 @@ BUGSINK = {
     "DIGEST_IMMEDIATELY": False,  # hard-coded, corresponds to Docker setup
 
     # The URL where the Bugsink instance is hosted. This is used in the email notifications and to construct DSNs.
-    "BASE_URL": os.getenv("BASE_URL", "http://localhost:9000"),  # no trailing slash
+    "BASE_URL": os.getenv("BASE_URL", "http://localhost:8000"),  # no trailing slash
 
     # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
     "SITE_TITLE": os.getenv("SITE_TITLE", "Bugsink"),

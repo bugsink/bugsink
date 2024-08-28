@@ -21,8 +21,8 @@ class DsnTestCase(RegularTestCase):
 
     def test_build_dsn_non_default_port(self):
         self.assertEqual(
-            "https://public_key@hosted.bugsink:9000/1",
-            build_dsn("https://hosted.bugsink:9000", "1", "public_key"))
+            "https://public_key@hosted.bugsink:8000/1",
+            build_dsn("https://hosted.bugsink:8000", "1", "public_key"))
 
     def test_get_store_url(self):
         self.assertEqual(

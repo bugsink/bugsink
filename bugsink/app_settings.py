@@ -18,7 +18,7 @@ CB_NOBODY = "CB_NOBODY"
 
 
 DEFAULTS = {
-    "BASE_URL": "http://127.0.0.1:9000",  # no trailing slash
+    "BASE_URL": "http://127.0.0.1:8000",  # no trailing slash
     "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 
     # Users, teams, projects
