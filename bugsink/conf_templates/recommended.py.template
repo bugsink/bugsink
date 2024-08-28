@@ -1,6 +1,5 @@
 # Generated using bugsink-create-conf --template=recommended
-# This is the configuration for the recommended setup for Bugsink in production, corresponding to the how-to guide:
-# TODO link
+# This is the configuration for the recommended setup for Bugsink in production.
 
 from bugsink.settings.default import *  # noqa
 
@@ -28,7 +27,6 @@ DATABASES["snappea"]["NAME"] = '/home/bugsink/snappea.sqlite3'
 TIME_ZONE = 'UTC'  # alternatively, e.g. 'Europe/Amsterdam'
 
 
-# See TODO in the docs
 # In the recommended (production) setup, we use Snappea for background tasks.
 SNAPPEA = {
     "TASK_ALWAYS_EAGER": False,
@@ -39,8 +37,6 @@ SNAPPEA = {
 }
 
 
-# See TODO in docs
-# 
 # EMAIL_HOST = ...
 # EMAIL_HOST_USER = ...
 # EMAIL_HOST_PASSWORD = ...
@@ -74,7 +70,6 @@ BUGSINK = {
     "SINGLE_TEAM": False,
     "TEAM_CREATION": CB_MEMBERS,  # who can create new teams. default: members, which means "any member of the site"
 
-    # See TODO in the docs
     # In the recommended setup, we do not digest events immediately, but instead offload this to Snappea. This ensures a
     # more response and reliable server when there are peak loads in the events.
     "DIGEST_IMMEDIATELY": False,

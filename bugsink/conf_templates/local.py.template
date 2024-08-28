@@ -24,7 +24,6 @@ SECRET_KEY = "{{ secret_key }}"
 TIME_ZONE = 'UTC'  # alternatively, e.g. 'Europe/Amsterdam'
 
 
-# See TODO in the docs
 # When running locally, it is recommended to configure SNAPPEA to always run eagerly, i.e. to run tasks synchronously.
 # This avoids the need to run a separate "snappea server" process to run the workers, and the performance impact is
 # negligible for local development.
@@ -33,12 +32,11 @@ SNAPPEA = {
 }
 
 
-# See TODO in docs
-# When running locally, it is recommended to configure the email backend to use the console backend, which prints the
-# email to the console instead of sending it. The assumption is basically that you don't want to send emails to yourself
-# while developing locally, because the errors that you do trigger will already obvious.
+# When running locally, it is recommended to configure the email backend to use the (quiet) console backend, which
+# prints the email to the console instead of sending it. The assumption is basically that you don't want to send emails
+# to yourself while developing locally, because the errors that you do trigger will already obvious.
 # 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+EMAIL_BACKEND = "bugsink.email_backends.QuietConsoleEmailBackend"
 # EMAIL_HOST = ...
 # EMAIL_HOST_USER = ...
 # EMAIL_HOST_PASSWORD = ...
@@ -53,7 +51,6 @@ BUGSINK = {
     # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
     # "SITE_TITLE": "Bugsink",  
 
-    # See TODO in the docs
     # When running locally, it is recommended to configure the Bugsink to digest events immediately. (This is basically
     # implied by the "TASK_ALWAYS_EAGER" setting above, but setting DIGEST_IMMEDIATELY to True removes one more step
     # from the process.)
