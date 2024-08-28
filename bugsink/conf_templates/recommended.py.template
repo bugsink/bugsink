@@ -39,16 +39,6 @@ SNAPPEA = {
 }
 
 
-DEFAULTS = {
-
-    "NUM_WORKERS": 4,
-    "GRACEFUL_TIMEOUT": 10,
-
-    "TASK_QS_LIMIT": 100,
-
-}
-
-
 # See TODO in docs
 # 
 # EMAIL_HOST = ...
