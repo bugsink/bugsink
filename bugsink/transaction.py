@@ -134,9 +134,15 @@ class ImmediateAtomic(SuperDurableAtomic):
         super(ImmediateAtomic, self).__enter__()
 
         if connection.vendor != 'sqlite':
-            # we just do a "select everything" query on the ContentType table to make sure we have a global write lock
-            # (for sqlite, this is not necessary, because BEGIN IMMEDIATE already does that). (We prefer ContentType
-            # over User because of the whole users.get_user_model() thing.) we get a specific row to trigger evaluation
+            # we just do a "select the first row" query on the ContentType table to make sure we have a global write
+            # lock (for sqlite, this is not necessary, because BEGIN IMMEDIATE already does that). (We prefer
+            # ContentType over User because of the whole users.get_user_model() thing.) we get a specific row to trigger
+            # evaluation
+            #
+            # Note: for a moment I considered pushing the select_for_update closer to the location where it matters
+            # most, i.e. ingest, and also to tie it more closely to e.g. the project at hand. As it stands, I actually
+            # like very much that we stick closely to the sqlite model for the mysql case, but we can always take this
+            # road later.
             from django.contrib.contenttypes.models import ContentType
             ContentType.objects.select_for_update().order_by("pk").first()
 
