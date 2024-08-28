@@ -8,7 +8,7 @@ version_file = "bugsink/_version.py"
 [project]
 name = "bugsink"
 authors = [
-    {name = "Bugsink B.V.", email = "klaas@vanschelven.com"},
+    {name = "Bugsink B.V.", email = "info@bugsink.com"},
 ]
 description = "Dead simple crash monitoring."
 readme = "README.md"
@@ -52,7 +52,11 @@ include = [
     "users*",
 ]
 
-# exclude = ["my_package.tests*"]  # exclude packages matching these glob patterns (empty by default)
+exclude = [
+    # This, or similar syntaxes, don't seem to actually work.
+    # https://stackoverflow.com/q/75091671/339144
+    # "bugsink/settings/development.py",
+]  # exclude packages matching these glob patterns (empty by default)
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
