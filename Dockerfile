@@ -26,7 +26,7 @@ COPY --from=build /wheels /wheels
 RUN --mount=type=cache,target=/var/cache/buildkit/pip \
     pip install --find-links /wheels --no-index /wheels/$WHEEL_FILE mysqlclient
 
-COPY bugsink_conf.py .
+COPY bugsink/conf_templates/docker.py.template bugsink_conf.py
 
 RUN ["bugsink-manage", "migrate", "snappea", "--database=snappea"]
 

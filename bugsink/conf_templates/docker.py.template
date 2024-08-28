@@ -1,59 +1,109 @@
 import os
+from urllib.parse import urlparse
 
 from bugsink.settings.default import *  # noqa
 from bugsink.settings.default import DATABASES
 
-DEBUG = True
+_KIBIBYTE = 1024
+_MEBIBYTE = 1024 * _KIBIBYTE
 
+
+DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
+
+# The security checks on SECRET_KEY are done as part of 'bugsink-manage check --deploy'
 SECRET_KEY = os.getenv("SECRET_KEY")
 
-# Alternatively, pass the SECRET_KEY as an environment variable. (although that has security implications too!)
-# i.e. those may leak in shared server setups.
-#
-# SECRET_KEY = os.environ["SECRET_KEY"]  # use dictionary lookup rather than .getenv to ensure the variable is set.
 
-
-ALLOWED_HOSTS = ["bugsink"]
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "*").split(",")
 
 
 # The time-zone here is the default for display purposes (when no project/user configuration is used).
 # https://docs.djangoproject.com/en/4.2/ref/settings/#std-setting-TIME_ZONE
-TIME_ZONE = 'Europe/Amsterdam'
+TIME_ZONE = os.getenv("TIME_ZONE", "UTC")
 
 
-# See TODO in the docs
+# Our Docker image is hard-coded to run with snappea in the background; this means we hard-code (as opposed to reading
+# the from the env) certain variables: TASK_ALWAYS_EAGER, WORKAHOLIC and DIGEST_IMMEDIATELY.
+
 SNAPPEA = {
-    "TASK_ALWAYS_EAGER": False,
-    "NUM_WORKERS": 2,
+    "TASK_ALWAYS_EAGER": False,  # hard-coded, corresponds to Docker setup
+    "WORKAHOLIC": True,  # hard-coded, corresponds to Docker setup
+
+    "NUM_WORKERS": int(os.getenv("SNAPPEA_NUM_WORKERS", 2)),
 }
 
 
-DATABASES['default'] = {
-    'ENGINE': 'django.db.backends.mysql',
-    'NAME': 'bugsink',
-    "USER": "root",
-    "PASSWORD": "bugsink",
-    "HOST": "mysql_container",
-}
+if os.getenv("DATABASE_URL"):
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    parsed = urlparse(DATABASE_URL)
+
+    if parsed.scheme != "mysql":
+        raise ValueError("For DATABASE_URL, only mysql is supported.")
+
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': parsed.path.lstrip('/'),
+        "USER": parsed.username,
+        "PASSWORD": parsed.password,
+        "HOST": parsed.hostname,
+        "PORT": parsed.port or "3306",
+    }
+
+# else:
+#     print("WARNING: DATABASE_URL not set; using default sqlite database, which will not persist to a fresh container.")
 
 
-# EMAIL_HOST = ...
-# EMAIL_HOST_USER = ...
-# EMAIL_HOST_PASSWORD = ...
-# EMAIL_PORT = ...
-# EMAIL_USE_TLS = ...
+if os.getenv("EMAIL_HOST"):
+    EMAIL_HOST = os.getenv("EMAIL_HOST")
+    EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+    EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+    EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
+    EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() in ("true", "1", "yes")
+else:
+    # print("WARNING: EMAIL_HOST not set; email will not be sent")
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
-SERVER_EMAIL = DEFAULT_FROM_EMAIL = "Bugsink <bugsink@example.org>"
+SERVER_EMAIL = DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Bugsink <bugsink@example.org>")
+
+# constants for "create by" (user/team/project) settings
+CB_ANYBODY = "CB_ANYBODY"
+CB_MEMBERS = "CB_MEMBERS"
+CB_ADMINS = "CB_ADMINS"
+CB_NOBODY = "CB_NOBODY"
+
 
 BUGSINK = {
-    # See TODO in the docs
-    "DIGEST_IMMEDIATELY": False,
+    "DIGEST_IMMEDIATELY": False,  # hard-coded, corresponds to Docker setup
 
-    # "MAX_EVENT_SIZE": _MEBIBYTE,
-    # "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,
-    # "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
-    # "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
+    # The URL where the Bugsink instance is hosted. This is used in the email notifications and to construct DSNs.
+    "BASE_URL": os.getenv("BASE_URL", "http://localhost:9000"),  # no trailing slash
 
-    # "BASE_URL": "http://bugsink:9000",  # no trailing slash
-    # "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
+    # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
+    "SITE_TITLE": os.getenv("SITE_TITLE", "Bugsink"),
+
+    # Settings for Users, Teams and Projects
+    "SINGLE_USER": os.getenv("SINGLE_USER", "False").lower() in ("true", "1", "yes"),
+
+    # who can register new users. default: anybody, i.e. users can register themselves
+    "USER_REGISTRATION": os.getenv("USER_REGISTRATION", CB_ANYBODY),
+    "USER_REGISTRATION_VERIFY_EMAIL":
+        os.getenv("USER_REGISTRATION_VERIFY_EMAIL", "True").lower() in ("true", "1", "yes"),
+    "USER_REGISTRATION_VERIFY_EMAIL_EXPIRY":
+        int(os.getenv("USER_REGISTRATION_VERIFY_EMAIL_EXPIRY", 7 * 24 * 60 * 60)),  # 7 days
+
+    # if True, there is only one team, and all projects are in that team
+    "SINGLE_TEAM": os.getenv("SINGLE_TEAM", "False").lower() in ("true", "1", "yes"),
+    "TEAM_CREATION": os.getenv("TEAM_CREATION", CB_MEMBERS),  # who can create new teams.
+
+    # MAX* below mirror the (current) values for the Sentry Relay.
+    "MAX_EVENT_SIZE": int(os.getenv("MAX_EVENT_SIZE", _MEBIBYTE)),
+    "MAX_EVENT_COMPRESSED_SIZE": int(os.getenv("MAX_EVENT_COMPRESSED_SIZE", 200 * _KIBIBYTE)),
+    "MAX_ENVELOPE_SIZE": int(os.getenv("MAX_ENVELOPE_SIZE", 100 * _MEBIBYTE)),
+    "MAX_ENVELOPE_COMPRESSED_SIZE": int(os.getenv("MAX_ENVELOPE_COMPRESSED_SIZE", 20 * _MEBIBYTE)),
+
+    # Bugsink-specific limits:
+    # The default values are 1_000 and 5_000 respectively; which corresponds to ~6% and ~2.7% of the total capacity of
+    # 50 requests/s (ingestion) on low-grade hardware that I measured, and with 50% of the default value for retention.
+    "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": int(os.getenv("MAX_EVENTS_PER_PROJECT_PER_5_MINUTES", 1_000)),
+    "MAX_EVENTS_PER_PROJECT_PER_HOUR": int(os.getenv("MAX_EVENTS_PER_PROJECT_PER_HOUR", 5_000)),
 }
