@@ -10,7 +10,3 @@ inotify_simple
 brotli
 python-dateutil
 whitenoise
-
-# testing/development only:
-requests
-django-debug-toolbar
