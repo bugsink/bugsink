@@ -145,8 +145,11 @@ DATABASES = {
 
 DATABASE_ROUTERS = ("bugsink.dbrouters.SeparateSnappeaDBRouter",)
 
-# This is the default, but we're being explicit. In our setup (sqlite) we assume a low cost for reconnecting to the DB,
-# but a potential high cost ("checkpoint starvation") for keeping connections open.
+# This is the default, but we're being explicit. In our recommended setup (sqlite) we assume a low cost for reconnecting
+# to the DB, but a potential high cost ("checkpoint starvation") for keeping connections open.
+#
+# For not-as-recommended setups (mysql) we're OK with "one connection per request" too, even though the arguments laid
+# out in the above don't apply as much. (This might change after research)
 CONN_MAX_AGE = 0
 
 
