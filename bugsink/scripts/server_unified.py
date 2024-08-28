@@ -22,6 +22,8 @@ class ParentProcess:
         """
         print("Server-unified starting with pid", os.getpid())
 
+        self.pre_start()
+
         self.children = []
 
         # I think Docker will send a SIGTERM to the main process when it wants to stop the container; SIGINT is for
@@ -35,6 +37,22 @@ class ParentProcess:
         finally:
             for child in self.children:
                 child.wait()
+
+    def pre_start(self):
+        # I'd rather pull this out of server_unified.py, but I don't know how to do that in a way that works with
+        # Docker: The recommended way of running CMD in a Dockerfile is to use the exec form, which doesn't allow for
+        # running a script that does some setup before starting the main process, i.e. doesn't allow for '&&').
+        # Recommended here means: warning about signal-handling if you choose the other form.
+        #
+        # I also don't want to introduce further arg-parsing (distinguishing between serial and parallel start) so here
+        # we have it.
+        if sys.argv[1:2] == ["NO_DEPLOY_CHECK"]:
+            check = subprocess.run(["bugsink-manage", "check", "--fail-level", "WARNING"])
+        else:
+            check = subprocess.run(["bugsink-manage", "check", "--deploy", "--fail-level", "WARNING"])
+        if check.returncode != 0:
+            # print("Server-unified failed to start because 'bugsink-manage check' failed.")  superfluous
+            sys.exit(1)
 
     def start_children(self):
         # Start the server
@@ -73,6 +91,9 @@ class ParentProcess:
 
         # We don't want to pass the first argument, as that is the script name
         args = sys.argv[1:]
+
+        if args[:1] == ["NO_DEPLOY_CHECK"]:
+            args = args[1:]
 
         result = [[]]
         for arg in args:

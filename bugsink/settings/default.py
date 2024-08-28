@@ -205,6 +205,21 @@ WHITENOISE_USE_FINDERS = True
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
+SILENCED_SYSTEM_CHECKS = [
+    # in the recommended setup this is done at the proxy level; in Docker telling people about it is a TODO
+    "security.W004",  # SECURE_HSTS_SECONDS
+
+    # in the recommended setup this is done at the proxy level; in Docker telling people about it is a TODO
+    "security.W008",  # SECURE_SSL_REDIRECT
+
+    # TODO correct this for the recommended setup; in Docker telling people about it is a TODO
+    "security.W012",  # SESSION_COOKIE_SECURE
+
+    # TODO correct this for the recommended setup; in Docker telling people about it is a TODO
+    "security.W016",  # CSRF_COOKIE_SECURE
+]
+
+
 LOGGING = deepcopy(DEFAULT_LOGGING)
 
 if I_AM_RUNNING != "TEST":
