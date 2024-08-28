@@ -261,6 +261,13 @@ class Foreman:
             while self.create_workers() == self.settings.TASK_QS_LIMIT:
                 pass  # `== TASK_QS_LIMIT`: as documented above
 
+            # in workaholic mode, the checks-after-unblock may have led to the conclusion "I need to stop but I can't
+            # because there is still work to do". For that case, we need to do another check at the moment the work
+            # might have actually been done and before blocking again, i.e. here. Note that the other place where we
+            # block is the .acquire() in create_workers(), but there we _know_ we're not out of Tasks (by definition of
+            # acquiring the worker semaphore), so this single check is enough.
+            self.check_for_stopping()
+
     def create_workers(self):
         """returns the number of workers created (AKA tasks done)"""
 
@@ -336,6 +343,13 @@ class Foreman:
     def check_for_stopping(self):
         if not self.stopping:
             return
+
+        if self.settings.WORKAHOLIC:
+            with durable_atomic(using="snappea"):
+                if Task.objects.exists():
+                    logger.info("Not stopping yet: Workaholic mode, waiting for all tasks to finish")
+                    return
+
         logger.info("Stopping")
 
         # Loop over all tasks, waiting for them to finish. If they don't finish in time (GRACEFUL_TIMEOUT), we'll kill
