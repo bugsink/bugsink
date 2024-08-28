@@ -16,7 +16,7 @@ from users.models import EmailVerification
 from teams.models import TeamMembership, Team, TeamRole
 
 from bugsink.app_settings import get_settings, CB_ANYBODY, CB_MEMBERS, CB_ADMINS
-from bugsink.decorators import login_exempt
+from bugsink.decorators import login_exempt, atomic_for_request_method
 
 from .models import Project, ProjectMembership, ProjectRole, ProjectVisibility
 from .forms import ProjectMembershipForm, MyProjectMembershipForm, ProjectMemberInviteForm, ProjectForm
@@ -26,6 +26,7 @@ from .tasks import send_project_invite_email, send_project_invite_email_new_user
 User = get_user_model()
 
 
+@atomic_for_request_method
 def project_list(request, ownership_filter=None):
     my_memberships = ProjectMembership.objects.filter(user=request.user)
     my_team_memberships = TeamMembership.objects.filter(user=request.user)
@@ -108,6 +109,7 @@ def project_list(request, ownership_filter=None):
     })
 
 
+@atomic_for_request_method
 @permission_required("projects.add_project")
 def project_new(request):
     if get_settings().SINGLE_TEAM and Team.objects.count() == 0:
@@ -146,6 +148,7 @@ def _check_project_admin(project, user):
         raise PermissionDenied("You are not an admin of this project")
 
 
+@atomic_for_request_method
 def project_edit(request, project_pk):
     project = Project.objects.get(id=project_pk)
 
@@ -167,6 +170,7 @@ def project_edit(request, project_pk):
     })
 
 
+@atomic_for_request_method
 def project_members(request, project_pk):
     project = Project.objects.get(id=project_pk)
     _check_project_admin(project, request.user)
@@ -198,6 +202,7 @@ def _send_project_invite_email(user, project_pk):
         send_project_invite_email_new_user.delay(user.email, project_pk, verification.token)
 
 
+@atomic_for_request_method
 def project_members_invite(request, project_pk):
     # NOTE: project-member invite is just that: a direct invite to a project. If you want to also/instead invite someone
     # to a team, you need to just do that instead.
@@ -252,6 +257,7 @@ def project_members_invite(request, project_pk):
     })
 
 
+@atomic_for_request_method
 def project_member_settings(request, project_pk, user_pk):
     try:
         your_membership = ProjectMembership.objects.get(project=project_pk, user=request.user)
@@ -293,6 +299,7 @@ def project_member_settings(request, project_pk, user_pk):
     })
 
 
+@atomic_for_request_method
 @login_exempt  # no login is required, the token is what identifies the user
 def project_members_accept_new_user(request, project_pk, token):
     # There is a lot of overlap with the email-verification flow here; security-wise we make the same assumptions as we
@@ -341,6 +348,7 @@ def project_members_accept_new_user(request, project_pk, token):
     return redirect("project_members_accept", project_pk=project_pk)
 
 
+@atomic_for_request_method
 def project_members_accept(request, project_pk):
     # NOTE: in principle it is confusingly possible to reach this page while logged in as user A, while having been
     # invited as user B. Security-wise this is fine, but UX-wise it could be confusing. However, I'm in the assumption
@@ -369,6 +377,7 @@ def project_members_accept(request, project_pk):
     return render(request, "projects/project_members_accept.html", {"project": project, "membership": membership})
 
 
+@atomic_for_request_method
 def project_sdk_setup(request, project_pk):
     project = Project.objects.get(id=project_pk)
 

@@ -13,7 +13,7 @@ from django.contrib.auth import logout
 
 from users.models import EmailVerification
 from bugsink.app_settings import get_settings, CB_ANYBODY, CB_ADMINS, CB_MEMBERS
-from bugsink.decorators import login_exempt
+from bugsink.decorators import login_exempt, atomic_for_request_method
 
 from .models import Team, TeamMembership, TeamRole, TeamVisibility
 from .forms import TeamMemberInviteForm, TeamMembershipForm, MyTeamMembershipForm, TeamForm
@@ -22,6 +22,7 @@ from .tasks import send_team_invite_email, send_team_invite_email_new_user
 User = get_user_model()
 
 
+@atomic_for_request_method
 def team_list(request, ownership_filter=None):
     my_memberships = TeamMembership.objects.filter(user=request.user)
     my_teams = Team.objects.filter(teammembership__in=my_memberships)
@@ -87,6 +88,7 @@ def team_list(request, ownership_filter=None):
     })
 
 
+@atomic_for_request_method
 @permission_required("teams.add_team")
 def team_new(request):
     if request.method == 'POST':
@@ -107,6 +109,7 @@ def team_new(request):
     })
 
 
+@atomic_for_request_method
 def team_edit(request, team_pk):
     team = Team.objects.get(id=team_pk)
     if (not TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists() and
@@ -129,6 +132,7 @@ def team_edit(request, team_pk):
     })
 
 
+@atomic_for_request_method
 def team_members(request, team_pk):
     team = Team.objects.get(id=team_pk)
     if (not TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists() and
@@ -162,6 +166,7 @@ def _send_team_invite_email(user, team_pk):
         send_team_invite_email_new_user.delay(user.email, team_pk, verification.token)
 
 
+@atomic_for_request_method
 def team_members_invite(request, team_pk):
     team = Team.objects.get(id=team_pk)
     if (not TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists() and
@@ -214,6 +219,7 @@ def team_members_invite(request, team_pk):
     })
 
 
+@atomic_for_request_method
 def team_member_settings(request, team_pk, user_pk):
     try:
         your_membership = TeamMembership.objects.get(team=team_pk, user=request.user)
@@ -255,6 +261,7 @@ def team_member_settings(request, team_pk, user_pk):
     })
 
 
+@atomic_for_request_method
 @login_exempt  # no login is required, the token is what identifies the user
 def team_members_accept_new_user(request, team_pk, token):
     # There is a lot of overlap with the email-verification flow here; security-wise we make the same assumptions as we
@@ -303,6 +310,7 @@ def team_members_accept_new_user(request, team_pk, token):
     return redirect("team_members_accept", team_pk=team_pk)
 
 
+@atomic_for_request_method
 def team_members_accept(request, team_pk):
     # NOTE: in principle it is confusingly possible to reach this page while logged in as user A, while having been
     # invited as user B. Security-wise this is fine, but UX-wise it could be confusing. However, I'm in the assumption
