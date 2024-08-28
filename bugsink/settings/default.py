@@ -219,6 +219,10 @@ SILENCED_SYSTEM_CHECKS = [
     "security.W016",  # CSRF_COOKIE_SECURE
 ]
 
+# Specifies a timeout in seconds for blocking operations like the connection attempt. We set this to 5 seconds to avoid
+# hanging the entire application (or snappea when the workers fill up) when the SMTP server is down/unreachable.
+EMAIL_TIMEOUT = 5
+
 
 LOGGING = deepcopy(DEFAULT_LOGGING)
 
