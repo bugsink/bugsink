@@ -1,3 +1,2 @@
 # testing/development only:
-requests
 django-debug-toolbar
