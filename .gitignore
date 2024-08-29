@@ -46,3 +46,6 @@ node_modules
 
 # static files
 /collectedstatic
+
+# Docker artifacts
+/bugsink*tar
