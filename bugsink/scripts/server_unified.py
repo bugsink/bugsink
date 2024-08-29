@@ -39,25 +39,20 @@ class ParentProcess:
                 child.wait()
 
     def pre_start(self):
-        # I'd rather pull this out of server_unified.py, but I don't know how to do that in a way that works with
-        # Docker: The recommended way of running CMD in a Dockerfile is to use the exec form, which doesn't allow for
-        # running a script that does some setup before starting the main process, i.e. doesn't allow for '&&').
-        # Recommended here means: warning about signal-handling if you choose the other form.
-        #
-        # I also don't want to introduce further arg-parsing (distinguishing between serial and parallel start) so here
-        # we have it.
-        if sys.argv[1:2] == ["NO_DEPLOY_CHECK"]:
-            check = subprocess.run(["bugsink-manage", "check", "--fail-level", "WARNING"])
-        else:
-            check = subprocess.run(["bugsink-manage", "check", "--deploy", "--fail-level", "WARNING"])
-        if check.returncode != 0:
-            # print("Server-unified failed to start because 'bugsink-manage check' failed.")  superfluous
-            sys.exit(1)
+        # I'd rather this was not needed, I don't know how to do that in a way that works with Docker: The recommended
+        # way of running CMD in a Dockerfile is to use the exec form, which doesn't allow for running a script that does
+        # some setup before starting the main process, i.e. doesn't allow for '&&'.  Recommended here means: warning
+        # about signal-handling if you choose the other form.
+
+        for args in self.get_pre_start_command_args(sys.argv):
+            print("Server-unified 'pre-start' process:", " ".join(args))
+            proc = subprocess.run(args)
+            if proc.returncode != 0:
+                sys.exit(proc.returncode)
 
     def start_children(self):
-        # Start the server
         # Leaving stdout and stderr as None will make the output of the child processes be passed as our own.
-        for args in self.parse_args():
+        for args in self.get_parallel_command_args(sys.argv):
             try:
                 child = subprocess.Popen(args)
             except Exception:
@@ -86,14 +81,35 @@ class ParentProcess:
                     children_are_alive = False
                     self.terminate_children(except_child=child)
 
-    def parse_args(self):
+    @classmethod
+    def get_pre_start_command_args(self, argv):
+        """Splits our own arguments into a list of args for each of the pre-start commands, we split on "AMP_AMP"."""
+
+        # We don't want to pass the first argument, as that is the script name
+        args = argv[1:]
+
+        result = []
+        this = []
+        for arg in args:
+            if arg == "AMP_AMP":
+                # AMP_AMP serves as a terminator here, i.e. we only add-to-result when we encounter it, the last bit
+                # is never addeded (it will be dealt with as the set of parallel commands)
+                result.append(this)
+                this = []
+            else:
+                this.append(arg)
+
+        return result
+
+    @classmethod
+    def get_parallel_command_args(self, argv):
         """Splits our own arguments into a list of args for each of the children each, we split on "UNIFIED_WITH"."""
 
         # We don't want to pass the first argument, as that is the script name
-        args = sys.argv[1:]
+        args = argv[1:]
 
-        if args[:1] == ["NO_DEPLOY_CHECK"]:
-            args = args[1:]
+        while "AMP_AMP" in args:
+            args = args[args.index("AMP_AMP") + 1:]
 
         result = [[]]
         for arg in args:

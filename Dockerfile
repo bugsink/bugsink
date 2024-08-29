@@ -32,4 +32,4 @@ RUN ["bugsink-manage", "migrate", "snappea", "--database=snappea"]
 
 EXPOSE 8000
 
-CMD [ "bugsink-server-unified", "gunicorn", "--bind=0.0.0.0:8000", "--workers=10", "--access-logfile", "-", "bugsink.wsgi",       "UNIFIED_WITH",    "bugsink-runsnappea"]
+CMD [ "bugsink-server-unified", "bugsink-manage", "check", "--deploy", "--fail-level", "WARNING", "AMP_AMP", "gunicorn", "--bind=0.0.0.0:8000", "--workers=10", "--access-logfile", "-", "bugsink.wsgi",       "UNIFIED_WITH",    "bugsink-runsnappea"]

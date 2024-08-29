@@ -7,6 +7,7 @@ from .volume_based_condition import VolumeBasedCondition
 from .streams import (
     compress_with_zlib, GeneratorReader, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE, MaxDataReader,
     MaxDataWriter, zlib_generator, brotli_generator)
+from .scripts.server_unified import ParentProcess
 
 
 def apply_n(f, n, v):
@@ -129,3 +130,59 @@ class StreamsTestCase(RegularTestCase):
 
         with self.assertRaises(ValueError):
             writer.write(b"hellohello")
+
+
+class ServerUnifiedTestCase(RegularTestCase):
+
+    def test_arg_parsing(self):
+        def _check(argv, expected_pre_start, expected_parallel):
+            pre_start = ParentProcess.get_pre_start_command_args(argv)
+            parallel = ParentProcess.get_parallel_command_args(argv)
+            self.assertEqual(expected_pre_start, pre_start)
+            self.assertEqual(expected_parallel, parallel)
+
+        _check(
+            # meaning: a single empty command (which would lead to a failure). It's the meaningless case anyway, so I'm
+            # not going to make any special-case handling for it. In other words: there must be at least one command
+            # (and even that is quite meaningless, since you could just run the command directly).
+            ["script.py"],
+            [],
+            [[]],
+        )
+
+        _check(
+            ["script.py", "a", "b"],
+            [],
+            [["a", "b"]],
+        )
+
+        _check(
+            ["script.py", "a", "b", "UNIFIED_WITH", "c", "d", "UNIFIED_WITH", "e", "f"],
+            [],
+            [["a", "b"], ["c", "d"], ["e", "f"]],
+        )
+
+        _check(
+            ["script.py", "a", "b", "AMP_AMP", "c", "d", "UNIFIED_WITH", "e", "f"],
+            [["a", "b"]],
+            [["c", "d"], ["e", "f"]],
+        )
+
+        _check(
+            ["script.py", "a", "b", "UNIFIED_WITH", "c", "d", "UNIFIED_WITH", "e", "f"],
+            [],
+            [["a", "b"], ["c", "d"], ["e", "f"]],
+        )
+
+        _check(
+            ["script.py", "a", "b", "AMP_AMP", "c", "d", "AMP_AMP", "e", "f"],
+            [["a", "b"], ["c", "d"]],
+            [["e", "f"]],
+        )
+
+        _check(
+            ["script.py", "a", "b", "AMP_AMP", "c", "d", "AMP_AMP",
+                "e", "f", "UNIFIED_WITH", "g", "h", "UNIFIED_WITH", "i", "j"],
+            [["a", "b"], ["c", "d"]],
+            [["e", "f"], ["g", "h"], ["i", "j"]],
+        )
