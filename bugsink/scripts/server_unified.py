@@ -83,7 +83,7 @@ class ParentProcess:
 
     @classmethod
     def get_pre_start_command_args(self, argv):
-        """Splits our own arguments into a list of args for each of the pre-start commands, we split on "AMP_AMP"."""
+        """Splits our own arguments into a list of args for each of the pre-start commands, we split on "&&"."""
 
         # We don't want to pass the first argument, as that is the script name
         args = argv[1:]
@@ -91,8 +91,8 @@ class ParentProcess:
         result = []
         this = []
         for arg in args:
-            if arg == "AMP_AMP":
-                # AMP_AMP serves as a terminator here, i.e. we only add-to-result when we encounter it, the last bit
+            if arg == "&&":
+                # && serves as a terminator here, i.e. we only add-to-result when we encounter it, the last bit
                 # is never addeded (it will be dealt with as the set of parallel commands)
                 result.append(this)
                 this = []
@@ -103,17 +103,17 @@ class ParentProcess:
 
     @classmethod
     def get_parallel_command_args(self, argv):
-        """Splits our own arguments into a list of args for each of the children each, we split on "UNIFIED_WITH"."""
+        """Splits our own arguments into a list of args for each of the children each, we split on "|||"."""
 
         # We don't want to pass the first argument, as that is the script name
         args = argv[1:]
 
-        while "AMP_AMP" in args:
-            args = args[args.index("AMP_AMP") + 1:]
+        while "&&" in args:
+            args = args[args.index("&&") + 1:]
 
         result = [[]]
         for arg in args:
-            if arg == "UNIFIED_WITH":
+            if arg == "|||":
                 result.append([])
             else:
                 result[-1].append(arg)

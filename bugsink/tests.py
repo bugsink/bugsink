@@ -157,32 +157,31 @@ class ServerUnifiedTestCase(RegularTestCase):
         )
 
         _check(
-            ["script.py", "a", "b", "UNIFIED_WITH", "c", "d", "UNIFIED_WITH", "e", "f"],
+            ["script.py", "a", "b", "|||", "c", "d", "|||", "e", "f"],
             [],
             [["a", "b"], ["c", "d"], ["e", "f"]],
         )
 
         _check(
-            ["script.py", "a", "b", "AMP_AMP", "c", "d", "UNIFIED_WITH", "e", "f"],
+            ["script.py", "a", "b", "&&", "c", "d", "|||", "e", "f"],
             [["a", "b"]],
             [["c", "d"], ["e", "f"]],
         )
 
         _check(
-            ["script.py", "a", "b", "UNIFIED_WITH", "c", "d", "UNIFIED_WITH", "e", "f"],
+            ["script.py", "a", "b", "|||", "c", "d", "|||", "e", "f"],
             [],
             [["a", "b"], ["c", "d"], ["e", "f"]],
         )
 
         _check(
-            ["script.py", "a", "b", "AMP_AMP", "c", "d", "AMP_AMP", "e", "f"],
+            ["script.py", "a", "b", "&&", "c", "d", "&&", "e", "f"],
             [["a", "b"], ["c", "d"]],
             [["e", "f"]],
         )
 
         _check(
-            ["script.py", "a", "b", "AMP_AMP", "c", "d", "AMP_AMP",
-                "e", "f", "UNIFIED_WITH", "g", "h", "UNIFIED_WITH", "i", "j"],
+            ["script.py", "a", "b", "&&", "c", "d", "&&", "e", "f", "|||", "g", "h", "|||", "i", "j"],
             [["a", "b"], ["c", "d"]],
             [["e", "f"], ["g", "h"], ["i", "j"]],
         )
