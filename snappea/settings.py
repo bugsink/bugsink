@@ -16,7 +16,7 @@ DEFAULTS = {
     # * containers are supposed to be disposable; the message queue will be disposed of when the container is; the
     #   ingested (but not yet digested) events in the /tmp/ dir will be too, by the way.
     # * snappea may get a TERM signal because either the container is being stopped, or when the server exits (via
-    #   bugsink-server-unified).
+    #   monofy).
     #
     # Given the above, it's better for snappea to do all the work it can before it gets killed the drastic way when
     # Docker gets impatient, than to quickly shut down and leave the server with a bunch of unprocessed events. This is
