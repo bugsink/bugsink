@@ -10,7 +10,7 @@ name = "bugsink"
 authors = [
     {name = "Bugsink B.V.", email = "info@bugsink.com"},
 ]
-description = "Dead simple crash monitoring."
+description = "bugs happen — own ’em"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {file = "LICENSE"}
