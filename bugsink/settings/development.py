@@ -19,8 +19,6 @@ INTERNAL_IPS = [
     "127.0.0.1",
 ]
 
-# TODO monitor https://stackoverflow.com/questions/78476951/why-not-just-set-djangos-allowed-hosts-to
-# (also for create_example_conf.py)
 ALLOWED_HOSTS = ["*"]
 
 if not I_AM_RUNNING == "TEST":
