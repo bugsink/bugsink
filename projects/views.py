@@ -213,7 +213,7 @@ def project_members_invite(request, project_pk):
 
     if get_settings().USER_REGISTRATION in [CB_ANYBODY, CB_MEMBERS]:
         user_must_exist = False
-    elif get_settings().USER_REGISTRATION == CB_ADMINS and request.user.has_perm("users.add_user"):
+    elif get_settings().USER_REGISTRATION == CB_ADMINS and request.user.is_superuser:
         user_must_exist = False
     else:
         user_must_exist = True
