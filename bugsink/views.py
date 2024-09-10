@@ -1,11 +1,16 @@
 from django.shortcuts import redirect
 from django.conf import settings
 
+from django.template.defaultfilters import filesizeformat
 from django.views.decorators.http import require_GET
 from django.views.decorators.cache import cache_control
 from django.http import FileResponse, HttpRequest, HttpResponse
+from django.contrib.auth.decorators import user_passes_test
+from django.shortcuts import render
 
+from snappea.settings import get_settings as get_snappea_settings
 from bugsink.decorators import login_exempt
+from bugsink.app_settings import get_settings as get_bugsink_settings
 
 
 def home(request):
@@ -33,3 +38,41 @@ def trigger_error(request):
 def favicon(request: HttpRequest) -> HttpResponse:
     file = (settings.BASE_DIR / "static" / "favicon.png").open("rb")
     return FileResponse(file)
+
+
+@user_passes_test(lambda u: u.is_superuser)
+def settings_view(request):
+    def get_setting(settings, key):
+        value = getattr(settings, key, None)
+        if key in ["EMAIL_HOST_PASSWORD", "EMAIL_HOST_USER"]:
+            return "********" if value else ""
+        return value
+
+    def round_values(settings):
+        def maybe_round(v):
+            if isinstance(v, int) and v > 0 and v % 1024 == 0:
+                return "%s (%s)" % (v, filesizeformat(v))
+            return v
+        return {k: maybe_round(v) for k, v in settings.items()}
+
+    misc_settings = {
+        k: get_setting(settings, k) for k in (
+            "ALLOWED_HOSTS",
+            "SECURE_PROXY_SSL_HEADER",
+            "USE_X_FORWARDED_HOST",
+            "TIME_ZONE",
+            "EMAIL_HOST",
+            "EMAIL_HOST_USER",
+            "EMAIL_HOST_PASSWORD",
+            "EMAIL_PORT",
+            "EMAIL_USE_TLS",
+            "EMAIL_BACKEND",
+            "DEFAULT_FROM_EMAIL",
+        )
+    }
+
+    return render(request, "bugsink/settings.html", {
+        "bugsink_settings": round_values(get_bugsink_settings()),
+        "snappea_settings": get_snappea_settings(),
+        "misc_settings": misc_settings,
+    })

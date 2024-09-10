@@ -10,7 +10,7 @@ from teams.views import debug_email as debug_teams_email
 from bugsink.app_settings import get_settings
 from users.views import signup, confirm_email, resend_confirmation, request_reset_password, reset_password
 
-from .views import home, trigger_error, favicon
+from .views import home, trigger_error, favicon, settings_view
 
 
 admin.site.site_header = get_settings().SITE_TITLE
@@ -39,6 +39,7 @@ urlpatterns = [
     path('issues/', include('issues.urls')),
 
     path('admin/', admin.site.urls),
+    path('settings/', settings_view, name='settings'),
 
     path("favicon.ico", favicon),
 ]
