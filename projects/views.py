@@ -10,7 +10,6 @@ from django.contrib import messages
 from django.contrib.auth import logout
 from django.urls import reverse
 from django.utils import timezone
-from django.contrib.auth.decorators import permission_required
 
 from users.models import EmailVerification
 from teams.models import TeamMembership, Team, TeamRole
@@ -110,8 +109,11 @@ def project_list(request, ownership_filter=None):
 
 
 @atomic_for_request_method
-@permission_required("projects.add_project")
 def project_new(request):
+    if not (request.user.is_superuser or TeamMembership.objects.filter(user=request.user,
+            role=TeamRole.ADMIN).exists()):
+        raise PermissionDenied("You need to be a team admin to create a project")
+
     if get_settings().SINGLE_TEAM and Team.objects.count() == 0:
         # we just create the Single Team if it doesn't exist yet (whatever user triggers this doesn't matter)
         Team.objects.create(name="Single Team", slug="single-team")
