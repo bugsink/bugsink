@@ -15,7 +15,7 @@
 
     {# align to bottom #}
     <div class="ml-auto"><!-- top, RHS (buttons) -->
-        {% if perms.teams.add_team %}
+        {% if can_create %}
         <div>
             <a class="block font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" href="{% url 'team_new' %}">New Team</a>
         </div>

@@ -8,7 +8,6 @@ from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from django.urls import reverse
 from django.contrib import messages
-from django.contrib.auth.decorators import permission_required
 from django.contrib.auth import logout
 
 from users.models import EmailVerification
@@ -83,14 +82,20 @@ def team_list(request, ownership_filter=None):
         team_list = team_list_2
 
     return render(request, 'teams/team_list.html', {
+        'can_create':
+            get_settings().TEAM_CREATION in [CB_ANYBODY, CB_MEMBERS] or
+            (request.user.is_superuser and get_settings().TEAM_CREATION == CB_ADMINS),
         'ownership_filter': ownership_filter,
         'team_list': team_list,
     })
 
 
 @atomic_for_request_method
-@permission_required("teams.add_team")
 def team_new(request):
+    if not (get_settings().TEAM_CREATION in [CB_ANYBODY, CB_MEMBERS] or
+            (request.user.is_superuser and get_settings().TEAM_CREATION == CB_ADMINS)):
+        raise PermissionDenied("You are not allowed to create teams")
+
     if request.method == 'POST':
         form = TeamForm(request.POST)
 
