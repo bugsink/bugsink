@@ -28,7 +28,7 @@ DEFAULTS = {
     # the DB/AD/whatever, which could then be added to projects".
     "SINGLE_USER": False,
 
-    "USER_REGISTRATION": CB_ANYBODY,  # who can register new users. default: anybody, i.e. users can register themselves
+    "USER_REGISTRATION": CB_MEMBERS,  # who can register new users. default: members, i.e. any user can invite others
     "USER_REGISTRATION_VERIFY_EMAIL": True,
     "USER_REGISTRATION_VERIFY_EMAIL_EXPIRY": 3 * 24 * 60 * 60,  # 7 days
 

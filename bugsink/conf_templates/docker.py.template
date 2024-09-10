@@ -84,8 +84,8 @@ BUGSINK = {
     # Settings for Users, Teams and Projects
     "SINGLE_USER": os.getenv("SINGLE_USER", "False").lower() in ("true", "1", "yes"),
 
-    # who can register new users. default: anybody, i.e. users can register themselves
-    "USER_REGISTRATION": os.getenv("USER_REGISTRATION", CB_ANYBODY),
+    # who can register new users. default: members, i.e. any user can invite others
+    "USER_REGISTRATION": os.getenv("USER_REGISTRATION", CB_MEMBERS),
     "USER_REGISTRATION_VERIFY_EMAIL":
         os.getenv("USER_REGISTRATION_VERIFY_EMAIL", "True").lower() in ("true", "1", "yes"),
     "USER_REGISTRATION_VERIFY_EMAIL_EXPIRY":
