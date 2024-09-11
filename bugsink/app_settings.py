@@ -73,12 +73,21 @@ class AttrLikeDict(dict):
 _settings = None
 
 
+def _sanitize(settings):
+    """ 'sanitize' the settings, i.e. fixes common mistakes in the settings. """
+
+    if settings["BASE_URL"].endswith("/"):
+        settings["BASE_URL"] = settings["BASE_URL"][:-1]
+
+
 def get_settings():
     global _settings
     if _settings is None:
         _settings = AttrLikeDict()
         _settings.update(DEFAULTS)
         _settings.update(getattr(settings, "BUGSINK", {}))
+
+        _sanitize(_settings)
 
     return _settings
 
