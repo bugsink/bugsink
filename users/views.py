@@ -19,6 +19,7 @@ from .tasks import send_confirm_email, send_reset_email
 UserModel = get_user_model()
 
 
+@atomic_for_request_method
 def signup(request):
     if get_settings().USER_REGISTRATION != CB_ANYBODY:
         raise Http404("User self-registration is not allowed.")
@@ -46,6 +47,7 @@ def signup(request):
     return render(request, "signup.html", {"form": form})
 
 
+@atomic_for_request_method
 def confirm_email(request, token=None):
     # clean up expired tokens; doing this on every request is just fine, it saves us from having to run a cron job-like
     EmailVerification.objects.filter(
@@ -75,6 +77,7 @@ def confirm_email(request, token=None):
     return render(request, "users/confirm_email.html")
 
 
+@atomic_for_request_method
 def resend_confirmation(request):
     if request.method == 'POST':
         form = ResendConfirmationForm(request.POST)
@@ -93,6 +96,7 @@ def resend_confirmation(request):
     return render(request, "users/resend_confirmation.html", {"form": form})
 
 
+@atomic_for_request_method
 def request_reset_password(request):
     # something like this exists in Django too; copy-paste-modify from the other views was more simple than thoroughly
     # understanding the Django implementation and hooking into it.
@@ -117,6 +121,7 @@ def request_reset_password(request):
     return render(request, "users/request_reset_password.html", {"form": form})
 
 
+@atomic_for_request_method
 def reset_password(request, token=None):
     # alternative name: set_password (because this one also works for initial setting of a password)
 
@@ -189,5 +194,6 @@ DEBUG_CONTEXTS = {
 }
 
 
+@atomic_for_request_method
 def debug_email(request, template_name):
     return render(request, 'mails/' + template_name + ".html", DEBUG_CONTEXTS[template_name])
