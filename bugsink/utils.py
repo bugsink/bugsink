@@ -26,4 +26,8 @@ def send_rendered_email(subject, base_template_name, recipient_list, context=Non
 
 def deduce_allowed_hosts(base_url):
     url = urlparse(base_url)
+    if url.hostname == "localhost":
+        # Allow all hosts when running locally; useful to avoid understanding why 127.0.0.1:8000 is not allowed when
+        # localhost:8000 is.
+        return ["*"]
     return [url.hostname]
