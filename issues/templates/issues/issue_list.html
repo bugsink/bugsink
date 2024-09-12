@@ -35,12 +35,12 @@
       {% csrf_token %}
 
       <table class="w-full">
-      <thead>
+      <thead> {# I briefly considered hiding this thead 'if not issue_list' but it actually looks worse; instead, we just hide that one checkbox #}
 
             <tr class="bg-white border-slate-300 border-l-2 border-r-2">
             <td>
                 <div class="m-1 rounded-full hover:bg-slate-100 cursor-pointer" onclick="toggleContainedCheckbox(this); matchIssueCheckboxesStateToMain(this)">
-                    <input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4 cursor-pointer js-main-checkbox" onclick="event.stopPropagation(); matchIssueCheckboxesStateToMain(this.parentNode)"/>
+                    {% if issue_list %}<input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4 cursor-pointer js-main-checkbox" onclick="event.stopPropagation(); matchIssueCheckboxesStateToMain(this.parentNode)"/>{% endif %}
                 </div>
             </td>
             <td class="w-full ml-0 pb-4 pt-4 pr-4 flex">
@@ -166,7 +166,7 @@
     </div>
 
     {% if issue_list %}
-    <div class="flex justify-end mt-4">
+    <div class="flex justify-end mt-4"> {# the div with a few project-related icons (pjt-members, pjt-settings, my settings, dsn) on the lower RHS #}
 
         {% if not app_settings.SINGLE_USER %}{% if member.is_admin or request.user.is_superuser %}
         <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer text-slate-700" onclick="followContainedLink(this);" >
