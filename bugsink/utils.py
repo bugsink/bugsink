@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import get_template
 
@@ -20,3 +22,8 @@ def send_rendered_email(subject, base_template_name, recipient_list, context=Non
     msg.attach_alternative(html_content, "text/html")
 
     msg.send()
+
+
+def deduce_allowed_hosts(base_url):
+    url = urlparse(base_url)
+    return [url.hostname]

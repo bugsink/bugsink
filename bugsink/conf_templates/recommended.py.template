@@ -2,12 +2,12 @@
 # This is the configuration for the recommended setup for Bugsink in production.
 
 from bugsink.settings.default import *  # noqa
+from bugsink.utils import deduce_allowed_hosts
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = "{{ secret_key }}"
 
 
-ALLOWED_HOSTS = ["{{ host }}"]
 
 # Note: the recommended setup uses a reverse proxy (i.e. Nginx) in front of the Django server. This is why we trust the
 # X-Forwarded-Proto and X-Forwarded-Host headers. If you do not use a reverse proxy, you should remove these settings.
@@ -81,3 +81,8 @@ BUGSINK = {
 
     "INGEST_STORE_BASE_DIR": "/home/bugsink/ingestion",
 }
+
+ALLOWED_HOSTS = deduce_allowed_hosts(BUGSINK["BASE_URL"])
+
+# Alternatively, you can set the ALLOWED_HOSTS manually:
+# ALLOWED_HOSTS = ["{{ host }}"]

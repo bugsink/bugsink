@@ -1,6 +1,8 @@
 import os
 from urllib.parse import urlparse
 
+from bugsink.utils import deduce_allowed_hosts
+
 from bugsink.settings.default import *  # noqa
 from bugsink.settings.default import DATABASES
 
@@ -12,9 +14,6 @@ DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
 
 # The security checks on SECRET_KEY are done as part of 'bugsink-manage check --deploy'
 SECRET_KEY = os.getenv("SECRET_KEY")
-
-
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "*").split(",")
 
 
 # The time-zone here is the default for display purposes (when no project/user configuration is used).
@@ -107,3 +106,9 @@ BUGSINK = {
     "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": int(os.getenv("MAX_EVENTS_PER_PROJECT_PER_5_MINUTES", 1_000)),
     "MAX_EVENTS_PER_PROJECT_PER_HOUR": int(os.getenv("MAX_EVENTS_PER_PROJECT_PER_HOUR", 5_000)),
 }
+
+
+if os.getenv("ALLOWED_HOSTS"):
+    ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS").split(",")
+else:
+    ALLOWED_HOSTS = deduce_allowed_hosts(BUGSINK["BASE_URL"])

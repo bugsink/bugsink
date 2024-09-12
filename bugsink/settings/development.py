@@ -5,6 +5,8 @@ import os
 
 from debug_toolbar.middleware import show_toolbar
 
+from bugsink.utils import deduce_allowed_hosts
+
 import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
@@ -18,8 +20,6 @@ DEBUG = True
 INTERNAL_IPS = [
     "127.0.0.1",
 ]
-
-ALLOWED_HOSTS = ["*"]
 
 if not I_AM_RUNNING == "TEST":
     INSTALLED_APPS += [
@@ -149,3 +149,5 @@ else:
 LOGGING["handlers"]["snappea"]["level"] = "DEBUG"
 LOGGING["loggers"]["snappea"]["level"] = "DEBUG"
 LOGGING["formatters"]["snappea"]["format"] = "{asctime} - {threadName} - {levelname:7} - {message}"
+
+ALLOWED_HOSTS = deduce_allowed_hosts(BUGSINK["BASE_URL"])
