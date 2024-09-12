@@ -209,17 +209,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 SILENCED_SYSTEM_CHECKS = [
-    # in the recommended setup this is done at the proxy level; in Docker telling people about it is a TODO
+    # in recommended setups we implement HSTS and SSL redirect at the proxy level, so we silence these checks
     "security.W004",  # SECURE_HSTS_SECONDS
-
-    # in the recommended setup this is done at the proxy level; in Docker telling people about it is a TODO
     "security.W008",  # SECURE_SSL_REDIRECT
-
-    # TODO correct this for the recommended setup; in Docker telling people about it is a TODO
-    "security.W012",  # SESSION_COOKIE_SECURE
-
-    # TODO correct this for the recommended setup; in Docker telling people about it is a TODO
-    "security.W016",  # CSRF_COOKIE_SECURE
 ]
 
 # Specifies a timeout in seconds for blocking operations like the connection attempt. We set this to 5 seconds to avoid
