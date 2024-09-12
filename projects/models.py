@@ -84,10 +84,12 @@ class Project(models.Model):
         models.Index(fields=["id", "sentry_key"]),
     ]
     """
+
     def get_latest_release(self):
-        # TODO perfomance considerations... this can be denormalized/cached at the project level
         from releases.models import ordered_releases
-        return list(ordered_releases(project=self))[-1]
+        if not hasattr(self, "_latest_release"):
+            self._latest_release = list(ordered_releases(project=self))[-1]
+        return self._latest_release
 
     def save(self, *args, **kwargs):
         if self.slug in [None, ""]:

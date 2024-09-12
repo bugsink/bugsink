@@ -97,7 +97,9 @@ class Issue(models.Model):
         ]
 
     def occurs_in_last_release(self):
-        return False  # TODO actually implement (and then: implement in a performant manner)
+        # we can depend on latest_release to exist, because we always create at least one release, even for 'no release'
+        latest_release = self.project.get_latest_release()
+        return latest_release.version in self.events_at
 
     def turningpoint_set_all(self):
         # like turningpoint_set.all() but with user in select_related
