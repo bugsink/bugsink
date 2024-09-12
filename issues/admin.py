@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import Issue, Grouping, TurningPoint
+from .forms import IssueAdminForm
 
 
 class GroupingInline(admin.TabularInline):
@@ -34,6 +35,8 @@ class TurningPointInline(admin.TabularInline):
 
 @admin.register(Issue)
 class IssueAdmin(admin.ModelAdmin):
+    form = IssueAdminForm
+
     fields = [
         'project',
         'friendly_id',
