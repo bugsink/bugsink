@@ -8,7 +8,7 @@ from alerts.views import debug_email as debug_alerts_email
 from users.views import debug_email as debug_users_email
 from teams.views import debug_email as debug_teams_email
 from bugsink.app_settings import get_settings
-from users.views import signup, confirm_email, resend_confirmation, request_reset_password, reset_password
+from users.views import signup, confirm_email, resend_confirmation, request_reset_password, reset_password, preferences
 
 from .views import home, trigger_error, favicon, settings_view
 
@@ -30,6 +30,8 @@ urlpatterns = [
 
     path("accounts/login/", auth_views.LoginView.as_view(template_name="bugsink/login.html"), name="login"),
     path("accounts/logout/", auth_views.LogoutView.as_view(template_name="users/logged_out.html"), name="logout"),
+
+    path("accounts/preferences/", preferences, name="preferences"),
 
     path('api/', include('ingest.urls')),
 

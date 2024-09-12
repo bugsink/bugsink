@@ -11,6 +11,12 @@ from django.forms import ModelForm
 from django.utils.html import escape, mark_safe
 
 
+TRUE_FALSE_CHOICES = (
+    (True, 'Yes'),
+    (False, 'No')
+)
+
+
 def _(x):
     # dummy gettext
     return x
@@ -101,3 +107,13 @@ class SetPasswordForm(BaseSetPasswordForm):
         self.fields['new_password1'].help_text = "At least 8 characters"
 
         self.fields['new_password2'].help_text = None  # "Confirm password" is descriptive enough
+
+
+class PreferencesForm(ModelForm):
+    # I haven't gotten a decent display for checkboxes in forms yet; the quickest hack around this is a ChoiceField
+    send_email_alerts = forms.ChoiceField(
+        label=_("Send email alerts"), choices=TRUE_FALSE_CHOICES, required=False, widget=forms.Select())
+
+    class Meta:
+        model = UserModel
+        fields = ("send_email_alerts",)

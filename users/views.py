@@ -5,10 +5,13 @@ from django.shortcuts import render, redirect, reverse
 from django.contrib.auth import get_user_model
 from django.http import Http404
 from django.utils import timezone
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
+from bugsink.decorators import atomic_for_request_method
 
-from .forms import UserCreationForm, ResendConfirmationForm, RequestPasswordResetForm, SetPasswordForm
+from .forms import UserCreationForm, ResendConfirmationForm, RequestPasswordResetForm, SetPasswordForm, PreferencesForm
 from .models import EmailVerification
 from .tasks import send_confirm_email, send_reset_email
 
@@ -148,6 +151,28 @@ def reset_password(request, token=None):
         form = SetPasswordForm(user)
 
     return render(request, "users/reset_password.html", {"form": form, "next": next})
+
+
+@atomic_for_request_method
+# in the general case this is done by Middleware but we're under /accounts/. not security-critical because we simply
+# get a failure on request.user if this wasn't there, but still the "right thing"
+@login_required
+def preferences(request):
+    user = request.user
+    if request.method == 'POST':
+        form = PreferencesForm(request.POST, instance=user)
+
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Updated preferences")
+            return redirect('preferences')
+
+    else:
+        form = PreferencesForm(instance=user)
+
+    return render(request, 'users/preferences.html', {
+        'form': form,
+    })
 
 
 DEBUG_CONTEXTS = {
