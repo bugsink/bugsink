@@ -190,11 +190,11 @@
                 </div>
                 {% endif %}
 
-                {% if issue.get_events_at %}
+                {% if issue.get_events_at_2 %}
                 <div class="mb-4">
                     <div class="text-sm font-bold text-slate-500">Seen in releases:</div>
                     <div>
-                    {% for version in issue.get_events_at %}
+                    {% for version in issue.get_events_at_2 %}
                         <span {% if version|issha %}class="font-mono"{% endif %}>{{ version|shortsha }}{% if not forloop.last %}</span>,{% endif %}
                     {% endfor %}
                     </div>

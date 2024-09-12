@@ -83,6 +83,10 @@ class Issue(models.Model):
     def get_events_at(self):
         return parse_lines(self.events_at)
 
+    def get_events_at_2(self):
+        # _2: a great Python tradition; in this case: the same as get_events_at(), but ignoring the 'no release' release
+        return [e for e in self.get_events_at() if e != ""]
+
     def add_fixed_at(self, release_version):
         # release_version: str
         fixed_at = self.get_fixed_at()
