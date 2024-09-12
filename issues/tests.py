@@ -593,4 +593,4 @@ class GroupingUtilsTestCase(DjangoTestCase):
 
     def test_fingerprint_with_default(self):
         self.assertEqual("Log Message: <no log message> ⋄ <no transaction> ⋄ fixed string",
-                          get_issue_grouper_for_data({"fingerprint": ["{{ default }}", "fixed string"]}))
+                         get_issue_grouper_for_data({"fingerprint": ["{{ default }}", "fixed string"]}))
