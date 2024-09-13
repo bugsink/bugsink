@@ -59,7 +59,13 @@ class Command(BaseCommand):
             return False
 
         try:
-            with open(settings.BASE_DIR / 'api/event.schema.json', 'r') as f:
+            schema_filename = settings.BASE_DIR / 'api/event.schema.json'
+            if not schema_filename.exists():
+                # see api/README.md for more info
+                self.stderr.write("%s %s" % ("No schema file, exiting", identifier))
+                exit()
+
+            with open(schema_filename, 'r') as f:
                 schema = json.loads(f.read())
             jsonschema.validate(data, schema)
         except jsonschema.ValidationError as e:
