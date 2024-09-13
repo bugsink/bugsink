@@ -51,6 +51,9 @@ jobs:
       with:
         repository: bugsink/event-samples
         path: "event-samples"
+    - name: Run Makemigrations --check
+      run: |
+        python manage.py makemigrations --check
     - name: Run Tests
       run: |
         python manage.py test -v2
