@@ -36,7 +36,7 @@ class TeamMembership(models.Model):
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
-    send_email_alerts = models.BooleanField(default=None, null=True, blank=True)  # TODO implement the associated logic
+    send_email_alerts = models.BooleanField(default=None, null=True, blank=True)
     role = models.IntegerField(choices=TeamRole.choices, default=TeamRole.MEMBER)
     accepted = models.BooleanField(default=False)
 

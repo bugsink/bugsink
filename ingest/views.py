@@ -2,7 +2,7 @@ import os
 import logging
 import io
 from datetime import datetime, timezone
-import json  # TODO consider faster APIs
+import json
 
 from django.shortcuts import get_object_or_404
 from django.db.models import Max
@@ -411,7 +411,6 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         else:
             project = self.get_project_for_request(project_pk, request)
 
-        # TODO note not a problem
         if project.quota_exceeded_until is not None and ingested_at < project.quota_exceeded_until:
             # Sentry has x-sentry-rate-limits, but for now 429 is just fine. Client-side this is implemented as a 60s
             # backoff.

@@ -127,7 +127,9 @@ class Command(BaseCommand):
             headers = {
                 "Content-Type": "application/json",
                 "X-Sentry-Auth": get_header_value(dsn),
-                "X-BugSink-DebugInfo": identifier,  # TODO do we want to send non-filename identifiers too?
+                # as it stands we always send identifier here, even if it's not a filename. Whether that's useful or
+                # annoying is an open question, but no reason to change it for now
+                "X-BugSink-DebugInfo": identifier,
             }
             data_bytes = json.dumps(data).encode("utf-8")
             if use_envelope:

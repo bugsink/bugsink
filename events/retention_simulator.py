@@ -125,7 +125,7 @@ def main():
         if this_how_many:
             how_many = int(this_how_many)
 
-        # TODO the simulator does one cleanup per epoch, but the real thing does it on-demand as the max size is reached
+        # NOTE the simulator does one cleanup per epoch, but the real thing does it on-demand as the max size is reached
         # For now I'm not updating the simulator, because I have the real thing to play around with.
         print("INFLOW (with max %s)\n" % current_max_total_irrelevance)
         simulate_epoch(epoch, how_many, current_max_total_irrelevance)
