@@ -27,7 +27,7 @@
                 {% endif %}
 
                 <div class="ml-auto flex">
-                {% if user.is_staff %}
+                {% if app_settings.USE_ADMIN and user.is_staff %}
                 <a href="/admin/"><div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl">Admin</div></a>
                 {% endif %}
 
