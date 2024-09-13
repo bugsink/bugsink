@@ -36,7 +36,7 @@
             
     <div class="mb-6">
         {% for key, value in deployment_info %}
-            <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
+            <div class="flex">
                 <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
                 <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
             </div>

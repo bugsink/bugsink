@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% load issues %}
+{% load stricter_templates %}
 {% block title %}{{ issue.title }} · {{ block.super }}{% endblock %}
 
 {% block content %}
@@ -212,20 +213,23 @@
             </div>
         </div>
 
-        {% comment %} {# for now I don't actually think that 'tags' are key enough to get such a prominent position #}
-        <div class="border-2 mb-4 mr-4"><!-- "issue: key info" box -->
-            <div class="bg-slate-50 font-bold border-b-2">
-                <div class="border-2 p-4 border-slate-50 text-slate-500"> {# div-in-div to match the spacing of the tabs, which is caused by the hover-thick-line; we use border-2 on both sides rather than border-b-4 to get the text aligned centeredly #}
-                Tags {# (?) #}
+        {% if is_event_page and parsed_data.tags %}
+        <div class="border-2 mb-4 mr-4"><!-- "issue: tags" box -->
+            <div class="font-bold border-b-2">
+                <div class="p-4 border-slate-50 text-slate-500"> {# div-in-div to match the spacing of the tabs, which is caused by the hover-thick-line; we use border-2 on both sides rather than border-b-4 to get the text aligned centeredly #}
+                Event Tags
                 </div>
             </div>
             <div class="p-4">
-             Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam ut tincidunt ante. Nam semper purus at convallis placerat. Vestibulum hendrerit, sapien id consequat rutrum, ipsum neque ullamcorper lectus, id vulputate eros quam quis est. Proin in congue tortor, in fringilla felis. Duis rhoncus neque non lacus sollicitudin, sit amet facilisis sem pellentesque. Vivamus vestibulum rutrum euismod. Morbi dapibus ex urna. Fusce non dolor ac nisi euismod mollis. Aliquam fringilla mauris enim, quis eleifend nisi rhoncus eu. Morbi fringilla nulla sem, vitae pellentesque nulla tristique ut. Vivamus commodo non dolor ut hendrerit.
-
-Pellentesque vehicula venenatis lectus, id dictum magna iaculis ac. Vivamus a ante feugiat, consectetur lacus at, aliquet odio. Aliquam maximus ut ligula et mattis. Sed lobortis cursus felis sed pellentesque. Nullam luctus tempus nunc, eget lacinia nibh viverra vel. Sed vitae neque gravida, rutrum ante ut, mattis elit. Nam tristique consectetur ipsum, a venenatis felis dapibus vel. Phasellus nec orci risus. Cras sit amet vulputate leo. Aliquam vitae sapien sed massa tempus tempor non at nibh.
+                {% for key, value in parsed_data.tags|items %}
+                    <div class="flex">
+                        <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+                        <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+                    </div>
+                {% endfor %}
             </div>
         </div>
-        {% endcomment %}
+        {% endif %}
 
     </div>{# RHS container #}
 </div>
