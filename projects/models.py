@@ -78,13 +78,6 @@ class Project(models.Model):
     def dsn(self):
         return build_dsn(get_settings().BASE_URL, self.id, self.sentry_key)
 
-    """
-    # TODO is this even more efficient?
-    indexes = [
-        models.Index(fields=["id", "sentry_key"]),
-    ]
-    """
-
     def get_latest_release(self):
         from releases.models import ordered_releases
         if not hasattr(self, "_latest_release"):
