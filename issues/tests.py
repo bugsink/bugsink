@@ -1,3 +1,5 @@
+import os
+import inspect
 import uuid
 import json
 import time
@@ -414,6 +416,18 @@ class ViewTests(TransactionTestCase):
 
 @tag("integration")
 class IntegrationTest(TransactionTestCase):
+
+    def setUp(self):
+        self.verbosity = self.get_verbosity()
+
+    def get_verbosity(self):
+        # https://stackoverflow.com/a/27457315/339144
+        for s in reversed(inspect.stack()):
+            options = s[0].f_locals.get('options')
+            if isinstance(options, dict):
+                return int(options['verbosity'])
+        return 1
+
     def test_many_issues_ingest_and_show(self):
         user = User.objects.create_user(username='test', password='test')
         project = Project.objects.create(name="test")
@@ -427,9 +441,23 @@ class IntegrationTest(TransactionTestCase):
         command.stdout = StringIO()
         command.stderr = StringIO()
 
-        # for filename in ["...failing filename here..."]:  # use for faster debugging of individual failures
-        # TODO integrate (the relevant parts of) ../event-samples/ into our project.
-        for filename in glob("./ingest/samples/*/*.json") + glob("../event-samples/*.json"):
+        # the following may be used for faster debugging of individual failures:
+        # for filename in ["...failing filename here..."]:
+
+        # event-samples-private contains events that I have dumped from my local development environment, but which I
+        # have not bothered cleaning up, and can thus not be publically shared.
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
+
+        event_samples = glob(SAMPLES_DIR + "/*/*.json")
+        event_samples_private = glob("../event-samples-private/*.json")
+
+        if len(event_samples) == 0:
+            raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
+
+        if self.verbosity > 1:
+            print(f"Found {len(event_samples)} event samples and {len(event_samples_private)} private event samples")
+
+        for filename in event_samples + event_samples_private:
             with open(filename) as f:
                 data = json.loads(f.read())
 
