@@ -34,4 +34,14 @@ SOFTWARE.
 
 For all third party components incorporated into the Bugsink Software, those
 components are licensed under the original license provided by the owner of the
-applicable component.
+applicable component:
+
+* The icons in SVG format, directly included in various html templates are from
+  Heroicons by Tailwind Labs, Inc. (MIT License)
+
+* The code in the 'sentry' directory is Copyright 2019 Sentry
+  (https://sentry.io) and individual contributors. (BSD 3-Clause License)
+
+* Your package manager (typically pip) will install additional third party
+  components upon installing Bugsink. Please refer to the license of the
+  respective component in your package manager's repository.
