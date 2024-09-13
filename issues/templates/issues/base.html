@@ -143,6 +143,12 @@
     <div class="w-128 hidden lg:flex flex-auto flex-col">{# RHS container for multiple stacked boxes #}
 
         <div class="border-2 mb-4 mr-4"><!-- "issue: key info" box -->
+            <div class="font-bold border-b-2">
+                <div class="p-4 border-slate-50 text-slate-500 border-b-2"> {# div-in-div to match the spacing of the tabs, which is caused by the hover-thick-line; we use border-2 on both sides rather than border-b-4 to get the text aligned centeredly #}
+                Issue Key Info
+                </div>
+            </div>
+
             <div class="p-4">
                 <div class="mb-4">
                     <div class="text-sm font-bold text-slate-500">Issue #</div>
@@ -216,7 +222,7 @@
         {% if is_event_page and parsed_data.tags %}
         <div class="border-2 mb-4 mr-4"><!-- "issue: tags" box -->
             <div class="font-bold border-b-2">
-                <div class="p-4 border-slate-50 text-slate-500"> {# div-in-div to match the spacing of the tabs, which is caused by the hover-thick-line; we use border-2 on both sides rather than border-b-4 to get the text aligned centeredly #}
+                <div class="p-4 border-slate-50 text-slate-500">
                 Event Tags
                 </div>
             </div>
