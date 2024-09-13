@@ -58,6 +58,8 @@
 {% endif %}
 
 {% if parsed_data.user %}
+    {# note: in the (September 2024) sentry.io interface, user info is displayed under 'contexts', but in the data it simply lives top-level as #}
+    {# is implied by parsed_data.user -- I checked in a recent (September 2024) event.schema.json #}
     <h1 class="text-2xl font-bold mt-4"><a name="user">User</a></h1>
             
     <div class="mb-6">
