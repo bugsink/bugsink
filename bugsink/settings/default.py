@@ -50,7 +50,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'tailwind',  # As currently set up, this is also needed in production (templatetags)
-    'admin_auto_filters',  # TODO: decide whether 'admin.py' is useful in production too.
+    'admin_auto_filters',
 
     'users',
     'theme',
@@ -84,7 +84,10 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
-    'bugsink.middleware.PerformanceStatsMiddleware',  # TODO decide whether this is useful in production too.
+    # NOTE: _most_ useful while building Bugsink; in the recommended production setup the timings/counts of this
+    # middleware are not logged to a visible location; and this feature is undocumented. However, it _could_ prove
+    # useful in such contexts too, so I'm not going to put it behind a conditional.
+    'bugsink.middleware.PerformanceStatsMiddleware',
 ]
 
 ROOT_URLCONF = 'bugsink.urls'
