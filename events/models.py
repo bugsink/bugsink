@@ -99,33 +99,14 @@ class Event(models.Model):
     # max_length was deduced from current (late 2023) Sentry's Transaction model
     release = models.CharField(max_length=250, blank=True, null=False, default="")
 
-    # TODO simply not done yet; it's not mentioned in the main page for event so I missed it on the first pass
-    # request =
-
     # > Distributions are used to disambiguate build or deployment variants of the same release of an application. For
     # > example, the dist can be the build number of an Xcode build or the version code of an Android build.
     # max_length was deduced from current (late 2023) Sentry's ArtifactBundleFlatFileIndex model
     dist = models.CharField(max_length=64, blank=True, null=False, default="")
 
-    # TODO because a list
-    # > Optional. A map or list of tags for this event. Each tag must be less than 200 characters.
-    # tags
-
     # > The environment name, such as production or staging. The default value should be production.
     # max_length was deduced from current (late 2023) Sentry's GroupRelease model
     environment = models.CharField(max_length=64, blank=True, null=False, default="")
-
-    # TODO because a list
-    # > A list of relevant modules and their versions.
-    # modules
-
-    # Not done because deemed irrelevant (for now)
-    # > An arbitrary mapping of additional metadata to store with the event.
-    # extra =
-
-    # TODO because a list
-    # > A list of strings used to dictate the deduplication of this event.
-    # fingerprint
 
     # > Information about the Sentry SDK that generated this event.
     # max_length: In current (late 2023) Sentry this is implemented as an Interface (data TextField) so no real max
@@ -155,6 +136,24 @@ class Event(models.Model):
     # with age-based-irrelevance to determine which events will be evicted when retention quota are met.
     irrelevance_for_retention = models.PositiveIntegerField(blank=False, null=False)
     never_evict = models.BooleanField(blank=False, null=False, default=False)
+
+    # The following list of attributes are mentioned in the docs but are not attrs on our model (because we don't need
+    # them to be [yet]):
+    #
+    # > Optional. A map or list of tags for this event. Each tag must be less than 200 characters.
+    # tags
+    #
+    # > A list of relevant modules and their versions.
+    # modules =
+    #
+    # > An arbitrary mapping of additional metadata to store with the event.
+    # extra =
+    #
+    # > A list of strings used to dictate the deduplication of this event.
+    # fingerprint
+    #
+    # (This one is mentioned on https://develop.sentry.dev/sdk/event-payloads/request/)
+    # request =
 
     class Meta:
         unique_together = [
