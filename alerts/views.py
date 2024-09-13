@@ -10,7 +10,7 @@ DEBUG_CONTEXTS = {
         "alert_article": "a",
         "alert_reason": "NEW",
         "issue_url": get_settings().BASE_URL + "/issues/issue/00000000-0000-0000-0000-000000000000/",
-        "settings_url": get_settings().BASE_URL + "/",  # TODO
+        "settings_url": get_settings().BASE_URL + "/accounts/preferences/",
     },
 }
 

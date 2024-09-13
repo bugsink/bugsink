@@ -80,7 +80,7 @@ def _send_alert(issue_id, state_description, alert_article, alert_reason, **kwar
                 "state_description": state_description,
                 "alert_article": alert_article,
                 "alert_reason": alert_reason,
-                "settings_url": get_settings().BASE_URL + "/",  # TODO
+                "settings_url": get_settings().BASE_URL + "/accounts/preferences/",
                 **kwargs,
             },
         )
