@@ -205,7 +205,11 @@
         },
         "platform": {
           "description": " Platform identifier of this event (defaults to \"other\").\n\n A string representing the platform the SDK is submitting from. This will be used by the\n Sentry interface to customize various components in the interface, but also to enter or\n skip stacktrace processing.\n\n Acceptable values are: `as3`, `c`, `cfml`, `cocoa`, `csharp`, `elixir`, `haskell`, `go`,\n `groovy`, `java`, `javascript`, `native`, `node`, `objc`, `other`, `perl`, `php`, `python`,\n `ruby`",
-          "type": "string"
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "received": {
           "description": " Timestamp when the event has been received by Sentry.",
@@ -325,6 +329,9 @@
           "anyOf": [
             {
               "$ref": "#/definitions/Timestamp"
+            },
+            {
+              "type": "null"
             }
           ]
         },
@@ -381,11 +388,6 @@
           ]
         }
       },
-      "required": [
-        "event_id",
-        "platform",
-        "timestamp"
-      ],
       "additionalProperties": false
     }
   ],
@@ -729,6 +731,20 @@
             "version"
           ],
           "properties": {
+            "features": {
+              "description": " List of features that are enabled in the SDK. _Optional._\n\n A list of feature names identifying enabled SDK features. This list\n should contain all enabled SDK features. On some SDKs, enabling a feature in the\n options also adds an integration. We encourage tracking such features with either\n integrations or features but not both to reduce the payload size.",
+              "default": null,
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
             "integrations": {
               "description": " List of integrations that are enabled in the SDK. _Optional._\n\n The list should have all enabled integrations, including default integrations. Default\n integrations are included because different SDK releases may contain different default\n integrations.",
               "default": null,
@@ -908,6 +924,9 @@
           "$ref": "#/definitions/ReplayContext"
         },
         {
+          "$ref": "#/definitions/UserReportV2Context"
+        },
+        {
           "$ref": "#/definitions/MonitorContext"
         },
         {
@@ -918,6 +937,12 @@
         },
         {
           "$ref": "#/definitions/CloudResourceContext"
+        },
+        {
+          "$ref": "#/definitions/NelContext"
+        },
+        {
+          "$ref": "#/definitions/PerformanceScoreContext"
         },
         {
           "type": "object",
@@ -1477,7 +1502,7 @@
       ]
     },
     "EventType": {
-      "description": "The type of an event.\n\nThe event type determines how Sentry handles the event and has an impact on processing, rate limiting, and quotas. There are three fundamental classes of event types:\n\n- **Error monitoring events** (`default`, `error`): Processed and grouped into unique issues based on their exception stack traces and error messages. - **Security events** (`csp`, `hpkp`, `expectct`, `expectstaple`): Derived from Browser security violation reports and grouped into unique issues based on the endpoint and violation. SDKs do not send such events. - **Transaction events** (`transaction`): Contain operation spans and collected into traces for performance monitoring. - **Feedback events** (`feedback`): Contains user feedbacks",
+      "description": "The type of an event.\n\nThe event type determines how Sentry handles the event and has an impact on processing, rate limiting, and quotas. There are three fundamental classes of event types:\n\n- **Error monitoring events** (`default`, `error`): Processed and grouped into unique issues based on their exception stack traces and error messages. - **Security events** (`csp`, `hpkp`, `expectct`, `expectstaple`): Derived from Browser security violation reports and grouped into unique issues based on the endpoint and violation. SDKs do not send such events. - **Transaction events** (`transaction`): Contain operation spans and collected into traces for performance monitoring.",
       "type": "string",
       "enum": [
         "error",
@@ -1485,8 +1510,9 @@
         "hpkp",
         "expectct",
         "expectstaple",
+        "nel",
         "transaction",
-        "feedback",
+        "userreportv2",
         "default"
       ]
     },
@@ -1807,7 +1833,7 @@
               ]
             }
           },
-          "additionalProperties": true
+          "additionalProperties": false
         }
       ]
     },
@@ -2119,6 +2145,41 @@
         "fatal"
       ]
     },
+    "LinuxDistribution": {
+      "description": " Metadata for the Linux Distribution.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "description": " An index-able name that is stable for each distribution.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "pretty_name": {
+              "description": " A full rendering of name + version + release name (not available in all distributions).",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "version": {
+              "description": " The version of the distribution (missing in distributions with solely rolling release).",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
     "LockReason": {
       "description": " Represents an instance of a held lock (java monitor object) in a thread.",
       "anyOf": [
@@ -2191,7 +2252,7 @@
       ]
     },
     "LogEntry": {
-      "description": " A log entry message.\n\n A log message is similar to the `message` attribute on the event itself but\n can additionally hold optional parameters.\n\n ```json\n {\n   \"message\": {\n     \"message\": \"My raw message with interpreted strings like %s\",\n     \"params\": [\"this\"]\n   }\n }\n ```\n\n ```json\n {\n   \"message\": {\n     \"message\": \"My raw message with interpreted strings like {foo}\",\n     \"params\": {\"foo\": \"this\"}\n   }\n }\n ```",
+      "description": " A log entry message.\n\n A log message is similar to the `message` attribute on the event itself but\n can additionally hold optional parameters.\n\n ```json\n {\n   \"logentry\": {\n     \"message\": \"My raw message with interpreted strings like %s\",\n     \"params\": [\"this\"]\n   }\n }\n ```\n\n ```json\n {\n   \"logentry\": {\n     \"message\": \"My raw message with interpreted strings like {foo}\",\n     \"params\": {\"foo\": \"this\"}\n   }\n }\n ```",
       "anyOf": [
         {
           "type": "object",
@@ -2504,7 +2565,7 @@
               ]
             },
             "debug_checksum": {
-              "description": " The optional checksum of the debug companion file.\n\n - `pe_dotnet`: This is the hash algorithm and hex-formatted checksum of the associated PDB file.\n  This should have the format `$algorithm:$hash`, for example `SHA256:aabbccddeeff...`.\n\n   See: <https://github.com/dotnet/runtime/blob/main/docs/design/specs/PE-COFF.md#pdb-checksum-debug-directory-entry-type-19>",
+              "description": " The optional checksum of the debug companion file.\n\n - `pe_dotnet`: This is the hash algorithm and hex-formatted checksum of the associated PDB file.\n   This should have the format `$algorithm:$hash`, for example `SHA256:aabbccddeeff...`.\n\n   See: <https://github.com/dotnet/runtime/blob/main/docs/design/specs/PE-COFF.md#pdb-checksum-debug-directory-entry-type-19>",
               "default": null,
               "type": [
                 "string",
@@ -2524,7 +2585,7 @@
               ]
             },
             "debug_id": {
-              "description": " Unique debug identifier of the image.\n\n - `elf`: Debug identifier of the dynamic library or executable. If a code identifier is available, the debug identifier is the little-endian UUID representation of the first 16-bytes of that\n identifier. Spaces are inserted for readability, note the byte order of the first fields:\n\n   ```text\n   code id:  f1c3bcc0 2798 65fe 3058 404b2831d9e6 4135386c\n   debug id: c0bcc3f1-9827-fe65-3058-404b2831d9e6\n   ```\n\n   If no code id is available, the debug id should be computed by XORing the first 4096 bytes of the `.text` section in 16-byte chunks, and representing it as a little-endian UUID (again swapping the byte order).\n\n - `pe`: `signature` and `age` of the PDB file. Both values can be read from the CodeView PDB70 debug information header in the PE. The value should be represented as little-endian UUID, with the age appended at the end. Note that the byte order of the UUID fields must be swapped (spaces inserted for readability):\n\n   ```text\n   signature: f1c3bcc0 2798 65fe 3058 404b2831d9e6\n   age:                                            1\n   debug_id:  c0bcc3f1-9827-fe65-3058-404b2831d9e6-1\n   ```\n\n - `macho`: Identifier of the dynamic library or executable. It is the value of the `LC_UUID` load command in the Mach header, formatted as UUID.",
+              "description": " Unique debug identifier of the image.\n\n - `elf`: Debug identifier of the dynamic library or executable. If a code identifier is available, the debug identifier is the little-endian UUID representation of the first 16-bytes of that\n   identifier. Spaces are inserted for readability, note the byte order of the first fields:\n\n   ```text\n   code id:  f1c3bcc0 2798 65fe 3058 404b2831d9e6 4135386c\n   debug id: c0bcc3f1-9827-fe65-3058-404b2831d9e6\n   ```\n\n   If no code id is available, the debug id should be computed by XORing the first 4096 bytes of the `.text` section in 16-byte chunks, and representing it as a little-endian UUID (again swapping the byte order).\n\n - `pe`: `signature` and `age` of the PDB file. Both values can be read from the CodeView PDB70 debug information header in the PE. The value should be represented as little-endian UUID, with the age appended at the end. Note that the byte order of the UUID fields must be swapped (spaces inserted for readability):\n\n   ```text\n   signature: f1c3bcc0 2798 65fe 3058 404b2831d9e6\n   age:                                            1\n   debug_id:  c0bcc3f1-9827-fe65-3058-404b2831d9e6-1\n   ```\n\n - `macho`: Identifier of the dynamic library or executable. It is the value of the `LC_UUID` load command in the Mach header, formatted as UUID.",
               "anyOf": [
                 {
                   "$ref": "#/definitions/DebugId"
@@ -2581,6 +2642,88 @@
         }
       ]
     },
+    "NelContext": {
+      "description": " Contains NEL report information.\n\n Network Error Logging (NEL) is a browser feature that allows reporting of failed network\n requests from the client side. See the following resources for more information:\n\n - [W3C Editor's Draft](https://w3c.github.io/network-error-logging/)\n - [MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Network_Error_Logging)",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "elapsed_time": {
+              "description": " The number of milliseconds between the start of the resource fetch and when it was aborted by the user agent.",
+              "default": null,
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "error_type": {
+              "description": " If request failed, the type of its network error. If request succeeded, \"ok\".",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "phase": {
+              "description": " If request failed, the phase of its network error. If request succeeded, \"application\".",
+              "default": null,
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/NetworkReportPhases"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sampling_fraction": {
+              "description": " The sampling rate.",
+              "default": null,
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "server_ip": {
+              "description": " Server IP where the requests was sent to.",
+              "default": null,
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/String"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "NetworkReportPhases": {
+      "description": " Describes which phase the error occurred in.",
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "additionalProperties": false
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
     "NsError": {
       "description": " NSError informaiton.",
       "anyOf": [
@@ -2621,6 +2764,18 @@
               "type": [
                 "string",
                 "null"
+              ]
+            },
+            "distribution": {
+              "description": " Meta-data for the Linux Distribution.",
+              "default": null,
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/LinuxDistribution"
+                },
+                {
+                  "type": "null"
+                }
               ]
             },
             "kernel_version": {
@@ -2697,6 +2852,25 @@
         }
       ]
     },
+    "PerformanceScoreContext": {
+      "description": " Performance Score context.\n\n The performance score context contains the version of the\n profile used to calculate the performance score.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "score_profile_version": {
+              "description": " The performance score profile version.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
     "PosixSignal": {
       "description": " POSIX signal with optional extended data.\n\n On Apple systems, signals also carry a code in addition to the signal number describing the\n signal in more detail. On Linux, this code does not exist.",
       "anyOf": [
@@ -2747,12 +2921,22 @@
       "anyOf": [
         {
           "type": "object",
-          "required": [
-            "profile_id"
-          ],
           "properties": {
             "profile_id": {
               "description": " The profile ID.",
+              "default": null,
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/EventId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "profiler_id": {
+              "description": " The profiler ID.",
+              "default": null,
               "anyOf": [
                 {
                   "$ref": "#/definitions/EventId"
@@ -2977,6 +3161,14 @@
                 "null"
               ]
             },
+            "protocol": {
+              "description": " HTTP protocol.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "query_string": {
               "description": " The query string component of the URL.\n\n Can be given as unparsed string, dictionary, or list of tuples.\n\n If the query string is not declared and part of the `url`, Sentry moves it to the\n query string.",
               "default": null,
@@ -3111,6 +3303,34 @@
         }
       ]
     },
+    "Route": {
+      "description": " The route in the application, set by React Native SDK.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "description": " The name of the route.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "params": {
+              "description": " Parameters assigned to this route.",
+              "default": null,
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
     "RuntimeContext": {
       "description": " Runtime information.\n\n Runtime context describes a runtime in more detail. Typically, this context is present in\n `contexts` multiple times if multiple runtimes are involved (for instance, if you have a\n JavaScript application running on top of JVM).",
       "anyOf": [
@@ -3188,6 +3408,287 @@
                 {
                   "type": "null"
                 }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SpanData": {
+      "description": " Arbitrary additional data on a span.\n\n Besides arbitrary user data, this type also contains SDK-provided fields used by the\n product (see <https://develop.sentry.dev/sdk/performance/span-data-conventions/>).",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ai.completion_tokens.used": {
+              "description": " The output tokens used by an LLM call (the ones the LLM actually generated)",
+              "default": null
+            },
+            "ai.input_messages": {
+              "description": " The input messages to an AI model call",
+              "default": null
+            },
+            "ai.model_id": {
+              "description": " The Model ID of an AI pipeline, e.g., gpt-4",
+              "default": null
+            },
+            "ai.pipeline.name": {
+              "description": " The 'name' field of the ancestor span with op ai.pipeline.*",
+              "default": null
+            },
+            "ai.prompt_tokens.used": {
+              "description": " The input tokens used by an LLM call (usually cheaper than output tokens)",
+              "default": null
+            },
+            "ai.responses": {
+              "description": " The responses to an AI model call",
+              "default": null
+            },
+            "ai.total_tokens.used": {
+              "description": " The total tokens that were used by an LLM call",
+              "default": null
+            },
+            "app_start_type": {
+              "description": " Mobile app start variant.\n\n Can be either \"cold\" or \"warm\".",
+              "default": null
+            },
+            "browser.name": {
+              "description": " The client's browser name.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "cache.hit": {
+              "description": " Whether cache was hit or miss on a read operation.",
+              "default": null
+            },
+            "cache.item_size": {
+              "description": " The size of the cache item.",
+              "default": null
+            },
+            "cache.key": {
+              "description": " The name of the cache key.",
+              "default": null
+            },
+            "client.address": {
+              "description": " The client's IP address.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "code.filepath": {
+              "description": " The source code file name that identifies the code unit as uniquely as possible.",
+              "default": null
+            },
+            "code.function": {
+              "description": " The method or function name, or equivalent.\n\n Usually rightmost part of the code unit's name.",
+              "default": null
+            },
+            "code.lineno": {
+              "description": " The line number in `code.filepath` best representing the operation.",
+              "default": null
+            },
+            "code.namespace": {
+              "description": " The \"namespace\" within which `code.function` is defined.\n\n Usually the qualified class or module name, such that\n `code.namespace + some separator + code.function`\n form a unique identifier for the code unit.",
+              "default": null
+            },
+            "db.operation": {
+              "description": " The name of the operation being executed.\n\n E.g. the MongoDB command name such as findAndModify, or the SQL keyword.\n Based on [OpenTelemetry's call level db attributes](https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/semantic_conventions/database.md#call-level-attributes).",
+              "default": null
+            },
+            "db.system": {
+              "description": " An identifier for the database management system (DBMS) product being used.\n\n See [OpenTelemetry docs for a list of well-known identifiers](https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/semantic_conventions/database.md#notes-and-well-known-identifiers-for-dbsystem).",
+              "default": null
+            },
+            "frames.delay": {
+              "default": null
+            },
+            "http.decoded_response_content_length": {
+              "description": " The decoded body size of the response (in bytes).",
+              "default": null
+            },
+            "http.request_method": {
+              "description": " The HTTP method used.",
+              "default": null
+            },
+            "http.response.status_code": {
+              "description": " The status HTTP response.",
+              "default": null
+            },
+            "http.response_content_length": {
+              "description": " The encoded body size of the response (in bytes).",
+              "default": null
+            },
+            "http.response_transfer_size": {
+              "description": " The transfer size of the response (in bytes).",
+              "default": null
+            },
+            "messaging.destination.name": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "messaging.message.body.size": {
+              "description": " Message Body Size",
+              "default": null
+            },
+            "messaging.message.id": {
+              "description": " Message ID",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "messaging.message.receive.latency": {
+              "description": " Message Receive Latency",
+              "default": null
+            },
+            "messaging.message.retry.count": {
+              "description": " Message Retry Count",
+              "default": null
+            },
+            "previousRoute": {
+              "description": " The previous route in the application\n\n Set by React Native SDK.",
+              "default": null,
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Route"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "resource.render_blocking_status": {
+              "description": " The render blocking status of the resource.",
+              "default": null
+            },
+            "route": {
+              "description": " The current route in the application.\n\n Set by React Native SDK.",
+              "default": null,
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Route"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sentry.environment": {
+              "description": " The sentry environment.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sentry.frames.frozen": {
+              "description": " Frozen Frames",
+              "default": null
+            },
+            "sentry.frames.slow": {
+              "description": " Slow Frames",
+              "default": null
+            },
+            "sentry.frames.total": {
+              "description": " Total Frames",
+              "default": null
+            },
+            "sentry.release": {
+              "description": " The release version of the project.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sentry.replay.id": {
+              "description": " Replay ID",
+              "default": null
+            },
+            "sentry.sdk.name": {
+              "description": " The sentry SDK (see [`crate::protocol::ClientSdkInfo`]).",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sentry.sdk.version": {
+              "description": " The sentry SDK version (see [`crate::protocol::ClientSdkInfo`]).",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sentry.segment.name": {
+              "description": " Name of the segment that this span belongs to (see `segment_id`).\n\n This corresponds to the transaction name in the transaction-based model.\n\n For INP spans, this is the route name where the interaction occurred.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "server.address": {
+              "description": " Name of the web server host.",
+              "default": null
+            },
+            "thread.id": {
+              "description": " ID of thread from where the span originated.",
+              "default": null,
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ThreadId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "thread.name": {
+              "description": " Label identifying a thread from where the span originated.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ui.component_name": {
+              "description": " Name of the UI component (e.g. React).",
+              "default": null
+            },
+            "url.full": {
+              "description": " Absolute URL of a network resource.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "url.scheme": {
+              "description": " The URL scheme, e.g. `\"https\"`.",
+              "default": null
+            },
+            "user": {
+              "description": " User Display",
+              "default": null
+            },
+            "user_agent.original": {
+              "description": " Value of the HTTP User-Agent header sent by the client.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
               ]
             }
           },
@@ -3476,6 +3977,18 @@
               ],
               "format": "double"
             },
+            "data": {
+              "description": " Data of the trace's root span.",
+              "default": null,
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/SpanData"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "exclusive_time": {
               "description": " The amount of time in milliseconds spent in this transaction span,\n excluding its immediate child spans.",
               "default": null,
@@ -3756,8 +4269,43 @@
                 "null"
               ]
             },
+            "sentry_user": {
+              "description": " The user string representation as handled in Sentry.\n\n This field is computed by concatenating the name of specific fields of the `User`\n struct with their value. For example, if `id` is set, `sentry_user` will be equal to\n `\"id:id-of-the-user\".",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "username": {
               "description": " Username of the user.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "UserReportV2Context": {
+      "description": " Feedback context.\n\n This contexts contains user feedback specific attributes.\n We don't PII scrub contact_email as that is provided by the user.\n TODO(jferg): rename to FeedbackContext once old UserReport logic is deprecated.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "contact_email": {
+              "description": " an email optionally provided by the user, which can be different from user.email",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "message": {
+              "description": " The feedback message which contains what the user has to say.",
               "default": null,
               "type": [
                 "string",
