@@ -73,7 +73,6 @@
 {% endif %}
 
 {% if parsed_data.request %}
-
     <h1 class="text-2xl font-bold mt-4"><a name="request">Request</a></h1>
     <div class="mb-6">
             
@@ -91,15 +90,12 @@
     {% if parsed_data.request.headers %}
     <h3 class="font-bold mt-2">REQUEST HEADERS</h3>
     <div>
-    {# TODO the user's browser and OS can be deduced from the request headers. Perhaps that info should go near the headers #}
-
     {% for key, value in parsed_data.request.headers.items %}
     <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %} border-dotted">
         <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
         <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
     </div>
     {% endfor %}
-
     </div>
     {% endif %} {# end if parsed_data.request.headers #}
 
@@ -121,6 +117,34 @@
 
 {% endif %}
 
+{% if contexts %}
+    <h1 class="text-2xl font-bold mt-4"><a name="runtime">Contexts</a></h1>
+            
+    <div class="mb-6">
+        {% for context_key, context in contexts|items %}
+            <h3 class="font-bold mt-2">{{ context_key|upper }}</h3>
+            {% for key, value in context|items %}
+                <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
+                    <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+                    <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+                </div>
+            {% endfor %}
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% comment %}
+earlier I said about "tracing": I don't believe much in this whole business of tracing, so I'm not going to display the associated data either
+
+now that we "just display all contexts" this is no longer true... some of the feeling persists, but I don't think 
+that I'm so much anti-tracing that I want specifically exclude it from a generic loop. The data's there, let's just
+show it (in a non-special way)
+{% endcomment %}
+
+{% comment %}
+commented-out like it's 1999.
+this is now part of the more general "contexts" handling right above this section.
+the fact that we commented-out rather than clobbered reveals a small amount of doubt about whether this is the way.
 
 {% if parsed_data.contexts.runtime %}
     {# sentry gives this prime location (even a picture)... but why... it's kinda obvious what you're working in right? Maybe I could put it at the top of the modules list instead. And check if there's any other relevant info in that runtime context (RTFM) #}
@@ -135,6 +159,7 @@
         {% endfor %}
     </div>
 {% endif %}
+{% endcomment %}
 
 {% if parsed_data.modules %}
     <h1 class="text-2xl font-bold mt-4"><a name="modules">Modules</a></h1>
@@ -176,22 +201,6 @@
         {% endfor %}
     </div>
 {% endif %}
-
-{% comment %}
-{# I don't believe much in this whole business of tracing, so I'm not going to display the associated data either #}
-{% if parsed_data.contexts.trace %}
-    <h1 class="text-2xl font-bold mt-4"><a name="trace">Trace</a></h1>
-            
-    <div class="mb-6">
-        {% for key, value in parsed_data.contexts.trace|items %}
-            <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
-            </div>
-        {% endfor %}
-    </div>
-{% endif %}
-{% endcomment %}
 
 
 {% endblock %}

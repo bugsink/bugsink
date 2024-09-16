@@ -12,3 +12,4 @@ python-dateutil
 whitenoise
 requests  # for sentry-sdk-extensions, which is loaded in non-dev setup too
 monofy
+user_agents
