@@ -484,7 +484,7 @@ class IntegrationTest(TransactionTestCase):
                 data["timestamp"] = time.time()
 
             if not command.is_valid(data, filename):
-                raise Exception("validatity check in %s: %s" % filename, command.stderr.getvalue())
+                raise Exception("validatity check in %s: %s" % (filename, command.stderr.getvalue()))
 
             response = self.client.post(
                 f"/api/{ project.id }/store/",
