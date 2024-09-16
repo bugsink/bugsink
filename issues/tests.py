@@ -1,3 +1,4 @@
+import requests
 import os
 import inspect
 import uuid
@@ -12,6 +13,7 @@ from datetime import datetime, timezone
 from django.test import TestCase as DjangoTestCase, TransactionTestCase
 from django.contrib.auth import get_user_model
 from django.test import tag
+from django.conf import settings
 
 from projects.models import Project, ProjectMembership
 from releases.models import create_release_if_needed
@@ -457,6 +459,20 @@ class IntegrationTest(TransactionTestCase):
         if self.verbosity > 1:
             print(f"Found {len(event_samples)} event samples and {len(event_samples_private)} private event samples")
 
+        try:
+            github_result = requests.get(
+                "https://raw.githubusercontent.com/getsentry/sentry-data-schemas/main/relay/event.schema.json")
+            github_result.raise_for_status()
+
+            with open(settings.BASE_DIR / "api/event.schema.json", "r") as f:
+                my_contents = f.read()
+
+            self.assertEqual(my_contents, github_result.content.decode("utf-8"), "event.schema.json is not up-to-date")
+        except requests.RequestException:
+            # getting the latest schema "once in a while" is nice so that we can be sure we're not falling behind;
+            # but we don't want that to introduce a point-of-failure in our tests. So print-and-continue.
+            print("Could not fetch the latest event schema from GitHub; I will not fail the tests for this")
+
         for filename in event_samples + event_samples_private:
             with open(filename) as f:
                 data = json.loads(f.read())
@@ -468,7 +484,7 @@ class IntegrationTest(TransactionTestCase):
                 data["timestamp"] = time.time()
 
             if not command.is_valid(data, filename):
-                continue
+                raise Exception("validatity check in %s: %s" % filename, command.stderr.getvalue())
 
             response = self.client.post(
                 f"/api/{ project.id }/store/",
@@ -480,7 +496,8 @@ class IntegrationTest(TransactionTestCase):
                 },
             )
             self.assertEqual(
-                200, response.status_code, response.content if response.status_code != 302 else response.url)
+                200, response.status_code, "Error in %s: %s" % (
+                    filename, response.content if response.status_code != 302 else response.url))
 
         for event in Event.objects.all():
             urls = [

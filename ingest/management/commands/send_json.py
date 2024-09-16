@@ -30,46 +30,21 @@ class Command(BaseCommand):
         parser.add_argument("identifiers", nargs="+")
 
     def is_valid(self, data, identifier):
-        if "event_id" not in data:
-            self.stderr.write("%s %s" % ("Probably not a (single) event", identifier))
-            return False
-
-        if "platform" not in data:
-            # in a few cases this value isn't set either in the sentry test data but I'd rather ignore those...
-            # because 'platform' is such a valuable piece of info while getting a sense of the shape of the data
-            self.stderr.write("%s %s" % ("Platform not set", identifier))
-            return False
-
-        if data.get("type", "") == "transaction":
-            # kinda weird that this is in the "type" field rather than endpoint/envelope but who cares, that's
-            # where the info lives and we use it as an indicator to skip
-            self.stderr.write("%s %s" % ("We don't do transactions", identifier))
-            return False
-
-        if data.get('profile'):
-            # yet another case of undocumented behavior that I don't care about
-            # ../sentry-current/static/app/utils/profiling/profile/formats/node/trace.json
-            self.stderr.write("%s %s" % ("124", identifier))
-            return False
-
-        if data.get('message'):
-            # yet another case of undocumented behavior that I don't care about (top-level "message")
-            # ../glitchtip/events/test_data/py_hi_event.json
-            self.stderr.write("%s %s" % ("asdf", identifier))
-            return False
+        # In our (private) samples we often have this "_meta" field. I can't (quickly) find any documentation for it,
+        # nor do I have any use for it myself (i.e. I don't display this info in templates). The quickest way to get
+        # something to work is to just remove the info from the json. This comes with the drawback of changing data
+        # on-validation, but for now that's an OK trade=off.
+        if "_meta" in data:
+            del data["_meta"]
 
         try:
             schema_filename = settings.BASE_DIR / 'api/event.schema.json'
-            if not schema_filename.exists():
-                # see api/README.md for more info
-                self.stderr.write("%s %s" % ("No schema file, exiting", identifier))
-                exit()
-
             with open(schema_filename, 'r') as f:
                 schema = json.loads(f.read())
+
             jsonschema.validate(data, schema)
         except jsonschema.ValidationError as e:
-            self.stderr.write("%s %s %s" % ("still not ok at", repr(e), identifier))
+            self.stderr.write("%s %s" % (repr(e), identifier))
             return False
 
         return True
