@@ -46,7 +46,7 @@
                         <a href="{% url "team_member_settings" team_pk=team.pk user_pk=member.user_id %}" class="text-xl text-cyan-500 font-bold">{{ member.user.email }}</a>  {# "best name" perhaps later? #}
                         {% if not member.accepted %}
                         <span class="bg-slate-100 rounded-2xl px-4 py-2 ml-2 text-sm">Invitation pending</span>
-                        {% elif member.role == 1 %} {# NOTE: we intentionally hide admin-ness for non-accepted users; TODO better use of constants #}
+                        {% elif member.is_admin %} {# NOTE: we intentionally hide admin-ness for non-accepted users #}
                         <span class="bg-cyan-100 rounded-2xl px-4 py-2 ml-2 text-sm">Admin</span>
                         {% endif %}
                     </div>
