@@ -190,13 +190,22 @@ class IssueStateManager(object):
 
     @staticmethod
     def reopen(issue):
+        # this is called "reopen", but since there's no UI for it, it's more like "deal with a regression" (i.e. that's
+        # the only way this gets called).
         issue.is_resolved = False
-        issue.is_resolved_by_next_release = False  # ?? echt?
-        # TODO and what about fixed_at ?
 
-        # as in IssueStateManager.resolve(), but not because a reopened issue cannot be muted (we could mute it soon
-        # after reopening) but because when reopening an issue you're doing this from a resolved state; calling unmute()
-        # here is done as a consistency-enforcement after the fact.
+        # we don't touch is_resolved_by_next_release (i.e. set to False) here. Why? The simple/principled answer is that
+        # observations that Bugsink can make can by definition not be about the future. If the user tells us "this
+        # is fixed in some not-yet-released version" there's just no information ever in Bugsink to refute that".
+        # (BTW this point in the code cannot be reached when issue.is_resolved_by_next_release is True anyway)
+
+        # we also don't touch `fixed_at`. The meaning of that field is "reports came in about fixes at these points in
+        # time", not "it actually _was_ fixed at all of those points" and the finer differences between those 2
+        # statements is precisely what we have quite some "is_regression" logic for.
+
+        # as in IssueStateManager.resolve(), but not because a reopened issue cannot be muted in principle (i.e. we
+        # could mute it soon after reopening) but because when reopening an issue you're doing this from a resolved
+        # state; calling unmute() here is done as an after-the-fact consistency-enforcement.
         IssueStateManager.unmute(issue)
 
     @staticmethod
