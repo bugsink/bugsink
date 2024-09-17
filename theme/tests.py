@@ -1,11 +1,18 @@
 from unittest import TestCase as RegularTestCase
 
-from .templatetags.issues import _pygmentize_lines
+from .templatetags.issues import _pygmentize_lines as actual_pygmentize_lines
 
 
-class TestIssuesTemplateTags(RegularTestCase):
-    # These tests depend on the assert inside the function, simply calling the function and the assert not blowing up is
-    # what we're proving here.
+def _pygmentize_lines(lines):
+    # since we exclusively care about line-counts, we just pick something for filename and platform here.
+    return actual_pygmentize_lines(lines, filename="a.py", platform="python")
+
+
+class TestPygmentizeLineLineCountHandling(RegularTestCase):
+    # The focus of these tests is `len(input) == len(output)`, which is hard in the presence of emptyness.
+    #
+    # For failure we depend on the asserts inside the function, simply calling the function and the assert not blowing
+    # up is what we're proving here.
 
     def test_pygmentize_lines_empty(self):
         _pygmentize_lines([])
