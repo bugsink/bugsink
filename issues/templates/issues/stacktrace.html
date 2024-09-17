@@ -51,7 +51,7 @@
     </div>
 
     {% for frame in exception.stacktrace.frames %}
-        {% with frame=frame|pygmentize %}
+        {% with frame=frame|pygmentize:event.platform %}
         
         <div class="bg-white w-full font-mono"> {# per frame div #}
             {% if frame.raise_point %}<a name="raise"/>{% endif %}

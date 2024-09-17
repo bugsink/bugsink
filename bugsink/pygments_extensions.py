@@ -1,6 +1,9 @@
 from pygments.lexers import _iter_lexerclasses, _fn_matches
 from os.path import basename
 
+from pygments.lexers import (
+    ActionScript3Lexer, CLexer, ColdfusionHtmlLexer, CSharpLexer, HaskellLexer, GoLexer, GroovyLexer, JavaLexer,
+    JavascriptLexer, ObjectiveCLexer, PerlLexer, PhpLexer, PythonLexer, RubyLexer, TextLexer)
 
 _all_lexers = None
 
@@ -72,3 +75,36 @@ def guess_lexer_for_filename(_fn, **options):
         return get_all_lexers().get(test)(**options)
     except ValueError:
         return None
+
+
+def lexer_for_platform(platform, **options):
+    # We can depend on platform having been set: it's a required attribute as per Sentry's docs.
+    # The LHS in the table below is a fixed list of available platforms, as per the Sentry docs.
+    # The RHS is my educated guess for what these platforms map to in Pygments.
+
+    return {
+        "as3": ActionScript3Lexer,
+        "c": CLexer,
+        "cfml": ColdfusionHtmlLexer,
+        "cocoa": TextLexer,  # I couldn't find the Cocoa lexer in Pygments, this will do for now.
+        "csharp": CSharpLexer,
+        "elixir": TextLexer,  # I couldn't find the Elixir lexer in Pygments, this will do for now.
+        "haskell": HaskellLexer,
+        "go": GoLexer,
+        "groovy": GroovyLexer,
+        "java": JavaLexer,
+        "javascript": JavascriptLexer,
+
+        # > The Sentry Native SDK is intended for C and C++. However, since it builds as a dynamic library and exposes
+        # > C-bindings, it can be used by any language that supports interoperability with C, such as the Foreign
+        # > Function Interface (FFI).
+        # i.e. "it may be C or C++ or any other language that can call C functions", i.e. we can't reliably pick
+        "native": TextLexer,
+        "node": JavascriptLexer,  # I'm assuming the language is always JavaScript if the declared platform is Node.
+        "objc": ObjectiveCLexer,
+        "other": TextLexer,  # "other" by definition implies that nothing is known.
+        "perl": PerlLexer,  # or Perl6Lexer...
+        "php": PhpLexer,
+        "python": PythonLexer,
+        "ruby": RubyLexer,
+    }[platform](**options)

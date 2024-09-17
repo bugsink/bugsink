@@ -1,12 +1,13 @@
 import re
 from django import template
 from pygments import highlight
-from pygments.lexers import PythonLexer
 from pygments.formatters import HtmlFormatter
-from bugsink.pygments_extensions import guess_lexer_for_filename
+
 
 from django.utils.safestring import mark_safe
 
+
+from bugsink.pygments_extensions import guess_lexer_for_filename, lexer_for_platform
 
 register = template.Library()
 
@@ -22,17 +23,23 @@ def _split(joined, lengths):
     return result
 
 
-def _core_pygments(code, filename=None):
+def _core_pygments(code, filename=None, platform=None):
     # PythonLexer(stripnl=False) does not actually work; we work around it by inserting a space in the empty lines
     # before calling this function.
 
-    # TODO the PythonLexer not be the fallback (instead: guessing without filename)
+    # note: we don't use pygments' `guess_lexer(text)` function because it is basically useless, especially when only
+    # snippets of code are available. Check the implementation of `analyze_text` in the various lexers to see why (e.g.
+    # perl and python are particularly bad). Better just use the platform (even though that's broader than a single
+    # frame, since it applies to the whole event). A happy side effect of using `lexer_for_platform` is that it's fast.
+    # Note: this only matters in the presumably rare case that the filename is not available (or useful) but the source
+    # code is.
+
     if filename:
         lexer = guess_lexer_for_filename(filename)
         if lexer is None:
-            lexer = PythonLexer()
+            lexer = lexer_for_platform(platform)
     else:
-        lexer = PythonLexer()
+        lexer = lexer_for_platform(platform)
 
     result = highlight(code, lexer, HtmlFormatter(nowrap=True))
 
@@ -46,7 +53,7 @@ def _core_pygments(code, filename=None):
     return result
 
 
-def _pygmentize_lines(lines, filename=None):
+def _pygmentize_lines(lines, filename=None, platform=None):
     if lines == []:
         # special case; sending the empty string to pygments will result in one newline too many
         return []
@@ -57,13 +64,15 @@ def _pygmentize_lines(lines, filename=None):
     # we also add a space to the empty lines to make sure that they are not removed by the pygments formatter
     lines = [" " if line == "" else line for line in [l.replace("\n", "") for l in lines]]
     code = "\n".join(lines)
-    result = _core_pygments(code, filename=filename).split('\n')[:-1]  # remove the last empty line, a result of split()
+
+    # [:-1] to remove the last empty line, a result of split()
+    result = _core_pygments(code, filename=filename, platform=platform).split('\n')[:-1]
     assert len(lines) == len(result), "%s != %s" % (len(lines), len(result))
     return result
 
 
 @register.filter
-def pygmentize(value):
+def pygmentize(value, platform):
     filename = value.get('filename')
 
     if value.get('context_line') is None:
@@ -73,7 +82,7 @@ def pygmentize(value):
     code_as_list = value.get('pre_context', []) + [value['context_line']] + value.get('post_context', [])
     lengths = [len(value.get('pre_context', [])), 1, len(value.get('post_context', []))]
 
-    lines = _pygmentize_lines(code_as_list, filename=filename)
+    lines = _pygmentize_lines(code_as_list, filename=filename, platform=platform)
 
     pre_context, context_lines, post_context = _split(lines, lengths)
 
