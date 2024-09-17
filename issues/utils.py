@@ -8,7 +8,6 @@ from sentry.utils.strings import strip
 
 
 def maybe_empty(s):
-    # TODO deduplicate this with events/models.py
     return "" if not s else s
 
 
