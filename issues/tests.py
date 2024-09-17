@@ -3,7 +3,6 @@ import os
 import inspect
 import uuid
 import json
-import time
 from io import StringIO
 from glob import glob
 from unittest import TestCase as RegularTestCase
@@ -478,10 +477,6 @@ class IntegrationTest(TransactionTestCase):
                 data = json.loads(f.read())
 
             data["event_id"] = uuid.uuid4().hex
-
-            if "timestamp" not in data:
-                # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
-                data["timestamp"] = time.time()
 
             if not command.is_valid(data, filename):
                 raise Exception("validatity check in %s: %s" % (filename, command.stderr.getvalue()))

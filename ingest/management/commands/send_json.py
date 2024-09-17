@@ -107,11 +107,7 @@ class Command(BaseCommand):
             print(filename)
 
     def send_to_server(self, dsn, options, identifier, data, use_envelope, compress):
-        if "timestamp" not in data or options["fresh_timestamp"]:
-            # weirdly enough a large numer of sentry test data don't actually have this required attribute set.
-            # thus, we set it to something arbitrary on the sending side rather than have our server be robust
-            # for it.
-
+        if options["fresh_timestamp"]:
             # If promted, we just update the timestamp to 'now' to be able to avoid any 'ignore old stuff'
             # filters (esp. on hosted sentry when we want to see anything over there)
             data["timestamp"] = time.time()
