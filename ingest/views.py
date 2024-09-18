@@ -383,7 +383,8 @@ class IngestEventAPIView(BaseIngestAPIView):
         # solution: just copy/paste from process_event(), and take only one branch.
         event_metadata = self.get_event_meta(ingested_at, request, project)
 
-        # if get_settings().DIGEST_IMMEDIATELY:  this is the only branch we implemented here.
+        # if get_settings().DIGEST_IMMEDIATELY: this is the only branch we implemented here, i.e. we always digest
+        # immediately, independent of the setting.
         event_data = json.loads(
             MaxDataReader("MAX_EVENT_SIZE", content_encoding_reader(
                 MaxDataReader("MAX_EVENT_COMPRESSED_SIZE", request))).read())
