@@ -377,10 +377,15 @@ class IngestEventAPIView(BaseIngestAPIView):
 
         # This endpoint is deprecated. Personally, I think it's the simpler (and given my goals therefore better) of the
         # two, but fighting windmills and all... given that it's deprecated, I'm not going to give it quite as much love
-        # (at least for now). In particular, "not DIGEST_IMMEDIATELY" is not implemented here. Interfaces between the
-        # internal methods quite changed a bit recently, and this one did not keep up. In particular: in our current set
-        # of interfaces we need an event_id before parsing (or after parsing but then we have double work). Easiest
-        # solution: just copy/paste from process_event(), and take only one branch.
+        # (at least for now). Interfaces between the internal methods quite changed a bit recently, and this one did not
+        # keep up.
+        #
+        # In particular I'd like to just call process_event() here, but that takes both an event_id and an unparsed data
+        # stream, and we don't have an event_id here before parsing (and we don't want to parse twice).
+        #
+        # Instead, we just copy/pasted the relevant parts of process_event() here, and take only one branch (the one
+        # that digests immediately).
+
         event_metadata = self.get_event_meta(ingested_at, request, project)
 
         # if get_settings().DIGEST_IMMEDIATELY: this is the only branch we implemented here, i.e. we always digest
