@@ -230,7 +230,7 @@ class BaseIngestAPIView(View):
             # multiple events with the same event_id "don't happen" (i.e. are the result of badly misbehaving clients)
             raise ValidationError("Event already exists", code="event_already_exists")
 
-        release = create_release_if_needed(project, event.release, event)
+        release = create_release_if_needed(project, event.release, event, issue)
 
         if issue_created:
             TurningPoint.objects.create(

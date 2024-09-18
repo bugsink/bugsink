@@ -216,6 +216,29 @@ class IngestViewTestCase(TransactionTestCase):
 
             self.assertEqual(expected_called, send_unmute_alert.delay.called)
 
+    def test_regression_on_first_event_for_release_when_declared_as_resolved_by_next(self):
+        # a "regression" test about regressions: when the first event of a release is a regression, it should be
+        # detected but this wasn't the case in the past.
+
+        project = Project.objects.create(name="test")
+        request = self.request_factory.post("/api/1/store/")
+
+        # new event
+        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), project, request))
+
+        issue = Issue.objects.get(project=project)
+        issue.is_resolved = True
+        issue.is_resolved_by_next_release = True
+        issue.save()
+
+        # regression, on new release
+        event_data = create_event_data()
+        event_data["release"] = "1.0"
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, project, request))
+
+        issue = Issue.objects.get(project=project)
+        self.assertEqual(False, issue.is_resolved)
+
     def test_deal_with_double_event_ids(self):
         request = self.request_factory.post("/api/1/store/")
 

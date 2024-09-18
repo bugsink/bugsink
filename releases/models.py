@@ -83,7 +83,7 @@ class Release(models.Model):
         return self.version[:12]
 
 
-def create_release_if_needed(project, version, event):
+def create_release_if_needed(project, version, event, issue=None):
     if version is None:
         # it is the empty string in practice because we pull this from Issue.release, which is non-nullable
         raise ValueError('The None-like version must be the empty string')
@@ -114,6 +114,11 @@ def create_release_if_needed(project, version, event):
                 fixed_at=Concat("fixed_at", Value(release.version + "\n")),
                 is_resolved_by_next_release=False,
                 )
+
+            if issue is not None and issue.is_resolved_by_next_release:
+                # a bit of a hack: if we have an in-memory issue, we must update it as well.
+                issue.fixed_at = issue.fixed_at + release.version + "\n"
+                issue.is_resolved_by_next_release = False
 
     return release
 
