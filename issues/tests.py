@@ -476,6 +476,9 @@ class IntegrationTest(TransactionTestCase):
             with open(filename) as f:
                 data = json.loads(f.read())
 
+            # we do this because our samples do not have unique event_ids; additionally this sets the event_id if it's
+            # not set in the sample (it sometimes isn't); (the fact that we can deal with that case is separately
+            # tested)
             data["event_id"] = uuid.uuid4().hex
 
             if not command.is_valid(data, filename):

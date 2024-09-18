@@ -1,3 +1,4 @@
+import os
 from glob import glob
 import json
 import io
@@ -35,7 +36,12 @@ def _digest_params(event_data, project, request, now=None):
     # adapter to quickly reuse existing tests on refactored code. let's see where the code ends up before spending
     # considerable time on rewriting the tests
     return {
-        "event_metadata": {"project_id": project.id, "ingested_at": format_timestamp(now), "debug_info": ""},
+        "event_metadata": {
+            "event_id": event_data["event_id"],
+            "project_id": project.id,
+            "ingested_at": format_timestamp(now),
+            "debug_info": "",
+        },
         "event_data": event_data,
         "project": project,
         "digested_at": now,
@@ -275,33 +281,46 @@ class IngestViewTestCase(TransactionTestCase):
         command.stdout = io.StringIO()
         command.stderr = io.StringIO()
 
-        for filename in glob("./ingest/samples/*/*.json")[:1]:  # one is enough here
-            with open(filename) as f:
-                data = json.loads(f.read())
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
 
-            data["event_id"] = uuid.uuid4().hex
+        event_samples = glob(SAMPLES_DIR + "/*/*.json")
 
-            if "timestamp" not in data:
-                # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
-                data["timestamp"] = time.time()
+        if len(event_samples) == 0:
+            raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
 
-            if not command.is_valid(data, filename):
-                continue
+        for with_event_id in [True, False]:
+            for filename in event_samples[:1]:  # one is enough here
+                with open(filename) as f:
+                    data = json.loads(f.read())
 
-            data_bytes = json.dumps(data).encode("utf-8")
-            data_bytes = (b'{"event_id": "%s"}\n{"type": "event"}\n' % (data["event_id"]).encode("utf-8") + data_bytes)
+                data["event_id"] = uuid.uuid4().hex  # for good measure we reset this to avoid duplicates.
 
-            response = self.client.post(
-                f"/api/{ project.id }/envelope/",
-                content_type="application/json",
-                headers={
-                    "X-Sentry-Auth": sentry_auth_header,
-                    "X-BugSink-DebugInfo": filename,
-                },
-                data=data_bytes,
-            )
-            self.assertEqual(
-                200, response.status_code, response.content if response.status_code != 302 else response.url)
+                if "timestamp" not in data:
+                    # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
+                    data["timestamp"] = time.time()
+
+                if not command.is_valid(data, filename):
+                    continue
+
+                event_id = data["event_id"]
+                if not with_event_id:
+                    del data["event_id"]
+
+                data_bytes = json.dumps(data).encode("utf-8")
+                data_bytes = (
+                    b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") + data_bytes)
+
+                response = self.client.post(
+                    f"/api/{ project.id }/envelope/",
+                    content_type="application/json",
+                    headers={
+                        "X-Sentry-Auth": sentry_auth_header,
+                        "X-BugSink-DebugInfo": filename,
+                    },
+                    data=data_bytes,
+                )
+                self.assertEqual(
+                    200, response.status_code, response.content if response.status_code != 302 else response.url)
 
     def test_envelope_endpoint_digest_non_immediate(self):
         with override_settings(DIGEST_IMMEDIATELY=False):

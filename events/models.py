@@ -61,8 +61,11 @@ class Event(models.Model):
     # not actually expected to be null, but we want to be able to delete issues without deleting events (cleanup later)
     issue = models.ForeignKey("issues.Issue", blank=False, null=True, on_delete=models.SET_NULL)
 
+    # The docs say:
     # > Required. Hexadecimal string representing a uuid4 value. The length is exactly 32 characters. Dashes are not
     # > allowed. Has to be lowercase.
+    # But event.schema.json has this anyOf [..] null and only speaks of "it is strongly recommended to generate that
+    # uuid4 clientside". In any case, we just rely on the envelope's event_id (required per the envelope spec).
     # Not a primary key: events may be duplicated across projects
     event_id = models.UUIDField(primary_key=False, null=False, editable=False, help_text="As per the sent data")
     project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
@@ -191,7 +194,7 @@ class Event(models.Model):
 
         try:
             event = cls.objects.create(
-                event_id=parsed_data["event_id"],
+                event_id=event_metadata["event_id"],  # the metadata is the envelope's event_id, which takes precedence
                 project_id=event_metadata["project_id"],
                 issue=issue,
                 ingested_at=event_metadata["ingested_at"],

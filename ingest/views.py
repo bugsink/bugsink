@@ -89,7 +89,7 @@ class BaseIngestAPIView(View):
 
     @classmethod
     def process_event(cls, ingested_at, event_id, event_data_stream, project, request):
-        event_metadata = cls.get_event_meta(ingested_at, request, project)
+        event_metadata = cls.get_event_meta(event_id, ingested_at, request, project)
 
         if get_settings().DIGEST_IMMEDIATELY:
             # in this case the stream will be an BytesIO object, so we can actually call .get_value() on it.
@@ -106,11 +106,12 @@ class BaseIngestAPIView(View):
             digest.delay(event_id, event_metadata)
 
     @classmethod
-    def get_event_meta(cls, ingested_at, request, project):
+    def get_event_meta(cls, event_id, ingested_at, request, project):
         # Meta means: not part of the event data. Basically: information that is available at the time of ingestion, and
         # that must be passed to digest() in a serializable form.
         debug_info = request.META.get("HTTP_X_BUGSINK_DEBUGINFO", "")
         return {
+            "event_id": event_id,
             "project_id": project.id,
             "ingested_at": format_timestamp(ingested_at),
             "debug_info": debug_info,
@@ -381,18 +382,17 @@ class IngestEventAPIView(BaseIngestAPIView):
         # keep up.
         #
         # In particular I'd like to just call process_event() here, but that takes both an event_id and an unparsed data
-        # stream, and we don't have an event_id here before parsing (and we don't want to parse twice).
+        # stream, and we don't have an event_id here before parsing (and we don't want to parse twice). similarly,
+        # event_metadata construction requires the event_id.
         #
         # Instead, we just copy/pasted the relevant parts of process_event() here, and take only one branch (the one
-        # that digests immediately).
+        # that digests immediately); i.e. we always digest immediately, independent of the setting.
 
-        event_metadata = self.get_event_meta(ingested_at, request, project)
-
-        # if get_settings().DIGEST_IMMEDIATELY: this is the only branch we implemented here, i.e. we always digest
-        # immediately, independent of the setting.
         event_data = json.loads(
             MaxDataReader("MAX_EVENT_SIZE", content_encoding_reader(
                 MaxDataReader("MAX_EVENT_COMPRESSED_SIZE", request))).read())
+
+        event_metadata = self.get_event_meta(event_data["event_id"], ingested_at, request, project)
 
         self.digest_event(event_metadata, event_data, project=project)
 
