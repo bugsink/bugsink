@@ -287,8 +287,9 @@ class IngestViewTestCase(TransactionTestCase):
     @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=0)
     @patch("ingest.views.check_for_thresholds")
     def test_count_project_periods_and_act_on_it_zero(self, patched_check_for_thresholds):
-        # doing this would be nonsensical but let's at least not crash for that case
-        patched_check_for_thresholds.side_effect = check_for_thresholds
+        # actually having a 0-quota would be nonsensical but let's at least not crash for that case
+
+        patched_check_for_thresholds.side_effect = check_for_thresholds  # the patch is only there to count calls
         now = timezone.now()
 
         project = Project.objects.create(name="test")
@@ -301,7 +302,7 @@ class IngestViewTestCase(TransactionTestCase):
     @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=3)
     @patch("ingest.views.check_for_thresholds")
     def test_count_project_periods_and_act_on_it_simple_case(self, patched_check_for_thresholds):
-        patched_check_for_thresholds.side_effect = check_for_thresholds
+        patched_check_for_thresholds.side_effect = check_for_thresholds  # the patch is only there to count calls
         now = timezone.now()
 
         project = Project.objects.create(name="test")
@@ -356,7 +357,7 @@ class IngestViewTestCase(TransactionTestCase):
     @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=3)
     @patch("ingest.views.check_for_thresholds")
     def test_count_project_periods_and_act_on_it_new_check_done_but_below_threshold(self, patched_check_for_thresholds):
-        patched_check_for_thresholds.side_effect = check_for_thresholds
+        patched_check_for_thresholds.side_effect = check_for_thresholds  # the patch is only there to count calls
         now = timezone.now()
 
         project = Project.objects.create(name="test")
@@ -383,7 +384,7 @@ class IngestViewTestCase(TransactionTestCase):
         # last in-budget item) while the project is still in accepting (quota_exceeded_until is None) state? Because we
         # digest serially, I don't see how this could happen except by changing the quota in flight or through a
         # programming error; in any case, the current test documents what happens in that case.
-        patched_check_for_thresholds.side_effect = check_for_thresholds
+        patched_check_for_thresholds.side_effect = check_for_thresholds  # the patch is only there to count calls
         now = timezone.now()
 
         project = Project.objects.create(name="test")
