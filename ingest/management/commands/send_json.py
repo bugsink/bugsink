@@ -12,7 +12,6 @@ from django.conf import settings
 
 from compat.dsn import get_store_url, get_envelope_url, get_header_value
 from bugsink.streams import compress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE
-from bugsink.utils import understandable_json_error
 
 from projects.models import Project
 
@@ -45,7 +44,9 @@ class Command(BaseCommand):
 
             jsonschema.validate(data, schema)
         except jsonschema.ValidationError as e:
-            self.stderr.write("%s %s" % (understandable_json_error(e), identifier))
+            best = jsonschema.exceptions.best_match([e])
+
+            self.stderr.write("%s: %s %s" % (best.json_path, best.message, identifier))
             return False
 
         return True

@@ -28,7 +28,6 @@ from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.exceptions import ViolatedExpectation
 from bugsink.streams import content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded
 from bugsink.app_settings import get_settings
-from bugsink.utils import understandable_json_error
 
 from events.models import Event
 from events.retention import evict_for_max_events, should_evict
@@ -148,7 +147,11 @@ class BaseIngestAPIView(View):
                 try:
                     jsonschema.validate(data_to_validate, get_schema())
                 except jsonschema.ValidationError as inner_e:
-                    raise ValidationError(understandable_json_error(inner_e), code="invalid_event_data") from inner_e
+                    best = jsonschema.exceptions.best_match([inner_e])
+                    # we raise 'from best' here; this does lose some information w.r.t. 'from inner_e', but it's my
+                    # belief that it's not useful info we're losing. similarly, but more so for 'fastjsonschema_e'.
+                    raise ValidationError(best.json_path + ": " + best.message, code="invalid_event_data") from best
+
                 # in the (presumably not-happening) case that our fallback validation succeeds, fail w/o useful message
                 raise ValidationError(fastjsonschema_e.message, code="invalid_event_data") from fastjsonschema_e
 
