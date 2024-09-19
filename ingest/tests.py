@@ -288,7 +288,7 @@ class IngestViewTestCase(TransactionTestCase):
         if len(event_samples) == 0:
             raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
 
-        for with_event_id in [True, False]:
+        for include_event_id in [True, False]:
             for filename in event_samples[:1]:  # one is enough here
                 with open(filename) as f:
                     data = json.loads(f.read())
@@ -300,10 +300,10 @@ class IngestViewTestCase(TransactionTestCase):
                     data["timestamp"] = time.time()
 
                 if not command.is_valid(data, filename):
-                    continue
+                    raise Exception("validatity check in %s: %s" % (filename, command.stderr.getvalue()))
 
                 event_id = data["event_id"]
-                if not with_event_id:
+                if not include_event_id:
                     del data["event_id"]
 
                 data_bytes = json.dumps(data).encode("utf-8")
