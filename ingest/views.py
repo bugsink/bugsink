@@ -123,7 +123,7 @@ class BaseIngestAPIView(View):
     @classmethod
     def validate_event_data(cls, data, validation_setting):
         # rough notes on performance (50k event):
-        # fastjsonschema: compile: ~200ms, validation: ~2ms
+        # fastjsonschema: load-from-disk (precompiled): ~1ms, validation: ~2ms
         # jsonschema: 'compile': ~2ms, validation ~15ms
         #
         # note that this method raising an exception ("strict") creates additional overhead in the ~100ms range;
@@ -155,10 +155,12 @@ class BaseIngestAPIView(View):
                 # in the (presumably not-happening) case that our fallback validation succeeds, fail w/o useful message
                 raise ValidationError(fastjsonschema_e.message, code="invalid_event_data") from fastjsonschema_e
 
-        # the schema is loaded once and cached on the class (it's ~200ms)
-        # use_formats=False for "uint64", see https://github.com/horejsek/python-fastjsonschema/issues/108
+        # the schema is loaded once and cached on the class (it's in the 1-2ms range, but my measurements varied a lot
+        # so I'm not sure and I'd rather cache (and not always load) a file in the 2.5MB range than to just assume it's
+        # fast)
         if not hasattr(cls, "_event_validator"):
-            cls._event_validator = fastjsonschema.compile(get_schema(), use_formats=False, use_default=False)
+            from bugsink.event_schema import validate as validate_schema
+            cls._event_validator = validate_schema
 
         # known fields that are not part of the schema (and that we don't want to validate)
         data_to_validate = {k: v for k, v in data.items() if k != "_meta"}
