@@ -338,7 +338,7 @@ class IngestViewTestCase(TransactionTestCase):
 
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
 
-        event_samples = glob(SAMPLES_DIR + "/*/*.json")
+        event_samples = glob(SAMPLES_DIR + "/sentry/mobile1-xen.json")  # this one has 'exception.values[0].type'
 
         if len(event_samples) == 0:
             raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
