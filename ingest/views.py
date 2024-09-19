@@ -199,8 +199,8 @@ class BaseIngestAPIView(View):
         if not cls.count_project_periods_and_act_on_it(project, digested_at):
             return  # if over-quota: just return (any cleanup is done calling-side)
 
-        if get_settings().INPUT_VALIDATION in ["warn", "strict"]:
-            cls.validate_event_data(event_data, get_settings().INPUT_VALIDATION)
+        if get_settings().VALIDATE_ON_DIGEST in ["warn", "strict"]:
+            cls.validate_event_data(event_data, get_settings().VALIDATE_ON_DIGEST)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this

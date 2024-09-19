@@ -126,7 +126,7 @@ BUGSINK = {
     # undocumented feature: this enables links to the admin interface in the header/footer. I'm not sure where the admin
     # will fit in the final version, so that's why it's not documented.
     "USE_ADMIN": True,
-    "INPUT_VALIDATION": "strict",
+    "VALIDATE_ON_DIGEST": "strict",
 }
 
 
