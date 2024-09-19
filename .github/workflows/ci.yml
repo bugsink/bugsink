@@ -69,6 +69,7 @@ jobs:
       working-directory: separate_dir
       env:
         SAMPLES_DIR: "${{ github.workspace }}/event-samples"
+        PYTHONWARNINGS: all
       run: |
         # because we're outside the project directory, the test discovery won't find our packages. We simply enumerate
         # them using some shell-magic. Note that the only non-app that we still care about is 'bugsink' (project, not app)
