@@ -12,26 +12,9 @@ from django.conf import settings
 
 from compat.dsn import get_store_url, get_envelope_url, get_header_value
 from bugsink.streams import compress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE
+from bugsink.utils import understandable_json_error
 
 from projects.models import Project
-
-
-def understandable_json_error(e):
-    # When a JSON schema contains many anyOfs, the default error message does not contain any useful information
-    # (despite containing a lot of information). This function recursively traverses the "context" to extract, what I
-    # found in Sept 2024, to be the most useful information.
-
-    if e.context == []:
-        if e.message.endswith("is not of type 'null'"):
-            # when you implement 'nullable' as an anyOf with null, this will be half of the error messages, but not the
-            # useful half. So we just ignore it.
-            return ""
-
-        # no more children, we're at the node, let's return the actually-interesting information
-        return ("%s: " % e.json_path) + e.message
-
-    # we have children, let's recurse
-    return "\n".join([s for s in [understandable_json_error(suberror) for suberror in e.context] if s != ""])
 
 
 class Command(BaseCommand):

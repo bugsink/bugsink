@@ -38,6 +38,7 @@ DEFAULTS = {
 
     # System inner workings:
     "DIGEST_IMMEDIATELY": True,
+    "INPUT_VALIDATION": "none",  # other legal values are "warn" and "strict"
 
     # MAX* below mirror the (current) values for the Sentry Relay
     "MAX_EVENT_SIZE": _MEBIBYTE,

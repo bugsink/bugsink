@@ -31,3 +31,21 @@ def deduce_allowed_hosts(base_url):
         # localhost:8000 is.
         return ["*"]
     return [url.hostname]
+
+
+def understandable_json_error(e):
+    # When a JSON schema contains many anyOfs, the default error message does not contain any useful information
+    # (despite containing a lot of information). This function recursively traverses the "context" to extract, what I
+    # found in Sept 2024, to be the most useful information.
+
+    if e.context == []:
+        if e.message.endswith("is not of type 'null'"):
+            # when you implement 'nullable' as an anyOf with null, this will be half of the error messages, but not the
+            # useful half. So we just ignore it.
+            return ""
+
+        # no more children, we're at the node, let's return the actually-interesting information
+        return ("%s: " % e.json_path) + e.message
+
+    # we have children, let's recurse
+    return "\n".join([s for s in [understandable_json_error(suberror) for suberror in e.context] if s != ""])

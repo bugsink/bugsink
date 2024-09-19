@@ -3,7 +3,9 @@ import logging
 import io
 from datetime import datetime, timezone
 import json
+import jsonschema
 
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.db.models import Max
 from django.views import View
@@ -25,6 +27,7 @@ from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.exceptions import ViolatedExpectation
 from bugsink.streams import content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded
 from bugsink.app_settings import get_settings
+from bugsink.utils import understandable_json_error
 
 from events.models import Event
 from events.retention import evict_for_max_events, should_evict
@@ -118,6 +121,30 @@ class BaseIngestAPIView(View):
         }
 
     @classmethod
+    def validate_event_data(cls, data, validation_setting):
+        if not hasattr(cls, "_event_validator"):
+            # the schema is loaded once and cached on the class (it's in the 1-2ms range, but still seems worth it)
+            schema_filename = settings.BASE_DIR / 'api/event.schema.json'
+            with open(schema_filename, 'r') as f:
+                event_schema = json.loads(f.read())
+            ValidatorClass = jsonschema.validators.validator_for(event_schema)
+            # left here for documentation purposes, not needed, because this already (implicitly) happens in tests
+            # ValidatorClass.check_schema(event_schema)
+            cls._event_validator = ValidatorClass(event_schema)
+
+        if validation_setting == "strict":
+            try:
+                cls._event_validator.validate(data)
+            except jsonschema.ValidationError as e:
+                raise ValidationError(understandable_json_error(e), code="invalid_event_data") from e
+
+        else:  # "warn"
+            try:
+                cls._event_validator.validate(data)
+            except jsonschema.ValidationError as e:
+                logger.warn("event data validation failed: %s", understandable_json_error(e))
+
+    @classmethod
     @immediate_atomic()
     def digest_event(cls, event_metadata, event_data, project=None, digested_at=None):
         # ingested_at is passed from the point-of-ingestion; digested_at is determined here. Because this happens inside
@@ -143,6 +170,9 @@ class BaseIngestAPIView(View):
 
         if not cls.count_project_periods_and_act_on_it(project, digested_at):
             return  # if over-quota: just return (any cleanup is done calling-side)
+
+        if get_settings().INPUT_VALIDATION in ["warn", "strict"]:
+            cls.validate_event_data(event_data, get_settings().INPUT_VALIDATION)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
