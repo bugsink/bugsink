@@ -132,15 +132,17 @@ class BaseIngestAPIView(View):
             # ValidatorClass.check_schema(event_schema)
             cls._event_validator = ValidatorClass(event_schema)
 
+        data_to_validate = {k: v for k, v in data.items() if k != "_meta"}
+
         if validation_setting == "strict":
             try:
-                cls._event_validator.validate(data)
+                cls._event_validator.validate(data_to_validate)
             except jsonschema.ValidationError as e:
                 raise ValidationError(understandable_json_error(e), code="invalid_event_data") from e
 
         else:  # "warn"
             try:
-                cls._event_validator.validate(data)
+                cls._event_validator.validate(data_to_validate)
             except jsonschema.ValidationError as e:
                 logger.warn("event data validation failed: %s", understandable_json_error(e))
 
