@@ -415,6 +415,7 @@ class ViewTests(TransactionTestCase):
         self.assertContains(response, self.issue.title())
 
 
+@tag("samples")
 @tag("integration")
 class IntegrationTest(TransactionTestCase):
 

@@ -10,7 +10,7 @@ from unittest.mock import patch
 from unittest import TestCase as RegularTestCase
 from dateutil.relativedelta import relativedelta
 
-from django.test import TransactionTestCase
+from django.test import TransactionTestCase, tag
 from django.utils import timezone
 from django.test.client import RequestFactory
 from django.core.exceptions import ValidationError
@@ -271,6 +271,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(1, Issue.objects.count())
         self.assertEqual("1.0\n", Issue.objects.get().events_at)
 
+    @tag("samples")
     def test_envelope_endpoint(self):
         # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
         project = Project.objects.create(name="test")
@@ -323,6 +324,7 @@ class IngestViewTestCase(TransactionTestCase):
                 self.assertEqual(
                     200, response.status_code, response.content if response.status_code != 302 else response.url)
 
+    @tag("samples")
     def test_envelope_endpoint_reused_ids_different_exceptions(self):
         # dirty copy/paste from test_envelope_endpoint,
         project = Project.objects.create(name="test")
