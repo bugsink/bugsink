@@ -158,7 +158,7 @@ class BaseIngestAPIView(View):
         # the schema is loaded once and cached on the class (it's ~200ms)
         # use_formats=False for "uint64", see https://github.com/horejsek/python-fastjsonschema/issues/108
         if not hasattr(cls, "_event_validator"):
-            cls._event_validator = fastjsonschema.compile(get_schema(), use_formats=False)
+            cls._event_validator = fastjsonschema.compile(get_schema(), use_formats=False, use_default=False)
 
         # known fields that are not part of the schema (and that we don't want to validate)
         data_to_validate = {k: v for k, v in data.items() if k != "_meta"}
