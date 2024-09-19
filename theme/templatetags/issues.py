@@ -71,6 +71,14 @@ def _pygmentize_lines(lines, filename=None, platform=None):
     return result
 
 
+def d_get_l(d, key):
+    # returns an empty list for both missing keys and present-but-None keys
+    result = d.get(key)
+    if result is None:
+        return []
+    return result
+
+
 @register.filter
 def pygmentize(value, platform):
     filename = value.get('filename')
@@ -79,8 +87,8 @@ def pygmentize(value, platform):
         # when there is no code to pygmentize we just return as-is
         return value
 
-    code_as_list = value.get('pre_context', []) + [value['context_line']] + value.get('post_context', [])
-    lengths = [len(value.get('pre_context', [])), 1, len(value.get('post_context', []))]
+    code_as_list = d_get_l(value, 'pre_context') + [value['context_line']] + d_get_l(value, 'post_context')
+    lengths = [len(d_get_l(value, 'pre_context')), 1, len(d_get_l(value, 'post_context'))]
 
     lines = _pygmentize_lines(code_as_list, filename=filename, platform=platform)
 
@@ -97,7 +105,7 @@ def pygmentize(value, platform):
 def firstlineno(value):
     if value.get("lineno") is None:
         return None
-    return value['lineno'] - len(value.get('pre_context', []))
+    return value['lineno'] - len(d_get_l(value, 'pre_context'))
 
 
 SHA_RE = re.compile(r"[0-9a-f]+")
