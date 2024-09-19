@@ -51,7 +51,9 @@ INSTALLED_APPS = [
 
     'tailwind',  # As currently set up, this is also needed in production (templatetags)
     'admin_auto_filters',
+]
 
+BUGSINK_APPS = [
     'users',
     'theme',
     'snappea',
@@ -66,6 +68,8 @@ INSTALLED_APPS = [
 
     'performance',
 ]
+
+INSTALLED_APPS += BUGSINK_APPS
 
 AUTH_USER_MODEL = "users.User"
 

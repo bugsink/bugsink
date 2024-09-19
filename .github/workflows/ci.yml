@@ -7,7 +7,7 @@ on:
     branches: [ "main" ]
 
 env:
-  SAMPLES_DIR: "event-samples"
+  DJANGO_SETTINGS_MODULE: "bugsink.settings.development"
 
 jobs:
   flake8:
@@ -40,19 +40,39 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install Dependencies
+    - name: Install build
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install build
+    - name: Build wheel
+      run: |
+        python -m build --wheel
+    - name: Install from wheel
+      run: |
+        python -m pip install dist/*.whl
+    - name: Install development dependencies
+      run: |
         pip install -r requirements.development.txt
     - name: Check out event-samples
       uses: actions/checkout@master
       with:
         repository: bugsink/event-samples
         path: "event-samples"
+    - name: Create separate dir to avoid accidentally using non-packaged code
+      run: |
+        mkdir separate_dir
     - name: Run Makemigrations --check
+      working-directory: separate_dir
       run: |
-        python manage.py makemigrations --check
+        bugsink-manage makemigrations --check
     - name: Run Tests
+      working-directory: separate_dir
+      env:
+        SAMPLES_DIR: "${{ github.workspace }}/event-samples"
       run: |
-        python manage.py test -v2
+        # because we're outside the project directory, the test discovery won't find our packages. We simply enumerate
+        # them using some shell-magic. Note that the only non-app that we still care about is 'bugsink' (project, not app)
+        # which we mention separately
+        bugsink-manage test `bugsink-manage shell -c 'from django.conf import settings; print(" ".join(settings.BUGSINK_APPS))'` bugsink -v2
+        # bugsink-manage test ${GITHUB_WORKSPACE}  -v2  # fails with the following, which I don't understand:
+        # ImportError: 'tests' module incorrectly imported from '/opt/hostedtoolcache/Python/3.10.15/x64/lib/python3.10/site-packages/alerts'. Expected '/home/runner/work/bugsink-private/bugsink-private/alerts'. Is this module globally installed? 
