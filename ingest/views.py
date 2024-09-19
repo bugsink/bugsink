@@ -4,6 +4,7 @@ import io
 from datetime import datetime, timezone
 import json
 import jsonschema
+import fastjsonschema
 
 from django.conf import settings
 from django.shortcuts import get_object_or_404
@@ -122,29 +123,51 @@ class BaseIngestAPIView(View):
 
     @classmethod
     def validate_event_data(cls, data, validation_setting):
-        if not hasattr(cls, "_event_validator"):
-            # the schema is loaded once and cached on the class (it's in the 1-2ms range, but still seems worth it)
+        # rough notes on performance (50k event):
+        # fastjsonschema: compile: ~200ms, validation: ~2ms
+        # jsonschema: 'compile': ~2ms, validation ~15ms
+        #
+        # note that this method raising an exception ("strict") creates additional overhead in the ~100ms range;
+        # presumably because of the transaction rollback. Possible future direction: check pre-transaction. Not
+        # optimizing that yet though, because [1] presumably rare and [2] incorrect data might trigger arbitrary
+        # exceptions, so you'd have that cost-of-rollback anyway.
+
+        def get_schema():
             schema_filename = settings.BASE_DIR / 'api/event.schema.json'
             with open(schema_filename, 'r') as f:
-                event_schema = json.loads(f.read())
-            ValidatorClass = jsonschema.validators.validator_for(event_schema)
-            # left here for documentation purposes, not needed, because this already (implicitly) happens in tests
-            # ValidatorClass.check_schema(event_schema)
-            cls._event_validator = ValidatorClass(event_schema)
+                return json.loads(f.read())
 
+        def validate():
+            # helper function that wraps the idea of "validate quickly, but fail meaningfully"
+            try:
+                cls._event_validator(data_to_validate)
+            except fastjsonschema.exceptions.JsonSchemaValueException as fastjsonschema_e:
+                # fastjsonchema's exceptions provide almost no information (in the case of many anyOfs), so we just fall
+                # back to jsonschema for that. Slow (and double cost), but failing is the rare case, so we don't care.
+                # https://github.com/horejsek/python-fastjsonschema/issues/72 and 37 for some context
+                try:
+                    jsonschema.validate(data_to_validate, get_schema())
+                except jsonschema.ValidationError as inner_e:
+                    raise ValidationError(understandable_json_error(inner_e), code="invalid_event_data") from inner_e
+                # in the (presumably not-happening) case that our fallback validation succeeds, fail w/o useful message
+                raise ValidationError(fastjsonschema_e.message, code="invalid_event_data") from fastjsonschema_e
+
+        # the schema is loaded once and cached on the class (it's ~200ms)
+        # use_formats=False for "uint64", see https://github.com/horejsek/python-fastjsonschema/issues/108
+        if not hasattr(cls, "_event_validator"):
+            cls._event_validator = fastjsonschema.compile(get_schema(), use_formats=False)
+
+        # known fields that are not part of the schema (and that we don't want to validate)
         data_to_validate = {k: v for k, v in data.items() if k != "_meta"}
 
         if validation_setting == "strict":
-            try:
-                cls._event_validator.validate(data_to_validate)
-            except jsonschema.ValidationError as e:
-                raise ValidationError(understandable_json_error(e), code="invalid_event_data") from e
+            validate()
 
-        else:  # "warn"
+        else:  # i.e. "warn" - we never reach this function for "none"
             try:
-                cls._event_validator.validate(data_to_validate)
-            except jsonschema.ValidationError as e:
-                logger.warn("event data validation failed: %s", understandable_json_error(e))
+                validate()
+            except ValidationError as e:
+                logger.warn("event data validation failed: %s", e)
 
     @classmethod
     @immediate_atomic()
