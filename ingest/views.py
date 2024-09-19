@@ -223,7 +223,6 @@ class BaseIngestAPIView(View):
                 # the only realistic scenario): manually editing some sample event but not updating the event_id (nor
                 # running send_json with --fresh-id). We raise an exception after cleaning up, to at least avoid getting
                 # into an inconsistent state in the DB.
-                issue.delete()
                 raise ViolatedExpectation("no event created, but issue created")
 
             # Validating by letting the DB raise an exception, and only after taking some other actions already, is not

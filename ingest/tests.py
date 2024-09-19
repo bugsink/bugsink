@@ -27,6 +27,7 @@ from ingest.management.commands.send_json import Command as SendJsonCommand
 from .views import BaseIngestAPIView
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 from .event_counter import check_for_thresholds
+from bugsink.exceptions import ViolatedExpectation
 
 
 def _digest_params(event_data, project, request, now=None):
@@ -321,6 +322,64 @@ class IngestViewTestCase(TransactionTestCase):
                 )
                 self.assertEqual(
                     200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+    def test_envelope_endpoint_reused_ids_different_exceptions(self):
+        # dirty copy/paste from test_envelope_endpoint,
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        # first, we ingest many issues
+        command = SendJsonCommand()
+        command.stdout = io.StringIO()
+        command.stderr = io.StringIO()
+
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
+
+        event_samples = glob(SAMPLES_DIR + "/*/*.json")
+
+        if len(event_samples) == 0:
+            raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
+
+        for filename in event_samples[:1]:  # one is enough here
+            with open(filename) as f:
+                data = json.loads(f.read())
+            data["event_id"] = uuid.uuid4().hex  # we set it once, before the loop.
+
+            for type_ in ["Foo", "Bar"]:  # forces different groupers, leading to separate Issue objects
+                data['exception']['values'][0]['type'] = type_
+
+                if "timestamp" not in data:
+                    # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
+                    data["timestamp"] = time.time()
+
+                if not command.is_valid(data, filename):
+                    raise Exception("validatity check in %s: %s" % (filename, command.stderr.getvalue()))
+
+                event_id = data["event_id"]
+
+                data_bytes = json.dumps(data).encode("utf-8")
+                data_bytes = (
+                    b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") + data_bytes)
+
+                def check():
+                    response = self.client.post(
+                        f"/api/{ project.id }/envelope/",
+                        content_type="application/json",
+                        headers={
+                            "X-Sentry-Auth": sentry_auth_header,
+                            "X-BugSink-DebugInfo": filename,
+                        },
+                        data=data_bytes,
+                    )
+                    self.assertEqual(
+                        200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+                if type_ == "Foo":
+                    check()
+                else:
+                    with self.assertRaises(ViolatedExpectation):
+                        check()
 
     def test_envelope_endpoint_digest_non_immediate(self):
         with override_settings(DIGEST_IMMEDIATELY=False):
