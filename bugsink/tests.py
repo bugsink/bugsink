@@ -5,6 +5,7 @@ import brotli
 
 from unittest import TestCase as RegularTestCase
 from django.test import TestCase as DjangoTestCase
+from django.test import override_settings
 
 from .volume_based_condition import VolumeBasedCondition
 from .streams import (
@@ -148,6 +149,7 @@ class CSRFViewsTestCase(DjangoTestCase):
                 'code_path': 'CR4 - referer scheme is not https',
                 'code_path': 'CR8 - is_same_domain(parsed_referer.netloc, good_referer)',
                 'code_path': 'OV1 - request_origin == good_origin',
+                'code_path': 'OV2 - exact match with allowed_origins_exact',
                 'code_path': 'OV5 - not any is_same_domain(request_netloc, host)',
                 'code_path': 'PV1 - _origin_verified',
                 'code_path': 'PV2 - _check_referer',
@@ -207,6 +209,30 @@ class CSRFViewsTestCase(DjangoTestCase):
                 'process_view': 'OK',
             },
         })
+
+    @override_settings(CSRF_TRUSTED_ORIGINS=["https://subdomain.example.com"])
+    def test_trusted_origin_given(self):
+        # this should "probably not be needed for Bugsink, but we want to know that at least we don't crash in that
+        # case"
+        self._test(
+            origin="https://subdomain.example.com", referer="https://subdomain.example.com/debug/csrf/", secure=False,
+            expected={
+                'origin_verified_steps': {
+                    'request_origin': 'https://subdomain.example.com',
+                    'good_host': 'testserver',
+                    'good_origin': 'http://testserver',
+                    'code_path': 'OV2 - exact match with allowed_origins_exact',
+                    '_origin_verified': True,
+                    'allowed_origins_exact': {'https://subdomain.example.com'},
+                },
+                'process_view': {
+                    'request_is_secure': False,
+                    'code_path': 'PV1 - _origin_verified',
+                    '_orgin_verified': 'OK',
+                    '_check_token': 'OK',
+                    'process_view': 'OK',
+                },
+            })
 
     def test_funny_origin_given(self):
         # this is what you'd get if you tried to POST to the server from a different domain, or (more likely) if your
