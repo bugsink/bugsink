@@ -11,6 +11,7 @@ from bugsink.app_settings import get_settings
 from users.views import signup, confirm_email, resend_confirmation, request_reset_password, reset_password, preferences
 
 from .views import home, trigger_error, favicon, settings_view
+from .debug_views import csrf_debug
 
 
 admin.site.site_header = get_settings().SITE_TITLE
@@ -42,6 +43,7 @@ urlpatterns = [
 
     path('admin/', admin.site.urls),
     path('settings/', settings_view, name='settings'),
+    path('debug/csrf/', csrf_debug, name='csrf_debug'),
 
     path("favicon.ico", favicon),
 ]

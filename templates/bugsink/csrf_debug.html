@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% load static %}
+{% load tailwind_forms %}
+{% load stricter_templates %}
+
+{% block title %}CSRF Debug · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+<div class="m-4">
+
+    <div>
+        <h1 class="text-4xl my-4 font-bold">CSRF Debugging</h1>
+    </div>
+
+    <h2 class="text-2xl font-bold mt-4">Relevant settings</h2>
+    {% for key, value in relevant_settings|items %}
+        <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
+            <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+            <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+        </div>
+    {% endfor %}
+
+    {% if not posted %}
+    <h2 class="text-2xl font-bold mt-4">POST Data</h2>
+    <form action="{% url 'csrf_debug' %}" method="post">
+        {% csrf_token %}
+        <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md">Click to debug</button>
+    </form>
+    {% else %}
+
+    <h2 class="text-2xl font-bold mt-4">META</h2>
+    {% for key, value in META|items %}
+        <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
+            <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+            <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+        </div>
+    {% endfor %}
+
+    <h2 class="text-2xl font-bold mt-4">Middleware.process_view</h2>
+    {% for key, value in process_view|items %}
+        <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
+            <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+            <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+        </div>
+    {% endfor %}
+
+    {% if origin_verified_steps %}
+    <h2 class="text-2xl font-bold mt-4">_origin_verified: steps</h2>
+    {% for key, value in origin_verified_steps|items %}
+        <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
+            <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+            <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+        </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if check_referer_steps %}
+    <h2 class="text-2xl font-bold mt-4">_check_referer: steps</h2>
+    {% for key, value in check_referer_steps|items %}
+        <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
+            <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+            <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+        </div>
+    {% endfor %}
+    {% endif %}
+    
+    <h2 class="text-2xl font-bold mt-4">POST data</h2>
+    {% for key, value in POST|items %}
+        <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
+            <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
+            <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+        </div>
+    {% endfor %}
+
+
+
+    <h2 class="text-2xl font-bold mt-4">Posting again</h2>
+
+    <div>
+        To try again with the least risk of confusion, reload this page <i>without</i> reposting it first, and then POST again using the button.
+    </div>
+    
+
+    {% endif %}
+
+</div>
+{% endblock %}
