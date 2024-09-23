@@ -135,6 +135,7 @@ class StreamsTestCase(RegularTestCase):
             writer.write(b"hellohello")
 
 
+@override_settings(DEBUG_CSRF=True)
 class CSRFViewsTestCase(DjangoTestCase):
 
     """
@@ -170,7 +171,10 @@ class CSRFViewsTestCase(DjangoTestCase):
 
     def _test(self, origin, referer, secure, expected):
         response = self.client.get("/debug/csrf/")
-        token = re.search(r'name="csrfmiddlewaretoken" value="(.+?)"', response.content.decode("utf-8")).group(1)
+        match = re.search(r'name="csrfmiddlewaretoken" value="(.+?)"', response.content.decode("utf-8"))
+        if match is None:
+            self.fail("No CSRF token found in response: %s" % response.content)
+        token = match.group(1)
 
         headers = {}
         if origin is not None:

@@ -36,6 +36,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SECRET_KEY = os.getenv("SECRET_KEY", "")
 
 DEBUG = False
+DEBUG_CSRF = "USE_DEBUG"  # i.e. use the value of DEBUG for this setting (useful when DEBUG is set later)
 
 # Replacing "*" with your actual hostname forms an extra layer of security if your proxy/webserver is misconfigured.
 # The default (production) create-conf template does this for you.

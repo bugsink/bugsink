@@ -16,6 +16,7 @@ from django.utils.http import is_same_domain
 
 from django.shortcuts import render
 from django.conf import settings
+from django.http import Http404
 
 from bugsink.app_settings import get_settings
 from bugsink.decorators import login_exempt
@@ -197,6 +198,10 @@ def csrf_debug(request):
 
     # note the absence of cookie-related information; AFAIK, we don't use cookies for CSRF protection in Bugsink, so
     # there's no need to check for them.
+
+    if not (settings.DEBUG_CSRF is True or (settings.DEBUG_CSRF == "USE_DEBUG" and settings.DEBUG)):
+        # We do this here, and not in urls.py, because urls.py cannot be changed on-demand in tests
+        raise Http404("This view is only available in DEBUG_CSRF mode.")
 
     context = {"relevant_settings": {"BASE_URL": get_settings().BASE_URL}}
     context["relevant_settings"].update({k: getattr(settings, k) for k in [
