@@ -64,7 +64,7 @@
 
         <div class="dropdown">
             {% if not issue.is_muted and not issue.is_resolved %}
-                <button disabled {# disabled b/c clicking the dropdown does nothing - we have hover for that #} class="font-bold ext-slate-500 fill-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 active:ring">Mute for/until&nbsp;&nbsp;<svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
+                <button disabled {# disabled b/c clicking the dropdown does nothing - we have hover for that #} class="font-bold text-slate-500 fill-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 active:ring">Mute for/until&nbsp;&nbsp;<svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
 
                 <div class="dropdown-content-right flex-col">
                     {% for mute_option in mute_options %}
