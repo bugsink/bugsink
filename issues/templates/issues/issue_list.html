@@ -165,7 +165,6 @@
 
     </div>
 
-    {% if issue_list %}
     <div class="flex justify-end mt-4"> {# the div with a few project-related icons (pjt-members, pjt-settings, my settings, dsn) on the lower RHS #}
 
         {% if not app_settings.SINGLE_USER %}{% if member.is_admin or request.user.is_superuser %}
@@ -208,7 +207,6 @@
         </div>
 
     </div>
-    {% endif %}
 
 </div>
 
