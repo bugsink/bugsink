@@ -25,7 +25,9 @@
     <a href="{% url "issue_list_all" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 {% if state_filter == "all" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 hover:border-slate-400 hover:border-b-4{% endif %}">All</div></a>
     </div>
     <div class="ml-auto p-2">
-        <input type="text" name="search" placeholder="search issues..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md"/>
+        <form action="." method="get">
+        <input type="text" name="q" value="{{ q }}" placeholder="search issues..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md"/>
+        </form>
     </div>
 </div>
 

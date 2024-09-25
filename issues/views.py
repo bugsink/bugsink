@@ -212,6 +212,13 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
         Issue.objects.filter(project=project)
     ).order_by("-last_seen")
 
+    # this is really TSTTCPW (or more like a "fake it till you make it" thing); but I'd rather "have something" and then
+    # have really-good-search than to have either nothing at all, or half-baked search. Note that we didn't even bother
+    # to set indexes on the fields we search on (nor create a single searchable field for the whole of 'title').
+    if request.GET.get("q"):
+        issue_list = issue_list.filter(
+            Q(calculated_type__icontains=request.GET["q"]) | Q(calculated_value__icontains=request.GET["q"]))
+
     return render(request, "issues/issue_list.html", {
         "project": project,
         "member": ProjectMembership.objects.get(project=project, user=request.user),
@@ -226,6 +233,7 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
         "disable_resolve_buttons": state_filter in ("resolved"),
         "disable_mute_buttons": state_filter in ("resolved", "muted"),
         "disable_unmute_buttons": state_filter in ("resolved", "open"),
+        "q": request.GET.get("q", ""),
     })
 
 
