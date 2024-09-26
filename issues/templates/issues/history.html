@@ -11,7 +11,7 @@
     <div class="flex"><!-- single turningpoint (for 'your comments')-->
         <div class="flex-none">
             <div class="pt-8 pr-2">
-                <img class="w-12 h-12 rounded-full border-2 border-slate-300" src="https://gravatar.com/avatar/{{ request.user|gravatar_sha }}?s=48&d=robohash"/>
+                <img class="w-12 h-12 rounded-full border-2 border-slate-300" src="https://gravatar.com/avatar/{{ request.user|gravatar_sha }}?s=48&d=robohash" alt="{{ request.user|best_displayname }}"/>
             </div>
         </div>
         <div class="border-slate-300 border-2 rounded-md mt-6 flex-auto"><!-- the "your comments balloon" -->
@@ -45,9 +45,9 @@
         <div class="flex-none">
             <div class="pt-8 pr-2">
                 {% if turningpoint.user_id %}
-                <img class="w-12 h-12 rounded-full border-2 border-slate-300" src="https://gravatar.com/avatar/{{ turningpoint.user|gravatar_sha }}?s=48&d=robohash"/>
+                <img class="w-12 h-12 rounded-full border-2 border-slate-300" src="https://gravatar.com/avatar/{{ turningpoint.user|gravatar_sha }}?s=48&d=robohash" alt="{{ turningpoint.user|best_displayname }}"/>
                 {% else %}
-                <img class="w-12 h-12 rounded-full border-2 border-slate-300" src="{% static 'images/bugsink-logo.png' %}"/>
+                <img class="w-12 h-12 rounded-full border-2 border-slate-300" src="{% static 'images/bugsink-logo.png' %}" alt="Bugsink"/>
                 {% endif %}
             </div>
         </div>
