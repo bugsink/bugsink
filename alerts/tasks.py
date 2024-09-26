@@ -68,7 +68,7 @@ def _send_alert(issue_id, state_description, alert_article, alert_reason, **kwar
     issue = Issue.objects.get(id=issue_id)
     for user in _get_users_for_email_alert(issue):
         send_rendered_email(
-            subject=truncatechars(f'"{issue.title()}" in "{issue.project.name}" ({state_description})', 100),
+            subject=f'"{truncatechars(issue.title(), 80)}" in "{issue.project.name}" ({state_description})',
             base_template_name="mails/issue_alert",
             recipient_list=[user.email],
             context={
