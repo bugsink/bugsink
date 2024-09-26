@@ -514,6 +514,11 @@ class IntegrationTest(TransactionTestCase):
                     response = self.client.get(url)
                     self.assertEqual(
                         200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+                    # The following code may be used to save the rendered pages for later inspection, e.g. using Nu HTML
+                    # with open("/tmp/pages/" + url.replace("/", "_") + ".html", "w") as f:
+                    #     f.write(response.content.decode("utf-8"))
+
                 except Exception as e:
                     # we want to know _which_ event failed, hence the raise-from-e here
                     raise AssertionError("Error rendering event %s" % event.debug_info) from e
