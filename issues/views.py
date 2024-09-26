@@ -10,6 +10,7 @@ from django.template.defaultfilters import date
 from django.urls import reverse
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
+from django.core.paginator import Paginator
 
 from bugsink.decorators import project_membership_required, issue_membership_required, atomic_for_request_method
 from bugsink.transaction import durable_atomic
@@ -479,6 +480,10 @@ def issue_event_list(request, issue):
         return _handle_post(request, issue)
 
     event_list = issue.event_set.all()
+    paginator = Paginator(event_list, 250)  # in general "big is good" because it allows a lot "at a glance".
+
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
 
     last_event = issue.event_set.order_by("timestamp").last()  # the template needs this for the tabs, we pick the last
     return render(request, "issues/event_list.html", {
@@ -490,6 +495,7 @@ def issue_event_list(request, issue):
         "is_event_page": False,
         "parsed_data": json.loads(last_event.data),
         "mute_options": GLOBAL_MUTE_OPTIONS,
+        "page_obj": page_obj,
     })
 
 

@@ -108,7 +108,7 @@
             <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "stacktrace" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Stacktrace</div></a>
             <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/details/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "event-details" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Event&nbsp;Details</div></a>
             <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/breadcrumbs/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "breadcrumbs" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Breadcrumbs</div></a>
-            {# <a href="/issues/issue/{{ issue.id }}/events/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "event-list" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Event&nbsp;List</div></a>#}
+            <a href="/issues/issue/{{ issue.id }}/events/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "event-list" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Event&nbsp;List</div></a>
             <a href="/issues/issue/{{ issue.id }}/grouping/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "grouping" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Grouping</div></a>
             <a href="/issues/issue/{{ issue.id }}/history/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "history" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">History</div></a>
         </div>
@@ -133,7 +133,6 @@
                     {% endif %}
                     <a href="/admin/issues/issue/{{ issue.id }}/change/">Issue Admin</a>
                 {% endif %}
-
 
             </div>
         </div>{# bottom nav bar #}
