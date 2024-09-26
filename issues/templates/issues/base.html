@@ -125,14 +125,13 @@
                 <a href="/events/event/{{ event.id }}/download/">Download</a>
                 | <a href="/events/event/{{ event.id }}/raw/" >JSON</a>
                 | <a href="/events/event/{{ event.id }}/plain/" >Plain</a>
-
                 {% endif %}
 
                 {% if app_settings.USE_ADMIN and user.is_staff %}
                     {% if is_event_page %} 
-                        | <a href="/admin/events/event/{{ event.id }}/change/">Event Admin</a>
+                        | <a href="/admin/events/event/{{ event.id }}/change/">Event Admin</a> |
                     {% endif %}
-                    | <a href="/admin/issues/issue/{{ issue.id }}/change/">Issue Admin</a>
+                    <a href="/admin/issues/issue/{{ issue.id }}/change/">Issue Admin</a>
                 {% endif %}
 
 
