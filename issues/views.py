@@ -479,8 +479,10 @@ def issue_event_list(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event_list = issue.event_set.all()
-    paginator = Paginator(event_list, 250)  # in general "big is good" because it allows a lot "at a glance".
+    event_list = issue.event_set.order_by("digest_order")
+
+    # re 250: in general "big is good" because it allows a lot "at a glance".
+    paginator = Paginator(event_list, 250)
 
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
