@@ -41,7 +41,7 @@
 
 
 {% for turningpoint in issue.turningpoint_set_all %}
-    <div class="flex"><!-- single turningpoint -->
+    <div class="flex" id="comment-{{ turningpoint.id }}"><!-- single turningpoint -->
         <div class="flex-none">
             <div class="pt-8 pr-2">
                 {% if turningpoint.user_id %}
@@ -53,7 +53,6 @@
         </div>
 
         <div class="border-slate-300 border-2 rounded-md mt-6 flex-auto js-balloon"><!-- the "balloon" -->
-            <a name="comment-{{ turningpoint.id }}"/>
             <div class="pl-4 flex triangle-left"><!-- 'header' row -->
                 <div class="mt-4 mb-4">
                     <span class="font-bold text-slate-800">{{ turningpoint.get_kind_display }}</span> by

@@ -117,8 +117,8 @@ function showInAppFrames() {
             frameDetails.parentNode.querySelector(".js-chevron").classList.remove("rotate-180");
         }
     });
-    // this works because when there are repeated anchors a browser will just jump to the first one.
-    // the less lazy way would be to just have a single such anchor
+    // this works because when there are repeated ids a browser will just jump to the first one.
+    // the less lazy way would be to just have a single such id
     window.location = window.location.origin + window.location.pathname + '#in-app';
 }
 

@@ -54,9 +54,9 @@
         {% with frame=frame|pygmentize:event.platform %}
         
         <div class="bg-white w-full font-mono"> {# per frame div #}
-            {% if frame.raise_point %}<a name="raise"/>{% endif %}
-            {% if frame.in_app %}<a name="in-app"/>{% endif %}
-            {% if forloop.first and forloop.parentloop.first %}<a name="topp"/>{% endif %}
+            {% if frame.raise_point %}<span id="raise"></span>{% endif %}
+            {% if frame.in_app %}<span id="in-app"></span>{% endif %}
+            {% if forloop.first and forloop.parentloop.first %}<span id="first-frame"></span>{% endif %}
 
             <div class="flex pl-4 pt-2 pb-2 border-b-2 {% if forloop.first %}border-t-2{% endif %} bg-slate-100 border-slate-400 cursor-pointer" onclick="toggleFrameVisibility(this)"> {# per frame header div #}
 

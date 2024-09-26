@@ -19,7 +19,7 @@
 
 {# NOTE if we store event.grouper on the event, we could also show that here #}
 
-<h1 class="text-2xl font-bold mt-4"><a name="key-info">Key info</a></h1>
+<h1 id="key-info" class="text-2xl font-bold mt-4">Key info</h1>
 
 <div class="mb-6">
     {% for key, value in key_info %}
@@ -32,7 +32,7 @@
 
 
 {% if deployment_info %}
-    <h1 class="text-2xl font-bold mt-4"><a name="deployment">Deployment</a></h1>
+    <h1 id="deployment" class="text-2xl font-bold mt-4">Deployment</h1>
             
     <div class="mb-6">
         {% for key, value in deployment_info %}
@@ -45,7 +45,7 @@
 {% endif %}
 
 {% if parsed_data.tags %}
-    <h1 class="text-2xl font-bold mt-4"><a name="tags">Tags</a></h1>
+    <h1 id="tags" class="text-2xl font-bold mt-4">Tags</h1>
             
     <div class="mb-6">
         {% for key, value in parsed_data.tags|items %}
@@ -60,7 +60,7 @@
 {% if parsed_data.user %}
     {# note: in the (September 2024) sentry.io interface, user info is displayed under 'contexts', but in the data it simply lives top-level as #}
     {# is implied by parsed_data.user -- I checked in a recent (September 2024) event.schema.json #}
-    <h1 class="text-2xl font-bold mt-4"><a name="user">User</a></h1>
+    <h1 id="user" class="text-2xl font-bold mt-4">User</h1>
             
     <div class="mb-6">
         {% for key, value in parsed_data.user|items %}
@@ -73,7 +73,7 @@
 {% endif %}
 
 {% if parsed_data.request %}
-    <h1 class="text-2xl font-bold mt-4"><a name="request">Request</a></h1>
+    <h1 id="request" class="text-2xl font-bold mt-4">Request</h1>
     <div class="mb-6">
             
     <div>
@@ -118,7 +118,7 @@
 {% endif %}
 
 {% if contexts %}
-    <h1 class="text-2xl font-bold mt-4"><a name="runtime">Contexts</a></h1>
+    <h1 id="runtime" class="text-2xl font-bold mt-4">Contexts</h1>
             
     <div class="mb-6">
         {% for context_key, context in contexts|items %}
@@ -148,7 +148,7 @@ the fact that we commented-out rather than clobbered reveals a small amount of d
 
 {% if parsed_data.contexts.runtime %}
     {# sentry gives this prime location (even a picture)... but why... it's kinda obvious what you're working in right? Maybe I could put it at the top of the modules list instead. And check if there's any other relevant info in that runtime context (RTFM) #}
-    <h1 class="text-2xl font-bold mt-4"><a name="runtime">Runtime</a></h1>
+    <h1 id="runtime" class="text-2xl font-bold mt-4">Runtime</h1>
             
     <div class="mb-6">
         {% for key, value in parsed_data.contexts.runtime|items %}
@@ -162,7 +162,7 @@ the fact that we commented-out rather than clobbered reveals a small amount of d
 {% endcomment %}
 
 {% if parsed_data.modules %}
-    <h1 class="text-2xl font-bold mt-4"><a name="modules">Modules</a></h1>
+    <h1 id="modules" class="text-2xl font-bold mt-4">Modules</h1>
             
     <div class="mb-6">
         {# we have observed that (emperically) the keys in most of the above are sorted in some kind of meaningful way from important to non-important #}
@@ -177,7 +177,7 @@ the fact that we commented-out rather than clobbered reveals a small amount of d
 {% endif %}
 
 {% if parsed_data.sdk %}
-    <h1 class="text-2xl font-bold mt-4"><a name="sdk">SDK</a></h1>
+    <h1 id="sdk" class="text-2xl font-bold mt-4">SDK</h1>
             
     <div class="mb-6">
         {% for key, value in parsed_data.sdk|items %}
@@ -190,7 +190,7 @@ the fact that we commented-out rather than clobbered reveals a small amount of d
 {% endif %}
 
 {% if parsed_data.extra %}
-    <h1 class="text-2xl font-bold mt-4"><a name="extra">Extra</a></h1>
+    <h1 id="extra" class="text-2xl font-bold mt-4">Extra</h1>
             
     <div class="mb-6">
         {% for key, value in parsed_data.extra|items %}
