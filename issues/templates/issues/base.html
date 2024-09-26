@@ -8,7 +8,7 @@
 <div class="m-4 flex flex-col lg:flex-row-reverse"><!-- container for the white bit (issue title, buttons) at the top of the page -->
 
     <div class="ml-auto flex-none pb-4 lg:pb-0"><!-- top, RHS (buttons) -->
-        <form action="" method="post">
+        <form action="." method="post">
         {% csrf_token %}
         {% if issue.is_resolved %}{# i.e. buttons disabled #}
             {# see issues/tests.py for why this is turned off ATM #}
