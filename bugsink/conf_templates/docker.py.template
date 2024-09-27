@@ -22,7 +22,7 @@ if os.getenv("BEHIND_HTTPS_PROXY", "False").lower() in ("true", "1", "yes"):
     # We hard-tie the ideas of "behind a proxy" and "use https" together: there is no reason to go through the trouble
     # of setting up a proxy if you're not using https. We also hard-code some choices of proxy headers; which means you
     # have to match those on the proxy side (but that's easy enough).
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Note: slightly redundant, Gunicorn also does this.
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 else:
