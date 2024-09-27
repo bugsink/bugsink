@@ -65,7 +65,6 @@ def settings_view(request):
         k: get_setting(settings, k) for k in (
             "ALLOWED_HOSTS",
             "SECURE_PROXY_SSL_HEADER",
-            "USE_X_FORWARDED_HOST",
             "TIME_ZONE",
             "EMAIL_HOST",
             "EMAIL_HOST_USER",

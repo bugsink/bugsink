@@ -23,7 +23,6 @@ if os.getenv("BEHIND_HTTPS_PROXY", "False").lower() in ("true", "1", "yes"):
     # of setting up a proxy if you're not using https. We also hard-code some choices of proxy headers; which means you
     # have to match those on the proxy side (but that's easy enough).
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    USE_X_FORWARDED_HOST = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 else:

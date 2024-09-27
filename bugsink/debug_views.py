@@ -207,7 +207,6 @@ def csrf_debug(request):
     context["relevant_settings"].update({k: getattr(settings, k) for k in [
         "ALLOWED_HOSTS",
         "SECURE_PROXY_SSL_HEADER",
-        "USE_X_FORWARDED_HOST",
         "CSRF_TRUSTED_ORIGINS",
     ]})
 
