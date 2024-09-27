@@ -1,7 +1,7 @@
 from django.utils.encoding import force_str
 
 from sentry.stacktraces.functions import get_function_name_for_frame
-from sentry.stacktraces.processing import get_crash_frame_from_event_data
+from sentry.stacktraces.processing import get_crash_frame_from_event_data, get_crash_location
 from sentry.utils.safe import get_path, trim
 
 from sentry.utils.strings import strip
@@ -31,17 +31,6 @@ def get_exception_type_and_value_for_logmessage(data):
         return "Log Message", message.splitlines()[0]
 
     return "Log Message", "<no log message>"
-
-
-def get_crash_location(data):
-    frame = get_crash_frame_from_event_data(
-        data,
-        frame_filter=lambda x: x.get("function") not in (None, "<redacted>", "<unknown>"),
-    )
-    if frame is not None:
-        func = get_function_name_for_frame(frame, data.get("platform"))
-        return frame.get("filename") or frame.get("abs_path"), func
-    return None, None
 
 
 def get_exception_type_and_value_for_exception(data):

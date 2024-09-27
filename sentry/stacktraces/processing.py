@@ -1,3 +1,4 @@
+from sentry.stacktraces.functions import get_function_name_for_frame
 from sentry.utils.safe import get_path
 
 
@@ -24,3 +25,17 @@ def get_crash_frame_from_event_data(data, frame_filter=None):
 
     if default:
         return default
+
+
+def get_crash_location(data):
+    # This function lives in a different file in the Sentry codebase (sentry/eventtypes/error.py), but it made its way
+    # here because that file didn't make it to the part of Sentry that we vendored.
+
+    frame = get_crash_frame_from_event_data(
+        data,
+        frame_filter=lambda x: x.get("function") not in (None, "<redacted>", "<unknown>"),
+    )
+    if frame is not None:
+        func = get_function_name_for_frame(frame, data.get("platform"))
+        return frame.get("filename") or frame.get("abs_path"), func
+    return None, None
