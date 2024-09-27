@@ -32,7 +32,7 @@ def release_sort_key(release):
 
 
 def ordered_releases(*filter_args, **filter_kwargs):
-    """Python-based sorting of Release objects (to facilitate semver-based sorting when applicable)"""
+    """Sorting Release objects in code (as opposed to in-DB) to facilitate semver-based sorting when applicable"""
     releases = Release.objects.filter(*filter_args, **filter_kwargs)
 
     return sorted(releases, key=release_sort_key)
@@ -85,7 +85,7 @@ class Release(models.Model):
 
 def create_release_if_needed(project, version, event, issue=None):
     if version is None:
-        # it is the empty string in practice because we pull this from Issue.release, which is non-nullable
+        # because `create_release_if_needed` is called with Issue.release (non-nullable), the below "won't happen"
         raise ValueError('The None-like version must be the empty string')
 
     # NOTE: we even create a Release for the empty release here; we need the associated info (date_released) if a

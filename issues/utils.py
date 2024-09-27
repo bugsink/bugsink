@@ -18,6 +18,10 @@ def get_type_and_value_for_data(data):
 
 
 def get_exception_type_and_value_for_logmessage(data):
+    """In Sentry's data-model, log messages are retrofitted into the event model; personally I'm not a fan of using an
+    Error Tracking tool for logging, but we at least make sure to show meaningful titles for log messages. The Bugsink
+    choice is: just use "Log Message" as the type, which at least clarfies what you're looking at"""
+
     message = strip(
         get_path(data, "logentry", "message")
         or get_path(data, "logentry", "formatted")
@@ -41,6 +45,9 @@ def get_crash_location(data):
 
 
 def get_exception_type_and_value_for_exception(data):
+    """Extracts the type and value of the exception from the event data. The non-trivial part is that we have to handle
+    multiple exceptions in a chain, missing values, and synthetic exceptions."""
+
     if isinstance(data.get("exception"), list):
         if len(data["exception"]) == 0:
             return "<unknown>", ""
@@ -77,6 +84,10 @@ def get_exception_type_and_value_for_exception(data):
 
 
 def default_issue_grouper(calculated_type, calculated_value, transaction):
+    # This is the "default" issue grouper, both in the sense that it's the issue-grouper that's used for the part of the
+    # fingerprint named "{{ default }}" and in the sense that it's the default issue grouper when no fingerprint is
+    # provided. It's a simple issue grouper that concatenates the title and the transaction.
+
     title = get_title_for_exception_type_and_value(calculated_type, calculated_value)
     return title + " ⋄ " + transaction
 
@@ -99,6 +110,9 @@ def get_issue_grouper_for_data(data, calculated_type=None, calculated_value=None
 
 
 def get_title_for_exception_type_and_value(type_, value):
+    # This is a simple function that formats the type and value of an exception in a way that's suitable for use as a
+    # title. It's used in grouping, but also to actually display the title of an issue in the UI.
+
     if not value:
         return type_
 
@@ -109,6 +123,8 @@ def get_title_for_exception_type_and_value(type_, value):
 
 
 def get_denormalized_fields_for_data(parsed_data):
+    """Extracts some fields from the event data that are set "denormalized" (cached) on the issue model."""
+
     last_frame = get_crash_frame_from_event_data(parsed_data) or {}
 
     module = maybe_empty(last_frame.get("module", ""))
