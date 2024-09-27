@@ -55,6 +55,10 @@ class Release(models.Model):
 
     semver = models.CharField(max_length=255, null=False, editable=False)
     is_semver = models.BooleanField(editable=False)
+
+    # sort_epoch is a way to ensure that we can sort releases alternatingly by date and by semver. The idea is that
+    # whenever we switch from one to the other, we increment the epoch. This way, we can sort releases by epoch first
+    # and then by date or semver.
     sort_epoch = models.IntegerField(editable=False)
 
     def save(self, *args, **kwargs):
