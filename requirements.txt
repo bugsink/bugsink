@@ -14,3 +14,4 @@ requests  # for sentry-sdk-extensions, which is loaded in non-dev setup too
 monofy
 user_agents
 fastjsonschema
+verbose_csrf_middleware

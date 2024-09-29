@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% comment %}
+Note on security: the basic principle is "the more you expose, the more an attacker knows."
+In this case, I think it should be fine, because all we expose here is stuff about mismatched hosts, and:
+
+1. this will only happen while your site isn't properly configured yet
+2. bugsink recommends a setup with a single host, so this info is literally knowable by looking at the URL bar
+
+{% endcomment %}
+
+{% block title %}403 Forbidden{% endblock %}
+
+{% block content %}
+<div class="m-4">
+<h1 class="text-4xl mt-4 font-bold">CSRF verification failed, request aborted</h1>
+
+<div class="pt-2">{{ reason }}</div>
+</div>
+{% endblock %}
