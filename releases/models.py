@@ -84,6 +84,14 @@ class Release(models.Model):
         unique_together = ("project", "version")
 
     def get_short_version(self):
+        if self.version == "":
+            # the reason for this little hack is to have something show up in the UI for this case. I 'assume' (mother
+            # of all ...) that in most reasonable cases we actually don't show releases if there's an empty release
+            # (i.e. for the single empty release we really shouldn't, because then project.has_releases should be false)
+            # but I've seen at least one case where you still have to show something even for the empty release: when
+            # switching back to "no release". (that's why I say "most reasonable cases"). (observed in testing, because
+            # test-events generally wildly vary in the release info they carry).
+            return "«no version»"
         if self.is_semver:
             return self.version
         return self.version[:12]

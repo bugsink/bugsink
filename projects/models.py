@@ -80,7 +80,7 @@ class Project(models.Model):
 
     def get_latest_release(self):
         from releases.models import ordered_releases
-        if not hasattr(self, "_latest_release"):
+        if not hasattr(self, "_latest_release"):  # per-instance cache
             self._latest_release = list(ordered_releases(project=self))[-1]
         return self._latest_release
 
