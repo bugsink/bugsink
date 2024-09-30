@@ -97,6 +97,8 @@ def create_release_if_needed(project, version, event, issue=None):
     # NOTE: we even create a Release for the empty release here; we need the associated info (date_released) if a
     # real release is ever created later.
 
+    version = sanitize_version(version)
+
     release, release_created = Release.objects.get_or_create(project=project, version=version)
     if release_created and version != "":
         if not project.has_releases:
@@ -129,12 +131,23 @@ def create_release_if_needed(project, version, event, issue=None):
     return release
 
 
-# Some thoughts that should go into a proper doc-like location later:
-#
-# 1. The folllowing restrictions are not (yet?) replicated from Sentry:
-#
-# There are a few restrictions -- the release name cannot:
-#
-# - contain newlines, tabulator characters, forward slashes(/), or back slashes(\\)
-# - be (in their entirety) period (.), double period (..), or space ( )
-# - exceed 200 characters
+def sanitize_version(version):
+    """
+    Implements the folllowing restrictions are from the Sentry documentation:
+
+    > There are a few restrictions -- the release name cannot:
+    >
+    > - contain newlines, tabulator characters, forward slashes(/), or back slashes(\\)
+    > - be (in their entirety) period (.), double period (..), or space ( )
+    > - exceed 200 characters
+
+    It does so as sanitize-dont-raise, i.e. it will return a sanitized version of the input string, but will not raise
+    an exception if the input string is invalid. Reason: we care about having valid data (and we rely e.g. on the lack
+    of newlines for our parsing), but we never want an invalid input to lead to discarded events. And there's no one
+    to 'read' a rejected event and fix it.
+    """
+
+    step_1 = version.replace("\n", "").replace("\t", "").replace("/", "").replace("\\", "")
+    step_2 = "sanitized" if step_1 in (".", "..", " ") else step_1
+    step_3 = step_2[:200]
+    return step_3
