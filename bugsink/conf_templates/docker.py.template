@@ -11,8 +11,7 @@ _MEBIBYTE = 1024 * _KIBIBYTE
 
 
 DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
-DEBUG_CSRF = "USE_DEBUG" if os.getenv("DEBUG_CSRF") == "USE_DEBUG" else
-    os.getenv("DEBUG_CSRF", "False").lower() in ("true", "1", "yes")
+DEBUG_CSRF = "USE_DEBUG" if os.getenv("DEBUG_CSRF") == "USE_DEBUG" else os.getenv("DEBUG_CSRF", "False").lower() in ("true", "1", "yes")
 
 # The security checks on SECRET_KEY are done as part of 'bugsink-manage check --deploy'
 SECRET_KEY = os.getenv("SECRET_KEY")
