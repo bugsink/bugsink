@@ -32,4 +32,4 @@ RUN ["bugsink-manage", "migrate", "snappea", "--database=snappea"]
 
 EXPOSE 8000
 
-CMD [ "monofy", "bugsink-manage", "migrate", "&&", "bugsink-manage", "check", "--deploy", "--fail-level", "WARNING", "&&", "gunicorn", "--bind=0.0.0.0:8000", "--workers=10", "--access-logfile", "-", "bugsink.wsgi", "|||", "bugsink-runsnappea"]
+CMD [ "monofy", "bugsink-manage", "check", "--deploy", "--fail-level", "WARNING", "&&", "bugsink-manage", "migrate", "&&", "gunicorn", "--bind=0.0.0.0:8000", "--workers=10", "--access-logfile", "-", "bugsink.wsgi", "|||", "bugsink-runsnappea"]
