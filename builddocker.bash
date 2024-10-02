@@ -11,10 +11,10 @@ echo "Building docker image with wheel file: $WHEEL_FILE"
 
 if [[ $WHEEL_FILE == *"dev"* ]]; then
     echo "This is a dev version, no tags will be added"
-    TAGS="-t bugsink:dev"
+    TAGS="-t bugsink/bugsink:dev"
 else
     VERSION=$(echo $WHEEL_FILE | cut -d'-' -f2)
-    TAGS="-t bugsink:$VERSION -t bugsink:$(echo $VERSION | awk -F. '{print $1"."$2}') -t bugsink:$(echo $VERSION | awk -F. '{print $1}') -t bugsink:latest -t bugsink"
+    TAGS="-t bugsink/bugsink:$VERSION -t bugsink/bugsink:$(echo $VERSION | awk -F. '{print $1"."$2}') -t bugsink/bugsink:$(echo $VERSION | awk -F. '{print $1}') -t bugsink/bugsink:latest -t bugsink/bugsink"
     echo "This is a non-dev version, tags will be added: $TAGS"
 fi
 
