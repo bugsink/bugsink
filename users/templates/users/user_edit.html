@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% load static %}
+{% load tailwind_forms %}
+
+{% block title %}Edit {{ form.instance.username }} · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+
+<div class="flex items-center justify-center">
+
+    <div class="m-4 max-w-4xl flex-auto">
+        <form action="." method="post">
+        {% csrf_token %}
+
+        <div>
+            <h1 class="text-4xl my-4 font-bold">{{ form.instance.username }}</h1>
+        </div>
+
+        <div class="mt-4 mb-4">
+            Settings for "{{ form.instance.username }}".
+        </div>
+
+        {% tailwind_formfield form.username %}
+
+        <button name="action" value="invite" class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md">Save</button>
+        <a href="{% url "user_list" %}" class="text-cyan-500 font-bold ml-2">Cancel</a>
+        </form>
+
+    </div>
+</div>
+
+{% endblock %}

@@ -26,7 +26,6 @@ UserModel = get_user_model()
 
 
 class UserCreationForm(BaseUserCreationForm):
-
     # Our UserCreationForm is the place where the "use email for usernames" logic is implemented.
     # We could instead push such logic in the model, and do it more thoroughly (i.e. remove either field, and point the
     # USERNAME_FIELD to the other). But I'm not sure that this is the most future-proof way forward. In particular,
@@ -72,6 +71,34 @@ class UserCreationForm(BaseUserCreationForm):
                 password_validation.validate_password(password, self.instance)
             except ValidationError as error:
                 self.add_error("password1", error)
+
+    def save(self, **kwargs):
+        commit = kwargs.pop("commit", True)
+        user = super().save(commit=False)
+        user.email = user.username
+        if commit:
+            user.save()
+        return user
+
+
+class UserEditForm(ModelForm):
+    # See notes in UserCreationForm about the "use email for usernames" logic; it's the same here.
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['username'].validators = [EmailValidator()]
+        self.fields['username'].label = "Email"
+
+        self.fields['username'].help_text = None  # "Email" is descriptive enough
+
+    class Meta:
+        model = UserModel
+        fields = ("username",)
+
+    def clean_username(self):
+        if UserModel.objects.exclude(pk=self.instance.pk).filter(username=self.cleaned_data['username']).exists():
+            raise ValidationError(mark_safe("This email is already registered by another user."))
+        return self.cleaned_data['username']
 
     def save(self, **kwargs):
         commit = kwargs.pop("commit", True)

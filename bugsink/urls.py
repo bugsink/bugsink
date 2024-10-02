@@ -34,6 +34,9 @@ urlpatterns = [
 
     path("accounts/preferences/", preferences, name="preferences"),
 
+    # many user-related views are directly exposed above (/accounts/), the rest is here:
+    path("users/", include("users.urls")),
+
     path('api/', include('ingest.urls')),
 
     path('projects/', include('projects.urls')),

@@ -6,17 +6,64 @@ from django.contrib.auth import get_user_model
 from django.http import Http404
 from django.utils import timezone
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
 from bugsink.decorators import atomic_for_request_method
 
-from .forms import UserCreationForm, ResendConfirmationForm, RequestPasswordResetForm, SetPasswordForm, PreferencesForm
+from .forms import (
+    UserCreationForm, ResendConfirmationForm, RequestPasswordResetForm, SetPasswordForm, PreferencesForm, UserEditForm)
 from .models import EmailVerification
 from .tasks import send_confirm_email, send_reset_email
 
 
 UserModel = get_user_model()
+
+
+@atomic_for_request_method
+@user_passes_test(lambda u: u.is_superuser)
+def user_list(request):
+    users = UserModel.objects.all().order_by('username')
+
+    if request.method == 'POST':
+        full_action_str = request.POST.get('action')
+        action, user_pk = full_action_str.split(":", 1)
+        if action == "deactivate":
+            user = UserModel.objects.get(pk=user_pk)
+            user.is_active = False
+            user.save()
+
+            messages.success(request, 'User %s deactivated' % user.username)
+            return redirect('user_list')
+
+        if action == "activate":
+            user = UserModel.objects.get(pk=user_pk)
+            user.is_active = True
+            user.save()
+
+            messages.success(request, 'User %s activated' % user.username)
+            return redirect('user_list')
+
+    return render(request, 'users/user_list.html', {
+        'users': users,
+    })
+
+
+@atomic_for_request_method
+@user_passes_test(lambda u: u.is_superuser)
+def user_edit(request, user_pk):
+    user = UserModel.objects.get(pk=user_pk)
+    if request.method == 'POST':
+        form = UserEditForm(request.POST, instance=user)
+
+        if form.is_valid():
+            form.save()
+            return redirect("user_list")
+
+    else:
+        form = UserEditForm(instance=user)
+
+    return render(request, "users/user_edit.html", {"form": form})
 
 
 @atomic_for_request_method
@@ -62,7 +109,7 @@ def confirm_email(request, token=None):
     if request.method == 'POST':
         # We insist on POST requests to do the actual confirmation (at the cost of an extra click). See:
         # https://softwareengineering.stackexchange.com/a/422579/168778
-        # there's no form, the'res just a button to generate the post request
+        # there's no Django form (fields), there's just a button to generate the post request
 
         verification.user.is_active = True
         verification.user.save()
@@ -159,8 +206,8 @@ def reset_password(request, token=None):
 
 
 @atomic_for_request_method
-# in the general case this is done by Middleware but we're under /accounts/. not security-critical because we simply
-# get a failure on request.user if this wasn't there, but still the "right thing"
+# in the general case this is done by Middleware but we're under /accounts/, so we need it back.
+# not security-critical because we simply get a failure on request.user if this wasn't there, but still the right thing.
 @login_required
 def preferences(request):
     user = request.user
