@@ -217,6 +217,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 SILENCED_SYSTEM_CHECKS = [
+    "security.W003",  # Complaint about lack of "django.middleware.csrf.CsrfViewMiddleware", but we have our own version
+
     # in recommended setups we implement HSTS and SSL redirect at the proxy level, so we silence these checks
     "security.W004",  # SECURE_HSTS_SECONDS
     "security.W008",  # SECURE_SSL_REDIRECT
