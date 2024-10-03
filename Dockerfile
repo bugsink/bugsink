@@ -17,6 +17,8 @@ FROM python:${PYTHON_VERSION}-slim
 ARG WHEEL_FILE
 ENV PYTHONUNBUFFERED=1
 
+ENV PORT=8000
+
 WORKDIR /app
 
 # mysqlclient dependencies; needed here too, because the built wheel depends on .o files
@@ -30,6 +32,6 @@ COPY bugsink/conf_templates/docker.py.template bugsink_conf.py
 
 RUN ["bugsink-manage", "migrate", "snappea", "--database=snappea"]
 
-EXPOSE 8000
+EXPOSE $PORT
 
-CMD [ "monofy", "bugsink-manage", "check", "--deploy", "--fail-level", "WARNING", "&&", "bugsink-manage", "migrate", "&&", "gunicorn", "--bind=0.0.0.0:8000", "--workers=10", "--access-logfile", "-", "bugsink.wsgi", "|||", "bugsink-runsnappea"]
+CMD [ "monofy", "bugsink-manage", "check", "--deploy", "--fail-level", "WARNING", "&&", "bugsink-manage", "migrate", "&&", "gunicorn", "--bind=0.0.0.0:$PORT", "--workers=10", "--access-logfile", "-", "bugsink.wsgi", "|||", "bugsink-runsnappea"]
