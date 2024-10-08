@@ -9,6 +9,7 @@ from users.views import debug_email as debug_users_email
 from teams.views import debug_email as debug_teams_email
 from bugsink.app_settings import get_settings
 from users.views import signup, confirm_email, resend_confirmation, request_reset_password, reset_password, preferences
+from ingest.views import download_envelope
 
 from .views import home, trigger_error, favicon, settings_view
 from .debug_views import csrf_debug
@@ -38,6 +39,9 @@ urlpatterns = [
     path("users/", include("users.urls")),
 
     path('api/', include('ingest.urls')),
+
+    # not in /api/ because it's not part of the ingest API, but still part of the ingest app
+    path('ingest/envelope/<str:envelope_id>/', download_envelope, name='download_envelope'),
 
     path('projects/', include('projects.urls')),
     path('teams/', include('teams.urls')),

@@ -15,6 +15,7 @@ from django.core.exceptions import ValidationError
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from django.contrib.auth.decorators import user_passes_test
 
 from compat.auth import parse_auth_header_value
 from compat.dsn import get_sentry_key
@@ -39,6 +40,7 @@ from .parsers import StreamingEnvelopeParser, ParseError
 from .filestore import get_filename_for_event_id
 from .tasks import digest
 from .event_counter import check_for_thresholds
+from .models import StoreEnvelope, DontStoreEnvelope, Envelope
 
 
 HTTP_429_TOO_MANY_REQUESTS = 429
@@ -458,12 +460,29 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
     def _post(self, request, project_pk=None):
         ingested_at = datetime.now(timezone.utc)
 
+        input_stream = MaxDataReader("MAX_ENVELOPE_SIZE", content_encoding_reader(
+            MaxDataReader("MAX_ENVELOPE_COMPRESSED_SIZE", request)))
+
+        # note: we use the unvalidated (against DSN) "project_pk"; b/c of the debug-nature we assume "not a problem"
+        input_stream = StoreEnvelope(ingested_at, project_pk, input_stream) if get_settings().KEEP_ENVELOPES > 0 \
+            else DontStoreEnvelope(input_stream)
+
+        try:
+            return self._post2(request, input_stream, ingested_at, project_pk)
+        finally:
+            # storing stuff in the DB on-ingest (rather than on digest-only) is not "as architected"; it's OK because
+            # this is a debug-only thing.
+            #
+            # note: in finally, so this happens even for all paths, including errors and 404 (i.e. wrong DSN). By design
+            # b/c the error-paths are often the interesting ones when debugging. We even store when over quota (429),
+            # that's more of a trade-off to avoid adding extra complexity for a debug-tool.
+            input_stream.store()
+
+    def _post2(self, request, input_stream, ingested_at, project_pk=None):
         # Note: wrapping the COMPRESSES_SIZE checks arount request makes it so that when clients do not compress their
         # requests, they are still subject to the (smaller) maximums that apply pre-uncompress. This is exactly what we
         # want.
-        parser = StreamingEnvelopeParser(
-                    MaxDataReader("MAX_ENVELOPE_SIZE", content_encoding_reader(
-                        MaxDataReader("MAX_ENVELOPE_COMPRESSED_SIZE", request))))
+        parser = StreamingEnvelopeParser(input_stream)
 
         envelope_headers = parser.get_envelope_headers()
 
@@ -558,3 +577,11 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 # more stuff that we don't care about (up to 20MiB compressed) whereas the max event size (uncompressed) is 1MiB.
 # Another advantage: this allows us to raise the relevant Header parsing and size limitation Exceptions to the SDKs.
 #
+
+
+@user_passes_test(lambda u: u.is_superuser)
+def download_envelope(request, envelope_id=None):
+    envelope = get_object_or_404(Envelope, pk=envelope_id)
+    response = HttpResponse(envelope.data, content_type="application/x-sentry-envelope")
+    response["Content-Disposition"] = f'attachment; filename="envelope-{envelope_id}.json"'
+    return response

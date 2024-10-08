@@ -39,6 +39,7 @@ DEFAULTS = {
     # System inner workings:
     "DIGEST_IMMEDIATELY": True,
     "VALIDATE_ON_DIGEST": "none",  # other legal values are "warn" and "strict"
+    "KEEP_ENVELOPES": 0,  # set to a number to store that many; 0 means "store none". This is for debugging.
 
     # MAX* below mirror the (current) values for the Sentry Relay
     "MAX_EVENT_SIZE": _MEBIBYTE,

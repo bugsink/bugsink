@@ -127,6 +127,8 @@ BUGSINK = {
     # will fit in the final version, so that's why it's not documented.
     "USE_ADMIN": True,
     "VALIDATE_ON_DIGEST": "strict",
+
+    "KEEP_ENVELOPES": 10,
 }
 
 
