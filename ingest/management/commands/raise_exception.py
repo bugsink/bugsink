@@ -16,7 +16,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         from sentry_sdk import set_tag
         set_tag("foo", "bar")
-        set_tag("baz", 1)
+        set_tag("baz", "1")
 
         if options["no_release"]:
             # The sentry client "tries hard" to get the release from the environment (including git); I have found the
