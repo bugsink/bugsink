@@ -123,6 +123,10 @@ BUGSINK = {
     # 50 requests/s (ingestion) on low-grade hardware that I measured, and with 50% of the default value for retention.
     "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": int(os.getenv("MAX_EVENTS_PER_PROJECT_PER_5_MINUTES", 1_000)),
     "MAX_EVENTS_PER_PROJECT_PER_HOUR": int(os.getenv("MAX_EVENTS_PER_PROJECT_PER_HOUR", 5_000)),
+
+    # Settings that help with debugging and development ("why isn't Bugsink doing what I expect?")
+    "VALIDATE_ON_DIGEST": os.getenv("VALIDATE_ON_DIGEST", "none").lower(),  # other legal values are "warn" and "strict"
+    "KEEP_ENVELOPES": int(os.getenv("KEEP_ENVELOPES", 0)),  # keep this many in the database; 0 means "don't keep"
 }
 
 
