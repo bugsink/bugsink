@@ -501,6 +501,8 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         #   added complexity (conditional transactions both here and in digest_event) is not worth it for modes that are
         #   non-production anyway.
         if "dsn" in envelope_headers:
+            # as in get_sentry_key_for_request, we don't verify that the DSN contains the project_pk, for the same
+            # reason ("reasons unconvincing")
             project = self.get_project(project_pk, get_sentry_key(envelope_headers["dsn"]))
         else:
             project = self.get_project_for_request(project_pk, request)
