@@ -95,6 +95,12 @@ MIDDLEWARE = [
     'bugsink.middleware.PerformanceStatsMiddleware',
 ]
 
+# Config of verbose_csrf_middleware.CsrfViewMiddleware: For Bugsink, there's never any intentional cross-scheme POSTing
+# going on. In that case "wrong scheme" always just means "Django's confused about is_secure", and we want to point
+# people in the right direction (i.e. fix your proxy's X-Forwarded-Proto)
+VERBOSE_CSRF_REASON_SCHEME_MISMATCH = "(wrong scheme); fix your proxy's X-Forwarded-Proto"
+
+
 ROOT_URLCONF = 'bugsink.urls'
 
 TEMPLATES = [
