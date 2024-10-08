@@ -77,7 +77,7 @@ def atomic_for_request_method(function, *decorator_args, **decorator_kwargs):
 
     This is what immediate_atomic is for.
 
-    ##  for read requests, use the plain old transaction.atomic.
+    ##  for read requests, use the plain old transaction.atomic (with durable=True, to ensure you're the outermost)
 
     This might be surprising if you think about transactions as mainly a means of guaranteeing atomicity of writes (as
     is directly implied by Django's naming). The thing we're going for is snapshot isolation (given by SQLite in WAL
