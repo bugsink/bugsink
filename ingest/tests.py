@@ -44,7 +44,6 @@ def _digest_params(event_data, project, request, now=None):
             "debug_info": "",
         },
         "event_data": event_data,
-        "project": project,
         "digested_at": now,
     }
 
