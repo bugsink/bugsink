@@ -585,5 +585,5 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 def download_envelope(request, envelope_id=None):
     envelope = get_object_or_404(Envelope, pk=envelope_id)
     response = HttpResponse(envelope.data, content_type="application/x-sentry-envelope")
-    response["Content-Disposition"] = f'attachment; filename="envelope-{envelope_id}.json"'
+    response["Content-Disposition"] = f'attachment; filename="envelope-{envelope_id}.envelope"'
     return response
