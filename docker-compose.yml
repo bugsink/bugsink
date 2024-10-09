@@ -7,7 +7,7 @@ services:
     restart: always
     ports:
       - "${APP_PORT:-8000}:8000"
-    env_file: .env.docker
+    env_file: .env
     environment:
       DATABASE_URL: mysql://${DB_USER:-bugsink}:${DB_PASSWORD}@db/${DB_NAME:-bugsink}
     healthcheck:
