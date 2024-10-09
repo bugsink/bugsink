@@ -272,8 +272,8 @@ def evict_for_irrelevance(
 
 
 def delete_with_limit(qs, limit):
-    # Django does not support this out of the box (i.e. it does not support LIMIT in DELETE queries). Sqlite does in
-    # fact support it (whereas many other DBs do not), so we reach down into Django's internals to get this done.
+    # Django does not support this out of the box (i.e. it does not support LIMIT in DELETE queries). Both Sqlite and
+    # MySQL do in fact support it (whereas many other DBs do not), so we just reach down into Django's internals.
     sql, params = SQLDeleteCompiler(qs.query, connection, 'default').as_sql()
     limited_sql = sql + " LIMIT %s"
     limited_params = params + (limit,)
