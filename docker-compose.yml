@@ -1,0 +1,47 @@
+services:
+  app:
+    image: bugsink/bugsink:${APP_VERSION:-0.1.11}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    env_file: .env.docker
+    environment:
+      DATABASE_URL: mysql://${DB_USER:-bugsink}:${DB_PASSWORD}@db/${DB_NAME:-bugsink}
+    healthcheck:
+      test: timeout 10s bash -c ':> /dev/tcp/127.0.0.1/8000' || exit 1
+      interval: 30s
+      timeout: 15s
+      retries: 3
+
+  db:
+    image: mysql:${DB_VERSION:-9}
+    restart: always
+    # ports:
+    #   - "${DB_PORT-3306}:3306"
+    volumes:
+      - data:/var/lib/mysql
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: yes
+      MYSQL_DATABASE: ${DB_NAME:-bugsink}
+      MYSQL_USER: ${DB_USER:-bugsink}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: mysqladmin ping -h localhost
+      timeout: 20s
+      retries: 10
+
+  setup:
+    image: bugsink/bugsink:${APP_VERSION:-0.1.11}
+    command: "bugsink-manage migrate"
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: mysql://${DB_USER:-bugsink}:${DB_PASSWORD}@db/${DB_NAME:-bugsink}
+
+volumes:
+  data:
