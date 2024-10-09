@@ -32,6 +32,4 @@ COPY bugsink/conf_templates/docker.py.template bugsink_conf.py
 
 RUN ["bugsink-manage", "migrate", "snappea", "--database=snappea"]
 
-EXPOSE $PORT
-
 CMD [ "monofy", "bugsink-manage", "check", "--deploy", "--fail-level", "WARNING", "&&", "bugsink-manage", "migrate", "&&", "gunicorn", "--bind=0.0.0.0:$PORT", "--workers=10", "--access-logfile", "-", "bugsink.wsgi", "|||", "bugsink-runsnappea"]
