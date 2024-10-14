@@ -9,6 +9,22 @@ from django.db import connection
 performance_logger = logging.getLogger("bugsink.performance.views")
 
 
+class DisallowChunkedMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.META.get("HTTP_TRANSFER_ENCODING").lower() == "chunked" and \
+                not request.META.get("wsgi.input_terminated"):
+
+            # If we get here, it means that the request has a Transfer-Encoding header with a value of "chunked", but we
+            # have no wsgi-layer handling for that. This probably means that we're running the Django development
+            # server, and as such our fixes for the Gunicorn/Django mismatch that we put in wsgi.py are not in effect.
+            raise ValueError("This server is not configured to support Chunked Transfer Encoding (for requests)")
+
+        return self.get_response(request)
+
+
 class LoginRequiredMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response

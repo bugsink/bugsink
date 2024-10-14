@@ -77,6 +77,7 @@ AUTH_USER_MODEL = "users.User"
 TAILWIND_APP_NAME = 'theme'
 
 MIDDLEWARE = [
+    'bugsink.middleware.DisallowChunkedMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
