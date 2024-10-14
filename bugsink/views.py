@@ -9,6 +9,8 @@ from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render
 
 from snappea.settings import get_settings as get_snappea_settings
+
+from bugsink.version import __version__
 from bugsink.decorators import login_exempt
 from bugsink.app_settings import get_settings as get_bugsink_settings
 
@@ -80,4 +82,5 @@ def settings_view(request):
         "bugsink_settings": round_values(get_bugsink_settings()),
         "snappea_settings": get_snappea_settings(),
         "misc_settings": misc_settings,
+        "version": __version__,
     })
