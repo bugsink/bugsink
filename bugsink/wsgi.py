@@ -23,7 +23,6 @@ class MyWSGIRequest(WSGIRequest):
         if "CONTENT_LENGTH" not in environ and "HTTP_TRANSFER_ENCODING" in environ:
             # "unlimit" content length
             self._stream = self.environ["wsgi.input"]
-            environ["CHUNKED_TE_HANDLED"] = True
 
 
 class MyWSGIHandler(WSGIHandler):
