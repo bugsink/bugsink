@@ -25,6 +25,12 @@ bugsink-manage = "bugsink.scripts.manage:main"
 bugsink-create-conf = "bugsink.scripts.create_conf:main"
 bugsink-runsnappea = "bugsink.scripts.runsnappea:main"
 
+[project.urls]
+homepage = "https://www.bugsink.com/"
+documentation = "https://www.bugsink.com/docs/"
+issues = "https://github.com/bugsink/bugsink/issues"
+repository = "https://github.com/bugsink/bugsink"
+
 [tool.setuptools]
 include-package-data = true  # this is the default, but explicit is better than implicit
 
