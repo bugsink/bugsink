@@ -14,7 +14,8 @@ class DisallowChunkedMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.META.get("HTTP_TRANSFER_ENCODING").lower() == "chunked" and \
+        if "HTTP_TRANSFER_ENCODING" in request.META and \
+                request.META["HTTP_TRANSFER_ENCODING"].lower() == "chunked" and \
                 not request.META.get("wsgi.input_terminated"):
 
             # If we get here, it means that the request has a Transfer-Encoding header with a value of "chunked", but we
