@@ -95,7 +95,7 @@ class StreamingEnvelopeParser:
 
         self.envelope_headers = None
 
-    def _parse_headers(self, eof_is_error):
+    def _parse_headers(self, eof_after_header_is_error=True):
         """
         Quoted from https://develop.sentry.dev/sdk/envelopes/#headers at version 9c7f19f96562
         conversion to numbered list mine
@@ -134,7 +134,7 @@ class StreamingEnvelopeParser:
             if header_stream_value == b"":
                 return None
 
-            if eof_is_error:
+            if eof_after_header_is_error:
                 # We found some header-data, but nothing else. This is an error
                 raise ParseError("EOF when reading headers; what is this a header for then?")
 
@@ -145,7 +145,8 @@ class StreamingEnvelopeParser:
 
     def get_envelope_headers(self):
         if self.envelope_headers is None:
-            self.envelope_headers = self._parse_headers(eof_is_error=False)
+            # see test_eof_after_envelope_headers for why we don't error on EOF-after-header here
+            self.envelope_headers = self._parse_headers(eof_after_header_is_error=False)
             assert self.envelope_headers is not None
 
         return self.envelope_headers
@@ -157,7 +158,7 @@ class StreamingEnvelopeParser:
         self.get_envelope_headers()
 
         while not self.at_eof:
-            item_headers = self._parse_headers(eof_is_error=True)
+            item_headers = self._parse_headers(eof_after_header_is_error=True)
             if item_headers is None:
                 self.at_eof = True
                 break
