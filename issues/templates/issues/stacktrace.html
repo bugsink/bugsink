@@ -122,13 +122,13 @@
                     {% if frame.vars %}
                     <div class="mt-4 mb-6">{# variables #}
                         <div class="flex">
-                            <div class="w-1/4 pt-2 font-bold border-b-2 border-slate-500 pl-4">Variable</div>
-                            <div class="w-3/4 pt-2 font-bold border-b-2 border-slate-500 pr-4">Value</div>
+                            <div class="w-1/3 pt-2 font-bold border-b-2 border-slate-500 pl-4">Variable</div>
+                            <div class="w-2/3 pt-2 font-bold border-b-2 border-slate-500 pr-4">Value</div>
                         </div>
                         {% for var, value in frame.vars|items %}
                         <div class="flex">
-                            <div class="w-1/4 pl-4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ var }}</div>
-                            <div class="w-3/4 pr-4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %}">{{ value }}</div>
+                            <div class="w-1/3 pl-4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ var }}</div>
+                            <div class="w-2/3 pr-4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %}">{{ value }}</div>
                         </div>
                         {% endfor %}
                     </div>
