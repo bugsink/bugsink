@@ -1,6 +1,7 @@
 # approach as in snappea/settings.py
 # alternative would be: just put "everything" in the big settings.py (or some mix-using-imports version of that).
 # but for now I like the idea of keeping the bugsink-as-an-app stuff separate from the regular Django/db/global stuff.
+import os
 from contextlib import contextmanager
 
 from django.conf import settings
@@ -17,8 +18,11 @@ CB_ADMINS = "CB_ADMINS"
 CB_NOBODY = "CB_NOBODY"
 
 
+_PORT = os.environ.get("PORT", "8000")
+
+
 DEFAULTS = {
-    "BASE_URL": "http://127.0.0.1:8000",  # no trailing slash
+    "BASE_URL": f"http://127.0.0.1:{_PORT}",  # no trailing slash
     "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 
     # Users, teams, projects
