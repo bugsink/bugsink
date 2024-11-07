@@ -14,8 +14,29 @@ from bugsink.version import __version__
 from bugsink.decorators import login_exempt
 from bugsink.app_settings import get_settings as get_bugsink_settings
 
+from phonehome.tasks import send_if_due
+
+
+def _phone_home():
+    # I need a way to cron-like run tasks that works for the setup with and without snappea. With snappea it's straight-
+    # forward (though not part of snappea _yet_). Without snappea, you'd need _some_ location to do a "poor man's cron"
+    # check. Server-start would be the first thing to consider, but how to do this across gunicorn, debugserver, and
+    # possibly even non-standard (for Bugsink) wsgi servers? Better go the "just pick some request to do the check"
+    # route. I've picked "home", because [a] it's assumed to be somewhat regularly visited [b] there's no transaction
+    # logic in it, which leaves space for transaction-logic in the phone-home task itself and [c] some alternatives are
+    # a no-go (ingestion: on a tight budget; login: not visited when a long-lived session is active).
+    #
+    # having chosen the solution for the non-snappea case, I got the crazy idea of using it for the snappea case too,
+    # i.e. just put a .delay() here and let the config choose. Not so crazy though, because [a] saves us from new
+    # features in snappea, [b] we introduce a certain symmetry of measurement between the 2 setups, i.e. the choice of
+    # lazyness does not influence counting and [c] do I really want to get pings for sites where nobody visits home()?
+
+    send_if_due.delay()  # _phone_home() wrapper serves as a place for the comment above
+
 
 def home(request):
+    _phone_home()
+
     if request.user.project_set.filter(projectmembership__accepted=True).distinct().count() == 1:
         # if the user has exactly one project, we redirect them to that project
         project = request.user.project_set.get()

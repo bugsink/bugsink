@@ -23,6 +23,10 @@ elif [s.endswith("gunicorn") for s in sys.argv[:1]] == [True]:
 else:
     I_AM_RUNNING = "OTHER"
 
+
+# Used for reporting / debugging purposes. The default docker conf template overrides this accordingly.
+IS_DOCKER = False
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -55,6 +59,7 @@ INSTALLED_APPS = [
 ]
 
 BUGSINK_APPS = [
+    'phonehome',
     'users',
     'theme',
     'snappea',

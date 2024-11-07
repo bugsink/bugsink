@@ -11,6 +11,8 @@ _MEBIBYTE = 1024 * _KIBIBYTE
 _PORT = os.environ.get("PORT", "8000")
 
 
+IS_DOCKER = True
+
 DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
 DEBUG_CSRF = "USE_DEBUG" if os.getenv("DEBUG_CSRF") == "USE_DEBUG" else os.getenv("DEBUG_CSRF", "False").lower() in ("true", "1", "yes")
 

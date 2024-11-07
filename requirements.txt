@@ -10,7 +10,7 @@ inotify_simple
 brotli
 python-dateutil
 whitenoise
-requests  # for sentry-sdk-extensions, which is loaded in non-dev setup too
+requests
 monofy==1.1.*
 user_agents
 fastjsonschema
