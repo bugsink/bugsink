@@ -90,6 +90,7 @@ def _make_message_body():
             # Settings that tell us how production-like your usage is.
             "SINGLE_USER": get_settings().SINGLE_USER,
             "SINGLE_TEAM": get_settings().SINGLE_TEAM,
+            "EMAIL_BACKEND": settings.EMAIL_BACKEND,
             # As it stands, the 2 settings below are not used to determine production-like-ness; left here for reference
             # "USER_REGISTRATION": get_settings().USER_REGISTRATION,
             # "TEAM_CREATION": get_settings().TEAM_CREATION,
