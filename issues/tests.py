@@ -456,6 +456,7 @@ class IntegrationTest(TransactionTestCase):
 
         event_samples = glob(SAMPLES_DIR + "/*/*.json")
         event_samples_private = glob("../event-samples-private/*.json")
+        known_broken = [SAMPLES_DIR + "/" + s.strip() for s in open(SAMPLES_DIR + "/KNOWN-BROKEN").readlines()]
 
         if len(event_samples) == 0:
             raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
@@ -486,7 +487,7 @@ class IntegrationTest(TransactionTestCase):
             # tested)
             data["event_id"] = uuid.uuid4().hex
 
-            if not command.is_valid(data, filename):
+            if not command.is_valid(data, filename) and filename not in known_broken:
                 raise Exception("validatity check in %s: %s" % (filename, command.stderr.getvalue()))
 
             response = self.client.post(

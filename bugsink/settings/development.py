@@ -126,7 +126,10 @@ BUGSINK = {
     # undocumented feature: this enables links to the admin interface in the header/footer. I'm not sure where the admin
     # will fit in the final version, so that's why it's not documented.
     "USE_ADMIN": True,
-    "VALIDATE_ON_DIGEST": "strict",
+
+    # In development, I want to be able to upload broken events, so I can test their downstream rendering/processing.
+    # Has the added benefit that the integration tests can run (event_samples repo contains broken events).
+    "VALIDATE_ON_DIGEST": "warn",
 
     "KEEP_ENVELOPES": 10,
 }

@@ -288,6 +288,7 @@ class IngestViewTestCase(TransactionTestCase):
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
 
         event_samples = glob(SAMPLES_DIR + "/*/*.json")
+        known_broken = [SAMPLES_DIR + "/" + s.strip() for s in open(SAMPLES_DIR + "/KNOWN-BROKEN").readlines()]
 
         if len(event_samples) == 0:
             raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
@@ -303,7 +304,7 @@ class IngestViewTestCase(TransactionTestCase):
                     # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
                     data["timestamp"] = time.time()
 
-                if not command.is_valid(data, filename):
+                if not command.is_valid(data, filename) and filename not in known_broken:
                     raise Exception("validatity check in %s: %s" % (filename, command.stderr.getvalue()))
 
                 event_id = data["event_id"]
@@ -341,6 +342,7 @@ class IngestViewTestCase(TransactionTestCase):
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
 
         event_samples = glob(SAMPLES_DIR + "/sentry/mobile1-xen.json")  # this one has 'exception.values[0].type'
+        known_broken = [SAMPLES_DIR + "/" + s.strip() for s in open(SAMPLES_DIR + "/KNOWN-BROKEN").readlines()]
 
         if len(event_samples) == 0:
             raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
@@ -357,7 +359,7 @@ class IngestViewTestCase(TransactionTestCase):
                     # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
                     data["timestamp"] = time.time()
 
-                if not command.is_valid(data, filename):
+                if not command.is_valid(data, filename) and filename not in known_broken:
                     raise Exception("validatity check in %s: %s" % (filename, command.stderr.getvalue()))
 
                 event_id = data["event_id"]
