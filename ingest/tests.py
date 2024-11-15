@@ -10,11 +10,12 @@ from unittest.mock import patch
 from unittest import TestCase as RegularTestCase
 from dateutil.relativedelta import relativedelta
 
-from django.test import TransactionTestCase, tag
+from django.test import tag
 from django.utils import timezone
 from django.test.client import RequestFactory
 from django.core.exceptions import ValidationError
 
+from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project
 from events.factories import create_event_data, create_event
 from issues.factories import get_or_create_issue
@@ -62,6 +63,8 @@ class IngestViewTestCase(TransactionTestCase):
     # > transactions are committed, and the callbacks will run. However [..] significantly slower [..]
 
     def setUp(self):
+        super().setUp()
+
         # the existence of loud/quiet reflect that parts of this test focusses on alert-sending
         self.request_factory = RequestFactory()
         self.loud_project = Project.objects.create(

@@ -9,11 +9,12 @@ from unittest import TestCase as RegularTestCase
 from unittest.mock import patch
 from datetime import datetime, timezone
 
-from django.test import TestCase as DjangoTestCase, TransactionTestCase
+from django.test import TestCase as DjangoTestCase
 from django.contrib.auth import get_user_model
 from django.test import tag
 from django.conf import settings
 
+from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project, ProjectMembership
 from releases.models import create_release_if_needed
 from events.factories import create_event
@@ -39,6 +40,7 @@ class RegressionUtilTestCase(RegularTestCase):
     # this particular testcase tests straight on the utility `is_regression` (i.e. not all issue-handling code)
 
     def setUp(self):
+        super().setUp()
         self.releases = ["a", "b", "c", "d", "e", "f", "g", "h"]
 
     def test_not_marked_as_fixed(self):
@@ -387,6 +389,7 @@ class ViewTests(TransactionTestCase):
     # we start with minimal "does this show something and not fully crash" tests and will expand from there.
 
     def setUp(self):
+        super().setUp()
         self.user = User.objects.create_user(username='test', password='test')
         self.project = Project.objects.create()
         ProjectMembership.objects.create(project=self.project, user=self.user)
@@ -420,6 +423,7 @@ class ViewTests(TransactionTestCase):
 class IntegrationTest(TransactionTestCase):
 
     def setUp(self):
+        super().setUp()
         self.verbosity = self.get_verbosity()
 
     def get_verbosity(self):

@@ -1,11 +1,12 @@
 import datetime
 
-from django.test import TestCase as DjangoTestCase, TransactionTestCase
+from django.test import TestCase as DjangoTestCase
 from unittest import TestCase as RegularTestCase
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.utils import timezone
 
+from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project, ProjectMembership
 from issues.models import Issue
 from issues.factories import denormalized_issue_fields
@@ -20,6 +21,7 @@ class ViewTests(TransactionTestCase):
     # we start with minimal "does this show something and not fully crash" tests and will expand from there.
 
     def setUp(self):
+        super().setUp()
         self.user = User.objects.create_user(username='test', password='test')
         self.project = Project.objects.create()
         ProjectMembership.objects.create(project=self.project, user=self.user)
