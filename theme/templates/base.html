@@ -44,13 +44,13 @@
                 </div>
             </div>
 
-            {% if show_free_version_message %}
+            {% for system_warning in system_warnings %}
             <div class="flex p-4 bg-yellow-100 border-b-2 border-yellow-200">
                 <div>
-                    This is the free version of Bugsink; usage is limited to a single user for local development only. Using this software in production requires a <a href="https://www.bugsink.com/#pricing" target="_blank" class="font-bold text-slate-800">paid licence</a>.
+                    {{ system_warning }}
                 </div>
             </div>
-            {% endif %}
+            {% endfor %}
 
             {% comment %} {# for use when we introduce a notification system #}
             <div class="flex p-4 bg-yellow-100 border-b-2 border-yellow-200">

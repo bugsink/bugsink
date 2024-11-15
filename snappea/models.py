@@ -7,6 +7,7 @@ from . import thread_uuid
 
 
 class Task(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
     task_name = models.CharField(max_length=255)
     args = models.TextField(null=False, default='[]')
     kwargs = models.TextField(null=False, default='{}')
