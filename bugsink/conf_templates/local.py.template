@@ -60,4 +60,5 @@ BUGSINK = {
     # to more uses; MAKE SURE THAT YOU ARE ALLOWED TO DO SO.
     "SINGLE_USER": True,
     "SINGLE_TEAM": True,
+    "USER_REGISTRATION": CB_NOBODY,
 }
