@@ -18,8 +18,8 @@ CSRF_COOKIE_SECURE = True
 
 # In the recommended setup, the database is SQLite. The single (unix) user is named `bugsink` and we put the database in
 # its home directory:
-DATABASES["default"]["NAME"] = '/home/bugsink/db.sqlite3'
-DATABASES["snappea"]["NAME"] = '/home/bugsink/snappea.sqlite3'
+DATABASES["default"]["NAME"] = '{{ base_dir }}/db.sqlite3'
+DATABASES["snappea"]["NAME"] = '{{ base_dir }}/snappea.sqlite3'
 
 
 # The time-zone here is the default for display purposes (when no project/user configuration is used).
@@ -33,8 +33,8 @@ SNAPPEA = {
     "TASK_ALWAYS_EAGER": False,
     "NUM_WORKERS": 4,
 
-    "PID_FILE": "/home/bugsink/snappea/snappea.pid",
-    "WAKEUP_CALLS_DIR": "/home/bugsink/snappea/wakeup",
+    "PID_FILE": "{{ base_dir }}/snappea/snappea.pid",
+    "WAKEUP_CALLS_DIR": "{{ base_dir }}/snappea/wakeup",
 }
 
 
@@ -80,7 +80,7 @@ BUGSINK = {
     # "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
     # "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
 
-    "INGEST_STORE_BASE_DIR": "/home/bugsink/ingestion",
+    "INGEST_STORE_BASE_DIR": "{{ base_dir }}/ingestion",
 }
 
 ALLOWED_HOSTS = deduce_allowed_hosts(BUGSINK["BASE_URL"])
