@@ -1,4 +1,5 @@
 from django.db.backends.signals import connection_created
+from django.contrib.auth.management.commands.createsuperuser import Command as CreateSuperUserCommand
 
 
 def set_pragmas(sender, connection, **kwargs):
@@ -24,3 +25,18 @@ def set_pragmas(sender, connection, **kwargs):
 
 
 connection_created.connect(set_pragmas)
+
+
+# Monkey-patch the createsuperuser command with more clear instructions
+def _get_input_message(self, field, default=None):
+    # I don't think I want to commit to the below yet, leaving it here for now
+    # if field.verbose_name == 'Username':
+    #     return "Username (use your email address):"
+
+    if field.verbose_name == 'email address':
+        return "Email (alerts/password-reset): "
+    return unpatched_get_input_message(self, field, default)
+
+
+unpatched_get_input_message = CreateSuperUserCommand._get_input_message
+CreateSuperUserCommand._get_input_message = _get_input_message
