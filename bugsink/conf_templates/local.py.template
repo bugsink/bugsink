@@ -57,7 +57,7 @@ BUGSINK = {
     "DIGEST_IMMEDIATELY": True,
 
     # You are licenced to run Bugsink locally in single-user mode. By changing the settings below, you may open the door
-    # to more uses; MAKE SURE THAT YOU ARE ALLOWED TO DO SO.
+    # to more uses; make sure to buy a licence if you do.
     "SINGLE_USER": True,
     "SINGLE_TEAM": True,
     "USER_REGISTRATION": CB_NOBODY,
