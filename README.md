@@ -1,6 +1,6 @@
 # Bugsink: Self-hosted Error Tracking 
 
-Bugsink offers real-time [error tracking](https://www.bugsink.com/error-tracking/) for your applications with full control
+[Bugsink](https://www.bugsink.com/) offers real-time [error tracking](https://www.bugsink.com/error-tracking/) for your applications with full control
 through self-hosting. 
 
 * [Built to self-host](https://www.bugsink.com/built-to-self-host/)
