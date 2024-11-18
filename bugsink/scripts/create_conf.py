@@ -13,8 +13,8 @@ def main():
         "--template", help="Template to use; recommended or local", choices=["recommended", "local", "docker"],
         required=True)
 
-    parser.add_argument("--port", help="Port to use in SITE_TITLE ; default is 8000", type=int, default=8000)
-    parser.add_argument("--host", help="Host to use in SITE_TITLE ; default is 127.0.0.1", default="127.0.0.1")
+    parser.add_argument("--port", help="Port to use in BASE_URL ; default is 8000", type=int, default=8000)
+    parser.add_argument("--host", help="Host to use in BASE_URL ; default is localhost", default="localhost")
     parser.add_argument(
         "--base-dir", help="base dir for databases, snappea, and ingestion store ('recommended' template only)",
         default="/home/bugsink")

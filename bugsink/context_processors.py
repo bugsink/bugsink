@@ -70,7 +70,7 @@ def useful_settings_processor(request):
     # (First version of "should I nag" logic): nag only after considerable time to play with the app, and for "some
     # indication" that you're using this in production (the simplest such indication is that you've configured a
     # BASE_URL that's not localhost). Subject to change.
-    system_warnings = [FREE_VERSION_WARNING] if nag_30 and '127.0.0.1' not in get_settings().BASE_URL else []
+    system_warnings = [FREE_VERSION_WARNING] if nag_30 and 'localhost' not in get_settings().BASE_URL else []
 
     return {
         # Note: no way to actually set the license key yet, so nagging always happens for now.

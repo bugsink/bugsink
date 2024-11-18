@@ -22,7 +22,7 @@ _PORT = os.environ.get("PORT", "8000")
 
 
 DEFAULTS = {
-    "BASE_URL": f"http://127.0.0.1:{_PORT}",  # no trailing slash
+    "BASE_URL": f"http://localhost:{_PORT}",  # no trailing slash
     "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 
     # Users, teams, projects
