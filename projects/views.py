@@ -406,6 +406,7 @@ def project_sdk_setup(request, project_pk):
 
     return render(request, "projects/project_sdk_setup.html", {
         "project": project,
+        "install_text": get_template("sdkconf/python/install_text").render({}),
         "install": _sdk_code("install", {}, TextLexer()),
         "conf": _sdk_code("conf", {"dsn": project.dsn}, PythonLexer()),
         "verify": _sdk_code("verify", {}, PythonLexer()),
