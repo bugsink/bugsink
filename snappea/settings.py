@@ -36,8 +36,19 @@ DEFAULTS = {
 
 
 class AttrLikeDict(dict):
+    def __hasattr__(self, item):
+        return item in self
+
     def __getattr__(self, item):
-        return self[item]
+        # attribute errors are to be understood at the call site; as they are for regular object's missing attributes.
+        __tracebackhide__ = True
+
+        try:
+            return self[item]
+        except KeyError:
+            # "from None": this is so directly caused by the KeyError that cause and effect are the same and cause must
+            # be hidden.
+            raise AttributeError(item) from None
 
 
 _settings = None
