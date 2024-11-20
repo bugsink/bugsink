@@ -15,4 +15,3 @@ monofy==1.1.*
 user_agents
 fastjsonschema
 verbose_csrf_middleware
-sdkconf

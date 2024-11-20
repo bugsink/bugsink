@@ -1,10 +1,5 @@
 from datetime import timedelta
 
-from pygments import highlight
-from pygments.lexers import PythonLexer, TextLexer
-from pygments.formatters import HtmlFormatter
-
-from django.template.loader import get_template
 from django.shortcuts import render
 from django.db import models
 from django.shortcuts import redirect
@@ -15,7 +10,6 @@ from django.contrib import messages
 from django.contrib.auth import logout
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.safestring import mark_safe
 
 from users.models import EmailVerification
 from teams.models import TeamMembership, Team, TeamRole
@@ -385,16 +379,8 @@ def project_members_accept(request, project_pk):
     return render(request, "projects/project_members_accept.html", {"project": project, "membership": membership})
 
 
-def _sdk_code(part, context, lexer):
-    template = get_template("sdkconf/python/%s" % part)
-    code = template.render(context)
-
-    return mark_safe(
-        highlight(code, lexer, HtmlFormatter()).replace("highlight", "p-4 mt-4 bg-slate-50 syntax-coloring"))
-
-
 @atomic_for_request_method
-def project_sdk_setup(request, project_pk):
+def project_sdk_setup(request, project_pk, platform=""):
     project = Project.objects.get(id=project_pk)
 
     if not request.user.is_superuser and not ProjectMembership.objects.filter(project=project, user=request.user,
@@ -404,10 +390,11 @@ def project_sdk_setup(request, project_pk):
     # NOTE about lexers:: I have bugsink/pyments_extensions; but the platforms mentioned there don't necessarily map to
     # what I will make selectable here. "We'll see" whether yet another lookup dict will be needed.
 
-    return render(request, "projects/project_sdk_setup.html", {
+    assert platform in ["", "python", "javascript", "php"]
+
+    template_name = "projects/project_sdk_setup%s.html" % ("_" + platform if platform else "")
+
+    return render(request, template_name, {
         "project": project,
-        "install_text": get_template("sdkconf/python/install_text").render({}),
-        "install": _sdk_code("install", {}, TextLexer()),
-        "conf": _sdk_code("conf", {"dsn": project.dsn}, PythonLexer()),
-        "verify": _sdk_code("verify", {}, PythonLexer()),
+        "dsn": project.dsn,
     })

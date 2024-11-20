@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static code %}
 
-{% block title %}Set up your SDK · {{ site_title }}{% endblock %}
+{% block title %}Connect your application · {{ site_title }}{% endblock %}
 
 {% block content %}
 
@@ -9,49 +9,38 @@
 <div class="flex items-center justify-center">
 
     <div class="m-4 max-w-4xl flex-auto">
-        <h1 class="text-4xl font-bold">Set up your SDK</h1>
+        <h1 class="text-4xl font-bold">Connect your application</h1>
 
         <div class="mt-4">
             Connect your application to Bugsink to start tracking errors.
-            Bugsink is compatible with the Sentry SDK. A basic setup is the following: 
+            Bugsink is compatible with the <a href="https://docs.sentry.io/platforms/">Sentry SDKs</a>.
+            Use the following DSN to connect your application to Bugsink:
         </div>
+{% code %}:::text
+{{ dsn }}
+{% endcode %}
 
-        <h2 class="mt-8 text-2xl font-bold">Step 1: Install the SDK</h2>
-
+        <h2 class="mt-8 text-2xl font-bold">Language-specific instructions</h2>
         <div class="mt-4">
-            {{ install_text }}
+            Pick your language to get specific instructions on how to set up the SDK. 
+
+            <ul class="list-disc list-inside mt-4">
+                <li><a class="text-cyan-500 font-bold" href="python/">Python</a></li>
+                <li><a class="text-cyan-500 font-bold" href="javascript/">JavaScript</a></li>
+                <li><a class="text-cyan-500 font-bold" href="php/">PHP</a></li>
+            </ul>
+
         </div>
-
-        {{ install }}
-
-        <h2 class="mt-8 text-2xl font-bold">Step 2: Initialize the SDK</h2>
-
         <div class="mt-4">
-            Initialize and configure the SDK with your DSN. Add the following at the start of your application code:
-        </div>
-
-        {{ conf }}
-
-        <h2 class="mt-6 text-2xl font-bold">Step 3: Verify the setup</h2>
-
-        <div class="mt-4">
-            To verify that everything is working, raise an exception on purpose and check that it appears in Bugsink.
-            Put this code somewhere after the configuration:
-        </div>
-
-        {{ verify }}
-
-        <div class="mt-4"> 
-            Your event should now appear in the <a href="{% url "issue_list_open" project_pk=project.pk %}" class="text-cyan-500 font-bold">list of open issues</a>.
+            Not listed? It will probably work anyway! Just use the DSN above, and let us know if you run into any issues (or not).
         </div>
 
         <h2 class="mt-6 text-2xl font-bold">Further reading</h2>
 
         <div class="mt-4"> 
-            For more information on how to use the SDK, check the <a href="https://www.bugsink.com/docs/platforms/python/" class="text-cyan-500 font-bold">full documentation</a>.
+            For more information on how to use the SDK, check the <a href="https://www.bugsink.com/docs/sdk-recommendations/" class="text-cyan-500 font-bold">Bugsink-specific SDK recommendations</a>.
         </div>
         
-
     </div>
 </div>
 

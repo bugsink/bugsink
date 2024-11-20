@@ -56,7 +56,6 @@ INSTALLED_APPS = [
 
     'tailwind',  # As currently set up, this is also needed in production (templatetags)
     'admin_auto_filters',
-    'sdkconf',
 ]
 
 BUGSINK_APPS = [

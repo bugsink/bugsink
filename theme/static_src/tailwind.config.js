@@ -43,7 +43,7 @@ module.exports = {
          */
         // '../../**/*.py'
         "../../issues/views.py",
-
+        "../../theme/templatetags/code.py",
     ],
     theme: {
       extend: {

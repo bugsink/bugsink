@@ -20,4 +20,5 @@ urlpatterns = [
     path('<int:project_pk>/members/settings/<str:user_pk>/', project_member_settings, name="project_member_settings"),
 
     path('<int:project_pk>/sdk-setup/', project_sdk_setup, name="project_sdk_setup"),
+    path('<int:project_pk>/sdk-setup/<str:platform>/', project_sdk_setup, name="project_sdk_setup_platform"),
 ]

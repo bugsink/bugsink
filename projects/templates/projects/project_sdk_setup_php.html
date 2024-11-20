@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% load static code %}
+
+{% block title %}Set up your SDK · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+
+<div class="flex items-center justify-center">
+
+    <div class="m-4 max-w-4xl flex-auto">
+        <h1 class="text-4xl font-bold">Set up your SDK</h1>
+
+        <div class="mt-4">
+            Connect your PHP application to Bugsink to start tracking errors.
+            Bugsink is compatible with the <a class="text-cyan-500 font-bold" href="https://docs.sentry.io/platforms/php/">Sentry SDK</a>.
+            Note that the instructions for <a class="text-cyan-500 font-bold" href="https://docs.sentry.io/platforms/php/guides/laravel/">Laravel</a> and <a class="text-cyan-500 font-bold" href="https://docs.sentry.io/platforms/php/guides/symfony/">Symfony</a> are quite different from plain PHP.
+            In the below we provide an overview, zoom in on the differences between Bugsink and Sentry, and provide a snippet with the correct DSN set.
+        </div>
+
+        <h2 class="mt-8 text-2xl font-bold">Step 1: Install the SDK</h2>
+
+        <div class="mt-4">
+            Install the SDK using Composer. Run either of the following commands:
+
+{% code %}:::text
+PICK ONE:
+composer require sentry/sentry
+composer require sentry/sentry-laravel
+composer require sentry/sentry-symfony
+{% endcode %}
+        </div>
+
+        <h2 class="mt-8 text-2xl font-bold">Step 2: Configure the SDK with your DSN</h2>
+
+        <div class="mt-4">
+            The steps for initialization/configuration differ between the different frameworks. Refer to the relevant
+            document.
+        </div>
+        <div class="mt-4">
+            Configure the SDK without tracing and profiling, as Bugsink does not support these features.
+        </div>
+        <div class="mt-4">
+            Initialize and configure the SDK with your DSN:
+        </div>
+
+{% code %}:::php
+{{ dsn }}
+{% endcode %}
+
+        <h2 class="mt-6 text-2xl font-bold">Step 3: Verify the setup</h2>
+
+        <div class="mt-4">
+            To verify that everything is working, raise an exception on purpose and check that it appears in Bugsink.
+            How to do this depends on the framework you are using, as per the documentation. Here's an example for plain PHP:
+        </div>
+
+{% code %}:::php
+<?php
+try {
+  $this->iWantThisToFailSoBugsinkShowsIt();
+} catch (\Throwable $exception) {
+  \Sentry\captureException($exception);
+}
+?>{% endcode %}
+
+        <div class="mt-4"> 
+            Your event should now appear in the <a href="{% url "issue_list_open" project_pk=project.pk %}" class="text-cyan-500 font-bold">list of open issues</a>.
+        </div>
+
+        <h2 class="mt-6 text-2xl font-bold">Further reading</h2>
+
+        <div class="mt-4"> 
+            For more information on how to use the SDK, check the <a href="https://www.bugsink.com/docs/sdk-recommendations/" class="text-cyan-500 font-bold">Bugsink-specific SDK recommendations</a>.
+        </div>
+        
+
+    </div>
+</div>
+
+{% endblock %}

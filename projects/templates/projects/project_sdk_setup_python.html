@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% load static code %}
+
+{% block title %}Connect your Python Application · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+
+<div class="flex items-center justify-center">
+
+    <div class="m-4 max-w-4xl flex-auto">
+        <h1 class="text-4xl font-bold">Connect your Python Application</h1>
+
+        <div class="mt-4">
+            Connect your Python application to Bugsink to start tracking errors.
+            Bugsink is compatible with the Sentry SDK. A basic setup is the following: 
+        </div>
+
+        <h2 class="mt-8 text-2xl font-bold">Step 1: Install the SDK</h2>
+
+        <div class="mt-4">
+            Install the SDK using pip:
+        </div>
+
+{% code %}:::text
+pip install sentry-sdk
+{% endcode %}
+
+        <h2 class="mt-8 text-2xl font-bold">Step 2: Initialize the SDK</h2>
+
+        <div class="mt-4">
+            Initialize and configure the SDK with your DSN. Add the following at the start of your application code:
+        </div>
+
+{% code %}:::python
+import sentry_sdk
+
+sentry_sdk.init(
+    "{{ dsn }}",
+
+    send_default_pii=True,
+    max_request_body_size="always",
+
+    # Setting up the release is highly recommended. The SDK will try to
+    # infer it, but explicitly setting it is more reliable:
+    # release=...,
+
+    traces_sample_rate=0,
+)
+{% endcode %}
+
+        <h2 class="mt-6 text-2xl font-bold">Step 3: Verify the setup</h2>
+
+        <div class="mt-4">
+            To verify that everything is working, raise an exception on purpose and check that it appears in Bugsink.
+
+        </div>
+        <div class="mt-4">
+            Put this code somewhere in your application where it can easily be triggered and then trigger it (don't use an interactive shell since the SDK will ignore exceptions raised in it):
+        </div>
+
+{% code %}:::python
+raise Exception("Raised Exception on purpose to send it to Bugsink")
+{% endcode %}
+
+        <div class="mt-4"> 
+            Your event should now appear in the <a href="{% url "issue_list_open" project_pk=project.pk %}" class="text-cyan-500 font-bold">list of open issues</a>.
+        </div>
+
+        <h2 class="mt-6 text-2xl font-bold">Further reading</h2>
+
+        <div class="mt-4"> 
+            For more information on how to use the SDK, check the <a href="https://www.bugsink.com/docs/sdk-recommendations/" class="text-cyan-500 font-bold">Bugsink-specific SDK recommendations</a>.
+        </div>
+        
+
+    </div>
+</div>
+
+{% endblock %}

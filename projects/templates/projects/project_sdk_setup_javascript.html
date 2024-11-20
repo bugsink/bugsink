@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% load static code %}
+
+{% block title %}Set up your SDK · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+
+<div class="flex items-center justify-center">
+
+    <div class="m-4 max-w-4xl flex-auto">
+        <h1 class="text-4xl font-bold">Set up your SDK</h1>
+
+        <div class="mt-4">
+            Connect your JavaScript application to Bugsink to start tracking errors.
+            Bugsink is compatible with the <a class="text-cyan-500 font-bold" href="https://docs.sentry.io/platforms/javascript/">Sentry SDK</a>.
+            Detailed instructions per framework are in the <a class="text-cyan-500 font-bold" href="https://docs.sentry.io/platforms/javascript/">Sentry SDK Documentation</a>. In the below we provide an overview, zoom in on the differences between Bugsink and Sentry, and provide a snippet with the correct DSN set.
+        </div>
+
+        <h2 class="mt-8 text-2xl font-bold">Step 1: Install the SDK</h2>
+
+        <div class="mt-4">
+            Install the SDK by including a script tag, or by using a package manager such as npm or yarn. Note that the SDK to use depends on your framework (e.g. React, Angular, Vue, etc.).
+
+{% code %}:::text
+npm install @sentry/your-js-flavor --save
+{% endcode %}
+        </div>
+
+        <h2 class="mt-8 text-2xl font-bold">Step 2: Initialize the SDK</h2>
+
+        <div class="mt-4">
+            Initialize and configure the SDK with your DSN. Use the configuration snippet that applies to your framework,
+            and replace the Sentry.init call with the call below:
+        </div>
+
+{% code %}:::javascript
+// use the correct import statement for your framework, like:
+
+// import * as Sentry from "@sentry/browser";
+// const Sentry = require("@sentry/node");
+// import * as Sentry from "@sentry/angular";
+
+Sentry.init({
+  dsn: "{{ dsn }}",
+
+  // Alternatively, use `process.env.npm_package_version` for a dynamic release version
+  // if your build tool supports it.
+  release: "my-project-name@...",
+
+  integrations: [],
+  tracesSampleRate: 0,
+{% comment %} sendDefaultPii: true, // not actually implemented yet, see https://github.com/getsentry/sentry-javascript/issues/5347
+{% endcomment %}});
+{% endcode %}
+
+        <h2 class="mt-6 text-2xl font-bold">Step 3: Verify the setup</h2>
+
+        <div class="mt-4">
+            To verify that everything is working, raise an exception on purpose and check that it appears in Bugsink.
+            A good location for this depends on your framework, but a good place is in the main entry point of your application.
+            (Don't use the devtools console, because it will not be caught by the SDK).
+        </div>
+
+{% code %}:::javascript
+// Put something like this in the handler of a button click, on a timeout, or similar.
+throw new Error("Error Thrown on purpose to send it to Bugsink");
+{% endcode %}
+
+        <div class="mt-4"> 
+            Your event should now appear in the <a href="{% url "issue_list_open" project_pk=project.pk %}" class="text-cyan-500 font-bold">list of open issues</a>.
+        </div>
+
+        <h2 class="mt-6 text-2xl font-bold">Further reading</h2>
+
+        <div class="mt-4"> 
+            For more information on how to use the SDK, check the <a href="https://www.bugsink.com/docs/sdk-recommendations/" class="text-cyan-500 font-bold">Bugsink-specific SDK recommendations</a>.
+        </div>
+        
+
+    </div>
+</div>
+
+{% endblock %}
