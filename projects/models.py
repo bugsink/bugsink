@@ -59,7 +59,9 @@ class Project(models.Model):
     alert_on_unmute = models.BooleanField(default=True)
 
     # visibility
-    visibility = models.IntegerField(choices=ProjectVisibility.choices, default=ProjectVisibility.TEAM_MEMBERS)
+    visibility = models.IntegerField(
+        choices=ProjectVisibility.choices, default=ProjectVisibility.TEAM_MEMBERS,
+        help_text="Which users can see this project and its issues?")
 
     # ingestion/digestion quota
     quota_exceeded_until = models.DateTimeField(null=True, blank=True)

@@ -23,7 +23,9 @@ class Team(models.Model):
     name = models.CharField(max_length=255, blank=False, null=False, unique=True)
     slug = models.SlugField(max_length=50, blank=False, null=False)
 
-    visibility = models.IntegerField(choices=TeamVisibility.choices, default=TeamVisibility.DISCOVERABLE)
+    visibility = models.IntegerField(
+        choices=TeamVisibility.choices, default=TeamVisibility.DISCOVERABLE,
+        help_text="Which users can see this team and its issues?")
 
     def __str__(self):
         return self.name
