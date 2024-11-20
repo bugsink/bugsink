@@ -3,9 +3,15 @@ from os.path import basename
 
 from pygments.lexers import (
     ActionScript3Lexer, CLexer, ColdfusionHtmlLexer, CSharpLexer, HaskellLexer, GoLexer, GroovyLexer, JavaLexer,
-    JavascriptLexer, ObjectiveCLexer, PerlLexer, PhpLexer, PythonLexer, RubyLexer, TextLexer)
+    JavascriptLexer, ObjectiveCLexer, PerlLexer, PhpLexer, PythonLexer, RubyLexer, TextLexer, XmlPhpLexer)
 
 _all_lexers = None
+
+
+def _custom_options(clz, options):
+    if clz in [PhpLexer, XmlPhpLexer]:
+        options["startinline"] = True
+    return options
 
 
 def get_all_lexers():
@@ -72,7 +78,9 @@ def guess_lexer_for_filename(_fn, **options):
         return False
 
     try:
-        return get_all_lexers().get(test)(**options)
+        clz = get_all_lexers().get(test)
+        options = _custom_options(clz, options)
+        return clz(**options)
     except ValueError:
         return None
 
@@ -82,7 +90,7 @@ def lexer_for_platform(platform, **options):
     # The LHS in the table below is a fixed list of available platforms, as per the Sentry docs.
     # The RHS is my educated guess for what these platforms map to in Pygments.
 
-    return {
+    clz = {
         "as3": ActionScript3Lexer,
         "c": CLexer,
         "cfml": ColdfusionHtmlLexer,
@@ -107,4 +115,6 @@ def lexer_for_platform(platform, **options):
         "php": PhpLexer,
         "python": PythonLexer,
         "ruby": RubyLexer,
-    }[platform](**options)
+    }[platform]
+    options = _custom_options(clz, options)
+    return clz(**options)
