@@ -70,10 +70,9 @@ class AttrLikeDict(dict):
         return item in self
 
     def __getattr__(self, item):
-        try:
-            return self[item]
-        except KeyError:
+        if item not in self:
             raise AttributeError(item)
+        return self[item]
 
 
 _settings = None
