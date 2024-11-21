@@ -26,6 +26,11 @@ def enrich_contexts_with_ua(parsed_data):
         if ua_string is None:
             return contexts
 
+        if isinstance(ua_string, list):
+            if len(ua_string) == 0:
+                return contexts
+            ua_string = ua_string[0]  # assuming: it's always just one, and if it's not we just pick that anyway
+
         user_agent = ua_parse(ua_string)
 
         if "browser" not in contexts:
