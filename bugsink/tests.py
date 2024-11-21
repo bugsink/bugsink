@@ -6,6 +6,7 @@ import brotli
 from unittest import TestCase as RegularTestCase
 from django.test import TestCase as DjangoTestCase
 from django.test import override_settings
+from django.core.exceptions import SuspiciousOperation
 
 from .volume_based_condition import VolumeBasedCondition
 from .streams import (
@@ -361,3 +362,58 @@ class CSRFViewsTestCase(DjangoTestCase):
                 'process_view': 'OK',
             }
         })
+
+
+class SetRemoteAddrMiddlewareTestCase(RegularTestCase):
+
+    @override_settings(X_FORWARDED_FOR_PROXY_COUNT=1)
+    def test_parse_x_forwarded_for_one_proxy(self):
+        from .middleware import SetRemoteAddrMiddleware
+
+        self.assertEqual(None, SetRemoteAddrMiddleware.parse_x_forwarded_for(None))
+        self.assertEqual(None, SetRemoteAddrMiddleware.parse_x_forwarded_for(""))
+        self.assertEqual("1.2.3.4", SetRemoteAddrMiddleware.parse_x_forwarded_for("1.2.3.4"))
+
+        with self.assertRaises(SuspiciousOperation):
+            SetRemoteAddrMiddleware.parse_x_forwarded_for("123.123.123.123,1.2.3.4")
+
+
+'''
+the bit to test, for reference:
+
+class SetRemoteAddrMiddleware:
+    """
+    Sets the REMOTE_ADDR from the proxy headers if so configured. Sets REMOTE_ADDR to None if the configured headers are
+    empty (misconfiguration), i.e. None rather than 127.0.0.1 in that case.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    @staticmethod
+    def parse_x_forwarded_for(header_value):
+        if header_value is None:
+            # The most typical misconfiguration is to forget to set the header at all. In that case, we'll just set the
+            # IP to None, which will mean some data will be missing from your events (but you'll still get them).
+            return None
+
+        # Elements are comma-separated, with optional whitespace surrounding the commas. (MDN)
+        ips = [s.strip() for s in header_value.split(",")]
+
+        # Each proxy in the chain appends the IP it is forwarding for to the list. Hence, the number of proxies you use
+        # must exactly equal the number of IPs in the list. (+1 for the client; -1 because the last proxy will not be in
+        # the list)
+        if len(ips) == settings.X_FORWARDED_FOR_PROXY_COUNT:
+            return ips[0]  # The first address is the original client; others are proxies
+
+        if len(ips) > settings.X_FORWARDED_FOR_PROXY_COUNT:
+            # Greater than: somebody added something, most likely maliciously. Complain loudly.
+            # Alternatively, we could just take the one we trust (at index -proxy_count), but if someone's spoofing
+            # there's no reason to trust the rest of the message (event data).
+            raise SuspiciousOperation("X-Forwarded-For header does not contain the expected number of addresses")
+
+        # implied: len(ips) < settings.X_FORWARDED_FOR_PROXY_COUNT:
+        # As in 'if header_value is None' above, this is a misconfiguration. We'll just set the IP to None.
+        return None
+
+'''

@@ -42,6 +42,12 @@ SECRET_KEY = os.getenv("SECRET_KEY", "")
 DEBUG = False
 DEBUG_CSRF = "USE_DEBUG"  # i.e. use the value of DEBUG for this setting (useful when DEBUG is set later)
 
+# Various proxy-related settings (default.py: no proxy)
+USE_X_REAL_IP = False
+USE_X_FORWARDED_FOR = False
+X_FORWARDED_FOR_PROXY_COUNT = 0
+
+
 # Replacing "*" with your actual hostname forms an extra layer of security if your proxy/webserver is misconfigured.
 # The default (production) create-conf template does this for you.
 ALLOWED_HOSTS = ["*"]
@@ -82,6 +88,7 @@ AUTH_USER_MODEL = "users.User"
 TAILWIND_APP_NAME = 'theme'
 
 MIDDLEWARE = [
+    'bugsink.middleware.SetRemoteAddrMiddleware',
     'bugsink.middleware.DisallowChunkedMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',

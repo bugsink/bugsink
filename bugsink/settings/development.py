@@ -14,6 +14,7 @@ from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
 SECRET_KEY = 'django-insecure-$@clhhieazwnxnha-_zah&(bieq%yux7#^07&xsvhn58t)8@xw'
 DEBUG = True
 
+
 # > The Debug Toolbar is shown only if your IP address is listed in Django’s INTERNAL_IPS setting. This means that for
 # > local development, you must add "127.0.0.1" to INTERNAL_IPS.
 INTERNAL_IPS = [

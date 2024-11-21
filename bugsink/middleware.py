@@ -5,6 +5,8 @@ from sentry_sdk_extensions.nohub import capture_exception
 
 from django.contrib.auth.decorators import login_required
 from django.db import connection
+from django.conf import settings
+from django.core.exceptions import SuspiciousOperation
 
 performance_logger = logging.getLogger("bugsink.performance.views")
 
@@ -91,3 +93,49 @@ class CaptureExceptionsMiddleware:
         if dsn is not None:
             capture_exception(dsn, exception)
         return None
+
+
+class SetRemoteAddrMiddleware:
+    """
+    Sets the REMOTE_ADDR from the proxy headers if so configured. Sets REMOTE_ADDR to None if the configured headers are
+    empty (misconfiguration), i.e. None rather than 127.0.0.1 in that case.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    @staticmethod
+    def parse_x_forwarded_for(header_value):
+        if header_value in [None, ""]:
+            # The most typical misconfiguration is to forget to set the header at all, or to have it be empty. In that
+            # case, we'll just set the IP to None, which will mean some data will be missing from your events (but
+            # you'll still get them).
+            return None
+
+        # Elements are comma-separated, with optional whitespace surrounding the commas. (MDN)
+        ips = [s.strip() for s in header_value.split(",")]
+
+        # Each proxy in the chain appends the IP it is forwarding for to the list. Hence, the number of proxies you use
+        # must exactly equal the number of IPs in the list. (+1 for the client; -1 because the last proxy will not be in
+        # the list)
+        if len(ips) == settings.X_FORWARDED_FOR_PROXY_COUNT:
+            return ips[0]  # The first address is the original client; others are proxies
+
+        if len(ips) > settings.X_FORWARDED_FOR_PROXY_COUNT:
+            # Greater than: somebody added something, most likely maliciously. Complain loudly.
+            # Alternatively, we could just take the one we trust (at index -proxy_count), but if someone's spoofing
+            # there's no reason to trust the rest of the message (event data).
+            raise SuspiciousOperation("X-Forwarded-For header does not contain the expected number of addresses")
+
+        # implied: len(ips) < settings.X_FORWARDED_FOR_PROXY_COUNT:
+        # As in 'if header_value is None' above, this is a misconfiguration. We'll just set the IP to None.
+        return None
+
+    def __call__(self, request):
+        if settings.USE_X_REAL_IP:
+            request.META["REMOTE_ADDR"] = request.META.get("HTTP_X_REAL_IP", None)
+
+        elif settings.USE_X_FORWARDED_FOR:  # elif: X-Real-IP / X-Forwarded-For are mutually exclusive
+            request.META["REMOTE_ADDR"] = self.parse_x_forwarded_for(request.META.get("HTTP_X_FORWARDED_FOR", None))
+
+        return self.get_response(request)

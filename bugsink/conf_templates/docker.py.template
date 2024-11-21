@@ -27,6 +27,7 @@ if os.getenv("BEHIND_HTTPS_PROXY", "False").lower() in ("true", "1", "yes"):
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Note: slightly redundant, Gunicorn also does this.
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    USE_X_REAL_IP = True
 else:
     # We don't warn about SESSION_COOKIE_SECURE and CSRF_COOKIE_SECURE; we can't set them to True because some browsers
     # interpret that as "use https for cookies, even on localhost", and there is no https (BEHIND_HTTPS_PROXY is False).
