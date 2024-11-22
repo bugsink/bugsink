@@ -3,6 +3,9 @@ from urllib.parse import urlparse
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import get_template
 
+import sentry_sdk
+from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
+
 
 def send_rendered_email(subject, base_template_name, recipient_list, context=None):
     if context is None:
@@ -31,3 +34,55 @@ def deduce_allowed_hosts(base_url):
         # localhost:8000 is not allowed when 127.0.0.1:8000 is and vice versa.
         return ["localhost", "127.0.0.1"]
     return [url.hostname]
+
+
+def eat_your_own_dogfood(sentry_dsn, **kwargs):
+    """
+    Configures your Bugsink installation to send messages to some Bugsink-compatible installation.
+    See https://www.bugsink.com/docs/dogfooding/
+    """
+
+    if sentry_dsn is None:
+        return
+
+    default_kwargs = {
+        "dsn": sentry_dsn,
+        "traces_sample_rate": 0,
+        "send_default_pii": True,
+        "transport": MoreLoudlyFailingTransport,
+
+        # see (e.g.) https://github.com/getsentry/sentry-python/issues/377 for why this is necessary; I really really
+        # dislike Sentry's silent dropping of local variables; let's see whether "just send everything" makes for
+        # messages that are too big. If so, we might monkey-patch sentry_sdk/serializer.py 's 2 variables named
+        # MAX_DATABAG_DEPTH and MAX_DATABAG_BREADTH (esp. the latter)
+        "max_request_body_size": "always",
+
+        # In actual development, the list below is not needed, because in that case Sentry's SDK is able to distinguish
+        # based on the os.cwd() v.s. site-packages. For cases where the Production installation instructions are
+        # followed, that doesn't fly though, because we "just install everything" (using pip install), and we need to be
+        # explicit. The notation below (no trailing dot or slash) is the correct one (despite not being documented) as
+        # evidenced by the line `if item == name or name.startswith(item + "."):` in the sentry_sdk source:
+        "in_app_include": [
+            "alerts",
+            "bugsink",
+            "compat",
+            "events",
+            "ingest",
+            "issues",
+            "performance",
+            "projects",
+            "releases",
+            "sentry",
+            "sentry_sdk_extensions",
+            "snappea",
+            "teams",
+            "theme",
+            "users",
+        ],
+    }
+
+    default_kwargs.update(kwargs)
+
+    sentry_sdk.init(
+        **default_kwargs,
+    )

@@ -1,7 +1,7 @@
 import os
 from urllib.parse import urlparse
 
-from bugsink.utils import deduce_allowed_hosts
+from bugsink.utils import deduce_allowed_hosts, eat_your_own_dogfood
 
 from bugsink.settings.default import *  # noqa
 from bugsink.settings.default import DATABASES
@@ -43,9 +43,12 @@ else:
 TIME_ZONE = os.getenv("TIME_ZONE", "UTC")
 
 
+SENTRY_DSN = os.getenv("SENTRY_DSN", None)
+eat_your_own_dogfood(SENTRY_DSN)
+
+
 # Our Docker image is hard-coded to run with snappea in the background; this means we hard-code (as opposed to reading
 # the from the env) certain variables: TASK_ALWAYS_EAGER, WORKAHOLIC and DIGEST_IMMEDIATELY.
-
 SNAPPEA = {
     "TASK_ALWAYS_EAGER": False,  # hard-coded, corresponds to Docker setup
     "WORKAHOLIC": True,  # hard-coded, corresponds to Docker setup
