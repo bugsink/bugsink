@@ -26,6 +26,9 @@ class Command(BaseCommand):
         parser.add_argument("--fresh-timestamp", action="store_true")
         parser.add_argument("--compress", action="store", choices=["gzip", "deflate", "br"], default=None)
         parser.add_argument("--use-envelope", action="store_true")
+        parser.add_argument(
+            "--x-forwarded-for", action="store",
+            help="Set the X-Forwarded-For header to test whether your setup is properly ignoring it")
         parser.add_argument("kind", action="store", help="The kind of object (filename, project, issue, event)")
         parser.add_argument("identifiers", nargs="+")
 
@@ -110,6 +113,10 @@ class Command(BaseCommand):
                 # annoying is an open question, but no reason to change it for now
                 "X-BugSink-DebugInfo": identifier,
             }
+
+            if options["x_forwarded_for"]:
+                headers["X-Forwarded-For"] = options["x_forwarded_for"]
+
             data_bytes = json.dumps(data).encode("utf-8")
             if use_envelope:
                 # the smallest possible envelope:
