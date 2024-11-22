@@ -4,6 +4,7 @@ from functools import partial
 
 from django.db import models, transaction
 from django.db.models import F, Value
+from django.db.models.functions import Concat
 from django.template.defaultfilters import date as default_date_filter
 from django.conf import settings
 
@@ -290,12 +291,12 @@ class IssueQuerysetStateManager(object):
         )
         exclude_qs_for_fixed_at(issue_qs, "").update(
             is_resolved=True,
-            fixed_at=F("fixed_at") + Value(release_version + "\n"),
+            fixed_at=Concat(F("fixed_at"), Value(release_version + "\n")),
         )
 
         # release_version: str
         issue_qs.update(
-            fixed_at=F("fixed_at") + Value(release_version + "\n"),
+            fixed_at=Concat(F("fixed_at"), Value(release_version + "\n")),
         )
 
     @staticmethod
