@@ -81,6 +81,7 @@ class PerformanceStatsMiddleware:
 class CaptureExceptionsMiddleware:
     # Capture exceptions using a Middleware rather than the more magical sentry_sdk.init() method. This is more
     # explicit and easier to understand, though less feature-complete.
+    # Debugging tool (for development); not turned on by default.
 
     def __init__(self, get_response):
         self.get_response = get_response
