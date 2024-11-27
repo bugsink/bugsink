@@ -30,9 +30,13 @@ def send_rendered_email(subject, base_template_name, recipient_list, context=Non
 def deduce_allowed_hosts(base_url):
     url = urlparse(base_url)
     if url.hostname == "localhost" or url.hostname == "127.0.0.1":
-        # Allow both 127.0.0.1 and localhost as hostname when running locally; useful to avoid understanding why
-        # localhost:8000 is not allowed when 127.0.0.1:8000 is and vice versa.
-        return ["localhost", "127.0.0.1"]
+        # Allow all hosts when running locally. All hosts, because in local setups there are a few common scenarios of
+        # named-hosts-that-should-still-be-ok, like:
+        # * docker containers with a name
+        # * /etc/hosts defining an explicit name for localhost
+        # * accessing Bugsink on your local network by ip (192.etc)
+        # In production setups, the expectation is that deduce_allowed_hosts is not used with localhost/127.0.0.1
+        return ["*"]
     return [url.hostname]
 
 
