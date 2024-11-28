@@ -1,9 +1,9 @@
 import sys
 
-from django.http import HttpResponseServerError
+from django.http import HttpResponseServerError, HttpResponseBadRequest
 from django.template import TemplateDoesNotExist, loader
 from django.views.decorators.csrf import requires_csrf_token
-from django.views.defaults import ERROR_500_TEMPLATE_NAME, ERROR_PAGE_TEMPLATE
+from django.views.defaults import ERROR_500_TEMPLATE_NAME, ERROR_PAGE_TEMPLATE, ERROR_400_TEMPLATE_NAME
 from django.shortcuts import redirect
 from django.conf import settings
 
@@ -114,6 +114,25 @@ def settings_view(request):
         "misc_settings": misc_settings,
         "version": __version__,
     })
+
+
+@requires_csrf_token
+def bad_request(request, exception, template_name=ERROR_400_TEMPLATE_NAME):
+    # verbatim copy of Django's default bad_request view, but with "exception" in the context
+    # doing this for any-old-Django-site is probably a bad idea, but here the security/convenience tradeoff is fine,
+    # especially because we only show str(exception) in the template.
+    try:
+        template = loader.get_template(template_name)
+    except TemplateDoesNotExist:
+        if template_name != ERROR_400_TEMPLATE_NAME:
+            # Reraise if it's a missing custom template.
+            raise
+        return HttpResponseBadRequest(
+            ERROR_PAGE_TEMPLATE % {"title": "Bad Request (400)", "details": ""},
+        )
+
+    _, exception, _ = sys.exc_info()
+    return HttpResponseBadRequest(template.render({"exception": exception}, request))
 
 
 @requires_csrf_token

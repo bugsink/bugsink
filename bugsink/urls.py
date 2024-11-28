@@ -65,4 +65,5 @@ if settings.DEBUG:
     ]
 
 
+handler400 = "bugsink.views.bad_request"
 handler500 = "bugsink.views.server_error"

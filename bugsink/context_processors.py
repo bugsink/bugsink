@@ -83,5 +83,6 @@ def useful_settings_processor(request):
 
 def logged_in_user_processor(request):
     return {
-        'logged_in_user': request.user,
+        # getattr, because if there's a failure "very early" in the request handling, we don't have an AnonymousUser
+        'logged_in_user': getattr(request, "user", None),
     }
