@@ -13,5 +13,5 @@ whitenoise
 requests
 monofy==1.1.*
 user_agents
-fastjsonschema
+fastjsonschema>=2.21.0
 verbose_csrf_middleware
