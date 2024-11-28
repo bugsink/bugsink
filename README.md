@@ -16,11 +16,24 @@ This is what you'll get:
 
 ### Installation & docs
 
-[Detailed installation instructions](https://www.bugsink.com/docs/installation/) on the Bugsink website, Pythonists
-may try their luck without reading the docs by doing a
+The **quickest way to evaluate Bugsink** is to spin up a throw-away instance using Docker:
 
 ```
-pip install bugsink
+docker pull bugsink/bugsink:latest
+
+docker run \
+  -e SECRET_KEY={{ random_secret }} \
+  -e CREATE_SUPERUSER=admin:admin \
+  -e PORT=8000 \
+  -p 8000:8000 \
+  bugsink/bugsink
 ```
+
+Visit [http://localhost:8000/](http://localhost:8000/), where you'll see a login screen. The default username and password
+are `admin`.
+
+Now, you can [set up your first project](https://www.bugsink.com/docs/quickstart/) and start tracking errors.
+
+[Detailed installation instructions](https://www.bugsink.com/docs/installation/) are on the Bugsink website. 
 
 [More information and documentation](https://www.bugsink.com/)
