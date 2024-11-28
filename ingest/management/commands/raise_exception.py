@@ -18,6 +18,17 @@ class Command(BaseCommand):
         set_tag("foo", "bar")
         set_tag("baz", "1")
 
+        one = 1
+        two = 2
+        three = 3
+        four = 4
+        five = 5
+        six = 6
+        seven = 7
+        eight = 8
+        nine = 9
+        ten = 10
+
         if options["no_release"]:
             # The sentry client "tries hard" to get the release from the environment (including git); I have found the
             # following to be a workable way to set the release to None. (But I have checked that, in the absence of

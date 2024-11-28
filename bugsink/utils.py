@@ -3,7 +3,6 @@ from urllib.parse import urlparse
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import get_template
 
-import sentry_sdk
 from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
 
 
@@ -45,6 +44,9 @@ def eat_your_own_dogfood(sentry_dsn, **kwargs):
     Configures your Bugsink installation to send messages to some Bugsink-compatible installation.
     See https://www.bugsink.com/docs/dogfooding/
     """
+    import sentry_sdk.serializer
+    sentry_sdk.serializer.MAX_DATABAG_DEPTH = float("inf")
+    sentry_sdk.serializer.MAX_DATABAG_BREADTH = float("inf")
 
     if sentry_dsn is None:
         return
@@ -59,6 +61,7 @@ def eat_your_own_dogfood(sentry_dsn, **kwargs):
         # dislike Sentry's silent dropping of local variables; let's see whether "just send everything" makes for
         # messages that are too big. If so, we might monkey-patch sentry_sdk/serializer.py 's 2 variables named
         # MAX_DATABAG_DEPTH and MAX_DATABAG_BREADTH (esp. the latter)
+        # still not a complete solution until https://github.com/getsentry/sentry-python/issues/3209 is fixed
         "max_request_body_size": "always",
 
         # In actual development, the list below is not needed, because in that case Sentry's SDK is able to distinguish
