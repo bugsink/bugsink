@@ -6,7 +6,16 @@
 <div class="m-4">
 <h1 class="text-4xl mt-4 font-bold">500 Server Error</h1>
 
-<div class="pt-2">
-    There was an internal server error.
+<div class="pt-2 font-bold">
+    {{ exception }}
 </div>
+
+<div class="pt-6">
+    You will find more information in:
+    <ul class="list-disc pt-4 pl-4">
+        <li>the server logs (stdout of your Docker, or in journalctl)</li>
+        <li>if you're <a href="https://www.bugsink.com/docs/dogfooding/" class="text-cyan-500 font-bold">dogfooding Bugsink</a>, in Bugsink itself</li>
+    </ul>
+</div>
+
 {% endblock %}

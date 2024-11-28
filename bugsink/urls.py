@@ -63,3 +63,6 @@ if settings.DEBUG:
         path('trigger-error/', trigger_error),
         path("__debug__/", include("debug_toolbar.urls")),
     ]
+
+
+handler500 = "bugsink.views.server_error"
