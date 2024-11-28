@@ -18,16 +18,7 @@ class Command(BaseCommand):
         set_tag("foo", "bar")
         set_tag("baz", "1")
 
-        one = 1
-        two = 2
-        three = 3
-        four = 4
-        five = 5
-        six = 6
-        seven = 7
-        eight = 8
-        nine = 9
-        ten = 10
+        a = b = c = d = ee = f = g = h = i = j = 0  # noqa (unused in code, simply 10 variables to check MAX_DATABAG_*)
 
         if options["no_release"]:
             # The sentry client "tries hard" to get the release from the environment (including git); I have found the
