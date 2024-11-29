@@ -1,7 +1,10 @@
+from collections import namedtuple
 from datetime import timedelta
 
+from django.conf import settings
 from django.utils import timezone
 from django.utils.safestring import mark_safe
+from django.urls import reverse
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
 from bugsink.transaction import durable_atomic
@@ -11,11 +14,18 @@ from snappea.models import Task
 
 from phonehome.models import Installation
 
+SystemWarning = namedtuple('SystemWarning', ['message', 'ignore_url'])
+
 
 FREE_VERSION_WARNING = mark_safe(
     """This is the free version of Bugsink; usage is limited to a single user for local development only.
     Using this software in production requires a
     <a href="https://www.bugsink.com/#pricing" target="_blank" class="font-bold text-slate-800">paid licence</a>.""")
+
+EMAIL_BACKEND_WARNING = mark_safe(
+    """Email is not set up, I can't send email. To get the most out of Bugsink, please
+    <a href="https://www.bugsink.com/docs/setting-up-email/" target="_blank" class="font-bold text-slate-800">set up
+    an EMAIL_BACKEND</a>.""")
 
 
 def get_snappea_warnings():
@@ -33,8 +43,8 @@ def get_snappea_warnings():
 
         oldest_task_age = (timezone.now() - Task.objects.all().order_by('created_at').first().created_at).seconds
 
-    WARNING = (f"Snappea has {task_count} tasks in the queue, the oldest being {oldest_task_age}s old. It may be "
-               f"either overwhelmed, blocked, not running, or misconfigured.")
+    WARNING = SystemWarning((f"Snappea has {task_count} tasks in the queue, the oldest being {oldest_task_age}s old. "
+                             f"It may be either overwhelmed, blocked, not running, or misconfigured."), None)
 
     # 1. "a lot" of tasks in the backlog.
     # We have a backlog because spikes are always to be expected, and dealing with them in a backlog is the feature that
@@ -67,10 +77,28 @@ def useful_settings_processor(request):
     nag_7 = installation.created_at < timezone.now() - timedelta(days=7)
     nag_30 = installation.created_at < timezone.now() - timedelta(days=30)
 
+    system_warnings = []
+
     # (First version of "should I nag" logic): nag only after considerable time to play with the app, and for "some
     # indication" that you're using this in production (the simplest such indication is that you've configured a
     # BASE_URL that's not localhost). Subject to change.
-    system_warnings = [FREE_VERSION_WARNING] if nag_30 and 'localhost' not in get_settings().BASE_URL else []
+    if nag_30 and 'localhost' not in get_settings().BASE_URL:
+        system_warnings.append(SystemWarning(FREE_VERSION_WARNING, None))
+
+    if settings.EMAIL_BACKEND in [
+            'django.core.mail.backends.console.EmailBackend',
+            'bugsink.email_backends.QuietConsoleEmailBackend'] and not installation.silence_email_system_warning:
+
+        if getattr(getattr(request, "user", None), "is_superuser"):
+            ignore_url = reverse("silence_email_system_warning")
+        else:
+            # not a superuser, so can't silence the warning. I'm applying some heuristics here;
+            # * superusers (and only those) will be able to deal with this (have access to EMAIL_BACKEND)
+            # * better to still show (though not silencable) the message to non-superusers.
+            # this will not always be so, but it's a good start.
+            ignore_url = None
+
+        system_warnings.append(SystemWarning(EMAIL_BACKEND_WARNING, ignore_url))
 
     return {
         # Note: no way to actually set the license key yet, so nagging always happens for now.

@@ -1,6 +1,6 @@
 import sys
 
-from django.http import HttpResponseServerError, HttpResponseBadRequest
+from django.http import HttpResponseServerError, HttpResponseBadRequest, HttpResponseRedirect
 from django.template import TemplateDoesNotExist, loader
 from django.views.decorators.csrf import requires_csrf_token
 from django.views.defaults import ERROR_500_TEMPLATE_NAME, ERROR_PAGE_TEMPLATE, ERROR_400_TEMPLATE_NAME
@@ -19,8 +19,10 @@ from snappea.settings import get_settings as get_snappea_settings
 from bugsink.version import __version__
 from bugsink.decorators import login_exempt
 from bugsink.app_settings import get_settings as get_bugsink_settings
+from bugsink.decorators import atomic_for_request_method
 
 from phonehome.tasks import send_if_due
+from phonehome.models import Installation
 
 
 def _phone_home():
@@ -114,6 +116,17 @@ def settings_view(request):
         "misc_settings": misc_settings,
         "version": __version__,
     })
+
+
+@user_passes_test(lambda u: u.is_superuser)
+@atomic_for_request_method
+def silence_email_system_warning(request):
+    installation = Installation.objects.get()
+    installation.silence_email_system_warning = True
+    installation.save()
+
+    next = request.POST.get("next", "/")
+    return HttpResponseRedirect(next)
 
 
 @requires_csrf_token

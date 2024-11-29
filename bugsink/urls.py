@@ -11,7 +11,7 @@ from bugsink.app_settings import get_settings
 from users.views import signup, confirm_email, resend_confirmation, request_reset_password, reset_password, preferences
 from ingest.views import download_envelope
 
-from .views import home, trigger_error, favicon, settings_view
+from .views import home, trigger_error, favicon, settings_view, silence_email_system_warning
 from .debug_views import csrf_debug
 
 
@@ -49,6 +49,8 @@ urlpatterns = [
     path('issues/', include('issues.urls')),
 
     path('admin/', admin.site.urls),
+
+    path('silence-email-system-warning/', silence_email_system_warning, name='silence_email_system_warning'),
     path('settings/', settings_view, name='settings'),
     path('debug/csrf/', csrf_debug, name='csrf_debug'),
 
