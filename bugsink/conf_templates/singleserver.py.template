@@ -1,5 +1,5 @@
-# Generated using bugsink-create-conf --template=recommended
-# This is the configuration for the recommended setup for Bugsink in production.
+# Generated using bugsink-create-conf --template=singleserver
+# This is the configuration for the singleserver setup for Bugsink in production.
 
 from bugsink.settings.default import *  # noqa
 from bugsink.utils import deduce_allowed_hosts, eat_your_own_dogfood
@@ -9,8 +9,9 @@ SECRET_KEY = "{{ secret_key }}"
 
 
 
-# Note: the recommended setup uses a reverse proxy (i.e. Nginx) in front of the Django server. This is why we trust the
-# X-Forwarded-Proto and X-Real-IP headers. If you do not use a reverse proxy, you should remove these settings.
+# Note: the singleserver production setup uses a reverse proxy (i.e. Nginx) in front of the Django server. This is why
+# we trust the X-Forwarded-Proto and X-Real-IP headers. If you do not use a reverse proxy, you should remove these
+# settings.
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Note: slightly redundant, Gunicorn also does this.
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
@@ -20,8 +21,8 @@ USE_X_REAL_IP = True
 # X_FORWARDED_FOR_PROXY_COUNT = 1
 
 
-# In the recommended setup, the database is SQLite. The single (unix) user is named `bugsink` and we put the database in
-# its home directory:
+# In the singleserver production setup, the database is SQLite. The single (unix) user is named `bugsink` and we put
+# the database in its home directory:
 DATABASES["default"]["NAME"] = '{{ base_dir }}/db.sqlite3'
 DATABASES["snappea"]["NAME"] = '{{ base_dir }}/snappea.sqlite3'
 
@@ -37,7 +38,7 @@ eat_your_own_dogfood(SENTRY_DSN)
 TIME_ZONE = 'UTC'  # alternatively, e.g. 'Europe/Amsterdam'
 
 
-# In the recommended (production) setup, we use Snappea for background tasks.
+# In the singleserver production setup, we use Snappea for background tasks.
 SNAPPEA = {
     "TASK_ALWAYS_EAGER": False,
     "NUM_WORKERS": 4,
@@ -80,8 +81,8 @@ BUGSINK = {
     "SINGLE_TEAM": False,
     "TEAM_CREATION": CB_MEMBERS,  # who can create new teams. default: members, which means "any member of the site"
 
-    # In the recommended setup, we do not digest events immediately, but instead offload this to Snappea. This ensures a
-    # more response and reliable server when there are peak loads in the events.
+    # In the singleserver production setup, we do not digest events immediately, but instead offload this to Snappea.
+    # This ensures a more response and reliable server when there are peak loads in the events.
     "DIGEST_IMMEDIATELY": False,
 
     # "MAX_EVENT_SIZE": _MEBIBYTE,

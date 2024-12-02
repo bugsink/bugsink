@@ -10,13 +10,13 @@ def main():
     parser = argparse.ArgumentParser(description="Create a configuration file.")
     parser.add_argument("--output-file", "-o", help="Output file", default="bugsink_conf.py")
     parser.add_argument(
-        "--template", help="Template to use; recommended or local", choices=["recommended", "local", "docker"],
+        "--template", help="Template to use", choices=["singleserver", "local", "docker"],
         required=True)
 
     parser.add_argument("--port", help="Port to use in BASE_URL ; default is 8000", type=int, default=8000)
     parser.add_argument("--host", help="Host to use in BASE_URL ; default is localhost", default="localhost")
     parser.add_argument(
-        "--base-dir", help="base dir for databases, snappea, and ingestion store ('recommended' template only)",
+        "--base-dir", help="base dir for databases, snappea, and ingestion store ('singleserver' template only)",
         default="/home/bugsink")
     args = parser.parse_args()
 
@@ -24,8 +24,8 @@ def main():
         print("Output file already exists; please remove it first")
         sys.exit(1)
 
-    if args.base_dir != "/home/bugsink" and args.template != "recommended":
-        print("The base-dir option is only used in the 'recommended' template")
+    if args.base_dir != "/home/bugsink" and args.template != "singleserver":
+        print("The base-dir option is only used in the 'singleserver' template")
         sys.exit(1)
 
     secret_key = get_random_secret_key()

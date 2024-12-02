@@ -7,7 +7,7 @@ from pathlib import Path
 from django.utils.log import DEFAULT_LOGGING
 
 
-# We have a single file for our default settings, and expect (if they use the recommended setup) the end-users to
+# We have a single file for our default settings, and expect (if they use the singleserver setup) the end-users to
 # configure their setup using a single bugsink_conf.py also. To be able to have (slightly) different settings for e.g.
 # logging for various commands, we expose a variable I_AM_RUNNING that can be used to determine what command is being
 # run. We use (potentially fragile) sys.argv checks to determine what command is being run. For now "it works, don't
@@ -102,7 +102,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
-    # NOTE: _most_ useful while building Bugsink; in the recommended production setup the timings/counts of this
+    # NOTE: _most_ useful while building Bugsink; in the singleserver production setup the timings/counts of this
     # middleware are not logged to a visible location; and this feature is undocumented. However, it _could_ prove
     # useful in such contexts too, so I'm not going to put it behind a conditional.
     'bugsink.middleware.PerformanceStatsMiddleware',
