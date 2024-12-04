@@ -42,6 +42,7 @@ applicable component:
 * The code in the 'sentry' directory is Copyright 2019 Sentry
   (https://sentry.io) and individual contributors. (BSD 3-Clause License)
 
-* Your package manager (typically pip) will install additional third party
-  components upon installing Bugsink. Please refer to the license of the
-  respective component in your package manager's repository.
+* Upon installing Bugsink, additional third party components will be installed
+  automatically (e.g. through pip or as part of the Docker installation).
+  Please refer to the license of the respective component in your package
+  manager's repository.
