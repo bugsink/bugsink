@@ -88,6 +88,11 @@ def pygmentize(value, platform):
         return value
 
     code_as_list = d_get_l(value, 'pre_context') + [value['context_line']] + d_get_l(value, 'post_context')
+
+    # as per event.schema.json, it's possible that the list of lines contains None values (via pre_context and
+    # post_context), although it's not clear what that would mean. We just replace them with empty strings.
+    code_as_list = ["" if line is None else line for line in code_as_list]
+
     lengths = [len(d_get_l(value, 'pre_context')), 1, len(d_get_l(value, 'post_context'))]
 
     lines = _pygmentize_lines(code_as_list, filename=filename, platform=platform)
