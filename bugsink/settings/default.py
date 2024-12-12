@@ -134,6 +134,13 @@ TEMPLATES = [
                 'bugsink.context_processors.logged_in_user_processor',
                 'projects.context_processors.user_projects_processor',
             ],
+            # This is the thing that used to be called "TEMPLATE_DEBUG". We set it to True to have the template code
+            # context (filename in the stacktrace, offending and surrounding lines) available in our stacktraces when
+            # dogfooding. This does not expose anything when 'regular DEBUG' is False. (the docs say "If it is True, the
+            # fancy error page will display a detailed report for any exception raised during template rendering."; this
+            # already hints at "if there is no fancy error page nothing new will be displayed" and this is indeed so (I
+            # checked).
+            'debug': True,
         },
     },
 ]

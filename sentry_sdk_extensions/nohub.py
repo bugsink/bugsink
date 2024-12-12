@@ -87,10 +87,7 @@ def capture_exceptions(dsn, client_options=None):
 def process_django_templates(event, hint):
     # Copied from sentry_sdk.integrations.django, but in a way that way can reference it (it's an inner function at the
     # original location)
-
-    # I only got this to work when TEMPLATE_DEBUG is True, at least for the case where there was just "any old
-    # exception" which happens as part of a template rendering, i.e. as opposed to a template syntax error. I'm not sure
-    # whether the regular sentry_sdk would have the same problem, but I'm not going to worry about it now.
+    # Only works when TEMPLATES['OPTIONS']['debug'] is True (for obvious reasons).
 
     if hint is None:
         return event
