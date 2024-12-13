@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Count
 
 from releases.models import Release
-from issues.models import Issue
+from issues.models import Issue, Grouping, TurningPoint
 from events.models import Event
 
 
@@ -16,6 +16,18 @@ def make_consistent():
     for issue in Issue.objects.filter(project=None):
         print("Deleting issue %s, because it has no project" % issue)
         issue.delete()
+
+    for grouping in Grouping.objects.filter(project=None):
+        print("Deleting grouping %s, because it has no project" % grouping)
+        grouping.delete()
+
+    for grouping in Grouping.objects.filter(issue=None):
+        print("Deleting grouping %s, because it has no issue" % grouping)
+        grouping.delete()
+
+    for turning_point in TurningPoint.objects.filter(issue=None):
+        print("Deleting turning point %s, because it has no issue" % turning_point)
+        turning_point.delete()
 
     for release in Release.objects.filter(project=None):
         print("Deleting release %s, because it has no project" % release)
