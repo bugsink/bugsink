@@ -51,7 +51,7 @@ def guess_lexer_for_filename(_fn, **options):
 
     * we iterate over the lexers in order of "most recently matched".
     * we return only a single result based on filename.
-    * we don't have the "code" argument.
+    * we don't have the "code" argument; lexer.analyse_text is useless, see git-branch attempt-at-bettter-guess-filename
 
     We return None if no lexer matches the filename.
 
