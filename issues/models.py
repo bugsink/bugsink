@@ -407,7 +407,9 @@ class TurningPoint(models.Model):
     comment = models.TextField(blank=True, null=False, default="")
 
     class Meta:
-        ordering = ["-timestamp"]
+        # by ordering on "-id" we order things that happen in a single ingestion in the order in which they happened.
+        # (in particular: NEXT_MATERIALIZED followed by REGRESSED is a common pattern)
+        ordering = ["-timestamp", "-id"]
         indexes = [
             models.Index(fields=["timestamp"]),
         ]
