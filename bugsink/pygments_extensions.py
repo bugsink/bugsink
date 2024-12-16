@@ -1,3 +1,4 @@
+from collections import defaultdict
 from pygments.lexers import _iter_lexerclasses, _fn_matches
 from os.path import basename
 
@@ -17,7 +18,14 @@ def _custom_options(clz, options):
 def get_all_lexers():
     global _all_lexers
     if _all_lexers is None:
-        _all_lexers = MRUList(_iter_lexerclasses())
+        d = defaultdict(list)
+        for lexer in _iter_lexerclasses():
+            for filename in lexer.filenames:
+                d[filename].append(lexer)
+            for filename in lexer.alias_filenames:
+                d[filename].append(lexer)
+        _all_lexers = MRUList(d.items())
+
     return _all_lexers
 
 
@@ -45,13 +53,12 @@ class MRUList(object):
         raise ValueError("No item in the list matched the test")
 
 
-def guess_lexer_for_filename(_fn, **options):
+def guess_lexer_for_filename(_fn, code=None, **options):
     """
     Similar to pygments' guess_lexer_for_filename, but:
 
     * we iterate over the lexers in order of "most recently matched".
-    * we return only a single result based on filename.
-    * we don't have the "code" argument.
+    * we return only a single result based on filename & code
 
     We return None if no lexer matches the filename.
 
@@ -59,30 +66,39 @@ def guess_lexer_for_filename(_fn, **options):
     5ms (note that on stacktraces there may easily be 20 frames, so this goes times 20 i.e. in the 100ms range). We can
     do it in ~.01ms. this is unsurprising, because pygments always does ~500 tests (regex calls), and we only do a few
     for the most common programming languages (fractionally above 1 on average, because you'll have only a handful in
-    practice, and that handfull will typically not alternate much in a given stacktrace).
+    practice, and that handfull will typically not alternate much in a given stacktrace). (The above numbers are not
+    updated for the current implementation)
 
     (initialization, i.e. setting the caches, takes ~.2s in both approaches)
     """
 
     fn = basename(_fn)
 
-    def test(lexer):
-        for filename in lexer.filenames:
-            if _fn_matches(fn, filename):
-                return True
-
-        for filename in lexer.alias_filenames:
-            if _fn_matches(fn, filename):
-                return True
-
-        return False
+    def test(tup):
+        pattern, classes = tup
+        return _fn_matches(fn, pattern)
 
     try:
-        clz = get_all_lexers().get(test)
-        options = _custom_options(clz, options)
-        return clz(**options)
+        pattern, classes = get_all_lexers().get(test)
     except ValueError:
         return None
+
+    def get_rating(cls):
+        # from pygmets/lexers/__init__'s guess_lexer_for_filename; but adapted for "cls only"; and `code` is required
+        return cls.analyse_text(code)
+
+    if len(classes) == 1:
+        # optimization: if there's only one, we don't need to sort. note: guarding for 0-len is not necessary, because
+        # of how we construct the lookup table (we always have at least one lexer for each pattern)
+        clz = classes[0]
+    else:
+        classes = sorted(classes, key=get_rating)
+
+    clz = classes[-1]
+    print([(get_rating(a), a) for a in classes])
+
+    options = _custom_options(clz, options)
+    return clz(**options)
 
 
 def lexer_for_platform(platform, **options):
