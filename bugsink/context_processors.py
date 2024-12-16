@@ -5,6 +5,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.utils.safestring import mark_safe
 from django.urls import reverse
+from django.contrib.auth.models import AnonymousUser
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
 from bugsink.transaction import durable_atomic
@@ -89,7 +90,7 @@ def useful_settings_processor(request):
             'django.core.mail.backends.console.EmailBackend',
             'bugsink.email_backends.QuietConsoleEmailBackend'] and not installation.silence_email_system_warning:
 
-        if getattr(getattr(request, "user", None), "is_superuser"):
+        if getattr(request, "user", AnonymousUser()).is_superuser:
             ignore_url = reverse("silence_email_system_warning")
         else:
             # not a superuser, so can't silence the warning. I'm applying some heuristics here;
@@ -112,5 +113,5 @@ def useful_settings_processor(request):
 def logged_in_user_processor(request):
     return {
         # getattr, because if there's a failure "very early" in the request handling, we don't have an AnonymousUser
-        'logged_in_user': getattr(request, "user", None),
+        'logged_in_user': getattr(request, "user", AnonymousUser()),
     }
