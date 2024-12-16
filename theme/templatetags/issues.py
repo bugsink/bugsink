@@ -28,7 +28,7 @@ def _core_pygments(code, filename=None, platform=None):
     # before calling this function.
 
     # note: we don't use pygments' `guess_lexer(text)` function because it is basically useless, especially when only
-    # snippets of code are available. Check the implementation of `analyze_text` in the various lexers to see why (e.g.
+    # snippets of code are available. Check the implementation of `analyse_text` in the various lexers to see why (e.g.
     # perl and python are particularly bad). Better just use the platform (even though that's broader than a single
     # frame, since it applies to the whole event). A happy side effect of using `lexer_for_platform` is that it's fast.
     # Note: this only matters in the presumably rare case that the filename is not available (or useful) but the source
