@@ -35,7 +35,7 @@ def _core_pygments(code, filename=None, platform=None):
     # code is.
 
     if filename:
-        lexer = guess_lexer_for_filename(filename)
+        lexer = guess_lexer_for_filename(filename, platform, code=code)
         if lexer is None:
             lexer = lexer_for_platform(platform)
     else:
