@@ -40,12 +40,3 @@ In short, the more reasons to just use the "upstream" API.
 
 Said in another way: we act more as the "relay" than as "getsentry/sentry", because we do ingest straight in the main
 process. So we should adhere to the relay's spec.
-
-### Notes on use:
-
-Bugsink, as it stands, doesn't use event.schema.json much.
-
-* We have `--valid-only` as a param on `send_json`, but I appear to have used that only sporadically (back in nov 2023)
-* We _could_ at some point in the future [offer the option to] throw events through a validator before proceeding with
-  digesting. At that point we'll re-vendor event.schema.json (from the sentry-data-schemas repo)
-* Reading this file is useful, but we can do that straight from the source.

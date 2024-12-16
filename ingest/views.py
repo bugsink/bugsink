@@ -134,7 +134,7 @@ class BaseIngestAPIView(View):
         # exceptions, so you'd have that cost-of-rollback anyway.
 
         def get_schema():
-            schema_filename = settings.BASE_DIR / 'api/event.schema.json'
+            schema_filename = settings.BASE_DIR / 'api/event.schema.altered.json'
             with open(schema_filename, 'r') as f:
                 return json.loads(f.read())
 
