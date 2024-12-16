@@ -24,7 +24,7 @@ FREE_VERSION_WARNING = mark_safe(
     <a href="https://www.bugsink.com/#pricing" target="_blank" class="font-bold text-slate-800">paid licence</a>.""")
 
 EMAIL_BACKEND_WARNING = mark_safe(
-    """Email is not set up, I can't send email. To get the most out of Bugsink, please
+    """Email is not set up, emails won't be sent. To get the most out of Bugsink, please
     <a href="https://www.bugsink.com/docs/settings/#email" target="_blank" class="font-bold text-slate-800">set up
     an EMAIL_BACKEND</a>.""")
 
