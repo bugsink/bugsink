@@ -379,6 +379,7 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
         "event": event,
         "is_event_page": True,
         "parsed_data": parsed_data,
+        "breadcrumbs": get_values(parsed_data.get("breadcrumbs")),
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 

@@ -17,7 +17,7 @@
     </div>
 </div>
 
-{% if not parsed_data.breadcrumbs or not parsed_data.breadcrumbs.values %}
+{% if not breadcrumbs %}
 
     <div class="mt-6 mb-6 italic">
         No breadcrumbs available for this event.
@@ -30,7 +30,7 @@
 {# <thead> </thead> #}
 <tbody>
 
-{% for breadcrumb in parsed_data.breadcrumbs.values %}
+{% for breadcrumb in breadcrumbs %}
     <tr class="border-slate-200 border-2 ">
 
     <td class="p-4 font-bold text-slate-500 align-top">
