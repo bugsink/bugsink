@@ -13,6 +13,7 @@ from django.core.management.base import BaseCommand
 
 from compat.dsn import get_store_url, get_envelope_url, get_header_value
 from bugsink.streams import compress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE
+from issues.utils import get_values
 
 
 class Command(BaseCommand):
@@ -93,7 +94,8 @@ class Command(BaseCommand):
             into_chars = lambda i: "".join([chr(ord("A") + int(c)) for c in str(i)])  # noqa
 
             unevenly_distributed_number = int(1 / (random.random() + 0.0000001))
-            data["exception"]["values"][0]["type"] = "Exception" + into_chars(unevenly_distributed_number)
+            values = get_values(data["exception"])
+            values[0]["type"] = "Exception" + into_chars(unevenly_distributed_number)
 
         data_bytes = json.dumps(data).encode("utf-8")
 

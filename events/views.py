@@ -4,6 +4,7 @@ from django.utils.http import content_disposition_header
 from django.shortcuts import render
 
 from bugsink.decorators import event_membership_required, atomic_for_request_method
+from issues.utils import get_values
 
 
 @atomic_for_request_method
@@ -19,7 +20,7 @@ def event_download(request, event, as_attachment=False):
 @event_membership_required
 def event_plaintext(request, event):
     parsed_data = json.loads(event.data)
-    exceptions = parsed_data["exception"]["values"] if "exception" in parsed_data else None
+    exceptions = get_values(parsed_data["exception"]) if "exception" in parsed_data else None
 
     return render(request, "events/event_stacktrace.txt", {
         "event": event,

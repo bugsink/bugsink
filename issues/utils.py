@@ -11,6 +11,34 @@ def maybe_empty(s):
     return "" if not s else s
 
 
+def get_values(obj):
+    """
+    https://develop.sentry.dev/sdk/data-model/event-payloads/exception/
+
+    > The exception attribute should be an object with the attribute values containing a list of one or more values that
+    > are objects in the format described below. Alternatively, the exception attribute may be a flat list of objects in
+    > the format below.
+
+    Same for threads & breadcrumbs:
+    * https://develop.sentry.dev/sdk/data-model/event-payloads/threads/
+    * https://develop.sentry.dev/sdk/data-model/event-payloads/breadcrumbs/
+
+    This function gets that list, whether the exception already was it, or whether it was wrapped in a dict as the
+    single value of a "values" key.
+    """
+    if obj is None:
+        # None in None out allows us to compose this function with get_path (which returns None if any key is missing).
+        return None
+
+    if isinstance(obj, list):
+        return obj
+
+    if isinstance(obj, dict):
+        return obj["values"]
+
+    raise ValueError("Expected exception/threads/breadcrumbs to be a list or a dict, got %r" % obj)
+
+
 def get_type_and_value_for_data(data):
     if "exception" in data and data["exception"]:
         return get_exception_type_and_value_for_exception(data)
@@ -51,7 +79,11 @@ def get_exception_type_and_value_for_exception(data):
     #    is a system to help you think about cases that you didn't properly think about in the first place),
     #    although you may also care about the root cause. (In fact, sometimes you care more about the root cause,
     #    but I'd say you'll have to yak-shave your way there).
-    exception = get_path(data, "exception", "values", -1)  # .values is required by the json spec, so can be done safely
+    values = get_values(get_path(data, "exception"))
+    if values is None or len(values) == 0:
+        return "<unknown>", ""
+
+    exception = values[-1]
     if not exception:
         return "<unknown>", ""
 

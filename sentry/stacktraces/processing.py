@@ -3,11 +3,14 @@ from sentry.utils.safe import get_path
 
 
 def get_crash_frame_from_event_data(data, frame_filter=None):
+    from issues.utils import get_values  # changed by Bugsink
+    values = get_values(get_path(data, "exception"))
+
     frames = get_path(
-        data, "exception", "values", -1, "stacktrace", "frames"
+        values, -1, "stacktrace", "frames"
     ) or get_path(data, "stacktrace", "frames")
     if not frames:
-        threads = get_path(data, "threads", "values")
+        threads = get_values(get_path(data, "threads"))
         if threads and len(threads) == 1:
             frames = get_path(threads, 0, "stacktrace", "frames")
 

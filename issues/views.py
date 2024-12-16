@@ -24,6 +24,7 @@ from projects.models import ProjectMembership
 
 from .models import Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind
 from .forms import CommentForm
+from .utils import get_values
 
 
 MuteOption = namedtuple("MuteOption", ["for_or_until", "period_name", "nr_of_periods", "gte_threshold"])
@@ -307,9 +308,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
 
     parsed_data = json.loads(event.data)
 
-    # sentry/glitchtip have some code here to deal with the case that "values" is not present, and exception itself is
-    # the list of exceptions, but we don't aim for endless backwards compat (yet) so we don't.
-    exceptions = parsed_data["exception"]["values"] if "exception" in parsed_data else None
+    exceptions = get_values(parsed_data["exception"]) if "exception" in parsed_data else None
 
     # NOTE: I considered making this a clickable button of some sort, but decided against it in the end. Getting the UI
     # right is quite hard (https://ux.stackexchange.com/questions/1318) but more generally I would assume that having
