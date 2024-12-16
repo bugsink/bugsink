@@ -26,11 +26,38 @@ class Command(BaseCommand):
             # .git, the release is set to None by default by the Python sentry sdk.)
             GLOBAL_HUB.client.options['release'] = None
 
-        try:
-            self.raise_exception("Exception raised on purpose - 2")
-        except Exception as e:
-            # self.raise_exception("An 'accident' happened while handling the exception")
-            self.raise_exception_from("We intentionally translated this into the exception", e)
+        """
+        RTFM: github issue (doesn't work though)
+
+        # import sys
+        import logging
+        log = logging.getLogger(__name__)
+        # sys.exc_clear()  doesn't exist in Python 3
+        log.error("As done on the GitHub issue", exc_info=True)  <= doesn't actually do anything though
+
+        """
+
+        # GitHub 2nd attempt
+        # > The logging integrations is a default integration so it will be enabled automatically when you initialize
+        # > the Sentry SDK.
+
+        """
+        plain logging.error
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error("I am an error message - using logging.error")
+        """
+
+        """
+        import sentry_sdk
+        sentry_sdk.capture_message("Unexpected event", level="warning", stack_trace=True)
+        """
+
+        """
+        # my solution:
+        # from sentry_sdk_extensions import capture_stacktrace
+        # capture_stacktrace("I have been captured")
+        """
 
     def raise_exception(self, msg):
         raise ValueError(msg)
