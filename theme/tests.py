@@ -1,5 +1,6 @@
 from unittest import TestCase as RegularTestCase
 
+from bugsink.pygments_extensions import choose_lexer_for_pattern, get_all_lexers
 from .templatetags.issues import _pygmentize_lines as actual_pygmentize_lines
 
 
@@ -59,3 +60,11 @@ class TestPygmentizeLineLineCountHandling(RegularTestCase):
 
     def test_pygmentize_lines_newline_on_otherwise_empty_line(self):
         _pygmentize_lines(["\n", "\n", "\n"])
+
+
+class TestChooseLexerForPatter(RegularTestCase):
+    def test_choose_lexer_for_pattern(self):
+        # simple 'does it not crash' test:
+
+        for pattern, lexers in get_all_lexers()._list:
+            choose_lexer_for_pattern(pattern, lexers, "", "", "python")

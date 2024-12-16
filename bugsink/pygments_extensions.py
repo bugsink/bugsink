@@ -1,10 +1,22 @@
+"""
+Pygments has the following limitations:
+
+1. Bad guessing mechanisms (especially for snippets)
+2. Generally bad support for snippets.
+
+Still, I think it's what we have in the Python world, so I'm just extending around the limitations; (mostly [1])
+
+"""
 from collections import defaultdict
-from pygments.lexers import _iter_lexerclasses, _fn_matches
+from pygments.lexers import _iter_lexerclasses, _fn_matches, HtmlLexer, HtmlDjangoLexer
+from pygments.lexer import DelegatingLexer
+
 from os.path import basename
 
 from pygments.lexers import (
     ActionScript3Lexer, CLexer, ColdfusionHtmlLexer, CSharpLexer, HaskellLexer, GoLexer, GroovyLexer, JavaLexer,
-    JavascriptLexer, ObjectiveCLexer, PerlLexer, PhpLexer, PythonLexer, RubyLexer, TextLexer, XmlPhpLexer)
+    JavascriptLexer, ObjectiveCLexer, PerlLexer, PhpLexer, PythonLexer, RubyLexer, TextLexer, XmlPhpLexer,
+)
 
 _all_lexers = None
 
@@ -20,10 +32,10 @@ def get_all_lexers():
     if _all_lexers is None:
         d = defaultdict(list)
         for lexer in _iter_lexerclasses():
-            for filename in lexer.filenames:
-                d[filename].append(lexer)
-            for filename in lexer.alias_filenames:
-                d[filename].append(lexer)
+            for pattern in lexer.filenames:
+                d[pattern].append(lexer)
+            for pattern in lexer.alias_filenames:
+                d[pattern].append(lexer)
         _all_lexers = MRUList(d.items())
 
     return _all_lexers
@@ -53,7 +65,7 @@ class MRUList(object):
         raise ValueError("No item in the list matched the test")
 
 
-def guess_lexer_for_filename(_fn, code=None, **options):
+def guess_lexer_for_filename(_fn, platform, code=None, **options):
     """
     Similar to pygments' guess_lexer_for_filename, but:
 
@@ -72,30 +84,20 @@ def guess_lexer_for_filename(_fn, code=None, **options):
     (initialization, i.e. setting the caches, takes ~.2s in both approaches)
     """
 
-    fn = basename(_fn)
+    filename = basename(_fn)
 
     def test(tup):
         pattern, classes = tup
-        return _fn_matches(fn, pattern)
+        return _fn_matches(filename, pattern)
 
     try:
         pattern, classes = get_all_lexers().get(test)
     except ValueError:
         return None
 
-    def get_rating(cls):
-        # from pygmets/lexers/__init__'s guess_lexer_for_filename; but adapted for "cls only"; and `code` is required
-        return cls.analyse_text(code)
-
-    if len(classes) == 1:
-        # optimization: if there's only one, we don't need to sort. note: guarding for 0-len is not necessary, because
-        # of how we construct the lookup table (we always have at least one lexer for each pattern)
-        clz = classes[0]
-    else:
-        classes = sorted(classes, key=get_rating)
-
-    clz = classes[-1]
-    print([(get_rating(a), a) for a in classes])
+    clz = choose_lexer_for_pattern(pattern, classes, filename, code, platform)
+    if clz is None:
+        return None
 
     options = _custom_options(clz, options)
     return clz(**options)
@@ -134,3 +136,84 @@ def lexer_for_platform(platform, **options):
     }[platform]
     options = _custom_options(clz, options)
     return clz(**options)
+
+
+def choose_lexer_for_pattern(pattern, classes, filename, code, platform):
+    """
+    This function chooses a lexer from the list of Lexers that Pygments associates with a given filename pattern.
+
+    Pygments' Lexer.analyse_text is basically useless for us: generally poor quality, and depending on full-file code
+    samples (we have 11-line snippets only). We choose to ignore that function and any pygments function that makes use
+    of it, replacing it with the current function. The upside is: this gives us a lot of control. Also upside: once
+    we're at this point we typically have to pick from a handful (max observed: 9) of lexers.
+
+    How we pick:
+
+    * If Pygments associates exactly one Lexer, we simply take Pygments' suggestion. (720 patterns)
+    * For ~70 patterns, there is not a single Lexer associated. This is where this function's heuristics come into play.
+
+    We take a quite conservative approach in disambiguating: the fallback if we don't manage to pick is to just use
+    "platform", which will usually be quite good.
+
+    The idea here is that a Stacktrace (which is what we're dealing with here) is typically a single-language
+    artifact, and the expectation is that SDKs encode which language that is in the "platform" attr. The cases of
+    mixed-language stacktraces are actually the rarity, presumably related to transpiling/templating and such.
+    Emperically: the only _real_ case I've observed in the wild where the current function breaks a tie is: picking
+    between Html template lexers (in particular: picking Django). (the fact that Bugsink is also Django skews this)
+
+    In any case, I'd rather add cases to this function as needed ("complaint-driven development") than have some big
+    ball of potentially very fragile tie-in with pygments' logic (note: Pygments has some 500 lexers, the vast majority
+    of which will not ever show up, simply because no SDK exists for it). In short: the breakage of missing cases is
+    expected to be much easier to reason about than that of "too much magic".
+
+    (counts of cases are from Pygments==2.16.1, end-of-2024)
+    """
+    if len(classes) == 1:
+        # the non-heuristic case (nothing to choose) doubles as an optimization. (0-len check not needed because the
+        # lookup table is constructed by looping over the existing Lexers)
+        return classes[0]
+
+    # heuristics below
+
+    if pattern in ["*.html", "*.htm", "*.xhtml", "*.xslt", "*.html"]:  # (deduced from 'if HtmlLexer in classes')
+        if platform == "python":
+            return HtmlDjangoLexer  # which is actually the Django/Jinja lexer (which makes it an even better guess)
+
+        # alternative solution: look at the code, deduce from there. but I reasoned: the only reason html code appears
+        # on the stacktrace is if it's a template. Your SDK must do some explicit work to get it there. And the only
+        # such case I know is the one of the DjangoIntegration.
+        # if re.search(r'\{%.*%\}', code) is not None or re.search(r'\{\{.*\}\}', code) is not None:
+
+        # The other HtmlLexer-like ones are: EvoqueHtmlLexer, HtmlGenshiLexer, HtmlPhpLexer, HtmlSmartyLexer,
+        # LassoHtmlLexer, RhtmlLexer, VelocityHtmlLexer
+        return HtmlLexer
+
+    return None
+
+
+def get_most_basic_if_exists(classes):
+    # UNUSED; kept for reference.
+    #
+    # The reasoning here was: maybe we can just pick the "simplest" of a list of Lexers, which is somehow the base-case.
+    # But the following are deductions I'm unwilling to make (among probably others):
+    #
+    # *.cp => ComponentPascalLexer' from [(ComponentPascalLexer', 4), (CppLexer', 5)]
+    # *.incl => LassoLexer' from [(LassoLexer', 4), (LassoHtmlLexer', 14), (LassoXmlLexer', 14)]
+    # *.xsl => XmlLexer' from [(XmlLexer', 4), (XsltLexer', 5)]
+    #
+    # In the end, unused b/c the general "don't build complex logic on top of Pygments, instead fix based on observed
+    # need"
+
+    def basicness(clz):
+        return len(clz.mro()) + (10 if DelegatingLexer in clz.mro() else 0)  # 10 is 'arbitrary high' for non-basic
+
+    classes = sorted(classes, key=basicness)
+    x_classes = sorted([(basicness(clz), clz) for clz in classes], key=lambda tup: tup[0])
+
+    best_basicness = x_classes[0][0]
+    best_ones = [clz for basicness, clz in x_classes if basicness == best_basicness]
+
+    if len(best_ones) > 1:
+        return None
+
+    return classes[0]
