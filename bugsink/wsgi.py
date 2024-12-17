@@ -18,6 +18,14 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bugsink_conf')
 
 
 class CustomWSGIRequest(WSGIRequest):
+    """
+    Custom WSQIRequest subclass with 2 fixes:
+
+    * Chunked Transfer Encoding (Django's behavior is broken)
+    * Better error message for disallowed hosts
+
+    Note: used in all servers (in gunicorn through wsgi.py; in Django's runserver through WSGI_APPLICATION)
+    """
 
     def __init__(self, environ):
         """

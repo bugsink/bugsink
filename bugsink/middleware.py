@@ -22,7 +22,9 @@ class DisallowChunkedMiddleware:
 
             # If we get here, it means that the request has a Transfer-Encoding header with a value of "chunked", but we
             # have no wsgi-layer handling for that. This probably means that we're running the Django development
-            # server, and as such our fixes for the Gunicorn/Django mismatch that we put in wsgi.py are not in effect.
+            # server, and as such our fixes for the Gunicorn/Django mismatch that we put in wsgi.py are insufficient
+            # (they fix Django's request handling for the Django-Gunicorn combination, but they don't make Django
+            # capable of handling chunked requests on its own).
             raise ValueError("This server is not configured to support Chunked Transfer Encoding (for requests)")
 
         return self.get_response(request)
