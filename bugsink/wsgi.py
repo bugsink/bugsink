@@ -17,13 +17,21 @@ from django.core.exceptions import DisallowedHost
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bugsink_conf')
 
 
-class MyWSGIRequest(WSGIRequest):
+class CustomWSGIRequest(WSGIRequest):
 
     def __init__(self, environ):
+        """
+        We override this method to fix Django's behavior in the context of Chunked Transfer Encoding (Django's
+        behavior, behind Gunicorn, is broken). Django's breakage is in the super() of this method, in the combination
+        [1] defaulting (through a set-on-catch) to 0 for CONTENT_LENGTH when not present and [2] settings self._stream
+        to a LimitedStream with that length. The lines below undo this behavior iff the HTTP_TRANSFER_ENCODING header
+        is present. See:
+        * https://code.djangoproject.com/ticket/35838   (The Django problem)
+        * https://github.com/bugsink/bugsink/issues/9   (Why we need a fix)
+        """
         super().__init__(environ)
 
         if "CONTENT_LENGTH" not in environ and "HTTP_TRANSFER_ENCODING" in environ:
-            # "unlimit" content length
             self._stream = self.environ["wsgi.input"]
 
     def get_host(self):
@@ -55,14 +63,14 @@ class MyWSGIRequest(WSGIRequest):
             raise DisallowedHost(message) from None
 
 
-class MyWSGIHandler(WSGIHandler):
-    request_class = MyWSGIRequest
+class CustomWSGIHandler(WSGIHandler):
+    request_class = CustomWSGIRequest
 
 
-def my_get_wsgi_application():
+def custom_get_wsgi_application():
     # Like get_wsgi_application, but returns a subclass of WSGIHandler that uses a custom request class.
     django.setup(set_prefix=False)
-    return MyWSGIHandler()
+    return CustomWSGIHandler()
 
 
-application = my_get_wsgi_application()
+application = custom_get_wsgi_application()
