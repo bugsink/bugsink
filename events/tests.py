@@ -1,3 +1,4 @@
+import json
 import datetime
 
 from django.test import TestCase as DjangoTestCase
@@ -13,6 +14,7 @@ from issues.factories import denormalized_issue_fields
 
 from .factories import create_event
 from .retention import eviction_target
+from .utils import annotate_with_meta
 
 User = get_user_model()
 
@@ -96,3 +98,118 @@ class RetentionTestCase(RegularTestCase):
         # Note that we have no special-casing for under-target (yet); not needed because should_evict (which does a
         # simple comparison) is always called first.
         # self.assertEqual(0, eviction_target(10_000, 9_999))
+
+
+class AnnotateWithMetaTestCase(RegularTestCase):
+    def test_annotate_with_meta(self):
+        parsed_data = json.loads(EXAMPLE_META)
+
+        exception_values = parsed_data["exception"]["values"]
+        frames = exception_values[0]["stacktrace"]["frames"]
+        meta_frames = parsed_data["_meta"]["exception"]["values"]["0"]["stacktrace"]["frames"]
+
+        annotate_with_meta(exception_values, parsed_data["_meta"]["exception"]["values"])
+
+        # length of the vars in a frame
+        self.assertTrue(hasattr(frames[0]["vars"], "incomplete"))
+        self.assertEqual(
+            meta_frames["0"]["vars"][""]["len"] - len(frames[0]["vars"]),
+            frames[0]["vars"].incomplete)
+
+        # a var itself
+        self.assertTrue(hasattr(frames[1]["vars"]["installed_apps"], "incomplete"))
+        self.assertEqual(
+            meta_frames["1"]["vars"]["installed_apps"][""]["len"] - len(frames[1]["vars"]["installed_apps"]),
+            frames[1]["vars"]["installed_apps"].incomplete)
+
+        # a var which is a list, containing a dict
+        self.assertTrue(hasattr(frames[2]["vars"]["args"][1]["__builtins__"], "incomplete"))
+        self.assertEqual(
+            (meta_frames["2"]["vars"]["args"]["1"]["__builtins__"][""]["len"] -
+             len(frames[2]["vars"]["args"][1]["__builtins__"])),
+            frames[2]["vars"]["args"][1]["__builtins__"].incomplete)
+
+
+EXAMPLE_META = r'''{
+  "exception": {
+    "values": [
+      {
+        "stacktrace": {
+          "frames": [
+            {
+              "vars": {
+                "os": "<module 'os' from '/usr/lib/python3.10/os.py'>"
+              }
+            },
+            {
+              "vars": {
+                "self": "<django.apps.registry.Apps object at 0x7f65d4bdfeb0>",
+                "installed_apps": [
+                  "'projects'"
+                ]
+              }
+            },
+            {
+              "vars": {
+                "f": "<built-in function exec>",
+                "args": [
+                  "<code object <module> at 0x7f65d33e92c0, file \"...\", line 1>",
+                  {
+                    "__name__": "'releases.models'",
+                    "__builtins__": {
+                      "any": "<built-in function any>"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "_meta": {
+    "exception": {
+      "values": {
+        "0": {
+          "stacktrace": {
+            "frames": {
+              "0": {
+                "vars": {
+                  "": {
+                    "len": 12
+                  }
+                }
+              },
+              "1": {
+                "vars": {
+                  "installed_apps": {
+                    "": {
+                      "len": 16
+                    }
+                  }
+                }
+              },
+              "2": {
+                "vars": {
+                  "args": {
+                    "1": {
+                      "__builtins__": {
+                        "": {
+                          "len": 155
+                        }
+                      },
+                      "": {
+                        "len": 13
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}'''  # extracted from a real event; limited to the parts that are needed for annotate_with_meta

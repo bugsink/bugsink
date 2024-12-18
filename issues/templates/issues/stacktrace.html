@@ -127,10 +127,17 @@
                         </div>
                         {% for var, value in frame.vars|items %}
                         <div class="flex">
-                            <div class="w-1/3 pl-4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ var }}</div>
-                            <div class="w-2/3 pr-4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %}">{{ value }}</div>
+                            <div class="w-1/3 pl-4 {% if not forloop.last or frame.vars|incomplete %}border-b-2 border-dotted border-slate-300{% endif %}">{{ var }}</div>
+                            <div class="w-2/3 pr-4 {% if not forloop.last or frame.vars|incomplete %} border-b-2 border-dotted border-slate-300{% endif %}">{{ value|format_var }}</div>
                         </div>
                         {% endfor %}
+                        {% if frame.vars|incomplete %}
+                        <div class="flex">
+                            <div class="w-1/3 pl-4 {# last by default #}italic">&lt;{{ frame.vars.incomplete }} items trimmed…&gt;</div>
+                            <div class="w-2/3 pr-4 {# last by default #}"></div>
+                        </div>
+                        {% endif %}
+
                     </div>
                     {% endif %}
 

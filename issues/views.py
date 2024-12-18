@@ -1,5 +1,6 @@
 from collections import namedtuple
 import json
+import sentry_sdk
 
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
@@ -25,6 +26,7 @@ from projects.models import ProjectMembership
 from .models import Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind
 from .forms import CommentForm
 from .utils import get_values
+from events.utils import annotate_with_meta
 
 
 MuteOption = namedtuple("MuteOption", ["for_or_until", "period_name", "nr_of_periods", "gte_threshold"])
@@ -309,6 +311,17 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
     parsed_data = json.loads(event.data)
 
     exceptions = get_values(parsed_data["exception"]) if "exception" in parsed_data else None
+
+    try:
+        # get_values for consistency (whether it's needed: unclear, since _meta is not actually in the specs)
+        meta_values = get_values(parsed_data.get("_meta", {}).get("exception", {"values": {}}))
+        annotate_with_meta(exceptions, meta_values)
+    except Exception as e:
+        # broad Exception handling: "_meta" is completely undocumented, and though we have some example of event-data
+        # with "_meta" in it, we're not quite sure what the full structure could be in the wild. Because the
+        # 'incomplete' annotations are not absolutely necessary (Sentry itself went without it for years) we silently
+        # swallow the error in that case.
+        sentry_sdk.capture_exception(e)
 
     # NOTE: I considered making this a clickable button of some sort, but decided against it in the end. Getting the UI
     # right is quite hard (https://ux.stackexchange.com/questions/1318) but more generally I would assume that having

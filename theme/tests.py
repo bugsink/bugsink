@@ -1,7 +1,10 @@
 from unittest import TestCase as RegularTestCase
 
 from bugsink.pygments_extensions import choose_lexer_for_pattern, get_all_lexers
-from .templatetags.issues import _pygmentize_lines as actual_pygmentize_lines
+
+from events.utils import IncompleteList, IncompleteDict
+
+from .templatetags.issues import _pygmentize_lines as actual_pygmentize_lines, format_var
 
 
 def _pygmentize_lines(lines):
@@ -68,3 +71,61 @@ class TestChooseLexerForPatter(RegularTestCase):
 
         for pattern, lexers in get_all_lexers()._list:
             choose_lexer_for_pattern(pattern, lexers, "", "", "python")
+
+
+class TestFormatVar(RegularTestCase):
+
+    def _format_var(self, var):
+        # small helper for readable tests
+        return format_var(var).replace("&#x27;", "'")
+
+    def test_format_var_none(self):
+        self.assertEqual(
+            "None",
+            self._format_var(None),
+        )
+
+    def test_format_var_nested(self):
+        var = {
+            "a": 1,
+            "b": [2, 3],
+            "c": {"d": 4},
+            "d": [],
+            "e": {},
+            "f": None,
+        }
+
+        self.assertEqual(
+            "{'a': 1, 'b': [2, 3], 'c': {'d': 4}, 'd': [], 'e': {}, 'f': None}",
+            self._format_var(var),
+        )
+
+    def test_format_var_deep(self):
+        def _deep(level):
+            result = None
+            for i in range(level):
+                result = [result]
+            return result
+
+        var = _deep(10_000)
+
+        self.assertEqual(
+            '[' * 10_000 + 'None' + ']' * 10_000,
+            self._format_var(var),
+        )
+
+    def test_format_var_incomplete_list(self):
+        var = IncompleteList([1, 2, 3], 9)
+
+        self.assertEqual(
+            "[1, 2, 3, <i>&lt;9 items trimmed…&gt;</i>]",
+            self._format_var(var),
+        )
+
+    def test_format_var_incomplete_dict(self):
+        var = IncompleteDict({"a": 1, "b": 2, "c": 3}, 9)
+
+        self.assertEqual(
+            "{'a': 1, 'b': 2, 'c': 3, <i>&lt;9 items trimmed…&gt;</i>}",
+            self._format_var(var),
+        )

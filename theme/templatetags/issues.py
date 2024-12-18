@@ -3,7 +3,7 @@ from django import template
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 
-
+from django.utils.html import escape
 from django.utils.safestring import mark_safe
 
 
@@ -135,3 +135,103 @@ def shortsha(value):
         return value
 
     return value[:12]
+
+
+@register.filter()
+def format_var(value):
+    """Formats a variable for display in the template; deals with 'marked as incomplete'."""
+    # this is a non-recursive version of the function below, which is faster and allows for arbitrary nesting.
+    # implementation: `todo` is a generator object that yields [1] parts of the result, and [2] instructions to recurse,
+    # which we interpret manually using a python-list "stack"
+
+    def storevalue(v):
+        # sentinel function to store the value for later retrieval; because JSON contains no callables this allows us
+        # to distinguish between `None` meaning no recurse and `None`, a value that needs to be displayed.
+        def get():
+            return v
+        return get
+
+    def gen_base(obj):
+        yield escape(repr(obj)), None
+
+    def bracket_wrap(gen, b_open, sep, b_close):
+        yield b_open, None
+        fst = True
+        for part, recurse in gen:
+            if not fst:
+                yield sep, None
+            yield part, recurse
+            fst = False
+        yield b_close, None
+
+    def gen_list(lst):
+        for value in lst:
+            yield "", storevalue(value)
+
+        if hasattr(lst, "incomplete"):
+            yield f"<i>&lt;{lst.incomplete} items trimmed…&gt;</i>", None
+
+    def gen_dict(d):
+        for (k, v) in d.items():
+            yield escape(repr(k)) + ": ", storevalue(v)
+
+        if hasattr(d, "incomplete"):
+            yield f"<i>&lt;{d.incomplete} items trimmed…&gt;</i>", None
+
+    def gen_switch(obj):
+        if isinstance(obj, list):
+            return bracket_wrap(gen_list(obj), "[", ", ", "]")
+        if isinstance(obj, dict):
+            return bracket_wrap(gen_dict(obj), "{", ", ", "}")
+        return gen_base(obj)
+
+    result = []
+    stack = []
+    todo = gen_switch(value)
+    done = False
+
+    while not done:
+        try:
+            part, recurse = next(todo)
+            result.append(part)
+        except StopIteration:
+            recurse = None
+            if stack:
+                todo = stack.pop()
+            else:
+                done = True
+
+        if callable(recurse):
+            stack.append(todo)
+            todo = gen_switch(recurse())
+
+    # mark_safe is OK because the only non-escaped characters are the brackets, commas, and colons.
+    return mark_safe("".join(result))
+
+
+# recursive equivalent:
+# @register.filter()
+# def format_var(value):
+#     """Formats a variable for display in the template; deals with 'marked as incomplete'.
+#     """
+#     # mark_safe is OK because the only non-escaped characters are the brackets, commas, and colons.
+#
+#     if isinstance(value, dict):
+#         parts = [(escape(repr(k)) + ": " + format_var(v)) for (k, v) in value.items()]
+#         if hasattr(value, "incomplete"):
+#             parts.append(mark_safe(f"<i>&lt;{value.incomplete} items trimmed…&gt;</i>"))
+#         return mark_safe("{" + ", ".join(parts) + "}")
+#
+#     if isinstance(value, list):
+#         parts = [format_var(v) for v in value]
+#         if hasattr(value, "incomplete"):
+#             parts.append(mark_safe(f"<i>&lt;{value.incomplete} items trimmed…&gt;</i>"))
+#         return mark_safe("[" + ", ".join(parts) + "]")
+#
+#     return escape(value)
+
+
+@register.filter()
+def incomplete(value):
+    # needed to disinguish between 'has an incomplete' attr (set by us) and 'contains an incomplete key' (event-data)
+    return hasattr(value, "incomplete")
