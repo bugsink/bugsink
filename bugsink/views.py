@@ -145,7 +145,7 @@ def bad_request(request, exception, template_name=ERROR_400_TEMPLATE_NAME):
         )
 
     _, exception, _ = sys.exc_info()
-    return HttpResponseBadRequest(template.render({"exception": exception}, request))
+    return HttpResponseBadRequest(template.render({"exception": exception}))
 
 
 @requires_csrf_token
@@ -164,4 +164,4 @@ def server_error(request, template_name=ERROR_500_TEMPLATE_NAME):
         )
 
     _, exception, _ = sys.exc_info()
-    return HttpResponseServerError(template.render({"exception": exception}, request))
+    return HttpResponseServerError(template.render({"exception": exception}))
