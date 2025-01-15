@@ -1,5 +1,4 @@
 from collections import namedtuple
-from datetime import timedelta
 
 from django.conf import settings
 from django.utils import timezone
@@ -75,16 +74,7 @@ def useful_settings_processor(request):
 
     installation = Installation.objects.get()
 
-    nag_7 = installation.created_at < timezone.now() - timedelta(days=7)
-    nag_30 = installation.created_at < timezone.now() - timedelta(days=30)
-
     system_warnings = []
-
-    # (First version of "should I nag" logic): nag only after considerable time to play with the app, and for "some
-    # indication" that you're using this in production (the simplest such indication is that you've configured a
-    # BASE_URL that's not localhost). Subject to change.
-    if nag_30 and 'localhost' not in get_settings().BASE_URL:
-        system_warnings.append(SystemWarning(FREE_VERSION_WARNING, None))
 
     if settings.EMAIL_BACKEND in [
             'django.core.mail.backends.console.EmailBackend',
@@ -103,7 +93,7 @@ def useful_settings_processor(request):
 
     return {
         # Note: no way to actually set the license key yet, so nagging always happens for now.
-        'site_title': get_settings().SITE_TITLE + (" (non-production use)" if nag_7 else ""),
+        'site_title': get_settings().SITE_TITLE,
         'registration_enabled': get_settings().USER_REGISTRATION == CB_ANYBODY,
         'app_settings': get_settings(),
         'system_warnings': system_warnings + get_snappea_warnings(),
