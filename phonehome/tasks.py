@@ -87,15 +87,10 @@ def _make_message_body():
             # LICENSE_EXPIRY
             # LICENSE_TYPE
 
-            # Settings that tell us how production-like your usage is.
+            # Settings that tell us a bit about how Bugsink is actually deployed. Useful for support.
             "SINGLE_USER": get_settings().SINGLE_USER,
             "SINGLE_TEAM": get_settings().SINGLE_TEAM,
             "EMAIL_BACKEND": settings.EMAIL_BACKEND,
-            # As it stands, the 2 settings below are not used to determine production-like-ness; left here for reference
-            # "USER_REGISTRATION": get_settings().USER_REGISTRATION,
-            # "TEAM_CREATION": get_settings().TEAM_CREATION,
-
-            # Settings that tell us a bit about how Bugsink is actually deployed. Useful for support.
             "TASK_ALWAYS_EAGER": get_snappea_settings().TASK_ALWAYS_EAGER,
             "DIGEST_IMMEDIATELY": get_settings().DIGEST_IMMEDIATELY,
             "IS_DOCKER": settings.IS_DOCKER,
