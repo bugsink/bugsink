@@ -144,7 +144,6 @@ def bad_request(request, exception, template_name=ERROR_400_TEMPLATE_NAME):
             ERROR_PAGE_TEMPLATE % {"title": "Bad Request (400)", "details": ""},
         )
 
-    _, exception, _ = sys.exc_info()
     return HttpResponseBadRequest(template.render({"exception": exception}))
 
 
