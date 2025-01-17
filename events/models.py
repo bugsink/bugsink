@@ -230,8 +230,10 @@ class Event(models.Model):
             created = True
             return event, created
         except IntegrityError as e:
-            assert re.match(
-                r".*unique constraint failed.*events_event.*project_id.*events_event.*event_id", str(e).lower())
+            if not re.match(
+                    r".*unique constraint failed.*events_event.*project_id.*events_event.*event_id", str(e).lower()):
+                raise
+
             return None, False
 
     def get_digest_order_bounds(self):
