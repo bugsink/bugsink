@@ -78,7 +78,7 @@ class BaseIngestAPIView(View):
             auth_dict = parse_auth_header_value(request.META["HTTP_X_SENTRY_AUTH"])
             return auth_dict.get("sentry_key")
 
-        raise exceptions.NotAuthenticated("Unable to find authentication information")
+        raise exceptions.PermissionDenied("Unable to find authentication information")
 
     @classmethod
     def get_project(cls, project_pk, sentry_key):
