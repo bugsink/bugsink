@@ -38,6 +38,8 @@ def get_values(obj):
             # This covers the case where the exception is neither of the above-documented formats, but is instead just a
             # plain dict. In that case, we wrap-with-list to get back into the documented format. Whether this is a
             # robust-enough solution is an open question. Seen for https://github.com/devSparkle/sentry-roblox
+            # (Despite the fact that such formats are not up-to-spec, January 2025 Sentry still accepts them, so we
+            # leave this funny workaround in place.)
             return [obj]
 
         return obj["values"]
