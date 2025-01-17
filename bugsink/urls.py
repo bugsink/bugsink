@@ -68,4 +68,6 @@ if settings.DEBUG:
 
 
 handler400 = "bugsink.views.bad_request"
+handler403 = "bugsink.views.permission_denied"
+handler404 = "bugsink.views.page_not_found"
 handler500 = "bugsink.views.server_error"

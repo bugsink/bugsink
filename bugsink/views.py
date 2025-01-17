@@ -3,13 +3,17 @@ import sys
 from django.http import HttpResponseServerError, HttpResponseBadRequest, HttpResponseRedirect
 from django.template import TemplateDoesNotExist, loader
 from django.views.decorators.csrf import requires_csrf_token
-from django.views.defaults import ERROR_500_TEMPLATE_NAME, ERROR_PAGE_TEMPLATE, ERROR_400_TEMPLATE_NAME
+from django.views.defaults import (
+    ERROR_500_TEMPLATE_NAME, ERROR_PAGE_TEMPLATE, ERROR_400_TEMPLATE_NAME, ERROR_403_TEMPLATE_NAME,
+    ERROR_404_TEMPLATE_NAME
+)
 from django.shortcuts import redirect
 from django.conf import settings
 
 from django.template.defaultfilters import filesizeformat
 from django.views.decorators.http import require_GET
 from django.views.decorators.cache import cache_control
+from django.views.defaults import permission_denied as django_permission_denied, page_not_found as django_page_not_found
 from django.http import FileResponse, HttpRequest, HttpResponse
 from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render
@@ -134,6 +138,9 @@ def bad_request(request, exception, template_name=ERROR_400_TEMPLATE_NAME):
     # verbatim copy of Django's default bad_request view, but with "exception" in the context
     # doing this for any-old-Django-site is probably a bad idea, but here the security/convenience tradeoff is fine,
     # especially because we only show str(exception) in the template.
+    if request.path.startswith("/api/"):
+        template_name = "4xx_5xx_api.txt"
+
     try:
         template = loader.get_template(template_name)
     except TemplateDoesNotExist:
@@ -154,6 +161,9 @@ def server_error(request, template_name=ERROR_500_TEMPLATE_NAME):
     # especially because we only show str(exception) in the template.
     _, exception, _ = sys.exc_info()
 
+    if request.path.startswith("/api/"):
+        template_name = "4xx_5xx_api.txt"
+
     try:
         template = loader.get_template(template_name)
     except TemplateDoesNotExist:
@@ -165,3 +175,22 @@ def server_error(request, template_name=ERROR_500_TEMPLATE_NAME):
         )
 
     return HttpResponseServerError(template.render({"exception": exception}))
+
+
+@requires_csrf_token
+def permission_denied(request, exception, template_name=ERROR_403_TEMPLATE_NAME):
+    # (this remark applies 4 times, for 400, 403, 404 and 500):
+    # the check for /api/ is a UX improvement such that we get slightly easier-to-read errors on screen in our own
+    # debugging tools. we don't
+    # * try to be smart about a text/json distinction (based on e.g. request content-type)
+    # * try to give a correct content-type on-response
+    if request.path.startswith("/api/"):
+        template_name = "4xx_5xx_api.txt"
+    return django_permission_denied(request, exception, template_name)
+
+
+@requires_csrf_token
+def page_not_found(request, exception, template_name=ERROR_404_TEMPLATE_NAME):
+    if request.path.startswith("/api/"):
+        template_name = "4xx_5xx_api.txt"
+    return django_page_not_found(request, exception, template_name)
