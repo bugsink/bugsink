@@ -152,6 +152,8 @@ def server_error(request, template_name=ERROR_500_TEMPLATE_NAME):
     # verbatim copy of Django's default server_error view, but with "exception" in the context
     # doing this for any-old-Django-site is probably a bad idea, but here the security/convenience tradeoff is fine,
     # especially because we only show str(exception) in the template.
+    _, exception, _ = sys.exc_info()
+
     try:
         template = loader.get_template(template_name)
     except TemplateDoesNotExist:
@@ -162,5 +164,4 @@ def server_error(request, template_name=ERROR_500_TEMPLATE_NAME):
             ERROR_PAGE_TEMPLATE % {"title": "Server Error (500)", "details": ""},
         )
 
-    _, exception, _ = sys.exc_info()
     return HttpResponseServerError(template.render({"exception": exception}))
