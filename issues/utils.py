@@ -34,6 +34,12 @@ def get_values(obj):
         return obj
 
     if isinstance(obj, dict):
+        if "values" not in obj:
+            # This covers the case where the exception is neither of the above-documented formats, but is instead just a
+            # plain dict. In that case, we wrap-with-list to get back into the documented format. Whether this is a
+            # robust-enough solution is an open question. Seen for https://github.com/devSparkle/sentry-roblox
+            return [obj]
+
         return obj["values"]
 
     raise ValueError("Expected exception/threads/breadcrumbs to be a list or a dict, got %r" % obj)
