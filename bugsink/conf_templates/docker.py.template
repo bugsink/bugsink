@@ -134,6 +134,8 @@ BUGSINK = {
     # Settings that help with debugging and development ("why isn't Bugsink doing what I expect?")
     "VALIDATE_ON_DIGEST": os.getenv("VALIDATE_ON_DIGEST", "none").lower(),  # other legal values are "warn" and "strict"
     "KEEP_ENVELOPES": int(os.getenv("KEEP_ENVELOPES", 0)),  # keep this many in the database; 0 means "don't keep"
+    "MINIMIZE_INFORMATION_EXPOSURE":
+        os.getenv("MINIMIZE_INFORMATION_EXPOSURE", "false").lower() in ("true", "1", "yes"),
 }
 
 

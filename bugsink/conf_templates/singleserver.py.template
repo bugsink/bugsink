@@ -91,6 +91,10 @@ BUGSINK = {
     # "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
 
     "INGEST_STORE_BASE_DIR": "{{ base_dir }}/ingestion",
+
+    # Optionally, you can set the following to True to further minimize information exposure in the UI. (The default is
+    # False, which we've judged to still not expose too much in most cases, but you might have different requirements.)
+    "MINIMIZE_INFORMATION_EXPOSURE": False,
 }
 
 ALLOWED_HOSTS = deduce_allowed_hosts(BUGSINK["BASE_URL"])

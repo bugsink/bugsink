@@ -83,6 +83,9 @@ def favicon(request: HttpRequest) -> HttpResponse:
 
 @user_passes_test(lambda u: u.is_superuser)
 def settings_view(request):
+    if get_bugsink_settings().MINIMIZE_INFORMATION_EXPOSURE:
+        raise PermissionError("This view is disabled because MINIMIZE_INFORMATION_EXPOSURE=True")
+
     def get_setting(settings, key):
         value = getattr(settings, key, None)
         if key in ["EMAIL_HOST_PASSWORD", "EMAIL_HOST_USER"]:
