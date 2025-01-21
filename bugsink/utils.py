@@ -4,6 +4,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.template.loader import get_template
 
 from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
+from .version import version
 
 
 def send_rendered_email(subject, base_template_name, recipient_list, context=None):
@@ -86,6 +87,7 @@ def eat_your_own_dogfood(sentry_dsn, **kwargs):
             "theme",
             "users",
         ],
+        "release": version,
     }
 
     default_kwargs.update(kwargs)
