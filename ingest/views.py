@@ -18,7 +18,7 @@ from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import user_passes_test
 
 from compat.auth import parse_auth_header_value
-from compat.dsn import get_sentry_key
+from compat.dsn import get_sentry_key, build_dsn
 
 from projects.models import Project
 from issues.models import Issue, IssueStateManager, Grouping, TurningPoint, TurningPointKind
@@ -82,10 +82,18 @@ class BaseIngestAPIView(View):
 
     @classmethod
     def get_project(cls, project_pk, sentry_key):
-        # NOTE this gives a 404 for non-properly authorized. Is this really something we care about, i.e. do we want to
-        # raise NotAuthenticated? In that case we need to get the project first, and then do a constant-time-comp on the
-        # sentry_key
-        return get_object_or_404(Project, pk=project_pk, sentry_key=sentry_key)
+        try:
+            return Project.objects.get(pk=project_pk, sentry_key=sentry_key)
+        except Project.DoesNotExist:
+            # We don't distinguish between "project not found" and "key incorrect"; there's no real value in that from
+            # the user perspective (they deal in dsns). Additional advantage: no need to do constant-time-comp on
+            # project.sentry_key for security reasons in that case.
+            #
+            # The dsn we show is reconstructed _as we understand it at this point in the code_, which is precisely what
+            # you want to show as a first step towards debugging issues with SDKs with faulty authentication (a rather
+            # common scenario).
+            dsn = build_dsn(get_settings().BASE_URL, project_pk, sentry_key)
+            raise exceptions.PermissionDenied("Project not found or key incorrect: %s" % dsn)
 
     @classmethod
     def get_project_for_request(cls, project_pk, request):
