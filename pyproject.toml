@@ -39,6 +39,7 @@ where = ["."]
 include = [
     "alerts*",
     "api*",
+    "bsmain*",
     "bugsink*",
     "compat*",
     "events*",

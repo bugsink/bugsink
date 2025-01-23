@@ -65,6 +65,7 @@ INSTALLED_APPS = [
 ]
 
 BUGSINK_APPS = [
+    'bsmain',
     'phonehome',
     'users',
     'theme',

@@ -4,7 +4,6 @@ from snappea.models import Task
 
 
 class Command(BaseCommand):
-    # "ingest" may not be the best place for this, but "bugsink" is not an app, so Django won't discover it.
 
     def add_arguments(self, parser):
         parser.add_argument(

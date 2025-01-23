@@ -23,7 +23,7 @@ from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKi
 from bugsink.app_settings import override_settings
 from compat.timestamp import format_timestamp
 from compat.dsn import get_header_value
-from ingest.management.commands.send_json import Command as SendJsonCommand
+from bsmain.management.commands.send_json import Command as SendJsonCommand
 
 from .views import BaseIngestAPIView
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
