@@ -18,7 +18,7 @@ from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project, ProjectMembership
 from releases.models import create_release_if_needed
 from events.factories import create_event
-from ingest.management.commands.send_json import Command as SendJsonCommand
+from bsmain.management.commands.send_json import Command as SendJsonCommand
 from compat.dsn import get_header_value
 from events.models import Event
 from ingest.views import BaseIngestAPIView
