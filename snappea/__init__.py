@@ -43,7 +43,7 @@ registry = Registry()
 # the wake up signals may flood the wakeup_dir in that time.
 #
 # Using a single file per-client does not introduce race conditions, though this is much harder to see than for the
-# file-per-task case. To see why this is the case (TODO copy notes from paper, including those for the previous case)
+# file-per-task case.
 #
 # (The fact that this is hard to see could provide an argument for reverting to per-task-uuid; to keep the directory
 # from overflowing we would have to make the batch-size (much) smaller. (we cannot just put signal cleanups inside the
