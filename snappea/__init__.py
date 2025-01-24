@@ -1,6 +1,12 @@
+from django.core.checks import Warning, register
+
 import uuid
 import logging
 import threading
+
+from django.conf import settings as django_settings  # this _must_ be renamed, because we have a settings.py file
+
+from snappea.settings import get_settings
 
 
 logger = logging.getLogger("snappea.foreman")
@@ -48,3 +54,15 @@ registry = Registry()
 localStorage = threading.local()
 localStorage.uuid = str(uuid.uuid4())
 thread_uuid = localStorage.uuid
+
+
+@register("snappea")
+def check_no_nested_settings_in_unnested_form(app_configs, **kwargs):
+    errors = []
+    for key in get_settings().keys():
+        if hasattr(django_settings, key):
+            errors.append(Warning(
+                f"The setting {key} is defined at the top level of your configuration. It must be nested under the "
+                f"'SNAPPEA' setting."
+            ))
+    return errors
