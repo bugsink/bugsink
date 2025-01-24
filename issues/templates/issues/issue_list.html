@@ -156,11 +156,10 @@
 
             <td class="w-full ml-0 pb-4 pt-4 pr-4 text-center">
                 <div class="p-4 text-xl font-bold text-slate-800">
-                    {% if state_filter == "open" %} {# TODO open #}
+                    {% if state_filter == "open" %}
+                        Congratulations! You have no open issues.
                         {% if project.digested_event_count == 0 %}
                             This might mean you have not yet <a class="text-cyan-500 font-bold" href="{% url "project_sdk_setup" project_pk=project.id %}">set up your SDK</a>.
-                        {% else %}
-                            Congratulations! You have no open issues.
                         {% endif %}
                     {% else %}
                         No {{ state_filter }} issues found.
