@@ -78,7 +78,7 @@ class Project(models.Model):
 
     @property
     def dsn(self):
-        return build_dsn(get_settings().BASE_URL, self.id, self.sentry_key.hex)
+        return build_dsn(str(get_settings().BASE_URL), self.id, self.sentry_key.hex)
 
     def get_latest_release(self):
         from releases.models import ordered_releases

@@ -22,6 +22,8 @@ from . import registry
 from .models import Task
 from .datastructures import Workers
 from .settings import get_settings
+from .utils import run_task_context
+
 
 logger = logging.getLogger("snappea.foreman")
 performance_logger = logging.getLogger("bugsink.performance.snappea")
@@ -170,7 +172,9 @@ class Foreman:
         def non_failing_function(*inner_args, **inner_kwargs):
             t0 = time.time()
             try:
-                function(*inner_args, **inner_kwargs)
+                with run_task_context(inner_args, inner_kwargs):
+                    function(*inner_args, **inner_kwargs)
+
             except Exception as e:
                 # Potential TODO: make this configurable / depend on our existing config in bugsink/settings.py
                 logger.warning("Snappea caught Exception: %s", str(e))

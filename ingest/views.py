@@ -92,7 +92,7 @@ class BaseIngestAPIView(View):
             # The dsn we show is reconstructed _as we understand it at this point in the code_, which is precisely what
             # you want to show as a first step towards debugging issues with SDKs with faulty authentication (a rather
             # common scenario).
-            dsn = build_dsn(get_settings().BASE_URL, project_pk, sentry_key)
+            dsn = build_dsn(str(get_settings().BASE_URL), project_pk, sentry_key)
             raise exceptions.PermissionDenied("Project not found or key incorrect: %s" % dsn)
 
     @classmethod

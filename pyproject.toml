@@ -43,6 +43,7 @@ include = [
     "bugsink*",
     "compat*",
     "events*",
+    "ee*",
     "ingest*",
     "issues*",
     "performance*",
