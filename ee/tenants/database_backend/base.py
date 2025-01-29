@@ -56,11 +56,11 @@ class DatabaseWrapper(TimedDatabaseWrapper):
 
     def get_connection_params(self):
         # We just mutate the settings_dict here (the alternative is waaay too much copy-pasting), mutating back after.
+        self.settings_dict["NAME"] = self.get_tenant()
         try:
-            self.settings_dict["NAME"] = self.get_tenant()
             return super().get_connection_params()
         finally:
-            del self.settings_dict["NAME"]
+            self.settings_dict.pop("NAME", None)
 
     def is_in_memory_db(self):
         return False  # we _know_ we don't do multi-tenant in memory, so this is simpler than some lookup.

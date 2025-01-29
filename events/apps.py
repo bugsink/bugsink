@@ -4,6 +4,7 @@ from django.utils.autoreload import autoreload_started
 
 
 def watch_for_debugserver_reload(sender, **kwargs):
+    return
     from .management.commands.make_consistent import make_consistent
     make_consistent()
 
