@@ -93,7 +93,7 @@ class BaseIngestAPIView(View):
             # you want to show as a first step towards debugging issues with SDKs with faulty authentication (a rather
             # common scenario).
             dsn = build_dsn(str(get_settings().BASE_URL), project_pk, sentry_key)
-            raise exceptions.PermissionDenied("Project not found or key incorrect: %s" % dsn)
+            raise exceptions.PermissionDenied("Project not found or key incorrect: %s" % dsn) from None
 
     @classmethod
     def get_project_for_request(cls, project_pk, request):
