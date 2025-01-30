@@ -11,5 +11,5 @@ updates:
         - "*"
   ignore:
     # Let's keep Django at 4.2 until a new LTS comes along
-    - dependency-name: "Django"
+    - dependency-name: "django"
       update-types: ["version-update:semver-major", "version-update:semver-minor"]
