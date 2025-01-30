@@ -1,2 +1,2 @@
 # testing/development only:
-django-debug-toolbar
+django-debug-toolbar==4.4.*
