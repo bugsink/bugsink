@@ -75,7 +75,7 @@ def _make_message_body():
 
         "settings": {
             # Settings that tell us "who you are", and are relevant in the context of licensing.
-            "BASE_URL": get_settings().BASE_URL,
+            "BASE_URL": str(get_settings().BASE_URL),
             "SITE_TITLE": get_settings().SITE_TITLE,
             "DEFAULT_FROM_EMAIL": settings.DEFAULT_FROM_EMAIL,
 

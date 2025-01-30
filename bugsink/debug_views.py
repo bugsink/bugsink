@@ -203,7 +203,7 @@ def csrf_debug(request):
         # We do this here, and not in urls.py, because urls.py cannot be changed on-demand in tests
         raise Http404("This view is only available in DEBUG_CSRF mode.")
 
-    context = {"relevant_settings": {"BASE_URL": get_settings().BASE_URL}}
+    context = {"relevant_settings": {"BASE_URL": str(get_settings().BASE_URL)}}
     context["relevant_settings"].update({k: getattr(settings, k) for k in [
         "ALLOWED_HOSTS",
         "SECURE_PROXY_SSL_HEADER",

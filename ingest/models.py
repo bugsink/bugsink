@@ -48,7 +48,7 @@ class StoreEnvelope:
 
         # arguably "debug", but if you turned StoreEnvelope on, you probably want to use its results "soon", and I'd
         # rather not have another thing for people to configure.
-        logger.info("envelope stored, available at %s%s", get_settings().BASE_URL, envelope.get_absolute_url())
+        logger.info("envelope stored, available at %s%s", str(get_settings().BASE_URL), envelope.get_absolute_url())
 
 
 class DontStoreEnvelope:
