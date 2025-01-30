@@ -19,3 +19,13 @@ updates:
     - dependency-name: "django-tailwind"
       versions:
       - ">3.6"
+
+# Turn off all pull requests for npm dependencies; we only use npm as a development-side
+# dependency (for tailwind, the results of which we simply commit into the repo).
+# This looks like a work-around ("limit: 0") but it's in fact the official way:
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuring-dependabot-version-updates#example-disabling-version-updates-for-some-dependencies
+- package-ecosystem: "npm"
+  directory: "/"
+  schedule:
+    interval: "weekly"
+  open-pull-requests-limit: 0
