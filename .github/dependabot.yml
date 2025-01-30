@@ -1,0 +1,15 @@
+version: 2
+updates:
+- package-ecosystem: pip
+  directory: "/"
+  schedule:
+    interval: daily
+    time: "15:00"
+  groups:
+    python-packages:
+      patterns:
+        - "*"
+  ignore:
+    # Let's keep Django at 4.2 until a new LTS comes along
+    - dependency-name: "Django"
+      update-types: ["version-update:semver-major", "version-update:semver-minor"]
