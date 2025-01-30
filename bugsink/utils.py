@@ -72,12 +72,15 @@ def eat_your_own_dogfood(sentry_dsn, **kwargs):
         # evidenced by the line `if item == name or name.startswith(item + "."):` in the sentry_sdk source:
         "in_app_include": [
             "alerts",
+            "bsmain",
             "bugsink",
             "compat",
             "events",
+            "ee",
             "ingest",
             "issues",
             "performance",
+            "phonehome",
             "projects",
             "releases",
             "sentry",
