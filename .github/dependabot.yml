@@ -9,3 +9,8 @@ updates:
     python-packages:
       patterns:
         - "*"
+  ignore:
+    # Let's keep Django at 4.2 until a new LTS comes along
+    - dependency-name: "django"
+      versions:
+      - ">=5.0"
