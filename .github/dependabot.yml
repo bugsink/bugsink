@@ -14,3 +14,8 @@ updates:
     - dependency-name: "django"
       versions:
       - ">=5.0"
+
+    # django-tailwind 3.7 and are broken on Python 3.9: https://github.com/timonweb/django-tailwind/issues/210
+    - dependency-name: "django-tailwind"
+      versions:
+      - ">3.6"
