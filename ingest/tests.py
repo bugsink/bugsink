@@ -49,6 +49,11 @@ def _digest_params(event_data, project, request, now=None):
     }
 
 
+def _readlines(filename):
+    with open(filename) as f:
+        return f.readlines()
+
+
 class IngestViewTestCase(TransactionTestCase):
     # this TestCase started out as focussed on alert-sending, but has grown beyond that. Sometimes simply by extending
     # existing tests. This is not a problem in itself, but may be slightly confusing if you don't realize that.
@@ -288,7 +293,7 @@ class IngestViewTestCase(TransactionTestCase):
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
 
         event_samples = glob(SAMPLES_DIR + "/*/*.json")
-        known_broken = [SAMPLES_DIR + "/" + s.strip() for s in open(SAMPLES_DIR + "/KNOWN-BROKEN").readlines()]
+        known_broken = [SAMPLES_DIR + "/" + s.strip() for s in _readlines(SAMPLES_DIR + "/KNOWN-BROKEN")]
 
         if len(event_samples) == 0:
             raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
@@ -342,7 +347,7 @@ class IngestViewTestCase(TransactionTestCase):
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
 
         event_samples = glob(SAMPLES_DIR + "/sentry/mobile1-xen.json")  # this one has 'exception.values[0].type'
-        known_broken = [SAMPLES_DIR + "/" + s.strip() for s in open(SAMPLES_DIR + "/KNOWN-BROKEN").readlines()]
+        known_broken = [SAMPLES_DIR + "/" + s.strip() for s in _readlines(SAMPLES_DIR + "/KNOWN-BROKEN")]
 
         if len(event_samples) == 0:
             raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")

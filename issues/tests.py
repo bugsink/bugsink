@@ -35,6 +35,11 @@ def fresh(obj):
     return type(obj).objects.get(pk=obj.pk)
 
 
+def _readlines(filename):
+    with open(filename) as f:
+        return f.readlines()
+
+
 class RegressionUtilTestCase(RegularTestCase):
     # This tests the concept of "what is a regression?", it _does not_ test for regressions in our code :-)
     # this particular testcase tests straight on the utility `is_regression` (i.e. not all issue-handling code)
@@ -456,7 +461,7 @@ class IntegrationTest(TransactionTestCase):
 
         event_samples = glob(SAMPLES_DIR + "/*/*.json")
         event_samples_private = glob("../event-samples-private/*.json")
-        known_broken = [SAMPLES_DIR + "/" + s.strip() for s in open(SAMPLES_DIR + "/KNOWN-BROKEN").readlines()]
+        known_broken = [SAMPLES_DIR + "/" + s.strip() for s in _readlines(SAMPLES_DIR + "/KNOWN-BROKEN")]
 
         if len(event_samples) == 0:
             raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
