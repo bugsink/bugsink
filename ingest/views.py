@@ -182,7 +182,7 @@ class BaseIngestAPIView(View):
             try:
                 validate()
             except ValidationError as e:
-                logger.warn("event data validation failed: %s", e)
+                logger.warning("event data validation failed: %s", e)
 
     @classmethod
     @immediate_atomic()
