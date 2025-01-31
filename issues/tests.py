@@ -22,6 +22,7 @@ from bsmain.management.commands.send_json import Command as SendJsonCommand
 from compat.dsn import get_header_value
 from events.models import Event
 from ingest.views import BaseIngestAPIView
+from issues.factories import get_or_create_issue
 
 from .models import Issue, IssueStateManager
 from .regressions import is_regression, is_regression_2, issue_is_regression
@@ -398,7 +399,7 @@ class ViewTests(TransactionTestCase):
         self.user = User.objects.create_user(username='test', password='test')
         self.project = Project.objects.create()
         ProjectMembership.objects.create(project=self.project, user=self.user)
-        self.issue = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        self.issue, _ = get_or_create_issue(self.project)
         self.event = create_event(self.project, self.issue)
         self.client.force_login(self.user)
 

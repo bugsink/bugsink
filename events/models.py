@@ -61,6 +61,9 @@ class Event(models.Model):
     # not actually expected to be null, but we want to be able to delete issues without deleting events (cleanup later)
     issue = models.ForeignKey("issues.Issue", blank=False, null=True, on_delete=models.SET_NULL)
 
+    # not actually expected to be null
+    grouping = models.ForeignKey("issues.Grouping", blank=False, null=True, on_delete=models.SET_NULL)
+
     # The docs say:
     # > Required. Hexadecimal string representing a uuid4 value. The length is exactly 32 characters. Dashes are not
     # > allowed. Has to be lowercase.
@@ -183,7 +186,7 @@ class Event(models.Model):
         return get_title_for_exception_type_and_value(self.calculated_type, self.calculated_value)
 
     @classmethod
-    def from_ingested(cls, event_metadata, digested_at, digest_order, stored_event_count, issue, parsed_data,
+    def from_ingested(cls, event_metadata, digested_at, digest_order, stored_event_count, issue, grouping, parsed_data,
                       denormalized_fields):
 
         # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
@@ -197,6 +200,7 @@ class Event(models.Model):
                 event_id=event_metadata["event_id"],  # the metadata is the envelope's event_id, which takes precedence
                 project_id=event_metadata["project_id"],
                 issue=issue,
+                grouping=grouping,
                 ingested_at=event_metadata["ingested_at"],
                 digested_at=digested_at,
                 data=json.dumps(parsed_data),

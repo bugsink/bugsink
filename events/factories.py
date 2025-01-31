@@ -25,9 +25,14 @@ def create_event(project=None, issue=None, timestamp=None, event_data=None):
         Max("digest_order"))["digest_order__max"]
     issue_digest_order = max_current + 1 if max_current is not None else 1
 
+    # we get this via issue because we don't have manual merging yet; once we do, the following is more appropriate:
+    # Grouping.objects.filter(project=project, grouping_key=grouping_key).get()
+    grouping = issue.grouping_set.first()
+
     return Event.objects.create(
         project=project,
         issue=issue,
+        grouping=grouping,
         ingested_at=timestamp,
         digested_at=timestamp,
         timestamp=timestamp,

@@ -270,14 +270,13 @@ class BaseIngestAPIView(View):
             # "what is a limit anyway, if you can go either over it, or work is done before the limit is reached")
             evict_for_max_events(project, digested_at, project_stored_event_count)
 
-        # NOTE: an event always has a single (automatically calculated) Grouping associated with it. Since we have that
-        # information available here, we could add it to the Event model.
         event, event_created = Event.from_ingested(
             event_metadata,
             ingested_at,
             issue.digested_event_count,
             issue_stored_event_count,
             issue,
+            grouping,
             event_data,
             denormalized_fields,
         )
