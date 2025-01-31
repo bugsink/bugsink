@@ -22,10 +22,11 @@ from events.ua_stuff import enrich_contexts_with_ua
 
 from compat.timestamp import format_timestamp
 from projects.models import ProjectMembership
+from sentry.utils.safe import get_path
 
 from .models import Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind
 from .forms import CommentForm
-from .utils import get_values
+from .utils import get_values, get_main_exception
 from events.utils import annotate_with_meta
 
 
@@ -419,6 +420,13 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         ("title", event.title()),
         ("event_id", event.event_id),
         ("bugsink_internal_id", event.id),
+
+        # grepping on [private-]samples (admittedly: not a very rich set)  has shown: when there's multiple values for
+        # mechanism, they're always identical. We just pick the 'main' (best guess) if this ever turns out to be false.
+        # sentry repeats this info throughout the chains in the trace, btw, but I don't want to pollute my UI so much.
+        ("handled", get_path(get_main_exception(parsed_data), "mechanism", "handled")),
+        ("mechanism", get_path(get_main_exception(parsed_data), "mechanism", "type")),
+
         ("issue_id", issue.id),
         ("timestamp", _date_with_milis_html(event.timestamp)),
         ("ingested at", _date_with_milis_html(event.ingested_at)),

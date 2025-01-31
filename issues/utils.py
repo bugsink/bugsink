@@ -69,30 +69,42 @@ def get_exception_type_and_value_for_logmessage(data):
     return "Log Message", "<no log message>"
 
 
-def get_exception_type_and_value_for_exception(data):
-    """Extracts the type and value of the exception from the event data. The non-trivial part is that we have to handle
-    multiple exceptions in a chain, missing values, and synthetic exceptions."""
+def get_main_exception(data):
+    """
+    Gets the 'main exception' from exception-data, which Bugsink has defined to be the last exception in the chain,
+    because it's the one you're most likely to care about. Why? I'd roughly distinguish 2 cases for reraising:
 
+    1. intentionally rephrasing/retyping exceptions to more clearly express their meaning. In that case you
+       certainly care more about the rephrased thing than the original, that's the whole point.
+
+    2. actual "accidents" happening while error-handling. In that case you care about the accident first (bugsink
+       is a system to help you think about cases that you didn't properly think about in the first place),
+       although you may also care about the root cause. (In fact, sometimes you care more about the root cause,
+       but I'd say you'll have to yak-shave your way there).
+
+    For a contrasting viewpoint, see https://github.com/getsentry/sentry-javascript/issues/10851 (esp. in view of
+    grouped exceptions, which we do not support)
+    """
     if isinstance(data.get("exception"), list):
         if len(data["exception"]) == 0:
-            return "<unknown>", ""
+            return None
 
-    # We use the last exception in the chain because it's the one you're most likely to care about. I'd roughly
-    # distinguish 2 cases for reraising:
-    #
-    # 1. intentionally rephrasing/retyping exceptions to more clearly express their meaning. In that case you
-    #    certainly care more about the rephrased thing than the original, that's the whole point.
-    #
-    # 2. actual "accidents" happening while error-handling. In that case you care about the accident first (bugsink
-    #    is a system to help you think about cases that you didn't properly think about in the first place),
-    #    although you may also care about the root cause. (In fact, sometimes you care more about the root cause,
-    #    but I'd say you'll have to yak-shave your way there).
     values = get_values(get_path(data, "exception"))
     if values is None or len(values) == 0:
-        return "<unknown>", ""
+        return None
 
     exception = values[-1]
     if not exception:
+        return None
+
+    return exception
+
+
+def get_exception_type_and_value_for_exception(data):
+    """Extracts the type and value of the exception from the event data. The non-trivial part is that we have to handle
+    multiple exceptions in a chain, missing values, and synthetic exceptions."""
+    exception = get_main_exception(data)
+    if exception is None:
         return "<unknown>", ""
 
     value = trim(get_path(exception, "value", default=""), 1024)
