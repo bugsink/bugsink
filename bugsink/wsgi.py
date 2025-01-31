@@ -46,7 +46,8 @@ class CustomWSGIRequest(WSGIRequest):
         """
         We override this method to provide a more informative error message when the host is disallowed, i.e. we include
         the current value of ALLOWED_HOSTS in the error message. That this is useful for debugging is self-evident.
-        We're leaking a bit of information here, but I don't think it's too much TBH.
+        We're leaking a bit of information here, but I don't think it's too much TBH -- especially in the light of ssl
+        certificates being specifically tied to the domain name.
         """
 
         # Import pushed down to make it absolutely clear we avoid circular importing/loading the wrong thing:
