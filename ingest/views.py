@@ -228,7 +228,8 @@ class BaseIngestAPIView(View):
                 Max("digest_order"))["digest_order__max"]
             issue_digest_order = max_current + 1 if max_current is not None else 1
 
-            # if the grouping doesn't exist, the issue doesn't exist either (because a grouping implies an issue).
+            # at this point in the code, "new grouper" implies "new issue", because manual information ("this grouper is
+            # actually part of some other issue") can by definition not yet have been specified.
             issue = Issue.objects.create(
                 digest_order=issue_digest_order,
                 project_id=event_metadata["project_id"],

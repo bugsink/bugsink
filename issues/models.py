@@ -121,8 +121,12 @@ class Issue(models.Model):
 
 
 class Grouping(models.Model):
-    """A Grouping models an automatically calculated grouping key (from the event data, with a key role for the SDK-side
-    fingerprint).
+    """
+    Grouping models the automatic part of Events should be grouped into Issues. In particular: an automatically
+    calculated grouping key (from the event data, with a key role for the SDK-side fingerprint).
+
+    They are separated out into a separate model to allow for manually merging (after the fact) multiple such groupings
+    into a single issue. (such manual merging is not yet implemented, but the data-model is already prepared for it)
     """
     project = models.ForeignKey(
         "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
