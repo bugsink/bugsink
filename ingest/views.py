@@ -272,7 +272,7 @@ class BaseIngestAPIView(View):
 
         event, event_created = Event.from_ingested(
             event_metadata,
-            ingested_at,
+            digested_at,
             issue.digested_event_count,
             issue_stored_event_count,
             issue,
