@@ -4,6 +4,16 @@
 {% block tab_content %}
 <h1 class="text-2xl font-bold {% if forloop.counter0 > 0 %}mt-4{% endif %} text-ellipsis whitespace-nowrap overflow-hidden">Issue Grouping:</h1>
 
+{% comment %}
+This template/tab may seem like very little info for a full tab, and that's probably correct. However:
+
+* We need _something_ that's tied to the issue rather than the event, because that's where the .grouping_set().all() lives.
+    (yes manual merging isn't implemented in the UI yet, but we follow the datamodel here)
+
+* Better grouping is probably inevitable in the future, at which point this place will be the place
+
+{% endcomment %}
+
 <div>The following automatically determined groupers are part of this issue:{# I think a better text can be devised #}</div>
 <ol class="font-mono">
 {% for grouper in issue.grouping_set.all %}
