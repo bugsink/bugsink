@@ -56,7 +56,7 @@ def get_type_and_value_for_data(data):
 def get_exception_type_and_value_for_logmessage(data):
     """In Sentry's data-model, log messages are retrofitted into the event model; personally I'm not a fan of using an
     Error Tracking tool for logging, but we at least make sure to show meaningful titles for log messages. The Bugsink
-    choice is: just use "Log Message" as the type, which at least clarfies what you're looking at"""
+    choice is: just use "Log Message" as the type, which at least clarifies what you're looking at"""
 
     message = strip(
         get_path(data, "logentry", "message")
