@@ -435,6 +435,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
     ]
     if parsed_data.get("logger"):
         key_info.append(("logger", parsed_data["logger"]))
+    # logentry.message & logentry.params are also potentially available, but sentry does not display them in the UI
 
     deployment_info = \
         ([("release", parsed_data["release"])] if "release" in parsed_data else []) + \
