@@ -418,6 +418,8 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
 
     key_info = [
         ("title", event.title()),
+        ("transaction", issue.transaction),
+        # transaction_info.source avoid information overload; sentry doesn't bother showing this in the UI either
         ("event_id", event.event_id),
         ("bugsink_internal_id", event.id),
 
