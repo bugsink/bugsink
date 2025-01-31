@@ -40,6 +40,54 @@ def deduce_allowed_hosts(base_url):
     return [url.hostname]
 
 
+# Note: the excessive string-matching in the below is intentional:
+# I'd rather have our error-handling code as simple as possible
+# instead of relying on all kinds of imports of Exception classes.
+def _name(type_):
+    try:
+        return type_.__module__ + "." + type_.__name__
+    except Exception:
+        try:
+            return type_.__name__
+        except Exception:
+            return "unknown"
+
+
+def fingerprint_exc(event, exc_info):
+    type_name = _name(exc_info[0])
+    # exc = exc_info[1]
+
+    if event["exception"]["values"][-1]["stacktrace"]["frames"][-1]["module"] == "bugsink.wsgi":
+        # When and Exception occurs in the WSGI handler, we want to override the fingerprint to exclude the transaction
+        # (which is URL-based in the default) because something that occurs at the server-level (e.g. DisallowedHost)
+        # would occur for all URLs.
+        #
+        # Road not taken: overriding event["transaction"] to "wsgi" and event["transaction_info"]["source"] to "custom"
+        # would preserve a bit more of the server-side grouping behavior; road-not-taken b/c the (or our?) interface so
+        # clearly implies "set fingerprints".
+        #
+        # Note: arguably, the above might be extended to "anything middleware-related" for the same reasons; we'll do
+        # that when we have an actual use-case.
+        event['fingerprint'] = ['wsgi', type_name]
+
+    return event
+
+
+def fingerprint_log_record(event, log_record):
+    # (hook for future use)
+    return event
+
+
+def fingerprint_before_send(event, hint):
+    if 'exc_info' in hint:
+        return fingerprint_exc(event, hint['exc_info'])
+
+    if 'log_record' in hint:
+        return fingerprint_log_record(event, hint['log_record'])
+
+    return event
+
+
 def eat_your_own_dogfood(sentry_dsn, **kwargs):
     """
     Configures your Bugsink installation to send messages to some Bugsink-compatible installation.
@@ -91,6 +139,7 @@ def eat_your_own_dogfood(sentry_dsn, **kwargs):
             "users",
         ],
         "release": version,
+        "before_send": fingerprint_before_send,
     }
 
     default_kwargs.update(kwargs)
