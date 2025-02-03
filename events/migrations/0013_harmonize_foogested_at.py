@@ -13,11 +13,14 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('events', '0012_event_ingested_at'),
-        ('ingest', '0001_set_sqlite_wal'),
-        ('issues', '0006_issue_next_unmute_check'),
-        ('projects', '0008_project_next_quota_check'),
-        ('releases', '0001_initial'),
-        ('teams', '0002_initial'),
+
+        # The following migrations were previously explicitly listed as dependencies; as part of the "depend on
+        # everything" pattern, but the actual RunPython command above does not depend on them so we simplify.
+        # ('ingest', '0001_set_sqlite_wal'),
+        # ('issues', '0006_issue_next_unmute_check'),
+        # ('projects', '0008_project_next_quota_check'),
+        # ('releases', '0001_initial'),
+        # ('teams', '0002_initial'),
     ]
 
     operations = [

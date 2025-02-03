@@ -7,8 +7,11 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("issues", "0007_alter_turningpoint_options"),
-        ("events", "0013_harmonize_foogested_at"),
+        ("issues", "0001_initial"),  # This defines the Grouping model, which the below FKs to
+        ("events", "0013_harmonize_foogested_at"),  # This is the previous migration
+
+        # Previous version:
+        # ("issues", "0007_alter_turningpoint_options"),  # seems unnecessary, given that Grouping is there since 0001
     ]
 
     operations = [

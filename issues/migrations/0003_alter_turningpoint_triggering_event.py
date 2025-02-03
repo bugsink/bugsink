@@ -7,8 +7,8 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('events', '0004_event_irrelevance_for_retention'),
-        ('issues', '0002_initial'),
+        ('events', '0001_initial'),  # Defines Event, which we FK to below
+        ('issues', '0002_initial'),  # This is the previous migration
     ]
 
     operations = [

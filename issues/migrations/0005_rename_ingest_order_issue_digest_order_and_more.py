@@ -6,8 +6,11 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('projects', '0004_project_quota_exceeded_until'),
-        ('issues', '0004_rename_event_count_issue_digested_event_count'),
+        ('issues', '0004_rename_event_count_issue_digested_event_count'),  # This is the previous migration
+
+        # The below dependency was previously mentioned here, but there's no need for it, since the operations below
+        # don't reference any models from it (explicitly)
+        # ('projects', '0004_project_quota_exceeded_until'),
     ]
 
     operations = [

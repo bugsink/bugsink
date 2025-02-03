@@ -26,8 +26,11 @@ def set_event_grouping(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("events", "0014_event_grouping"),
-        ("issues", "0007_alter_turningpoint_options"),
+        ("events", "0014_event_grouping"),  # This is the previous migration
+        ("issues", "0002_initial"),  # Defines Issue.grouping
+
+        # Previously, we depended on the below, but given the above that seems too restrictive.
+        # ("issues", "0007_alter_turningpoint_options"),  #
     ]
 
     operations = [

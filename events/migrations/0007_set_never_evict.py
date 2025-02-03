@@ -10,7 +10,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('events', '0006_event_never_evict'),
-        ('issues', '0003_alter_turningpoint_triggering_event'),
+        ('issues', '0003_alter_turningpoint_triggering_event'),  # This sets TurningPoint.triggering_event which is used
     ]
 
     operations = [

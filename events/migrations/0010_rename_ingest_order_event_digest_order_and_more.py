@@ -6,8 +6,11 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('issues', '0004_rename_event_count_issue_digested_event_count'),
-        ('projects', '0004_project_quota_exceeded_until'),
+        # the following migrations were previously (auto?) generated here, but the operations below only work on the
+        # 'event' model so I don't see how that's correct.
+        # ('issues', '0004_rename_event_count_issue_digested_event_count'),
+        # ('projects', '0004_project_quota_exceeded_until'),
+
         ('events', '0009_event_events_even_issue_i_90497b_idx'),
     ]
 

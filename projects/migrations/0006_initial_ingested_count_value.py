@@ -14,12 +14,8 @@ def initial_ingested_count_value(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('events', '0010_rename_ingest_order_event_digest_order_and_more'),
-        ('ingest', '0001_set_sqlite_wal'),
-        ('issues', '0005_rename_ingest_order_issue_digest_order_and_more'),
-        ('projects', '0005_project_ingested_event_count'),
-        ('releases', '0001_initial'),
-        ('teams', '0002_initial'),
+        ('events', '0003_initial'),  # this defines Event.project, and by implication event_set.count()
+        ('projects', '0005_project_ingested_event_count'),  # this is the previous migration
     ]
 
     operations = [

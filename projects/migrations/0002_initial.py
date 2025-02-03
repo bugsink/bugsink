@@ -8,9 +8,9 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('teams', '0001_initial'),
-        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('projects', '0001_initial'),
+        ('teams', '0001_initial'),  # Defines Team, which we FK to below
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),  # Defines AUTH_USER_MODEL, which we FK to below
+        ('projects', '0001_initial'),  # This is the previous migration
     ]
 
     operations = [

@@ -7,8 +7,8 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('issues', '0001_initial'),
-        ('events', '0001_initial'),
+        ('issues', '0001_initial'),  # issues.Issue is defined here, in the below we FK to that so it's a dependency
+        ('events', '0001_initial'),  # This is the previous migration
     ]
 
     operations = [

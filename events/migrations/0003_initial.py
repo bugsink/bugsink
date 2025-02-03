@@ -7,8 +7,8 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('projects', '0001_initial'),
-        ('events', '0002_initial'),
+        ('projects', '0001_initial'),  # Project model is defined here, since the present migration FKs to it we need it
+        ('events', '0002_initial'),  # This is the previous migration
     ]
 
     operations = [
