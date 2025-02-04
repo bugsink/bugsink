@@ -83,6 +83,10 @@ class Release(models.Model):
     class Meta:
         unique_together = ("project", "version")
 
+        indexes = [
+            models.Index(fields=["sort_epoch"]),
+        ]
+
     def get_short_version(self):
         if self.version == "":
             # the reason for this little hack is to have something show up in the UI for this case. I 'assume' (mother

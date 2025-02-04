@@ -114,6 +114,11 @@ class Project(models.Model):
     def is_discoverable(self):
         return self.visibility <= ProjectVisibility.DISCOVERABLE
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["name"]),
+        ]
+
 
 class ProjectMembership(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE)

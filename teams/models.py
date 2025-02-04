@@ -32,6 +32,11 @@ class Team(models.Model):
     def is_joinable(self):
         return self.visibility <= TeamVisibility.JOINABLE
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["name"]),
+        ]
+
 
 class TeamMembership(models.Model):
     team = models.ForeignKey(Team, on_delete=models.CASCADE)

@@ -15,6 +15,11 @@ class Task(models.Model):
     def __str__(self):
         return self.task_name
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['created_at']),
+        ]
+
 
 def wakeup_server():
     wakeup_file = os.path.join(get_settings().WAKEUP_CALLS_DIR, thread_uuid)

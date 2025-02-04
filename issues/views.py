@@ -360,7 +360,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
 def issue_event_404(request, issue, tab, this_view):
     """If the Event is 404, but the issue is not, we can still show the issue page; we show a message for the event"""
 
-    last_event = issue.event_set.order_by("timestamp").last()  # the template needs this for the tabs, we pick the last
+    last_event = issue.event_set.order_by("digest_order").last()  # the template needs this for the tabs
     return render(request, "issues/event_404.html", {
         "tab": tab,
         "this_view": this_view,
@@ -471,7 +471,7 @@ def issue_history(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    last_event = issue.event_set.order_by("timestamp").last()  # the template needs this for the tabs, we pick the last
+    last_event = issue.event_set.order_by("digest_order").last()  # the template needs this for the tabs
     return render(request, "issues/history.html", {
         "tab": "history",
         "project": issue.project,
@@ -489,7 +489,7 @@ def issue_grouping(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    last_event = issue.event_set.order_by("timestamp").last()  # the template needs this for the tabs, we pick the last
+    last_event = issue.event_set.order_by("digest_order").last()  # the template needs this for the tabs
     return render(request, "issues/grouping.html", {
         "tab": "grouping",
         "project": issue.project,
@@ -515,7 +515,7 @@ def issue_event_list(request, issue):
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
-    last_event = issue.event_set.order_by("timestamp").last()  # the template needs this for the tabs, we pick the last
+    last_event = issue.event_set.order_by("digest_order").last()  # the template needs this for the tabs
     return render(request, "issues/event_list.html", {
         "tab": "event-list",
         "project": issue.project,
