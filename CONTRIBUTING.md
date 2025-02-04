@@ -16,6 +16,10 @@ Code contributions are welcome! We use the GitHub PR process to review and merge
 
 * Bugsink uses flake8, with rules/exceptions documented in tox.ini
 
+### Security
+
+For security-related contributions, please refer to the [Security Policy](/SECURITY.md).
+
 #### Legal
 
 * Please confirm that you are the author of the code you are contributing, or that you have the right to contribute it.
