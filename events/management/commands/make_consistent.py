@@ -41,6 +41,11 @@ def make_consistent():
         print("Deleting event %s, because it has no project" % event)
         event.delete()
 
+    for event in Event.objects.filter(turningpoint__isnull=False, never_evict=False).distinct():
+        print("Setting event %s to never_evict because it has a turningpoint" % event)
+        event.never_evict = True
+        event.save()
+
 
 class Command(BaseCommand):
     help = """In 'normal operation', this command should not be used, because normal operation leaves the DB in a
