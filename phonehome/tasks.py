@@ -103,8 +103,10 @@ def _make_message_body():
             "project_count": Project.objects.count(),
             "team_count": Team.objects.count(),
 
-            # event-counts [per some interval (e.g. 24 hours)] is a possible future enhancement. If that turns out to be
-            # expensive, one thing to consider is pulling _make_message_body() out of the immediate_atomic() block.
+            # event-counts [per some interval (e.g. 24 hours)] is a possible future enhancement. We've already seen that
+            # such counts are expensive though, but if _make_message_body() is pulled out of the immediate_atomic()
+            # block (which is OK, since there is no need for some kind of 'transactional consistency' to register this
+            # simple metadata fact), then it might be OK to add some more expensive queries here.
         },
     }
 

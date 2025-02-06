@@ -227,7 +227,7 @@ def evict_for_max_events(project, timestamp, stored_event_count=None, include_ne
             if max_total_irrelevance < -1:  # < -1: as in `evict_for_irrelevance`
                 if not include_never_evict:
                     # everything that remains is 'never_evict'. 'never say never' and evict those as a last measure
-                    return evict_for_max_events(project, timestamp, stored_event_count - evicted, True)
+                    return evicted + evict_for_max_events(project, timestamp, stored_event_count - evicted, True)
 
                 raise Exception("No more effective eviction possible but target not reached")  # "should not happen"
 
@@ -239,7 +239,7 @@ def evict_for_max_events(project, timestamp, stored_event_count=None, include_ne
         stored_event_count - evicted - 1,  # down to: -1, because the +1 happens post-eviction
         orig_max_total_irrelevance, max_total_irrelevance, phase0.took, phase1.took, phase0.count, phase1.count)
 
-    return max_total_irrelevance
+    return evicted
 
 
 def evict_for_irrelevance(

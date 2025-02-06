@@ -27,7 +27,7 @@
     <div class="overflow-hidden">
         <div class="italic">
             Showing {{ page_obj.start_index }} - {{ page_obj.end_index }} of {{ page_obj.paginator.count }}
-            {% if project.digested_event_count != project.event_count %}
+            {% if project.digested_event_count != project.stored_event_count %}
                 available events ({{ project.digested_event_count }} total observed).
             {% else %}
                 total events.

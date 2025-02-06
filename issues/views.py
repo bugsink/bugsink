@@ -46,6 +46,18 @@ GLOBAL_MUTE_OPTIONS = [
 ]
 
 
+class KnownCountPaginator(Paginator):
+    """optimization: we know the total count of the queryset, so we can avoid a count() query"""
+
+    def __init__(self, *args, **kwargs):
+        self._count = kwargs.pop("count")
+        super().__init__(*args, **kwargs)
+
+    @property
+    def count(self):
+        return self._count
+
+
 def _is_valid_action(action, issue):
     """We take the 'strict' approach of complaining even when the action is simply a no-op, because you're already in
     the desired state."""
@@ -510,7 +522,7 @@ def issue_event_list(request, issue):
     event_list = issue.event_set.order_by("digest_order")
 
     # re 250: in general "big is good" because it allows a lot "at a glance".
-    paginator = Paginator(event_list, 250)
+    paginator = KnownCountPaginator(event_list, 250, count=issue.stored_event_count)
 
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)

@@ -51,6 +51,7 @@ class IssueAdmin(admin.ModelAdmin):
         'unmute_on_volume_based_conditions',
         'unmute_after',
         'digested_event_count',
+        'stored_event_count',
     ]
 
     inlines = [
@@ -62,6 +63,7 @@ class IssueAdmin(admin.ModelAdmin):
         "title",
         "project",
         "digested_event_count",
+        "stored_event_count",
     ]
     list_filter = [
         "project",
@@ -75,4 +77,5 @@ class IssueAdmin(admin.ModelAdmin):
         'calculated_type',
         'calculated_value',
         'digested_event_count',
+        'stored_event_count',
     ]

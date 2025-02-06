@@ -52,6 +52,7 @@ class Project(models.Model):
     # denormalized/cached/counted fields below
     has_releases = models.BooleanField(editable=False, default=False)
     digested_event_count = models.PositiveIntegerField(null=False, blank=False, default=0, editable=False)
+    stored_event_count = models.IntegerField(blank=False, null=False, default=0, editable=False)
 
     # alerting conditions
     alert_on_new_issue = models.BooleanField(default=True)

@@ -4,6 +4,7 @@ from django.db.models import Count
 from releases.models import Release
 from issues.models import Issue, Grouping, TurningPoint
 from events.models import Event
+from projects.models import Project
 
 
 def make_consistent():
@@ -45,6 +46,21 @@ def make_consistent():
         print("Setting event %s to never_evict because it has a turningpoint" % event)
         event.never_evict = True
         event.save()
+
+    # counter reset: do it last, because the above deletions may have changed the counts
+    for issue in Issue.objects.all():
+        if issue.stored_event_count != issue.event_set.count():
+            print("Updating event count for issue %s from %d to %d" % (
+                issue, issue.stored_event_count, issue.event_set.count()))
+            issue.stored_event_count = issue.event_set.count()
+            issue.save()
+
+    for project in Project.objects.all():
+        if project.stored_event_count != project.event_set.count():
+            print("Updating event count for project %s from %d to %d" % (
+                project, project.stored_event_count, project.event_set.count()))
+            project.stored_event_count = project.event_set.count()
+            project.save()
 
 
 class Command(BaseCommand):

@@ -236,6 +236,7 @@ class BaseIngestAPIView(View):
                 first_seen=ingested_at,
                 last_seen=ingested_at,
                 digested_event_count=1,
+                stored_event_count=0,  # we increment this below
                 **denormalized_fields,
             )
             issue_created = True
@@ -255,11 +256,8 @@ class BaseIngestAPIView(View):
             issue.last_seen = ingested_at
             issue.digested_event_count += 1
 
-        # NOTE: possibly expensive. "in theory" we can just do some bookkeeping for a denormalized value, but that may
-        # be hard to keep in-sync in practice. Let's check the actual cost first.
         # +1 because we're about to add one event.
-        project_stored_event_count = (project.event_set.count() or 0) + 1
-        issue_stored_event_count = (issue.event_set.count() or 0) + 1
+        project_stored_event_count = project.stored_event_count + 1
 
         if should_evict(project, digested_at, project_stored_event_count):
             # Note: I considered pushing this into some async process, but it makes reasoning much harder, and it's
@@ -268,13 +266,19 @@ class BaseIngestAPIView(View):
             # cron-like. (not exactly the same, because for cron-like time savings are possible if the cron-likeness
             # causes the work to be outside of the 'rush hour' -- OTOH this also introduces a lot of complexity about
             # "what is a limit anyway, if you can go either over it, or work is done before the limit is reached")
-            evict_for_max_events(project, digested_at, project_stored_event_count)
+            evicted = evict_for_max_events(project, digested_at, project_stored_event_count)
+        else:
+            evicted = 0
+
+        issue.stored_event_count = issue.stored_event_count + 1 - evicted  # +1 because we're about to add one event
+        project.stored_event_count = project_stored_event_count - evicted
+        project.save(update_fields=["stored_event_count"])
 
         event, event_created = Event.from_ingested(
             event_metadata,
             digested_at,
             issue.digested_event_count,
-            issue_stored_event_count,
+            issue.stored_event_count,
             issue,
             grouping,
             event_data,

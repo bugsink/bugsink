@@ -39,6 +39,7 @@ class Issue(models.Model):
     last_seen = models.DateTimeField(blank=False, null=False)  # based on event.ingested_at
     first_seen = models.DateTimeField(blank=False, null=False)  # based on event.ingested_at
     digested_event_count = models.IntegerField(blank=False, null=False)
+    stored_event_count = models.IntegerField(blank=False, null=False, default=0, editable=False)
     calculated_type = models.CharField(max_length=255, blank=True, null=False, default="")
     calculated_value = models.CharField(max_length=255, blank=True, null=False, default="")
     transaction = models.CharField(max_length=200, blank=True, null=False, default="")

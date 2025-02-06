@@ -521,6 +521,19 @@ class IngestViewTestCase(TransactionTestCase):
             # but at least this closes the door for the next event
             self.assertEqual(now + relativedelta(minutes=5), project.quota_exceeded_until)
 
+    def test_ingest_updates_stored_event_counts(self):
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
+
+        self.assertEqual(1, Issue.objects.count())
+        self.assertEqual(1, Issue.objects.get().stored_event_count)
+        self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).stored_event_count)
+
+        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
+        self.assertEqual(2, Issue.objects.get().stored_event_count)
+        self.assertEqual(2, Project.objects.get(id=self.quiet_project.id).stored_event_count)
+
 
 class TestParser(RegularTestCase):
 
