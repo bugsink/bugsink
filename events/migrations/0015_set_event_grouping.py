@@ -23,6 +23,7 @@ def set_event_grouping(apps, schema_editor):
         grouping = issue.grouping_set.first()
         Event.objects.filter(issue=issue).update(grouping=grouping)
 
+
 class Migration(migrations.Migration):
 
     dependencies = [

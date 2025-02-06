@@ -1,5 +1,6 @@
 from django.db import migrations
 
+
 def unfill_stored_event_count(apps, schema_editor):
     Project = apps.get_model("projects", "Project")
     Project.objects.all().update(stored_event_count=0)
