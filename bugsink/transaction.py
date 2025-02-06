@@ -151,17 +151,19 @@ class ImmediateAtomic(SuperDurableAtomic):
         self.t0 = time.time()
 
     def __exit__(self, exc_type, exc_value, traceback):
-        super(ImmediateAtomic, self).__exit__(exc_type, exc_value, traceback)
+        try:
+            super(ImmediateAtomic, self).__exit__(exc_type, exc_value, traceback)
 
-        took = (time.time() - self.t0) * 1000
-        performance_logger.info(f"{took:6.2f}ms IMMEDIATE transaction")
+            took = (time.time() - self.t0) * 1000
+            performance_logger.info(f"{took:6.2f}ms IMMEDIATE transaction")
 
-        connection = django_db_transaction.get_connection(self.using)
-        if hasattr(connection, "_start_transaction_under_autocommit"):
-            connection._start_transaction_under_autocommit = connection._start_transaction_under_autocommit_original
-            del connection._start_transaction_under_autocommit_original
+            connection = django_db_transaction.get_connection(self.using)
+            if hasattr(connection, "_start_transaction_under_autocommit"):
+                connection._start_transaction_under_autocommit = connection._start_transaction_under_autocommit_original
+                del connection._start_transaction_under_autocommit_original
 
-        immediate_semaphore.release()
+        finally:
+            immediate_semaphore.release()
 
 
 def immediate_atomic(using=None, savepoint=True, durable=True):
