@@ -121,7 +121,11 @@ class ImmediateAtomic(SuperDurableAtomic):
     # have the patched method; get_connection is thread_local, so monkey-patching is thread-safe.
 
     def __enter__(self):
-        immediate_semaphore.acquire()
+        if not immediate_semaphore.acquire(timeout=10):
+            # "should never happen", but I'd rather have a clear error message than a silent deadlock; the timeout of 10
+            # is chosen to be longer than the DB-related timeouts. i.e. when this happens it's presumably an error in
+            # the locking mechanism specifically, not actually caused by the DB being busy.
+            raise RuntimeError("Could not acquire immediate_semaphore")
 
         connection = django_db_transaction.get_connection(self.using)
 
