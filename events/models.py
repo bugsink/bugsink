@@ -171,6 +171,12 @@ class Event(models.Model):
             models.Index(fields=["issue", "digested_at"]),
         ]
 
+    def get_raw_data(self):
+        return self.data
+
+    def get_parsed_data(self):
+        return json.loads(self.data)
+
     def get_absolute_url(self):
         return f"/issues/issue/{ self.issue_id }/event/{ self.id }/"
 
@@ -232,6 +238,7 @@ class Event(models.Model):
                 **denormalized_fields,
             )
             created = True
+
             return event, created
         except IntegrityError as e:
             if not re.match(

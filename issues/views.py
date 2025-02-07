@@ -321,7 +321,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
     except Event.DoesNotExist:
         return issue_event_404(request, issue, "stacktrace", "event_stacktrace")
 
-    parsed_data = json.loads(event.data)
+    parsed_data = event.get_parsed_data()
 
     exceptions = get_values(parsed_data["exception"]) if "exception" in parsed_data else None
 
@@ -395,7 +395,7 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
     except Event.DoesNotExist:
         return issue_event_404(request, issue, "breadcrumbs", "event_breadcrumbs")
 
-    parsed_data = json.loads(event.data)
+    parsed_data = event.get_parsed_data()
 
     return render(request, "issues/breadcrumbs.html", {
         "tab": "breadcrumbs",
@@ -426,7 +426,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         event = _get_event(issue, event_pk, digest_order, nav)
     except Event.DoesNotExist:
         return issue_event_404(request, issue, "event-details", "event_details")
-    parsed_data = json.loads(event.data)
+    parsed_data = event.get_parsed_data()
 
     key_info = [
         ("title", event.title()),
@@ -490,7 +490,7 @@ def issue_history(request, issue):
         "issue": issue,
         "event": last_event,
         "is_event_page": False,
-        "parsed_data": json.loads(last_event.data),
+        "parsed_data": last_event.get_parsed_data(),
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
@@ -508,7 +508,7 @@ def issue_grouping(request, issue):
         "issue": issue,
         "event": last_event,
         "is_event_page": False,
-        "parsed_data": json.loads(last_event.data),
+        "parsed_data": last_event.get_parsed_data(),
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
@@ -535,7 +535,7 @@ def issue_event_list(request, issue):
         "event": last_event,
         "event_list": event_list,
         "is_event_page": False,
-        "parsed_data": json.loads(last_event.data),
+        "parsed_data": last_event.get_parsed_data(),
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "page_obj": page_obj,
     })

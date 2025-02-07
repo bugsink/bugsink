@@ -81,7 +81,7 @@ class Command(BaseCommand):
                 print("considering", project_id)
                 project = Project.objects.get(pk=project_id)
                 for event in project.event_set.all():
-                    data = json.loads(event.data)
+                    data = event.get_parsed_data()
                     if self.send_to_server(dsn, options, str(event.id), data, use_envelope, compress):
                         successfully_sent.append(event.id)
 

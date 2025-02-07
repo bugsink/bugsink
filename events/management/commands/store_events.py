@@ -21,4 +21,4 @@ class Command(BaseCommand):
 
         for event in events:
             with open(os.path.join(path, f'{event.event_id}.json'), 'w') as f:
-                f.write(event.data)
+                f.write(event.get_raw_data())
