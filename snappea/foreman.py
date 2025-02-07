@@ -180,7 +180,8 @@ class Foreman:
                 logger.warning("Snappea caught Exception: %s", str(e))
                 capture_exception(e)
             finally:
-                # equivalent to the below (in both cases nothing happens with already-closed/never opened connections)
+                # equivalent to the below, but slightly more general (and thus more future-proof). In both cases nothing
+                # happens with already-closed/never opened connections):
                 # self.connection_close()
                 # self.connection_close(using="snappea")  # for tasks delaying other tasks (not used currently)
                 for connection in connections.all():
