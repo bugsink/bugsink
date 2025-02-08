@@ -73,8 +73,15 @@ if os.getenv("DATABASE_URL"):
         "PORT": parsed.port or "3306",
     }
 
-# else:
-#     print("WARNING: DATABASE_URL not set; using default sqlite database, which will not persist to a fresh container.")
+else:
+    # similar to the default, but the fallback is /data/db.sqlite3; we also create the directory if it doesn't exist,
+    # which allows for throwaway setups (no volume mounted) to work out of the box.
+    DATABASES['default']['NAME'] = os.getenv("DATABASE_PATH", '/data/db.sqlite3')
+    database_path = os.path.dirname(DATABASES['default']['NAME'])
+    if not os.path.exists(database_path):
+        print(f"WARNING: {database_path} dir does not exist; creating it.")
+        print("WARNING: data will be lost when the container is removed.")
+        os.makedirs(database_path)
 
 
 if os.getenv("EMAIL_HOST"):
