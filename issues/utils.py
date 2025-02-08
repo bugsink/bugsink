@@ -64,7 +64,7 @@ def get_exception_type_and_value_for_logmessage(data):
     )
 
     if message:
-        return "Log Message", message.splitlines()[0]
+        return "Log Message", message.splitlines()[0][:1024]
 
     return "Log Message", "<no log message>"
 

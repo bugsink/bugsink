@@ -127,8 +127,8 @@ class Event(models.Model):
     debug_info = models.CharField(max_length=255, blank=True, null=False, default="")
 
     # denormalized/cached fields:
-    calculated_type = models.CharField(max_length=255, blank=True, null=False, default="")
-    calculated_value = models.CharField(max_length=255, blank=True, null=False, default="")
+    calculated_type = models.CharField(max_length=128, blank=True, null=False, default="")
+    calculated_value = models.TextField(max_length=1024, blank=True, null=False, default="")
     # transaction = models.CharField(max_length=200, blank=True, null=False, default="")  defined first-class above
     last_frame_filename = models.CharField(max_length=255, blank=True, null=False, default="")
     last_frame_module = models.CharField(max_length=255, blank=True, null=False, default="")
@@ -201,6 +201,9 @@ class Event(models.Model):
 
         irrelevance_for_retention = get_random_irrelevance(stored_event_count)
 
+        # A note on truncation (max_length): the fields we truncate here are directly from the SDK, so they "should have
+        # been" truncated already. But we err on the side of caution: this is the kind of SDK error that we can, and
+        # just want to, paper over (it's not worth dropping the event for).
         try:
             event = cls.objects.create(
                 event_id=event_metadata["event_id"],  # the metadata is the envelope's event_id, which takes precedence
@@ -212,25 +215,25 @@ class Event(models.Model):
                 data=json.dumps(parsed_data),
 
                 timestamp=parse_timestamp(parsed_data["timestamp"]),
-                platform=parsed_data["platform"],
+                platform=parsed_data["platform"][:64],
 
                 level=maybe_empty(parsed_data.get("level", "")),
-                logger=maybe_empty(parsed_data.get("logger", "")),
+                logger=maybe_empty(parsed_data.get("logger", ""))[:64],
                 # transaction=maybe_empty(parsed_data.get("transaction", "")), part of denormalized_fields
 
-                server_name=maybe_empty(parsed_data.get("server_name", "")),
-                release=maybe_empty(parsed_data.get("release", "")),
-                dist=maybe_empty(parsed_data.get("dist", "")),
+                server_name=maybe_empty(parsed_data.get("server_name", ""))[:255],
+                release=maybe_empty(parsed_data.get("release", ""))[:250],
+                dist=maybe_empty(parsed_data.get("dist", ""))[:64],
 
-                environment=maybe_empty(parsed_data.get("environment", "")),
+                environment=maybe_empty(parsed_data.get("environment", ""))[:64],
 
-                sdk_name=maybe_empty(parsed_data.get("", {}).get("name", "")),
-                sdk_version=maybe_empty(parsed_data.get("", {}).get("version", "")),
+                sdk_name=maybe_empty(parsed_data.get("", {}).get("name", ""))[:255],
+                sdk_version=maybe_empty(parsed_data.get("", {}).get("version", ""))[:255],
 
                 has_exception="exception" in parsed_data,
                 has_logentry="logentry" in parsed_data,
 
-                debug_info=event_metadata["debug_info"],
+                debug_info=event_metadata["debug_info"][:255],
 
                 digest_order=digest_order,
                 irrelevance_for_retention=irrelevance_for_retention,
