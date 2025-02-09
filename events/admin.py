@@ -35,8 +35,6 @@ class EventAdmin(admin.ModelAdmin):
         'level',
         'sdk_name',
         'sdk_version',
-        'has_exception',
-        'has_logentry',
         'debug_info',
         'on_site',
     ]
@@ -47,8 +45,6 @@ class EventAdmin(admin.ModelAdmin):
         'level',
         'sdk_name',
         'sdk_version',
-        'has_exception',
-        'has_logentry',
     ]
 
     fields = [
@@ -71,8 +67,6 @@ class EventAdmin(admin.ModelAdmin):
         'environment',
         'sdk_name',
         'sdk_version',
-        'has_exception',
-        'has_logentry',
         'debug_info',
         'pretty_data',
     ]

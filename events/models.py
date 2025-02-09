@@ -119,10 +119,6 @@ class Event(models.Model):
     sdk_name = models.CharField(max_length=255, blank=True, null=False, default="")
     sdk_version = models.CharField(max_length=255, blank=True, null=False, default="")
 
-    # these 2 are perhaps temporary, I made them up myself. Idea: ability to get a sense of the shape of the data quicly
-    has_exception = models.BooleanField(null=False)
-    has_logentry = models.BooleanField(null=False)
-
     # this is a temporary(?), bugsink-specific value;
     debug_info = models.CharField(max_length=255, blank=True, null=False, default="")
 
@@ -230,7 +226,6 @@ class Event(models.Model):
                 sdk_name=maybe_empty(parsed_data.get("", {}).get("name", ""))[:255],
                 sdk_version=maybe_empty(parsed_data.get("", {}).get("version", ""))[:255],
 
-                has_exception="exception" in parsed_data,
                 has_logentry="logentry" in parsed_data,
 
                 debug_info=event_metadata["debug_info"][:255],

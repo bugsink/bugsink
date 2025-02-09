@@ -37,8 +37,6 @@ def create_event(project=None, issue=None, timestamp=None, event_data=None):
         digested_at=timestamp,
         timestamp=timestamp,
         event_id=uuid.uuid4().hex,
-        has_exception=True,
-        has_logentry=True,
         data=json.dumps(event_data),
         digest_order=issue_digest_order,
         irrelevance_for_retention=0,
