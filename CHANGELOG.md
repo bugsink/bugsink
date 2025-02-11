@@ -22,7 +22,7 @@
 * Remove 2 fields that were "temporary [..] to get a sense of the shape of the data
 * Set up dependabot
 * Update dependencies (as per dependabot)
-* Datamodel: `Event.grouping`, which ensures every event has a consistent **Grouping** associated with it.
+* Datamodel: `Event.grouping`, which ensures every event has a consistent Grouping associated with it.
 * Move 'DESIGN*' docs out of repo
 * Mention Security Policiy in CONTRIBUTING.md
 * squashmigrations (faster startup for fresh installations)
