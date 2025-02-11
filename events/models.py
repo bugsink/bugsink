@@ -226,8 +226,6 @@ class Event(models.Model):
                 sdk_name=maybe_empty(parsed_data.get("", {}).get("name", ""))[:255],
                 sdk_version=maybe_empty(parsed_data.get("", {}).get("version", ""))[:255],
 
-                has_logentry="logentry" in parsed_data,
-
                 debug_info=event_metadata["debug_info"][:255],
 
                 digest_order=digest_order,
