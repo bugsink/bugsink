@@ -243,16 +243,14 @@ def evict_for_max_events(project, timestamp, stored_event_count=None, include_ne
 
 
 def evict_for_irrelevance(
-        project, max_total_irrelevance, epoch_bounds_with_irrelevance, include_never_evict=False, max_event_count=None):
+        project, max_total_irrelevance, epoch_bounds_with_irrelevance, include_never_evict=False, max_event_count=0):
     # max_total_irrelevance: the total may not exceed this (but it may equal it)
-    # max_event_count is optional in anticipation of non-count (i.e. size-based) based methods of eviction
-
     evicted = 0
 
     for (_, epoch_ub_exclusive), irrelevance_for_age in epoch_bounds_with_irrelevance:
         max_item_irrelevance = max_total_irrelevance - irrelevance_for_age
 
-        current_max = max_event_count - evicted if max_event_count is not None else None
+        current_max = max_event_count - evicted
         evicted += evict_for_epoch_and_irrelevance(
             project, epoch_ub_exclusive, max_item_irrelevance, current_max, include_never_evict)
 
@@ -262,7 +260,7 @@ def evict_for_irrelevance(
             # with max_item_irrelevance = -1. This means that if we just did such an eviction, we're done for all epochs
             break
 
-        if max_event_count is not None and evicted >= max_event_count:
+        if evicted >= max_event_count:
             # We've reached the target; we can stop early. In this case not all events with greater than max_total_irr
             # will have been evicted; if this is the case older items are more likely to be spared (because epochs are
             # visited in reverse order).
@@ -319,8 +317,5 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_eve
         # we need to manually ensure that no FKs to the deleted items exist:
         TurningPoint.objects.filter(triggering_event__in=qs).update(triggering_event=None)
 
-    if max_event_count is None:
-        nr_of_deletions, _ = qs.delete()
-    else:
-        nr_of_deletions = delete_with_limit(qs, max_event_count)
+    nr_of_deletions = delete_with_limit(qs, max_event_count)
     return nr_of_deletions
