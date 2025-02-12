@@ -1,6 +1,7 @@
+from contextlib import contextmanager
 import importlib
 
-from bugsink.app_settings import get_settings
+from bugsink.app_settings import get_settings, override_settings
 
 
 _storages = None
@@ -48,3 +49,23 @@ def _resolve(name, conf):
     clazz = getattr(module, class_name)
 
     return clazz(name, **conf.get("OPTIONS", {}))
+
+
+@contextmanager
+def override_event_storages(storage_conf):
+    """
+    Temporarily override the event storage for the duration of the context (for tests).
+    """
+    global _storages
+    global _write_storage
+
+    _storages = None
+    _write_storage = None
+
+    try:
+        with override_settings(EVENT_STORAGES=storage_conf):
+            yield
+
+    finally:
+        _storages = None
+        _write_storage = None

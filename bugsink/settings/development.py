@@ -94,8 +94,11 @@ BUGSINK = {
     # set MAX_EVENTS* very high to be able to do serious performance testing (which I do often in my dev environment)
     "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": 1_000_000,
     "MAX_EVENTS_PER_PROJECT_PER_HOUR": 50_000_000,
+}
 
-    "EVENT_STORAGES": {
+
+if not I_AM_RUNNING == "TEST":
+    BUGSINK["EVENT_STORAGES"] = {
         "local_flat_files": {
             "STORAGE": "events.storage.FileEventStorage",
             "OPTIONS": {
@@ -104,7 +107,6 @@ BUGSINK = {
             "USE_FOR_WRITE": True,
         },
     }
-}
 
 
 # performance development settings: show inline in the console, with a nice little arrow

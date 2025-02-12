@@ -1,5 +1,6 @@
 import contextlib
 import os.path
+from pathlib import Path
 
 
 class EventStorage(object):
@@ -45,6 +46,11 @@ class FileEventStorage(EventStorage):
             # EventStorage's API is generally _very_ limited (unique IDs, write-once) so we can (and should) be very
             # strict about what we allow; we further imply "text mode" and "utf-8 encoding" given the JSON context.
             raise ValueError("EventStorage.open() mode must be 'r' or 'w'")
+
+        if mode == 'w' and not os.path.exists(self.basepath):
+            # only if we're writing does this make sense (when reading, a newly created directoy won't have files in it,
+            # and fail in the next step)
+            Path(self.basepath).mkdir(parents=True, exist_ok=True)
 
         # We open with utf-8 encoding explicitly to pre-empt the future of pep-0686 (it's also the only thing that makes
         # sense in the context of JSON)

@@ -4,6 +4,7 @@ import json
 import io
 import uuid
 import time
+import tempfile
 
 import datetime
 from unittest.mock import patch
@@ -18,6 +19,8 @@ from django.core.exceptions import ValidationError
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project
 from events.factories import create_event_data, create_event
+from events.retention import evict_for_max_events
+from events.storage_registry import override_event_storages
 from issues.factories import get_or_create_issue
 from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
 from bugsink.app_settings import override_settings
@@ -396,6 +399,29 @@ class IngestViewTestCase(TransactionTestCase):
     def test_envelope_endpoint_digest_non_immediate(self):
         with override_settings(DIGEST_IMMEDIATELY=False):
             self.test_envelope_endpoint()
+
+    @tag("samples")
+    def test_filestore(self):
+        # quick & dirty way to test the filestore; in absence of a proper test for it, we just run a more-or-less
+        # integration test with the FileEventStorage activated. This will at least show the absence of the most obvious
+        # errors. We then run
+        with tempfile.TemporaryDirectory() as tempdir:
+            with override_event_storages({"local_flat_files": {
+                        "STORAGE": "events.storage.FileEventStorage",
+                        "OPTIONS": {
+                            "basepath": tempdir,
+                        },
+                        "USE_FOR_WRITE": True,
+                    },
+                    }):
+                self.test_envelope_endpoint()
+                self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
+
+                project = Project.objects.get(name="test")
+                project.retention_max_event_count = 1
+                evict_for_max_events(project, timezone.now(), stored_event_count=2)
+
+                self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
 
     @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=0)
     @patch("ingest.views.check_for_thresholds")
