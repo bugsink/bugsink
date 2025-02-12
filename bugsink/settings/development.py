@@ -55,7 +55,7 @@ SENTRY_DSN = os.getenv("SENTRY_DSN")
 eat_your_own_dogfood(SENTRY_DSN)
 
 SNAPPEA = {
-    "TASK_ALWAYS_EAGER": True,  # at least for (unit) tests, this is a requirement
+    "TASK_ALWAYS_EAGER": False,  # at least for (unit) tests, this is a requirement
     "NUM_WORKERS": 1,
 }
 
@@ -90,6 +90,19 @@ BUGSINK = {
     "VALIDATE_ON_DIGEST": "warn",
 
     "KEEP_ENVELOPES": 10,
+
+    "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": 1_000_000,
+    "MAX_EVENTS_PER_PROJECT_PER_HOUR": 50_000_000,
+
+    "EVENT_STORAGES": {
+        "local_flat_files": {
+            "STORAGE": "events.storage.FileEventStorage",
+            "OPTIONS": {
+                "basepath": os.path.join(BASE_DIR, "event_storage"),
+            },
+            "USE_FOR_WRITE": True,
+        },
+    }
 }
 
 

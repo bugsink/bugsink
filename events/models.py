@@ -1,10 +1,12 @@
 import re
 import json
 import uuid
+from functools import partial
 
 from django.db import models
 from django.db.utils import IntegrityError
 from django.db.models import Min, Max
+from django.db import transaction
 
 from projects.models import Project
 from compat.timestamp import parse_timestamp
@@ -12,6 +14,7 @@ from compat.timestamp import parse_timestamp
 from issues.utils import get_title_for_exception_type_and_value
 
 from .retention import get_random_irrelevance
+from .storage_registry import get_write_storage, get_storage
 
 
 class Platform(models.TextChoices):
@@ -46,6 +49,11 @@ class Level(models.TextChoices):
 
 def maybe_empty(s):
     return "" if not s else s
+
+
+def write_to_storage(event_id, parsed_data):
+    with get_write_storage().open(event_id, "w") as f:
+        json.dump(parsed_data, f)
 
 
 class Event(models.Model):
@@ -139,6 +147,8 @@ class Event(models.Model):
     irrelevance_for_retention = models.PositiveIntegerField(blank=False, null=False)
     never_evict = models.BooleanField(blank=False, null=False, default=False)
 
+    storage_backend = models.CharField(max_length=255, blank=True, null=True, default=None, editable=False)
+
     # The following list of attributes are mentioned in the docs but are not attrs on our model (because we don't need
     # them to be [yet]):
     #
@@ -168,10 +178,20 @@ class Event(models.Model):
         ]
 
     def get_raw_data(self):
-        return self.data
+        if self.storage_backend is None:
+            return self.data
+
+        storage = get_storage(self.storage_backend)
+        with storage.open(self.id, "r") as f:
+            return f.read()
 
     def get_parsed_data(self):
-        return json.loads(self.data)
+        if self.storage_backend is None:
+            return json.loads(self.data)
+
+        storage = get_storage(self.storage_backend)
+        with storage.open(self.id, "r") as f:
+            return json.load(f)
 
     def get_absolute_url(self):
         return f"/issues/issue/{ self.issue_id }/event/{ self.id }/"
@@ -197,6 +217,8 @@ class Event(models.Model):
 
         irrelevance_for_retention = get_random_irrelevance(stored_event_count)
 
+        write_storage = get_write_storage()
+
         # A note on truncation (max_length): the fields we truncate here are directly from the SDK, so they "should have
         # been" truncated already. But we err on the side of caution: this is the kind of SDK error that we can, and
         # just want to, paper over (it's not worth dropping the event for).
@@ -208,7 +230,8 @@ class Event(models.Model):
                 grouping=grouping,
                 ingested_at=event_metadata["ingested_at"],
                 digested_at=digested_at,
-                data=json.dumps(parsed_data),
+                data=json.dumps(parsed_data) if write_storage is None else "",
+                storage_backend=None if write_storage is None else write_storage.name,
 
                 timestamp=parse_timestamp(parsed_data["timestamp"]),
                 platform=parsed_data["platform"][:64],
@@ -235,6 +258,20 @@ class Event(models.Model):
             )
             created = True
 
+            if write_storage is not None:
+                # writing to the storage is pulled out of the database transaction (though not put in snappea). this
+                # means:
+                #
+                # Pros:
+                # * database transactions are not slowed down by storage-writes (potentially slow, e.g. S3)
+                # * failure to write the full event (e.g. S3, network) still means you get "something" in the DB.
+                #
+                # Cons:
+                # * no guarantee that an event in the DB has an associated event in the storage, because
+                #     * failure to write is possible, and does not affect the DB.
+                #     * there's a (small) window in time where the transaction is written, but the storage is not.
+                transaction.on_commit(partial(write_to_storage, event.id, parsed_data))
+
             return event, created
         except IntegrityError as e:
             if not re.match(
@@ -254,3 +291,11 @@ class Event(models.Model):
 
     def has_next(self):
         return self.digest_order < self.get_digest_order_bounds()[1]
+
+
+class StorageCleanupTodo(models.Model):
+    event_id = models.UUIDField(primary_key=True, editable=False)
+    storage_backend = models.CharField(max_length=255, blank=False, null=False)
+
+    def __str__(self):
+        return f"StorageCleanupTodo({self.event_id}, {self.storage_backend})"

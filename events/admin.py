@@ -4,7 +4,7 @@ from django.contrib import admin
 import json
 
 from projects.admin import ProjectFilter
-from .models import Event
+from .models import Event, StorageCleanupTodo
 
 
 @admin.register(Event)
@@ -90,3 +90,8 @@ class EventAdmin(admin.ModelAdmin):
 
     def on_site(self, obj):
         return mark_safe('<a href="' + escape(obj.get_absolute_url()) + '">View</a>')
+
+
+@admin.register(StorageCleanupTodo)
+class StorageCleanupTodoAdmin(admin.ModelAdmin):
+    pass

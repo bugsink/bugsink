@@ -4,11 +4,11 @@ from django.db.models import Q, Min, Max
 from random import random
 from datetime import timezone, datetime
 
-from django.db.models.sql.compiler import SQLDeleteCompiler
-from django.db import connection
-
 from bugsink.moreiterutils import pairwise, map_N_until
+from bugsink.transaction import delay_on_commit
 from performance.context_managers import time_and_query_count
+
+from .tasks import clean_as_per_storage_cleanup_todos
 
 performance_logger = logging.getLogger("bugsink.performance.retention")
 
@@ -269,23 +269,9 @@ def evict_for_irrelevance(
     return evicted
 
 
-def delete_with_limit(qs, limit):
-    # Django does not support this out of the box (i.e. it does not support LIMIT in DELETE queries). Both Sqlite and
-    # MySQL do in fact support it (whereas many other DBs do not), so we just reach down into Django's internals.
-    sql, params = SQLDeleteCompiler(qs.query, connection, 'default').as_sql()
-    limited_sql = sql + " LIMIT %s"
-    limited_params = params + (limit,)
-
-    with connection.cursor() as cursor:
-        cursor.execute(limited_sql, limited_params)
-        nr_of_deletions = cursor.rowcount
-
-    return nr_of_deletions
-
-
 def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_event_count, include_never_evict):
     from issues.models import TurningPoint
-    from .models import Event
+    from .models import Event, StorageCleanupTodo
     # evicting "at", based on the total irrelevance split out into 2 parts: max item irrelevance, and an epoch as
     # implied by the age-based irrelevance.
 
@@ -317,5 +303,18 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_eve
         # we need to manually ensure that no FKs to the deleted items exist:
         TurningPoint.objects.filter(triggering_event__in=qs).update(triggering_event=None)
 
-    nr_of_deletions = delete_with_limit(qs, max_event_count)
+    pks_to_delete = list(qs.order_by("digest_order")[:max_event_count].values_list("pk", flat=True))
+
+    if len(pks_to_delete) > 0:
+        StorageCleanupTodo.objects.bulk_create([
+            StorageCleanupTodo(event_id=id_, storage_backend=storage_backend)
+            for id_, storage_backend in
+            Event.objects.filter(pk__in=pks_to_delete).exclude(storage_backend=None).values_list("id", "storage_backend")
+        ])
+        delay_on_commit(clean_as_per_storage_cleanup_todos)
+
+        nr_of_deletions = Event.objects.filter(pk__in=pks_to_delete).delete()[1]["events.Event"]
+    else:
+        nr_of_deletions = 0
+
     return nr_of_deletions

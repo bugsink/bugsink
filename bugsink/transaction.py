@@ -126,6 +126,7 @@ class ImmediateAtomic(SuperDurableAtomic):
             # is chosen to be longer than the DB-related timeouts. i.e. when this happens it's presumably an error in
             # the locking mechanism specifically, not actually caused by the DB being busy.
             raise RuntimeError("Could not acquire immediate_semaphore")
+        performance_logger.info("immediate_semaphore ACQUIRED")
 
         connection = django_db_transaction.get_connection(self.using)
 
@@ -167,6 +168,7 @@ class ImmediateAtomic(SuperDurableAtomic):
                 del connection._start_transaction_under_autocommit_original
 
         finally:
+            performance_logger.info("immediate_semaphore RELEASE")
             immediate_semaphore.release()
 
 
