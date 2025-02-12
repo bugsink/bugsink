@@ -13,7 +13,7 @@ from issues.models import Issue
 from issues.factories import denormalized_issue_fields
 
 from .factories import create_event
-from .retention import eviction_target
+from .retention import eviction_target, should_evict, evict_for_max_events
 from .utils import annotate_with_meta
 
 User = get_user_model()
@@ -76,7 +76,7 @@ class TimeZoneTestCase(DjangoTestCase):
             self.assertEqual(datetime.timezone.utc, e.timestamp.tzinfo)
 
 
-class RetentionTestCase(RegularTestCase):
+class RetentionUtilsTestCase(RegularTestCase):
     def test_eviction_target(self):
         # over-target with low max: evict 5%
         self.assertEqual(5, eviction_target(100, 101))
@@ -98,6 +98,35 @@ class RetentionTestCase(RegularTestCase):
         # Note that we have no special-casing for under-target (yet); not needed because should_evict (which does a
         # simple comparison) is always called first.
         # self.assertEqual(0, eviction_target(10_000, 9_999))
+
+
+class RetentionTestCase(DjangoTestCase):
+    # test-second TestCase for retention/eviction. "At least have something that touches the main parts of the code to
+    # avoid the most obvious kinds of breakages". Not a full test of all features/code paths (yet).
+
+    def test_retention(self):
+        # this test contains just the key bits of ingest/views.py such that we can test `evict_for_max_events`
+        project_stored_event_count = 0
+        digested_at = timezone.now()
+
+        self.project = Project.objects.create(retention_max_event_count=5)
+        self.issue = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+
+        for digest_order in range(1, 7):
+            project_stored_event_count += 1  # +1 pre-create, as in the ingestion view
+            create_event(self.project, self.issue, timestamp=digested_at)
+
+            # in the real code calls to `evict_for_max_events` depend on `should_evict`; here we just test that both
+            # work correctly for each step in the loop. (a more complete test, and there's no perfermance consideration)
+
+            expected_should_evict = digest_order > 5
+
+            evicted = evict_for_max_events(self.project, digested_at, project_stored_event_count)
+
+            self.assertEqual(1 if expected_should_evict else 0, evicted)
+            self.assertEqual(expected_should_evict, should_evict(self.project, digested_at, project_stored_event_count))
+
+            project_stored_event_count -= evicted
 
 
 class AnnotateWithMetaTestCase(RegularTestCase):
