@@ -140,8 +140,8 @@ class ImmediateAtomic(SuperDurableAtomic):
         if connection.vendor != 'sqlite':
             # we just do a "select the first row" query on the ContentType table to make sure we have a global write
             # lock (for sqlite, this is not necessary, because BEGIN IMMEDIATE already does that). (We prefer
-            # ContentType over User because of the whole users.get_user_model() thing.) we get a specific row to trigger
-            # evaluation
+            # ContentType over User because of the whole users.get_user_model() thing.) `.first()` is needed to make the
+            # qs actually evaluate (become non-lazy).
             #
             # Note: for a moment I considered pushing the select_for_update closer to the location where it matters
             # most, i.e. ingest, and also to tie it more closely to e.g. the project at hand. As it stands, I actually
