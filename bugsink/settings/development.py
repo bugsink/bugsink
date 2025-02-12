@@ -90,6 +90,11 @@ BUGSINK = {
     "VALIDATE_ON_DIGEST": "warn",
 
     "KEEP_ENVELOPES": 10,
+
+    # set MAX_EVENTS* very high to be able to do serious performance testing (which I do often in my dev environment)
+    "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": 1_000_000,
+    "MAX_EVENTS_PER_PROJECT_PER_HOUR": 50_000_000,
+
 }
 
 
