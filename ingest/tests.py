@@ -392,6 +392,7 @@ class IngestViewTestCase(TransactionTestCase):
                     with self.assertRaises(ViolatedExpectation):
                         check()
 
+    @tag("samples")
     def test_envelope_endpoint_digest_non_immediate(self):
         with override_settings(DIGEST_IMMEDIATELY=False):
             self.test_envelope_endpoint()
