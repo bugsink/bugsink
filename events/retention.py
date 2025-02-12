@@ -4,12 +4,12 @@ from django.db.models import Q, Min, Max
 from random import random
 from datetime import timezone, datetime
 
-from django.db.models.sql.compiler import SQLDeleteCompiler
-from django.db import connection
-
 from bugsink.moreiterutils import pairwise, map_N_until
 from performance.context_managers import time_and_query_count
 
+from .storage_registry import get_storage
+
+bugsink_logger = logging.getLogger("bugsink")
 performance_logger = logging.getLogger("bugsink.performance.retention")
 
 
@@ -269,20 +269,6 @@ def evict_for_irrelevance(
     return evicted
 
 
-def delete_with_limit(qs, limit):
-    # Django does not support this out of the box (i.e. it does not support LIMIT in DELETE queries). Both Sqlite and
-    # MySQL do in fact support it (whereas many other DBs do not), so we just reach down into Django's internals.
-    sql, params = SQLDeleteCompiler(qs.query, connection, 'default').as_sql()
-    limited_sql = sql + " LIMIT %s"
-    limited_params = params + (limit,)
-
-    with connection.cursor() as cursor:
-        cursor.execute(limited_sql, limited_params)
-        nr_of_deletions = cursor.rowcount
-
-    return nr_of_deletions
-
-
 def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_event_count, include_never_evict):
     from issues.models import TurningPoint
     from .models import Event
@@ -317,5 +303,36 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_eve
         # we need to manually ensure that no FKs to the deleted items exist:
         TurningPoint.objects.filter(triggering_event__in=qs).update(triggering_event=None)
 
-    nr_of_deletions = delete_with_limit(qs, max_event_count)
+    # We generate the list of events-to-delete (including the LIMIT) before proceeding; this allows us:
+    # A. to have a portable delete_with_limit (e.g. Django does not support that, nor does Postgres).
+    # B. to apply both deletion and cleanup_events_on_storage() on the same list.
+    #
+    # Implementation notes:
+    # 1. We force evaluation here with a `list()`; this means subsequent usages do _not_ try to "just use an inner
+    #    query". Although inner queries are attractive in the abstract, the literature suggests that performance may be
+    #    unpredictable (e.g. on MySQL). By using a list, we lift the (max 500) ids-to-match to the actual query, which
+    #    is quite ugly, but predictable and (at least on sqlite where I tested this) lightning-fast.
+    # 2. order_by: "pick something" to ensure the 2 usages of the "subquery" point to the same thing. (somewhat
+    #    superceded by [1] above; but I like to be defensive and predictable). tie-breaking on digest_order seems
+    #    consistent with the semantics of eviction.
+    pks_to_delete = list(qs.order_by("digest_order")[:max_event_count].values_list("pk", flat=True))
+
+    if len(pks_to_delete) > 0:
+        cleanup_events_on_storage(
+            Event.objects.filter(pk__in=pks_to_delete).exclude(storage_backend=None)
+            .values_list("id", "storage_backend")
+        )
+        nr_of_deletions = Event.objects.filter(pk__in=pks_to_delete).delete()[1]["events.Event"]
+    else:
+        nr_of_deletions = 0
+
     return nr_of_deletions
+
+
+def cleanup_events_on_storage(todos):
+    for event_id, storage_backend in todos:
+        try:
+            get_storage(storage_backend).delete(event_id)
+        except Exception as e:
+            # in a try/except such that we can continue with the rest of the batch
+            bugsink_logger.error("Error during cleanup of %s on %s: %s", event_id, storage_backend, e)

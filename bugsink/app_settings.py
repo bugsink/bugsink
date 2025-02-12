@@ -62,6 +62,7 @@ DEFAULTS = {
 
     # Locations of files & directories:
     "INGEST_STORE_BASE_DIR": "/tmp/bugsink/ingestion",
+    "EVENT_STORAGES": {},
 
     # Security:
     "MINIMIZE_INFORMATION_EXPOSURE": False,

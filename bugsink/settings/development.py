@@ -95,6 +95,15 @@ BUGSINK = {
     "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": 1_000_000,
     "MAX_EVENTS_PER_PROJECT_PER_HOUR": 50_000_000,
 
+    "EVENT_STORAGES": {
+        "local_flat_files": {
+            "STORAGE": "events.storage.FileEventStorage",
+            "OPTIONS": {
+                "basepath": os.path.join(BASE_DIR, "filestorage"),
+            },
+            "USE_FOR_WRITE": True,
+        },
+    }
 }
 
 

@@ -15,6 +15,9 @@ __pycache__
 /bugsink/_version.py
 /dist/
 
+# This matches the filestorage mentioned in development.py
+/filestorage
+
 
 # sqlite
 /db.sqlite3
