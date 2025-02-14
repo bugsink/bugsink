@@ -20,6 +20,9 @@ class EventStorage(object):
     def open(self, event_id):
         raise NotImplementedError()
 
+    def list(self):
+        raise NotImplementedError()
+
     # one might imagine contexts where something like "url" is useful (e.g. S3, and pointing the end-user straight at
     # the event file) but such a model means you'll need to think about the security implications of that URL, which is
     # not worth it, so we only support "pass through application layer" (where the auth stuff is) models of usage.
@@ -62,3 +65,15 @@ class FileEventStorage(EventStorage):
 
     def delete(self, event_id):
         os.remove(self._event_path(event_id))
+
+    def list(self):
+        # returns the event IDs (as strings) of all events in the storage. Useful for "cleanup" operations.
+        # impl.: we use os.scandir() because it doesn't load the entire directory into memory (unlike os.listdir()), or
+        # worse, sorts it. "Some people" point to pathlib.Path.iterdir() as a better alternative, but only since 3.12
+        # is it using os.scandir(): https://github.com/python/cpython/commit/30f0643e36d2c9a5849c76ca0b27b748448d0567
+
+        return (
+            p.name[:-5]  # strip the ".json" suffix
+            for p in os.scandir(self.basepath)
+            if p.name.endswith(".json")
+        )
