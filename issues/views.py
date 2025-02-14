@@ -448,16 +448,20 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         ("digest order", event.digest_order),
     ]
 
-    if parsed_data.get("logger") or parsed_data.get("logentry", {}).get("message"):
+    if parsed_data.get("logger") or parsed_data.get("logentry", {}).get("message") or parsed_data.get("message"):
         logentry_info = []
 
         if parsed_data.get("logger"):
             logentry_info.append(("logger", parsed_data["logger"]))
 
-        if parsed_data.get("logentry", {}).get("message"):
-            logentry_info.append(("message", parsed_data["logentry"]["message"]))
+        # "message" is a fallback location for the logentry message. It's not in the specs, but it probably was in the
+        # past. see https://github.com/bugsink/bugsink/issues/43
+        logentry_key = "logentry" if "logentry" in parsed_data else "message"
 
-        params = parsed_data.get("logentry", {}).get("params", {})
+        if parsed_data.get(logentry_key, {}).get("message"):
+            logentry_info.append(("message", parsed_data[logentry_key]["message"]))
+
+        params = parsed_data.get(logentry_key, {}).get("params", {})
         if isinstance(params, list):
             for param_i, param_v in enumerate(params):
                 logentry_info.append(("#%s" % param_i, param_v))
