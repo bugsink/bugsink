@@ -448,9 +448,8 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         ("digest order", event.digest_order),
     ]
 
+    logentry_info = []
     if parsed_data.get("logger") or parsed_data.get("logentry", {}).get("message") or parsed_data.get("message"):
-        logentry_info = []
-
         if parsed_data.get("logger"):
             logentry_info.append(("logger", parsed_data["logger"]))
 
