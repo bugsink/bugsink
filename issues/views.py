@@ -447,9 +447,23 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         ("digested at", _date_with_milis_html(event.digested_at)),
         ("digest order", event.digest_order),
     ]
-    if parsed_data.get("logger"):
-        key_info.append(("logger", parsed_data["logger"]))
-    # logentry.message & logentry.params are also potentially available, but sentry does not display them in the UI
+
+    if parsed_data.get("logger") or parsed_data.get("logentry", {}).get("message"):
+        logentry_info = []
+
+        if parsed_data.get("logger"):
+            logentry_info.append(("logger", parsed_data["logger"]))
+
+        if parsed_data.get("logentry", {}).get("message"):
+            logentry_info.append(("message", parsed_data["logentry"]["message"]))
+
+        params = parsed_data.get("logentry", {}).get("params", {})
+        if isinstance(params, list):
+            for param_i, param_v in enumerate(params):
+                logentry_info.append(("#%s" % param_i, param_v))
+        elif isinstance(params, dict):
+            for param_k, param_v in params.items():
+                logentry_info.append((param_k, param_v))
 
     key_info += [
         ("grouping key", event.grouping.grouping_key),
@@ -471,6 +485,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         "is_event_page": True,
         "parsed_data": parsed_data,
         "key_info": key_info,
+        "logentry_info": logentry_info,
         "deployment_info": deployment_info,
         "contexts": contexts,
         "mute_options": GLOBAL_MUTE_OPTIONS,
