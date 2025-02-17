@@ -29,6 +29,8 @@ class Command(BaseCommand):
                 print(Event.objects.all().count())
 
         if stat == "digestion_speed":
+            print("WARNING: when eviction is enabled, the numbers will be wrong")
+
             for window in [1, 10, 30, 60, 5 * 60, 60 * 60, 24 * 60 * 60]:
                 now = timezone.now()
                 with durable_atomic():
