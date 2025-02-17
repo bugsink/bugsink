@@ -322,7 +322,7 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_eve
             Event.objects.filter(pk__in=pks_to_delete).exclude(storage_backend=None)
             .values_list("id", "storage_backend")
         )
-        nr_of_deletions = Event.objects.filter(pk__in=pks_to_delete).delete()[1]["events.Event"]
+        nr_of_deletions = Event.objects.filter(pk__in=pks_to_delete).delete()[1].get("events.Event", 0)
     else:
         nr_of_deletions = 0
 
