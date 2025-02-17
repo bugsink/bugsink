@@ -3,9 +3,11 @@ from .default import BASE_DIR, INSTALLED_APPS, MIDDLEWARE, LOGGING, DATABASES, I
 
 import os
 
+from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
 from debug_toolbar.middleware import show_toolbar
 
 from bugsink.utils import deduce_allowed_hosts, eat_your_own_dogfood
+
 
 SECRET_KEY = 'django-insecure-$@clhhieazwnxnha-_zah&(bieq%yux7#^07&xsvhn58t)8@xw'
 DEBUG = True
@@ -52,7 +54,10 @@ DATABASES["snappea"]["NAME"] = BASE_DIR / 'snappea.sqlite3'
 
 # {PROTOCOL}://{PUBLIC_KEY}:{DEPRECATED_SECRET_KEY}@{HOST}{PATH}/{PROJECT_ID}
 SENTRY_DSN = os.getenv("SENTRY_DSN")
-eat_your_own_dogfood(SENTRY_DSN)
+eat_your_own_dogfood(
+    SENTRY_DSN,
+    transport=MoreLoudlyFailingTransport,
+)
 
 SNAPPEA = {
     "TASK_ALWAYS_EAGER": True,  # at least for (unit) tests, this is a requirement

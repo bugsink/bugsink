@@ -3,7 +3,6 @@ from urllib.parse import urlparse
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import get_template
 
-from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
 from .version import version
 
 
@@ -104,7 +103,6 @@ def eat_your_own_dogfood(sentry_dsn, **kwargs):
         "dsn": sentry_dsn,
         "traces_sample_rate": 0,
         "send_default_pii": True,
-        "transport": MoreLoudlyFailingTransport,
 
         # see (e.g.) https://github.com/getsentry/sentry-python/issues/377 for why this is necessary; I really really
         # dislike Sentry's silent dropping of local variables; let's see whether "just send everything" makes for
