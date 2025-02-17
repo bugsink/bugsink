@@ -1,5 +1,4 @@
 import logging
-from user_agents import parse as ua_parse
 
 logger = logging.getLogger("bugsink.events.ua_stuff")
 
@@ -18,6 +17,14 @@ def enrich_contexts_with_ua(parsed_data):
     # RHS of various screens). But again: too little data to tell yet. Add to that that I'm much less inclined than my
     # competitors to give OS/browser info the main stage (icons? yuck!). So we'll just parse it, put it "somewhere", and
     # look at it again "later".
+
+    # lazy import for performance, because of the many compiled regexes in the user_agents module this takes .2s (local
+    # laptop as well as on random GCP server). When this is a top-level import, this cost is incurred on the first
+    # request (via urls.py), which is a problem when many first requests happen simultaneously (typically: through
+    # the ingestion API) and these contend for CPU to do this import. ("cold start in a hot env"). Making this import
+    # lazy avoids the problem, because only the first UI request (typically less hot and more spaced out) will do the
+    # import.
+    from user_agents import parse as ua_parse
 
     try:
         contexts = parsed_data.get("contexts", {})
