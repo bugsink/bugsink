@@ -6,6 +6,8 @@ from issues.models import Issue, Grouping, TurningPoint
 from events.models import Event
 from projects.models import Project
 
+from bugsink.transaction import immediate_atomic
+
 
 def make_consistent():
     # Delete all issues that have no events; they should not exist and in fact break various templates and views
@@ -64,11 +66,12 @@ def make_consistent():
 
 
 class Command(BaseCommand):
-    help = """In 'normal operation', this command should not be used, because normal operation leaves the DB in a
-consistent state. However, during development all bets are off, and to get back to sanity this command may be used."""
+    help = """Make the database consistent by deleting dangling objects (issues, events, etc) and updating counters."""
 
-    def add_arguments(self, parser):
-        pass
+    # In theory, this command should not be required, because Bugsink _should_ leave itself in a consistent state after
+    # every operation. However, in practice Bugsink may not always do as promised, people reach into the database for
+    # whatever reason, or things go out of whack during development.
 
     def handle(self, *args, **options):
-        make_consistent()
+        with immediate_atomic():
+            make_consistent()
