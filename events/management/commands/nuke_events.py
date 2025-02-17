@@ -7,12 +7,14 @@ from events.models import Event
 from events.management.commands.make_consistent import make_consistent
 
 from bugsink.transaction import immediate_atomic
+from bugsink.timed_sqlite_backend.base import allow_long_running_queries
 
 
 class Command(BaseCommand):
     help = "Throw away all events and issues, preserve teams, projects and users."
 
     def handle(self, *args, **options):
+        allow_long_running_queries()
         if not input("""This will complete REMOVE ALL ISSUES and EVENTS on %s.
 
 Are you sure? (yes/no) """ % get_settings().BASE_URL).lower().startswith("y"):

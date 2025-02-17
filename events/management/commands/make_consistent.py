@@ -7,6 +7,7 @@ from events.models import Event
 from projects.models import Project
 
 from bugsink.transaction import immediate_atomic
+from bugsink.timed_sqlite_backend.base import allow_long_running_queries
 
 
 def make_consistent():
@@ -73,5 +74,6 @@ class Command(BaseCommand):
     # whatever reason, or things go out of whack during development.
 
     def handle(self, *args, **options):
+        allow_long_running_queries()
         with immediate_atomic():
             make_consistent()

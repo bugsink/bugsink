@@ -7,19 +7,36 @@ from django.db.backends.sqlite3.base import (
 )
 
 
+_allow_long_running_queries = False
+
+
+def allow_long_running_queries():
+    """Set a global flag to allow long-running queries. Useful for one-off commands, where slowness is expected."""
+    global _allow_long_running_queries
+    _allow_long_running_queries = True
+
+
 @contextmanager
 def limit_runtime(conn, seconds):
+    global _allow_long_running_queries
+
     start = time.time()
 
     def check_time():
+        if _allow_long_running_queries:  # check in-the-callback, to avoid
+            return 0
+
         if time.time() > start + seconds:
             return 1
+
+        return 0
 
     # Set the progress handler to check the time; 10_000 is the number of SQLite VM instructions between invocations;
     # Simon Willison's experiments in Datasette suggest to use 1_000 here; but I don't care about precision so much
     # (it's just a final backstop) and I want to avoid the calls-into-Python (expensive!) as much as possible so I pick
     # a higher value.
     conn.set_progress_handler(check_time, 10_000)
+
     yield
 
     conn.set_progress_handler(None, 0)
