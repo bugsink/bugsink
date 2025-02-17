@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import logging
 import time
 from functools import partial
@@ -28,6 +29,18 @@ performance_logger = logging.getLogger("bugsink.performance.db")
 # locking that's still no help, but [a] in the recommended setup there is barely any cross-process locking and [b] this
 # lock only is only there to prevent WAL-growth, it's not for correctness (IMMEDIATE is for correctness).)
 immediate_semaphore = threading.Semaphore(1)
+
+
+class SemaphoreContext:
+    def __enter__(self):
+        if not immediate_semaphore.acquire(timeout=10):
+            # "should never happen", but I'd rather have a clear error message than a silent deadlock; the timeout of 10
+            # is chosen to be longer than the DB-related timeouts. i.e. when this happens it's presumably an error in
+            # the locking mechanism specifically, not actually caused by the DB being busy.
+            raise RuntimeError("Could not acquire immediate_semaphore")
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        immediate_semaphore.release()
 
 
 class SuperDurableAtomic(django_db_transaction.Atomic):
@@ -121,12 +134,6 @@ class ImmediateAtomic(SuperDurableAtomic):
     # have the patched method; get_connection is thread_local, so monkey-patching is thread-safe.
 
     def __enter__(self):
-        if not immediate_semaphore.acquire(timeout=10):
-            # "should never happen", but I'd rather have a clear error message than a silent deadlock; the timeout of 10
-            # is chosen to be longer than the DB-related timeouts. i.e. when this happens it's presumably an error in
-            # the locking mechanism specifically, not actually caused by the DB being busy.
-            raise RuntimeError("Could not acquire immediate_semaphore")
-
         connection = django_db_transaction.get_connection(self.using)
 
         if hasattr(connection, "_start_transaction_under_autocommit"):
@@ -155,21 +162,18 @@ class ImmediateAtomic(SuperDurableAtomic):
         self.t0 = time.time()
 
     def __exit__(self, exc_type, exc_value, traceback):
-        try:
-            super(ImmediateAtomic, self).__exit__(exc_type, exc_value, traceback)
+        super(ImmediateAtomic, self).__exit__(exc_type, exc_value, traceback)
 
-            took = (time.time() - self.t0) * 1000
-            performance_logger.info(f"{took:6.2f}ms IMMEDIATE transaction")
+        took = (time.time() - self.t0) * 1000
+        performance_logger.info(f"{took:6.2f}ms IMMEDIATE transaction")
 
-            connection = django_db_transaction.get_connection(self.using)
-            if hasattr(connection, "_start_transaction_under_autocommit"):
-                connection._start_transaction_under_autocommit = connection._start_transaction_under_autocommit_original
-                del connection._start_transaction_under_autocommit_original
-
-        finally:
-            immediate_semaphore.release()
+        connection = django_db_transaction.get_connection(self.using)
+        if hasattr(connection, "_start_transaction_under_autocommit"):
+            connection._start_transaction_under_autocommit = connection._start_transaction_under_autocommit_original
+            del connection._start_transaction_under_autocommit_original
 
 
+@contextmanager
 def immediate_atomic(using=None, savepoint=True, durable=True):
     # this is the Django 4.2 db.transaction.atomic, but using ImmediateAtomic, and with durable=True by default
 
@@ -182,8 +186,14 @@ def immediate_atomic(using=None, savepoint=True, durable=True):
     assert durable, "immediate_atomic should always be used with durable=True"
 
     if callable(using):
-        return ImmediateAtomic(DEFAULT_DB_ALIAS, savepoint, durable)(using)
-    return ImmediateAtomic(using, savepoint, durable)
+        immediate_atomic = ImmediateAtomic(DEFAULT_DB_ALIAS, savepoint, durable)(using)
+    else:
+        immediate_atomic = ImmediateAtomic(using, savepoint, durable)
+
+    # https://stackoverflow.com/a/45681273/339144 provides some context on nesting context managers; and how to proceed
+    # if you want to do this with an arbitrary number of context managers.
+    with SemaphoreContext(), immediate_atomic:
+        yield
 
 
 def delay_on_commit(function, *args, **kwargs):
