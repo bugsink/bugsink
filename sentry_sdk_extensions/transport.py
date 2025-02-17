@@ -10,4 +10,4 @@ class MoreLoudlyFailingTransport(HttpTransport):
     def on_dropped_event(self, reason):
         # type: (str) -> None
         # ... do you thing ...
-        logger.error("Sentry SDK dropped event: %s", reason)
+        print("Sentry SDK dropped event:", reason)
