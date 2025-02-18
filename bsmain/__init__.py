@@ -12,7 +12,8 @@ def check_no_nested_settings_in_unnested_form(app_configs, **kwargs):
         if hasattr(settings, key):
             errors.append(Warning(
                 f"The setting {key} is defined at the top level of your configuration. It must be nested under the "
-                f"'BUGSINK' setting."
+                f"'BUGSINK' setting.",
+                id="bsmain.W001",
             ))
     return errors
 

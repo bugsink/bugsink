@@ -63,6 +63,7 @@ def check_no_nested_settings_in_unnested_form(app_configs, **kwargs):
         if hasattr(django_settings, key):
             errors.append(Warning(
                 f"The setting {key} is defined at the top level of your configuration. It must be nested under the "
-                f"'SNAPPEA' setting."
+                f"'SNAPPEA' setting.",
+                id="snappea.W001",
             ))
     return errors
