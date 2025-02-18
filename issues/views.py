@@ -236,6 +236,10 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
         issue_list = issue_list.filter(
             Q(calculated_type__icontains=request.GET["q"]) | Q(calculated_value__icontains=request.GET["q"]))
 
+    paginator = Paginator(issue_list, 250)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+
     return render(request, "issues/issue_list.html", {
         "project": project,
         "member": ProjectMembership.objects.get(project=project, user=request.user),
@@ -251,6 +255,7 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
         "disable_mute_buttons": state_filter in ("resolved", "muted"),
         "disable_unmute_buttons": state_filter in ("resolved", "open"),
         "q": request.GET.get("q", ""),
+        "page_obj": page_obj,
     })
 
 
