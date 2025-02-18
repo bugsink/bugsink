@@ -118,6 +118,11 @@ class Issue(models.Model):
         indexes = [
             models.Index(fields=["first_seen"]),
             models.Index(fields=["last_seen"]),
+
+            # 3 indexes for the list view (state_filter)
+            models.Index(fields=["is_resolved", "is_muted", "last_seen"]),  # filter on resolved/muted
+            models.Index(fields=["is_muted", "last_seen"]),  # filter on muted
+            models.Index(fields=["is_resolved", "last_seen"]),  # filter on resolved
         ]
 
 
