@@ -53,11 +53,12 @@ DATABASES["snappea"]["NAME"] = BASE_DIR / 'snappea.sqlite3'
 
 
 # {PROTOCOL}://{PUBLIC_KEY}:{DEPRECATED_SECRET_KEY}@{HOST}{PATH}/{PROJECT_ID}
-SENTRY_DSN = os.getenv("SENTRY_DSN")
-eat_your_own_dogfood(
-    SENTRY_DSN,
-    transport=MoreLoudlyFailingTransport,
-)
+if not I_AM_RUNNING == "TEST":
+    SENTRY_DSN = os.getenv("SENTRY_DSN")
+    eat_your_own_dogfood(
+        SENTRY_DSN,
+        transport=MoreLoudlyFailingTransport,
+    )
 
 SNAPPEA = {
     "TASK_ALWAYS_EAGER": True,  # at least for (unit) tests, this is a requirement
