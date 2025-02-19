@@ -11,6 +11,11 @@ from bugsink.timed_sqlite_backend.base import allow_long_running_queries
 from bugsink.moreiterutils import batched
 
 
+class DryRunException(Exception):
+    # transaction.rollback doesn't work in atomic blocks; a poor man's substitute is to just raise something specific.
+    pass
+
+
 def _delete_for_missing_fk(clazz, field_name):
     """Delete all objects of class clazz of which the field field_name points to a non-existing object or null"""
     BATCH_SIZE = 1_000
@@ -100,7 +105,16 @@ class Command(BaseCommand):
     # every operation. However, in practice Bugsink may not always do as promised, people reach into the database for
     # whatever reason, or things go out of whack during development.
 
+    def add_arguments(self, parser):
+        parser.add_argument('--dry-run', action='store_true', help="Roll back all changes after making them.")
+
     def handle(self, *args, **options):
         allow_long_running_queries()
-        with immediate_atomic():
-            make_consistent()
+
+        try:
+            with immediate_atomic():
+                make_consistent()
+                if options['dry_run']:
+                    raise DryRunException("Dry run requested; rolling back changes.")
+        except DryRunException:
+            print("Changes have been rolled back (dry-run)")
