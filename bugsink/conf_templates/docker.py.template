@@ -150,3 +150,15 @@ if os.getenv("ALLOWED_HOSTS"):
     ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS").split(",")
 else:
     ALLOWED_HOSTS = deduce_allowed_hosts(BUGSINK["BASE_URL"])
+
+
+if os.getenv("FILE_EVENT_STORAGE_PATH"):
+    BUGSINK["EVENT_STORAGES"] = {
+        "file_event_storage": {
+            "STORAGE": "events.storage.FileEventStorage",
+            "OPTIONS": {
+                "basepath": os.getenv("FILE_EVENT_STORAGE_PATH"),
+            },
+            "USE_FOR_WRITE": os.getenv("FILE_EVENT_STORAGE_USE_FOR_WRITE", "false").lower() in ("true", "1", "yes"),
+        },
+    }
