@@ -1,3 +1,6 @@
+from itertools import islice
+
+
 def map_N_until(f, until, onemore=False):
     """
     maps f over the natural numbers until some value `until` is reaced, e.g.:
@@ -34,3 +37,14 @@ def pairwise(it):
     for current in it:
         yield (prev, current)
         prev = current
+
+
+def batched(iterable, n):
+    # itertools.batched was introduced in Python 3.12, but it's "roughly equivalent" to this:
+
+    # batched('ABCDEFG', 3) → ABC DEF G
+    if n < 1:
+        raise ValueError('n must be at least one')
+    iterator = iter(iterable)
+    while batch := tuple(islice(iterator, n)):
+        yield batch

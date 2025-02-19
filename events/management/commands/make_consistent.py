@@ -8,6 +8,38 @@ from projects.models import Project
 
 from bugsink.transaction import immediate_atomic
 from bugsink.timed_sqlite_backend.base import allow_long_running_queries
+from bugsink.moreiterutils import batched
+
+
+def _delete_for_missing_fk(clazz, field_name):
+    """Delete all objects of class clazz of which the field field_name points to a non-existing object or null"""
+    BATCH_SIZE = 1_000
+
+    dangling_fks = set()
+
+    field = clazz._meta.get_field(field_name)
+    related_model = field.related_model
+
+    # We just load _all_ available PKs into memory; it's expected that environments with millions of records will
+    # have enough RAM to deal with this (millions would translate into ~Gigabytes of RAM).
+    available_keys = set(related_model.objects.values_list('pk', flat=True))
+
+    # construct "dangling_fks"
+    for batch in batched(clazz.objects.values_list(field.get_attname(), flat=True).distinct(), BATCH_SIZE):
+        for key in batch:
+            if key not in available_keys:
+                dangling_fks.add(key)
+
+    def _del(deletion_kwargs, msg_kind):
+        total_cnt, d_of_counts = clazz.objects.filter(**deletion_kwargs).delete()
+        count = d_of_counts.get(clazz._meta.label, 0)
+        if count == 0:
+            return
+        print("Deleted %d %ss, because their %s was %s" % (count, clazz.__name__, field_name, msg_kind))
+
+    _del({field.get_attname(): None}, "NULL")
+    for batch in batched(dangling_fks, BATCH_SIZE):
+        _del({field.get_attname() + '__in': batch}, "non-existing")
 
 
 def make_consistent():
@@ -16,34 +48,18 @@ def make_consistent():
         print("Deleting issue %s, because it has 0 events" % issue)
         issue.delete()
 
-    # Cleanup of dangling stuff (e.g. events without issues); not harmful, but not useful either
-    for issue in Issue.objects.filter(project=None):
-        print("Deleting issue %s, because it has no project" % issue)
-        issue.delete()
+    # Various "dangling pointer" deletions:
+    _delete_for_missing_fk(Issue, 'project')
 
-    for grouping in Grouping.objects.filter(project=None):
-        print("Deleting grouping %s, because it has no project" % grouping)
-        grouping.delete()
+    _delete_for_missing_fk(Grouping, 'project')
+    _delete_for_missing_fk(Grouping, 'issue')
 
-    for grouping in Grouping.objects.filter(issue=None):
-        print("Deleting grouping %s, because it has no issue" % grouping)
-        grouping.delete()
+    _delete_for_missing_fk(TurningPoint, 'issue')
 
-    for turning_point in TurningPoint.objects.filter(issue=None):
-        print("Deleting turning point %s, because it has no issue" % turning_point)
-        turning_point.delete()
+    _delete_for_missing_fk(Release, 'project')
 
-    for release in Release.objects.filter(project=None):
-        print("Deleting release %s, because it has no project" % release)
-        release.delete()
-
-    for event in Event.objects.filter(issue=None):
-        print("Deleting event %s, because it has no issue" % event)
-        event.delete()
-
-    for event in Event.objects.filter(project=None):
-        print("Deleting event %s, because it has no project" % event)
-        event.delete()
+    _delete_for_missing_fk(Event, 'project')
+    _delete_for_missing_fk(Event, 'issue')
 
     for event in Event.objects.filter(turningpoint__isnull=False, never_evict=False).distinct():
         print("Setting event %s to never_evict because it has a turningpoint" % event)
