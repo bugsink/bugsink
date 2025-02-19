@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% load issues %}
+{% load humanize %}
 {% load stricter_templates %}
 {% block title %}{{ issue.title }} · {{ block.super }}{% endblock %}
 
@@ -119,7 +120,7 @@
         </div>
 
         <div class="flex p-4 bg-slate-200 border-b-2"><!-- bottom nav bar -->
-            {% if is_event_page %}<div>Event {{ event.digest_order }} of {{ issue.digested_event_count}} which occured at <span class="font-bold">{{ event.ingested_at|date:"j M G:i T" }}</span></div>{% endif %}
+            {% if is_event_page %}<div>Event {{ event.digest_order|intcomma }} of {{ issue.digested_event_count|intcomma }} which occured at <span class="font-bold">{{ event.ingested_at|date:"j M G:i T" }}</span></div>{% endif %}
             <div class="ml-auto pr-4 font-bold text-slate-500">
                 {% if is_event_page %}
                 <a href="/events/event/{{ event.id }}/download/">Download</a>
@@ -183,7 +184,7 @@
 
                 <div class="mb-4">
                     <div class="text-sm font-bold text-slate-500">Nr. of events:</div>
-                    <div>{{ issue.digested_event_count }}</div>
+                    <div>{{ issue.digested_event_count|intcomma }}</div>
                 </div>
 
                 {% if issue.digested_event_count > 1 %}

@@ -1,12 +1,13 @@
 {% extends "issues/base.html" %}
 {% load static %}
 {% load stricter_templates %}
+{% load humanize %}
 
 {% block tab_content %}
 
 <div class="flex">
     <div class="overflow-hidden">
-        <div class="italic">{{ event.ingested_at|date:"j M G:i T" }} (Event {{ event.digest_order }} of {{ issue.digested_event_count }})</div>
+        <div class="italic">{{ event.ingested_at|date:"j M G:i T" }} (Event {{ event.digest_order|intcomma }} of {{ issue.digested_event_count|intcomma }})</div>
     </div>
 
     <div class="ml-auto flex-none">
