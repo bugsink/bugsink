@@ -1,14 +1,15 @@
 {% extends "issues/base.html" %}
 {% load issues %}
+{% load humanize %}
 
 {% block tab_content %}
 
 <div class="flex">
     <div class="overflow-hidden">
         <div class="italic">
-            Showing {{ page_obj.start_index }} - {{ page_obj.end_index }} of {{ page_obj.paginator.count }}
+            Showing {{ page_obj.start_index|intcomma }} - {{ page_obj.end_index|intcomma }} of {{ page_obj.paginator.count|intcomma }}
             {% if project.digested_event_count != project.stored_event_count %}
-                available events ({{ project.digested_event_count }} total observed).
+                available events ({{ project.digested_event_count|intcomma }} total observed).
             {% else %}
                 total events.
             {% endif %}
