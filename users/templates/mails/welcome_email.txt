@@ -1,0 +1,5 @@
+{{ reason }}
+
+Follow the link below to a page where you can set your password.
+
+{{ reset_url }}

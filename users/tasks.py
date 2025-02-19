@@ -32,3 +32,18 @@ def send_reset_email(email, token):
             "reset_url": get_settings().BASE_URL + reverse("reset_password", kwargs={"token": token}),
         },
     )
+
+
+@shared_task
+def send_welcome_email(email, token, reason):
+    send_rendered_email(
+        subject="Welcome to Bugsink",
+        base_template_name="mails/welcome_email",
+        recipient_list=[email],
+        context={
+            "site_title": get_settings().SITE_TITLE,
+            "base_url": get_settings().BASE_URL + "/",
+            "reset_url": get_settings().BASE_URL + reverse("reset_password", kwargs={"token": token}),
+            "reason": reason,
+        },
+    )
