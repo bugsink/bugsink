@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.humanize',
 
     'tailwind',  # As currently set up, this is also needed in production (templatetags)
     'admin_auto_filters',
@@ -302,3 +303,7 @@ if I_AM_RUNNING == "SNAPPEA":
     for logger in LOGGING['loggers'].values():
         if "handlers" in logger and "console" in logger["handlers"]:
             logger["handlers"] = ["snappea"]
+
+FORMAT_MODULE_PATH = [
+    "bugsink.formats",
+]
