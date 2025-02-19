@@ -66,7 +66,7 @@ def make_consistent():
         event.never_evict = True
         event.save()
 
-    # counter reset: do it last, because the above deletions may have changed the counts
+    # Update counters
     for issue in Issue.objects.all():
         if issue.stored_event_count != issue.event_set.count():
             print("Updating event count for issue %s from %d to %d" % (
@@ -80,6 +80,17 @@ def make_consistent():
                 project, project.stored_event_count, project.event_set.count()))
             project.stored_event_count = project.event_set.count()
             project.save()
+
+    # Alternatively (but does it work in MySQL?)
+    # Issue.objects.update(
+    #     stored_event_count=Subquery(
+    #         Issue.objects.filter(pk=OuterRef('pk')).annotate(recount=Count('event')).values('recount')[:1])
+    # )
+
+    # Project.objects.update(
+    #     stored_event_count=Subquery(
+    #         Project.objects.filter(pk=OuterRef('pk')).annotate(recount=Count('event')).values('recount')[:1])
+    # )
 
 
 class Command(BaseCommand):
