@@ -493,8 +493,10 @@ class IntegrationTest(TransactionTestCase):
             # tested)
             data["event_id"] = uuid.uuid4().hex
 
-            if not command.is_valid(data, filename) and filename not in known_broken:
-                raise Exception("validatity check in %s: %s" % (filename, command.stderr.getvalue()))
+            if not command.is_valid(data, filename):
+                if filename not in known_broken:
+                    raise Exception("validatity check in %s: %s" % (filename, command.stderr.getvalue()))
+                command.stderr = StringIO()  # reset the error buffer; needed in the loop w/ known_broken
 
             response = self.client.post(
                 f"/api/{ project.id }/store/",

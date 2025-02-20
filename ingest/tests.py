@@ -312,8 +312,10 @@ class IngestViewTestCase(TransactionTestCase):
                     # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
                     data["timestamp"] = time.time()
 
-                if not command.is_valid(data, filename) and filename not in known_broken:
-                    raise Exception("validatity check in %s: %s" % (filename, command.stderr.getvalue()))
+                if not command.is_valid(data, filename):
+                    if filename not in known_broken:
+                        raise Exception("validatity check in %s: %s" % (filename, command.stderr.getvalue()))
+                    command.stderr = io.StringIO()  # reset the error buffer; needed in the loop w/ known_broken
 
                 event_id = data["event_id"]
                 if not include_event_id:
@@ -367,8 +369,10 @@ class IngestViewTestCase(TransactionTestCase):
                     # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
                     data["timestamp"] = time.time()
 
-                if not command.is_valid(data, filename) and filename not in known_broken:
-                    raise Exception("validatity check in %s: %s" % (filename, command.stderr.getvalue()))
+                if not command.is_valid(data, filename):
+                    if filename not in known_broken:
+                        raise Exception("validatity check in %s: %s" % (filename, command.stderr.getvalue()))
+                    command.stderr = io.StringIO()  # reset the error buffer; needed in the loop w/ known_broken
 
                 event_id = data["event_id"]
 
