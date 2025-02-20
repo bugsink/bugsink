@@ -1,5 +1,51 @@
 # Changes
 
+## 1.3.0 (20 February 2025)
+
+### Introduce FileEventStorage
+    
+An (optional) way to store the `event_data` (full event as JSON)
+outside the DB. This is expected to be useful for larger setups,
+because it gives you:
+
+* A more portable database (e.g. backups); (depeding on event size
+  the impact on your DB is ~50x.
+* Less worries about hitting "physical" limits (e.g. disk size, max
+  file size) for your DB.
+
+Presumably (more testing will happen going forwards) it will:
+
+* Speed up migrations (especially on sqlite, which does full table copies)
+
+However: Ingestion speed does not seem to notacibly changed (either
+way) with this change.
+
+Related utilities:
+
+* `migrate_to_current_eventstore` command: a command to move data over.
+* `cleanup_eventstorage` command: a "vacuum" of sorts.
+
+### Further Features
+
+* Pagination on the Issues list
+* Event-detail UI for Logentries: show `logentry.message` and `logentry.params`
+* UI: thousand-separators for counts
+* Support for top-level `message` in events (See #43)
+* `nuke_events` command improvements: more consistent behavior, better confirmation.
+* `make_consistent` command improvements: more affected cases, run in transaction
+* `migrate` command: always shows timings
+* `showstat` command: `digestion_speed`
+* Send welcome email: as a command
+* Support for CORS
+
+### Cleanup / refactoring
+
+* Move MoreLoudlyFailingTransport out of the default 'eat_your_own_dogfood' conf
+* allow long-running queries on long-running commands (`nuke_events`, `make_consistent`)
+* DB indexes for the issue-lists (including filters)
+* Don't 'eat your own dogfood' (send errors to backend) while running tests
+* `delete_with_limit` was removed; this removes one tie-in to MySQL/Sqlite (See #21)
+
 ## 1.2.0 (11 February 2025)
 
 ### Features
