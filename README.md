@@ -4,7 +4,7 @@
 through self-hosting. 
 
 * [Built to self-host](https://www.bugsink.com/built-to-self-host/)
-* [Sentry-compatible SDKs](https://www.bugsink.com/connect-any-application/)
+* [Sentry-SDK compatible](https://www.bugsink.com/connect-any-application/)
 * [Scalable and reliable](https://www.bugsink.com/scalable-and-reliable/)
 
 ### Screenshot
