@@ -38,6 +38,10 @@ Related utilities:
 * Send welcome email: as a command
 * Support for CORS
 
+### Fixes
+
+* transaction semaphore: ensure release for exceptions while _entering_ the transaction
+
 ### Cleanup / refactoring
 
 * Move MoreLoudlyFailingTransport out of the default 'eat_your_own_dogfood' conf
