@@ -45,6 +45,7 @@ Related utilities:
 * DB indexes for the issue-lists (including filters)
 * Don't 'eat your own dogfood' (send errors to backend) while running tests
 * `delete_with_limit` was removed; this removes one tie-in to MySQL/Sqlite (See #21)
+* Print task's name in Snappea log when "Done"
 
 ## 1.2.0 (11 February 2025)
 

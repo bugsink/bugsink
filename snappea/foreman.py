@@ -187,7 +187,9 @@ class Foreman:
                 for connection in connections.all():
                     connection.close()
 
-                logger.info("Worker done in %.3fs", time.time() - t0)
+                logger.info(
+                    'Worker done for "%s.%s" in %.3fs',
+                    function.__module__, function.__name__, time.time() - t0)
                 self.workers.stopped(task_id)
                 self.worker_semaphore.release()
 
