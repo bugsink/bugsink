@@ -25,7 +25,7 @@ FREE_VERSION_WARNING = mark_safe(
 EMAIL_BACKEND_WARNING = mark_safe(
     """Email is not set up, emails won't be sent. To get the most out of Bugsink, please
     <a href="https://www.bugsink.com/docs/settings/#email" target="_blank" class="font-bold text-slate-800">set up
-    an EMAIL_BACKEND</a>.""")
+    email</a>.""")
 
 
 def get_snappea_warnings():
