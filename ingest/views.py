@@ -55,13 +55,48 @@ performance_logger = logging.getLogger("bugsink.performance.ingest")
 @method_decorator(csrf_exempt, name='dispatch')
 class BaseIngestAPIView(View):
 
+    @staticmethod
+    def _set_cors_headers(response):
+        # For in-browser SDKs, we need to set the CORS headers, because if we don't, the browser will block the response
+        # from being read and print an error in the console; the longer version is:
+        #
+        # CORS protects the user of a browser from some random website "A" sending requests to the API of some site "B";
+        # implemented by the the browser enforcing the "Access-Control-Allow-Origin" response header as set by server B.
+        # In this case, the "other website B" is the Bugsink server, and the "random website A" is the application that
+        # is being monitored. The user has no relationship with the Bugsink API (there's nothing to protect), so we need
+        # to tell the browser to not protect against Bugsink data from reaching the monitored application, i.e.
+        # Access-Control-Allow-Origin: *.
+
+        response["Access-Control-Allow-Origin"] = "*"
+        response["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+
+        response["Access-Control-Allow-Headers"] = (
+            # The following 2 headers are actually understood by us:
+            "Content-Type, X-Sentry-Auth, "
+
+            # The following list of headers may be sent by Sentry SDKs. Even if we don't use them, we list them, because
+            # any not-listed header is not allowed by the browser and would trip the CORS protection:
+            "X-Requested-With, Origin, Accept, Authentication, Authorization, Content-Encoding, sentry-trace, "
+            "baggage, X-CSRFToken"
+        )
+
+        return response
+
+    def options(self, request, project_pk=None):
+        # This is a CORS preflight request; we just return the headers that the browser expects. (we _could_ check for
+        # the Origin, Request-Method, etc. headers, but we don't need to)
+        result = HttpResponse()
+        self._set_cors_headers(result)
+        result["Access-Control-Max-Age"] = "3600"  # tell browser to cache to avoid repeated preflight requests
+        return result
+
     def post(self, request, project_pk=None):
         try:
-            return self._post(request, project_pk)
+            return self._set_cors_headers(self._post(request, project_pk))
         except MaxLengthExceeded as e:
-            return JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST)
+            return self._set_cors_headers(JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST))
         except exceptions.ValidationError as e:
-            return JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST)
+            return self._set_cors_headers(JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST))
 
     @classmethod
     def get_sentry_key_for_request(cls, request):

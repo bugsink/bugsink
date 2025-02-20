@@ -17,6 +17,7 @@ from django.views.defaults import permission_denied as django_permission_denied,
 from django.http import FileResponse, HttpRequest, HttpResponse
 from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render
+from django.views import debug
 
 from snappea.settings import get_settings as get_snappea_settings
 
@@ -27,6 +28,24 @@ from bugsink.decorators import atomic_for_request_method
 
 from phonehome.tasks import send_if_due
 from phonehome.models import Installation
+
+from ingest.views import BaseIngestAPIView
+
+
+def cors_for_api_view(view):
+    def inner(request, *args, **kwargs):
+        response = view(request, *args, **kwargs)
+        if request.path.startswith("/api/"):
+            return BaseIngestAPIView._set_cors_headers(response)
+        return response
+    return inner
+
+
+# The below lines monkey-patch the debug views to add CORS headers for API views in DEBUG=True mode; a small convenience
+# to not get distracted by CORS errors in the browser console when there's a bug in the API view. Though I generally
+# avoid monkey-patching, this will only affect me (DEBUG=True) so it should be OK.
+debug.technical_404_response = cors_for_api_view(debug.technical_404_response)
+debug.technical_500_response = cors_for_api_view(debug.technical_500_response)
 
 
 def _phone_home():
@@ -137,6 +156,7 @@ def silence_email_system_warning(request):
 
 
 @requires_csrf_token
+@cors_for_api_view
 def bad_request(request, exception, template_name=ERROR_400_TEMPLATE_NAME):
     # verbatim copy of Django's default bad_request view, but with "exception" in the context
     # doing this for any-old-Django-site is probably a bad idea, but here the security/convenience tradeoff is fine,
@@ -158,6 +178,7 @@ def bad_request(request, exception, template_name=ERROR_400_TEMPLATE_NAME):
 
 
 @requires_csrf_token
+@cors_for_api_view
 def server_error(request, template_name=ERROR_500_TEMPLATE_NAME):
     # verbatim copy of Django's default server_error view, but with "exception" in the context
     # doing this for any-old-Django-site is probably a bad idea, but here the security/convenience tradeoff is fine,
@@ -181,6 +202,7 @@ def server_error(request, template_name=ERROR_500_TEMPLATE_NAME):
 
 
 @requires_csrf_token
+@cors_for_api_view
 def permission_denied(request, exception, template_name=ERROR_403_TEMPLATE_NAME):
     # (this remark applies 4 times, for 400, 403, 404 and 500):
     # the check for /api/ is a UX improvement such that we get slightly easier-to-read errors on screen in our own
@@ -193,6 +215,7 @@ def permission_denied(request, exception, template_name=ERROR_403_TEMPLATE_NAME)
 
 
 @requires_csrf_token
+@cors_for_api_view
 def page_not_found(request, exception, template_name=ERROR_404_TEMPLATE_NAME):
     if request.path.startswith("/api/"):
         template_name = "4xx_5xx_api.txt"
