@@ -22,7 +22,7 @@ way) with this change.
 
 Related utilities:
 
-* `migrate_to_current_eventstore` command: a command to move data over.
+* `migrate_to_current_eventstorage` command: a command to move data over.
 * `cleanup_eventstorage` command: a "vacuum" of sorts.
 
 ### Further Features
