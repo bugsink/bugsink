@@ -18,7 +18,7 @@ from bugsink.transaction import durable_atomic
 from bugsink.period_utils import add_periods_to_datetime
 
 from events.models import Event
-from events.ua_stuff import enrich_contexts_with_ua
+from events.ua_stuff import get_contexts_enriched_with_ua
 
 from compat.timestamp import format_timestamp
 from projects.models import ProjectMembership
@@ -482,7 +482,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         ([("environment", parsed_data["environment"])] if "environment" in parsed_data else []) + \
         ([("server_name", parsed_data["server_name"])] if "server_name" in parsed_data else [])
 
-    contexts = enrich_contexts_with_ua(parsed_data)
+    contexts = get_contexts_enriched_with_ua(parsed_data)
 
     return render(request, "issues/event_details.html", {
         "tab": "event-details",

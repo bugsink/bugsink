@@ -3,7 +3,7 @@ import logging
 logger = logging.getLogger("bugsink.events.ua_stuff")
 
 
-def enrich_contexts_with_ua(parsed_data):
+def get_contexts_enriched_with_ua(parsed_data):
     # GlitchTip has some mechanism to get "synthetic" (i.e. not present in the original, UA-header derived) info into
     # first the contexts, which is then propagated (with a whole bunch of other info from contexts) to the tags. Both
     # these steps happen on-digest.
