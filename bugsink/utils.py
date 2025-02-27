@@ -132,6 +132,7 @@ def eat_your_own_dogfood(sentry_dsn, **kwargs):
             "sentry",
             "sentry_sdk_extensions",
             "snappea",
+            "tags",
             "teams",
             "theme",
             "users",

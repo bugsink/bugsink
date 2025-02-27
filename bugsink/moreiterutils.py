@@ -39,6 +39,19 @@ def pairwise(it):
         prev = current
 
 
+def tuplewise(iterable):
+    """
+    >>> list(tuplewise(range(4)))
+    [(0, 1), (2, 3)]
+    """
+    i = iter(iterable)
+    while True:
+        try:
+            yield next(i), next(i)
+        except StopIteration:
+            return
+
+
 def batched(iterable, n):
     # itertools.batched was introduced in Python 3.12, but it's "roughly equivalent" to this:
 

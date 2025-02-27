@@ -35,6 +35,7 @@ from events.retention import evict_for_max_events, should_evict
 from releases.models import create_release_if_needed
 from alerts.tasks import send_new_issue_alert, send_regression_alert
 from compat.timestamp import format_timestamp, parse_timestamp
+from tags.models import digest_tags
 
 from .parsers import StreamingEnvelopeParser, ParseError
 from .filestore import get_filename_for_event_id
@@ -388,6 +389,10 @@ class BaseIngestAPIView(View):
         cls.count_issue_periods_and_act_on_it(issue, event, digested_at)
 
         issue.save()
+
+        # intentionally at the end: possible future optimization is to push this out of the transaction (or even use
+        # a separate DB for this)
+        digest_tags(event_data, event, issue)
 
     @classmethod
     def count_project_periods_and_act_on_it(cls, project, now):

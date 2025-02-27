@@ -78,6 +78,7 @@ BUGSINK_APPS = [
     'ingest',
     'issues',
     'events',
+    'tags',
     'alerts',
 
     'performance',

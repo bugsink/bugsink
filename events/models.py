@@ -59,6 +59,10 @@ def write_to_storage(event_id, parsed_data):
 
 
 class Event(models.Model):
+    # TODO now that the Tag models are introduced, an number of the below fields are actually already stored as tags.
+    # At some point we should decide whether to proceed with "just as tags" or "just in the event table". Will depend on
+    # findings about performance (and how generic our solution with tags really is).
+
     # Lines quotes with ">" are from the following to resources:
     # https://develop.sentry.dev/sdk/event-payloads/ (supposedly more human-readable)
     # https://develop.sentry.dev/sdk/event-payloads/types/ (more up-to-date and complete)
@@ -155,7 +159,7 @@ class Event(models.Model):
     # them to be [yet]):
     #
     # > Optional. A map or list of tags for this event. Each tag must be less than 200 characters.
-    # tags
+    # tags =   # implemented in tags/models.py
     #
     # > A list of relevant modules and their versions.
     # modules =
