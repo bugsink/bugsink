@@ -18,6 +18,7 @@ https://docs.sentry.io/platforms/python/enriching-events/tags/
 
 
 from django.db import models
+from django.db.models import Q
 
 from projects.models import Project
 from tags.utils import deduce_tags
@@ -87,16 +88,71 @@ class IssueTag(models.Model):
         ]
 
 
+# copy/pasta from _and_join; we could move both to a utils module
+def _or_join(q_objects):
+    if len(q_objects) == 0:
+        # we _could_ just return Q(), but I'd force the calling location to not do this
+        raise ValueError("empty list of Q objects")
+
+    result = q_objects[0]
+    for q in q_objects[1:]:
+        result |= q
+
+    return result
+
+
 def digest_tags(event_data, event, issue):
-    tags = deduce_tags(event_data)
+    # The max length of 200 is from TFM for user-provided tags. Still, we just apply it on deduced tags as well;
+    # It's a reasonably safe guess that this will not terribly confuse people, and avoids triggering errors on-save.
+    tags = {
+        k: v[:200] for k, v in deduce_tags(event_data).items()
+    }
+    store_tags(event, issue, tags)
 
-    for key, value in tags.items():
-        # The max length of 200 is from TFM for user-provided tags. Still, we just apply it on synthetic tags as well;
-        # It's a reasonably safe guess that this will not terribly confuse people, and avoids triggering errors on-save.
-        value = value[:200]
 
-        # TODO just use bulk_create for each of the types of objects
-        tag_key, _ = TagKey.objects.get_or_create(project_id=event.project_id, key=key)
-        tag_value, _ = TagValue.objects.get_or_create(project_id=event.project_id, key=tag_key, value=value)
-        EventTag.objects.get_or_create(project_id=event.project_id, value=tag_value, event=event)
-        IssueTag.objects.get_or_create(project_id=event.project_id, value=tag_value, issue=issue)
+def store_tags(event, issue, tags):
+    if not tags:
+        return  # short-circuit; which is a performance optimization which also avoids some the need for further guards
+
+    # The below is commented-out because in practice each get_or_create() triggers 4(!) queries (savepoint-related)
+    # It's left here for reference, because it provides a readable equivalent to the bulk_create approach.
+    # if len(tags) <= 1:
+    #     # for low numbers of tags the bulk_create approach is not worth it and we just do the straightforward thing.
+    #     # note that get_or_create may implies 1 or 2 queries, so the below is in the order of 4-8 _per tag_; which is
+    #     # why this is only worth it for very small numbers of tags (1 in the current setup).
+    #
+    #     for key, value in tags.items():
+    #         tag_key, _ = TagKey.objects.get_or_create(project_id=event.project_id, key=key)
+    #         tag_value, _ = TagValue.objects.get_or_create(project_id=event.project_id, key=tag_key, value=value)
+    #         EventTag.objects.get_or_create(project_id=event.project_id, value=tag_value, event=event)
+    #         IssueTag.objects.get_or_create(project_id=event.project_id, value=tag_value, issue=issue)
+    #
+    #     # the 0-case is implied here too, which avoids some further guards in the code below
+    #     return
+
+    TagKey.objects.bulk_create([
+        TagKey(project_id=event.project_id, key=key) for key in tags.keys()
+    ], ignore_conflicts=True)
+
+    # Select-back what we just created (or was already there); this is needed because "Enabling the ignore_conflicts or
+    # update_conflicts parameter disable setting the primary key on each model instance (if the database normally
+    # support it)." in Django 4.2; in Django 5.0 and up this is no longer so for `update_conflicts`, so we could use
+    # that instead and save a query.
+    tag_key_objects = TagKey.objects.filter(project_id=event.project_id, key__in=tags.keys())
+
+    TagValue.objects.bulk_create([
+        TagValue(project_id=event.project_id, key=key_obj, value=tags[key_obj.key]) for key_obj in tag_key_objects
+    ], ignore_conflicts=True)
+
+    # Select-back what we just created (or was already there); see above; the resulting SQL is a bit more complex than
+    # the previous one though, which raises the question whether this is performant.
+    tag_value_objects = TagValue.objects.filter(_or_join([
+        Q(project_id=event.project_id, key=key_obj, value=tags[key_obj.key]) for key_obj in tag_key_objects]))
+
+    EventTag.objects.bulk_create([
+        EventTag(project_id=event.project_id, value=tag_value, event=event) for tag_value in tag_value_objects
+    ], ignore_conflicts=True)
+
+    IssueTag.objects.bulk_create([
+        IssueTag(project_id=event.project_id, value=tag_value, issue=issue) for tag_value in tag_value_objects
+    ], ignore_conflicts=True)
