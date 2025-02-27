@@ -1,6 +1,7 @@
 import io
 import uuid
 import brotli
+import random
 
 import time
 import json
@@ -24,6 +25,8 @@ class Command(BaseCommand):
         parser.add_argument("--valid-only", action="store_true")
         parser.add_argument("--fresh-id", action="store_true")
         parser.add_argument("--fresh-timestamp", action="store_true")
+        parser.add_argument("--fresh-trace", action="store_true")
+        parser.add_argument("--tag", nargs="*", action="append")
         parser.add_argument("--compress", action="store", choices=["gzip", "deflate", "br"], default=None)
         parser.add_argument("--use-envelope", action="store_true")
         parser.add_argument(
@@ -101,6 +104,27 @@ class Command(BaseCommand):
 
         if options["fresh_id"]:
             data["event_id"] = uuid.uuid4().hex
+
+        if options["fresh_trace"]:
+            if "contexts" not in data:
+                data["contexts"] = {}
+            if "trace" not in data["contexts"]:
+                data["contexts"]["trace"] = {}
+
+            # https://develop.sentry.dev/sdk/data-model/event-payloads/span/#attributes
+            # > A random hex string with a length of 16 characters. [which is 8 bytes]
+            data["contexts"]["trace"]["span_id"] = random.getrandbits(64).to_bytes(8, byteorder='big').hex()
+            # > A random hex string with a length of 32 characters. [which is 16 bytes]
+            data["contexts"]["trace"]["trace_id"] = random.getrandbits(128).to_bytes(16, byteorder='big').hex()
+
+        if options["tag"]:
+            if "tags" not in data:
+                data["tags"] = {}
+
+            for tag in options["tag"]:
+                tag = tag[0]  # it's a list of lists... how to prevent this is not immediately clear
+                k, v = tag.split(":", 1)
+                data["tags"][k] = v
 
         if options["valid_only"] and not self.is_valid(data, identifier):
             return False
