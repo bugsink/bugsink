@@ -19,7 +19,7 @@ class Command(BaseCommand):
         t0 = time.time()
 
         try:
-            for i, event in enumerate(Event.objects.all()):
+            for i, event in enumerate(Event.objects.all().iterator()):
                 # transaction per event: allows for interrupting the process without losing all progress; also allows
                 # for your server to remain responsive during the process
                 with immediate_atomic():
