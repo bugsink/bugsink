@@ -22,17 +22,19 @@ class TagsTestCase(DjangoTestCase):
         self.assertEqual(self.event.tags.count(), 0)
 
     def test_store_1_tags(self):
-        with self.assertNumQueries(6):
+        with self.assertNumQueries(7):
             store_tags(self.event, self.issue, {"foo": "bar"})
 
         self.assertEqual(self.event.tags.count(), 1)
         self.assertEqual(self.issue.tags.count(), 1)
 
         self.assertEqual(self.event.tags.first().value.value, "bar")
+
+        self.assertEqual(self.issue.tags.first().count, 1)
         self.assertEqual(self.issue.tags.first().value.key.key, "foo")
 
     def test_store_5_tags(self):
-        with self.assertNumQueries(6):
+        with self.assertNumQueries(7):
             store_tags(self.event, self.issue, {f"k-{i}": f"v-{i}" for i in range(5)})
 
         self.assertEqual(self.event.tags.count(), 5)
@@ -40,3 +42,10 @@ class TagsTestCase(DjangoTestCase):
 
         self.assertEqual({"k-0", "k-1", "k-2", "k-3", "k-4"}, {tag.value.key.key for tag in self.event.tags.all()})
         self.assertEqual({"v-0", "v-1", "v-2", "v-3", "v-4"}, {tag.value.value for tag in self.event.tags.all()})
+
+    def test_store_single_tag_twice_on_issue(self):
+        store_tags(self.event, self.issue, {"foo": "bar"})
+        store_tags(create_event(self.project, self.issue), self.issue, {"foo": "bar"})
+
+        self.assertEqual(self.issue.tags.first().count, 2)
+        self.assertEqual(self.issue.tags.first().value.key.key, "foo")

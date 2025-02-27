@@ -18,7 +18,7 @@ https://docs.sentry.io/platforms/python/enriching-events/tags/
 
 
 from django.db import models
-from django.db.models import Q
+from django.db.models import Q, F
 
 from projects.models import Project
 from tags.utils import deduce_tags
@@ -79,12 +79,18 @@ class IssueTag(models.Model):
     value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.CASCADE)
 
     issue = models.ForeignKey('issues.Issue', blank=False, null=True, on_delete=models.SET_NULL, related_name='tags')
+    count = models.PositiveIntegerField(default=0)
 
     class Meta:
         # searching: by value, then Issue (is this so though? .qs is already on the other!)
         unique_together = ('value', 'issue')
         indexes = [
             models.Index(fields=['issue', 'value']),  # make lookups by issue (for detail pages) faster
+            # a point _could_ be made for ['issue', 'value' 'count'] we'll probably order by the latter in the end.
+            # but I suspect that in practice the sorting on by count can be done easily for a small number of items
+            # (and I suspect that if there are very many items, sorting is not useful, because the sparse information
+            # does not lead to much insight... but I might be wrong (a few tags with many values, and a long tail would
+            # be the counter-example))
         ]
 
 
@@ -156,3 +162,7 @@ def store_tags(event, issue, tags):
     IssueTag.objects.bulk_create([
         IssueTag(project_id=event.project_id, value=tag_value, issue=issue) for tag_value in tag_value_objects
     ], ignore_conflicts=True)
+
+    IssueTag.objects.filter(project_id=event.project_id, value__in=tag_value_objects, issue=issue).update(
+        count=F('count') + 1
+    )
