@@ -96,8 +96,7 @@ def digest_tags(event_data, event, issue):
         value = value[:200]
 
         # TODO just use bulk_create for each of the types of objects
-        # TODO check: event.project won't trigger a query, right? it's already loaded, right?
-        tag_key, _ = TagKey.objects.get_or_create(project=event.project, key=key)
-        tag_value, _ = TagValue.objects.get_or_create(project=event.project, key=tag_key, value=value)
-        EventTag.objects.get_or_create(project=event.project, value=tag_value, event=event)
-        IssueTag.objects.get_or_create(project=event.project, value=tag_value, issue=issue)
+        tag_key, _ = TagKey.objects.get_or_create(project_id=event.project_id, key=key)
+        tag_value, _ = TagValue.objects.get_or_create(project_id=event.project_id, key=tag_key, value=value)
+        EventTag.objects.get_or_create(project_id=event.project_id, value=tag_value, event=event)
+        IssueTag.objects.get_or_create(project_id=event.project_id, value=tag_value, issue=issue)
