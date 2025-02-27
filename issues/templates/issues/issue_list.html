@@ -157,6 +157,9 @@
 
             <td class="w-full ml-0 pb-4 pt-4 pr-4 text-center">
                 <div class="p-4 text-xl font-bold text-slate-800">
+                {% if q %}{# a single text is the catch-all for searching w/o results; 'seems enough' because one would generally only search after already having seen some issues (or not), i.e. having seen the relevant message as per below #}
+                    No {{ state_filter }} issues found for "{{ q }}"
+                {% else %}
                     {% if state_filter == "open" %}
                         Congratulations! You have no open issues.
                         {% if project.digested_event_count == 0 %}
@@ -165,6 +168,7 @@
                     {% else %}
                         No {{ state_filter }} issues found.
                     {% endif %}
+                {% endif %}
                 </div>
             </tr>
             {% endfor %}
