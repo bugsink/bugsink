@@ -11,7 +11,7 @@ from django.conf import settings
 from bugsink.volume_based_condition import VolumeBasedCondition
 from alerts.tasks import send_unmute_alert
 from compat.timestamp import parse_timestamp, format_timestamp
-from tags.models import IssueTag
+from tags.models import IssueTag, TagValue
 
 from .utils import (
     parse_lines, serialize_lines, filter_qs_for_fixed_at, exclude_qs_for_fixed_at,
@@ -116,7 +116,9 @@ class Issue(models.Model):
         # the 2-step process allows for the filter on count;
         # one could argue that this is also possible in a single query though...
 
-        ds = self.tags.all().values("value__key__key").annotate(cnt=models.Count("value__value")).distinct()
+        ds = self.tags.order_by("value__key__key").values("value__key__key")\
+                .annotate(cnt=models.Count("value__value")).distinct()
+
         for d in ds:
             if d['cnt'] > 10:
                 # the basic idea here is: keys for which we have "very many" values cannot be represented in a way that
@@ -128,14 +130,26 @@ class Issue(models.Model):
             issue_tags = [
                 issue_tag
                 for issue_tag in
-                IssueTag.objects.filter(project_id=self.project_id, issue=self, value__key__key=d['value__key__key'])
+                IssueTag.objects.filter(
+                    project_id=self.project_id, issue=self, value__key__key=d['value__key__key']).order_by("-count")
             ]
-            total_seen = sum(issue_tag.count for issue_tag in issue_tags)
 
-            # TODO sort descending by count
-            # TODO "Other"
-            for issue_tag in issue_tags:
+            total_seen = sum(issue_tag.count for issue_tag in issue_tags)
+            seen_till_now = 0
+            if len(issue_tags) > 4:
+                issue_tags = issue_tags[:3]  # cut off one more to make room for "Other"
+
+            for i, issue_tag in enumerate(issue_tags):
                 issue_tag.pct = int(issue_tag.count / total_seen * 100)
+                seen_till_now += issue_tag.count
+
+            if seen_till_now < total_seen:
+                issue_tags.append({
+                    "value": TagValue(value="..."),
+                    "count": total_seen - seen_till_now,
+                    "pct": int((total_seen - seen_till_now) / total_seen * 100),
+                })
+
             yield issue_tags
 
     class Meta:
