@@ -11,6 +11,7 @@ from django.conf import settings
 from bugsink.volume_based_condition import VolumeBasedCondition
 from alerts.tasks import send_unmute_alert
 from compat.timestamp import parse_timestamp, format_timestamp
+from tags.models import IssueTag
 
 from .utils import (
     parse_lines, serialize_lines, filter_qs_for_fixed_at, exclude_qs_for_fixed_at,
@@ -110,6 +111,32 @@ class Issue(models.Model):
     def turningpoint_set_all(self):
         # like turningpoint_set.all() but with user in select_related
         return self.turningpoint_set.all().select_related("user")
+
+    def get_issue_tags(self):
+        # the 2-step process allows for the filter on count;
+        # one could argue that this is also possible in a single query though...
+
+        ds = self.tags.all().values("value__key__key").annotate(cnt=models.Count("value__value")).distinct()
+        for d in ds:
+            if d['cnt'] > 10:
+                # the basic idea here is: keys for which we have "very many" values cannot be represented in a way that
+                # yields insight; we just skip 'm. Example: trace_id, which is "almost unique" per event.
+                continue
+
+            # TODO the key.key lookups, be smart(ish) about that;
+            # TODO select_related too
+            issue_tags = [
+                issue_tag
+                for issue_tag in
+                IssueTag.objects.filter(project_id=self.project_id, issue=self, value__key__key=d['value__key__key'])
+            ]
+            total_seen = sum(issue_tag.count for issue_tag in issue_tags)
+
+            # TODO sort descending by count
+            # TODO "Other"
+            for issue_tag in issue_tags:
+                issue_tag.pct = int(issue_tag.count / total_seen * 100)
+            yield issue_tags
 
     class Meta:
         unique_together = [
