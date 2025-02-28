@@ -116,8 +116,8 @@ class Issue(models.Model):
         # the 2-step process allows for the filter on count;
         # one could argue that this is also possible in a single query though...
 
-        ds = self.tags.order_by("value__key__key").values("value__key__key")\
-                .annotate(cnt=models.Count("value__value")).distinct()
+        ds = self.tags.order_by("value__key__key").values("value__key")\
+                .annotate(cnt=models.Count("value")).distinct()
 
         for d in ds:
             if d['cnt'] > 10:
@@ -125,13 +125,13 @@ class Issue(models.Model):
                 # yields insight; we just skip 'm. Example: trace_id, which is "almost unique" per event.
                 continue
 
-            # TODO the key.key lookups, be smart(ish) about that;
-            # TODO select_related too
             issue_tags = [
                 issue_tag
                 for issue_tag in
-                IssueTag.objects.filter(
-                    project_id=self.project_id, issue=self, value__key__key=d['value__key__key']).order_by("-count")
+                (IssueTag.objects
+                 .filter(project_id=self.project_id, issue=self, value__key=d['value__key'])
+                 .order_by("-count")
+                 .select_related("value", "value__key"))
             ]
 
             total_seen = sum(issue_tag.count for issue_tag in issue_tags)
