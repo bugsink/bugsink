@@ -218,7 +218,7 @@
             </div>
         </div>
 
-        {% if is_event_page and parsed_data.tags %}
+        {% if issue.get_issue_tags %}
         <div class="border-2 mb-4 mr-4"><!-- "issue: tags" box -->
             <div class="font-bold border-b-2">
                 <div class="p-4 border-slate-50 text-slate-500">

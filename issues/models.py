@@ -7,6 +7,7 @@ from django.db.models import F, Value
 from django.db.models.functions import Concat
 from django.template.defaultfilters import date as default_date_filter
 from django.conf import settings
+from django.utils.functional import cached_property
 
 from bugsink.volume_based_condition import VolumeBasedCondition
 from alerts.tasks import send_unmute_alert
@@ -112,12 +113,15 @@ class Issue(models.Model):
         # like turningpoint_set.all() but with user in select_related
         return self.turningpoint_set.all().select_related("user")
 
+    @cached_property
     def get_issue_tags(self):
         # the 2-step process allows for the filter on count;
         # one could argue that this is also possible in a single query though...
 
+        result = []
+
         ds = self.tags.filter(value__key__mostly_unique=False).order_by("value__key__key").values("value__key")\
-                .annotate(cnt=models.Count("value")).distinct()
+            .annotate(cnt=models.Count("value")).distinct()
 
         for d in ds:
             if d['cnt'] > 10:
@@ -150,7 +154,9 @@ class Issue(models.Model):
                     "pct": int((total_seen - seen_till_now) / total_seen * 100),
                 })
 
-            yield issue_tags
+            result.append(issue_tags)
+
+        return result
 
     class Meta:
         unique_together = [
