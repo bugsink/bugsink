@@ -32,6 +32,8 @@ INTERVAL = 60 * 60  # phone-home once an hour
 def send_if_due():
     # considered: not sending if DEBUG=True. But why? Expectation is: I'm the sole user of that setting. Better send
     # also, to keep symmetry, and indirectly check whether my own phone-home still works.
+    if not get_settings().PHONEHOME:
+        return
 
     # Note on attempted_at / sent_at distinction: attempted_at is when we first tried to send the message, and sent_at
     # is when we actually sent it. This allows us to try only once an hour, as well as track whether sending succeeded.

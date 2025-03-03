@@ -97,6 +97,15 @@ def make_consistent():
     #         Project.objects.filter(pk=OuterRef('pk')).annotate(recount=Count('event')).values('recount')[:1])
     # )
 
+    # Update Project.has_releases
+
+    for project in Project.objects.all():
+        if project.has_releases != project.release_set.exists():
+            print("Updating has_releases for project %s from %s to %s" % (
+                project, project.has_releases, project.release_set.exists()))
+            project.has_releases = project.release_set.exists()
+            project.save()
+
 
 class Command(BaseCommand):
     help = """Make the database consistent by deleting dangling objects (issues, events, etc) and updating counters."""

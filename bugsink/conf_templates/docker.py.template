@@ -143,6 +143,8 @@ BUGSINK = {
     "KEEP_ENVELOPES": int(os.getenv("KEEP_ENVELOPES", 0)),  # keep this many in the database; 0 means "don't keep"
     "MINIMIZE_INFORMATION_EXPOSURE":
         os.getenv("MINIMIZE_INFORMATION_EXPOSURE", "false").lower() in ("true", "1", "yes"),
+
+    "PHONEHOME": os.getenv("PHONEHOME", "true").lower() in ("true", "1", "yes"),
 }
 
 

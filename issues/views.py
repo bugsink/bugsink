@@ -509,6 +509,14 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
 
     logentry_info = []
     if parsed_data.get("logger") or parsed_data.get("logentry", {}).get("message") or parsed_data.get("message"):
+        if "level" in parsed_data:
+            # Sentry gives "level" a front row seat in the UI; but we don't: in an Error Tracker, the default is just
+            # "error" (and we don't want to pollute the UI with this info). Sentry's documentation is also very sparse
+            # on what this actually could be used for, other than that it's "similar" to the log level. I'm just going
+            # to interpret that as "it _is_ the log level" and show it in the logentry_info (only).
+            # Best source is: https://docs.sentry.dev/platforms/python/usage/set-level/
+            logentry_info.append(("level", parsed_data["level"]))
+
         if parsed_data.get("logger"):
             logentry_info.append(("logger", parsed_data["logger"]))
 

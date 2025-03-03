@@ -62,6 +62,8 @@ def _phone_home():
     # features in snappea, [b] we introduce a certain symmetry of measurement between the 2 setups, i.e. the choice of
     # lazyness does not influence counting and [c] do I really want to get pings for sites where nobody visits home()?
 
+    # NOTE: each time this function is called, it will schedule a new task, even when the task would quickly return
+    # (nothing due, or configured to never send). We _could_ improve that, but doesn't seem performance-critical enough.
     send_if_due.delay()  # _phone_home() wrapper serves as a place for the comment above
 
 
