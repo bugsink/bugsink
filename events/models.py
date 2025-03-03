@@ -5,6 +5,7 @@ import uuid
 from django.db import models
 from django.db.utils import IntegrityError
 from django.db.models import Min, Max
+from django.utils.functional import cached_property
 
 from projects.models import Project
 from compat.timestamp import parse_timestamp
@@ -286,3 +287,9 @@ class Event(models.Model):
 
     def has_next(self):
         return self.digest_order < self.get_digest_order_bounds()[1]
+
+    @cached_property
+    def get_tags(self):
+        return list(
+            self.tags.all().select_related("value", "value__key").order_by("value__key__key")
+        )

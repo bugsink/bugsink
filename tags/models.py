@@ -72,6 +72,9 @@ class EventTag(models.Model):
 
     class Meta:
         unique_together = ('value', 'event')
+        indexes = [
+            models.Index(fields=['event', 'value']),  # make lookups by event (for details page) faster
+        ]
 
 
 # class GroupingTag is not needed (not even for future-proofing); it would only be needed if you'd want to "unmerge"
