@@ -66,6 +66,7 @@ DEFAULTS = {
 
     # Security:
     "MINIMIZE_INFORMATION_EXPOSURE": False,
+    "PHONEHOME": True,
 }
 
 
