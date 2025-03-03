@@ -130,7 +130,7 @@ class Issue(models.Model):
 
         all_issue_tags = (
             IssueTag.objects
-            .filter(project_id=self.project_id, issue=self)
+            .filter(project_id=self.project_id, issue=self, value__key__mostly_unique=False)
             .order_by("value__key__key", "-count")
             .select_related("value", "value__key"))
 
