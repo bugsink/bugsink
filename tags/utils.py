@@ -16,7 +16,9 @@ CONTEXT_CONVERSION_TABLE = {
     "trace": ("trace", "trace_id"),
     "trace.span": ("trace", "span_id"),
     "browser.name": ("browser", "name"),
+    "browser.version": ("browser", "version"),
     "os.name": ("os", "name"),
+    "os.version": ("os", "version"),
 
     # TODO probably useful, simply not done yet:
     # runtime
@@ -67,8 +69,8 @@ def deduce_tags(event_data):
     if "trace" in tags and "trace.span" in tags:
         tags["trace.ctx"] = f"{tags['trace']}.{tags['trace.span']}"
 
-    if "browser.name" in tags and (browser_version := tags.get("browser.version")):
-        tags["browser"] = f"{tags['browser.name']} {browser_version}"
+    if "browser.name" in tags and "browser.version" in tags:
+        tags["browser"] = f"{tags['browser.name']} {tags['browser.version']}"
 
     if user_tag := deduce_user_tag(contexts):
         tags["user"] = user_tag
