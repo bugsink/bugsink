@@ -116,7 +116,7 @@ class Issue(models.Model):
         # the 2-step process allows for the filter on count;
         # one could argue that this is also possible in a single query though...
 
-        ds = self.tags.order_by("value__key__key").values("value__key")\
+        ds = self.tags.filter(value__key__mostly_unique=False).order_by("value__key__key").values("value__key")\
                 .annotate(cnt=models.Count("value")).distinct()
 
         for d in ds:

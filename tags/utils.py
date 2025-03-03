@@ -79,3 +79,16 @@ def deduce_tags(event_data):
     # mechanism
 
     return tags
+
+
+def is_mostly_unique(key):
+    if key.startswith("user"):
+        return True
+
+    if key.startswith("trace"):
+        return True
+
+    if key in ["browser.version", "browser"]:
+        return True
+
+    return False

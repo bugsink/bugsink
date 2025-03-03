@@ -5,8 +5,9 @@ counting. Some notes:
 * Arbitrary Tags can be set programatically in the SDKs, which we need to support (Sentry API Compatability).
 * Some "synthetic" Tags are introduced by Bugsink itself: attributes of an Event are deduced and stored explicitly as a
   Tag. The main reason to do this: stay flexible in terms of DB design and allow for generic code for searching and
-  counting. _However_, we don't make a commitment to any particular implementation, and if the deduce-and-store approach
-  turns out to be a performance bottleneck, it may be replaced. Particular notes on what we deduce are in `deduce_tags`.
+  counting (especially in the light of Issues, where a single tag can have many values). _However_, we don't make a
+  commitment to any particular implementation, and if the deduce-and-store approach turns out to be a performance
+  bottleneck, it may be replaced. Particular notes on what we deduce are in `deduce_tags`.
 
 https://docs.sentry.io/platforms/python/enriching-events/tags/
 
@@ -21,12 +22,17 @@ from django.db import models
 from django.db.models import Q, F
 
 from projects.models import Project
-from tags.utils import deduce_tags
+from tags.utils import deduce_tags, is_mostly_unique
 
 
 class TagKey(models.Model):
     project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
     key = models.CharField(max_length=32, blank=False, null=False)
+
+    # Tags that are "mostly unique" are not displayed in the issue tag counts, because the distribution of values is
+    # too flat to provide useful information. Another way of thinking about this is "this is a tag for searching, but
+    # not for counting".
+    mostly_unique = models.BooleanField(default=False)
 
     # I briefly considered being explicit about is_deduced; but it's annoying to store this info on the TagKey, and it's
     # probably redundant if we just come up with a list of "reserved" tags or similar.
@@ -136,7 +142,8 @@ def store_tags(event, issue, tags):
     #     # why this is only worth it for very small numbers of tags (1 in the current setup).
     #
     #     for key, value in tags.items():
-    #         tag_key, _ = TagKey.objects.get_or_create(project_id=event.project_id, key=key)
+    #         tag_key, _ = TagKey.objects.get_or_create(
+    #             project_id=event.project_id, key=key, mostly_unique=is_mostly_unique(key))
     #         tag_value, _ = TagValue.objects.get_or_create(project_id=event.project_id, key=tag_key, value=value)
     #         EventTag.objects.get_or_create(project_id=event.project_id, value=tag_value, event=event)
     #         IssueTag.objects.get_or_create(project_id=event.project_id, value=tag_value, issue=issue)
@@ -144,8 +151,11 @@ def store_tags(event, issue, tags):
     #     # the 0-case is implied here too, which avoids some further guards in the code below
     #     return
 
+    # there is some principled point here that there is always a single value of mostly_unique per key, but this point
+    # is not formalized in our datbase schema; it "just happens to work correctly" (at least as long as we don't change
+    # the list of mostly unique keys, at which point we'll have to do a datamigration).
     TagKey.objects.bulk_create([
-        TagKey(project_id=event.project_id, key=key) for key in tags.keys()
+        TagKey(project_id=event.project_id, key=key, mostly_unique=is_mostly_unique(key)) for key in tags.keys()
     ], ignore_conflicts=True)
 
     # Select-back what we just created (or was already there); this is needed because "Enabling the ignore_conflicts or
