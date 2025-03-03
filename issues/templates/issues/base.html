@@ -109,6 +109,7 @@
             <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "stacktrace" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Stacktrace</div></a>
             <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/details/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "event-details" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Event&nbsp;Details</div></a>
             <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/breadcrumbs/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "breadcrumbs" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Breadcrumbs</div></a>
+            <a href="/issues/issue/{{ issue.id }}/tags/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "tags" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Tags</div></a>
             <a href="/issues/issue/{{ issue.id }}/events/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "event-list" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Event&nbsp;List</div></a>
             <a href="/issues/issue/{{ issue.id }}/grouping/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "grouping" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Grouping</div></a>
             <a href="/issues/issue/{{ issue.id }}/history/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "history" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">History</div></a>
@@ -218,7 +219,7 @@
             </div>
         </div>
 
-        {% if issue.get_issue_tags %}
+        {% if issue.get_issue_tags and tab != "tags" %}
         <div class="border-2 mb-4 mr-4"><!-- "issue: tags" box -->
             <div class="font-bold border-b-2">
                 <div class="p-4 border-slate-50 text-slate-500">
@@ -226,7 +227,7 @@
                 </div>
             </div>
             <div class="p-4">
-                {% for issuetags in issue.get_issue_tags %}
+                {% for issuetags in issue.tags_summary %}
                     <div class="mb-4">
                         <div class="text-sm font-bold text-slate-500">{{ issuetags.0.value.key.key }}:</div>
                         <div>

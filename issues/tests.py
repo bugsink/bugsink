@@ -415,6 +415,10 @@ class ViewTests(TransactionTestCase):
         response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/details/")
         self.assertContains(response, self.issue.title())
 
+    def test_issue_tags(self):
+        response = self.client.get(f"/issues/issue/{self.issue.id}/tags/")
+        self.assertContains(response, self.issue.title())
+
     def test_issue_history(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/history/")
         self.assertContains(response, self.issue.title())
@@ -517,6 +521,7 @@ class IntegrationTest(TransactionTestCase):
                 f'/issues/issue/{ event.issue.id }/event/{ event.id }/details/',
                 f'/issues/issue/{ event.issue.id }/event/{ event.id }/breadcrumbs/',
                 f'/issues/issue/{ event.issue.id }/history/',
+                f'/issues/issue/{ event.issue.id }/tags/',
                 f'/issues/issue/{ event.issue.id }/grouping/',
                 f'/issues/issue/{ event.issue.id }/events/',
             ]

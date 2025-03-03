@@ -2,7 +2,8 @@ from django.urls import path, register_converter
 
 from .views import (
     issue_list, issue_event_stacktrace, issue_event_details, issue_event_list, issue_history, issue_grouping,
-    issue_event_breadcrumbs, event_by_internal_id, history_comment_new, history_comment_edit, history_comment_delete)
+    issue_event_breadcrumbs, event_by_internal_id, history_comment_new, history_comment_edit, history_comment_delete,
+    issue_tags)
 
 
 def regex_converter(passed_regex):
@@ -55,6 +56,7 @@ urlpatterns = [
     path('issue/<uuid:issue_pk>/event/<first-last:nav>/details/', issue_event_details, name="event_details"),
     path('issue/<uuid:issue_pk>/event/<first-last:nav>/breadcrumbs/', issue_event_details, name="event_breadcrumbs"),
 
+    path('issue/<uuid:issue_pk>/tags/', issue_tags),
     path('issue/<uuid:issue_pk>/history/', issue_history),
     path('issue/<uuid:issue_pk>/grouping/', issue_grouping),
     path('issue/<uuid:issue_pk>/events/', issue_event_list),

@@ -114,7 +114,14 @@ class Issue(models.Model):
         return self.turningpoint_set.all().select_related("user")
 
     @cached_property
-    def get_issue_tags(self):
+    def tags_summary(self):
+        return self._get_issue_tags(4, "...")
+
+    @cached_property
+    def tags_all(self):
+        return self._get_issue_tags(25, "Other...")
+
+    def _get_issue_tags(self, other_cutoff, other_label):
         # the 2-step process allows for the filter on count;
         # one could argue that this is also possible in a single query though...
 
@@ -140,8 +147,8 @@ class Issue(models.Model):
 
             total_seen = sum(issue_tag.count for issue_tag in issue_tags)
             seen_till_now = 0
-            if len(issue_tags) > 4:
-                issue_tags = issue_tags[:3]  # cut off one more to make room for "Other"
+            if len(issue_tags) > other_cutoff:
+                issue_tags = issue_tags[:other_cutoff - 1]  # cut off one more to make room for "Other"
 
             for i, issue_tag in enumerate(issue_tags):
                 issue_tag.pct = int(issue_tag.count / total_seen * 100)
@@ -149,7 +156,7 @@ class Issue(models.Model):
 
             if seen_till_now < total_seen:
                 issue_tags.append({
-                    "value": TagValue(value="..."),
+                    "value": TagValue(value=other_label),
                     "count": total_seen - seen_till_now,
                     "pct": int((total_seen - seen_till_now) / total_seen * 100),
                 })

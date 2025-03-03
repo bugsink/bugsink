@@ -574,6 +574,24 @@ def issue_history(request, issue):
 
 @atomic_for_request_method
 @issue_membership_required
+def issue_tags(request, issue):
+    if request.method == "POST":
+        return _handle_post(request, issue)
+
+    last_event = issue.event_set.order_by("digest_order").last()  # the template needs this for the tabs
+    return render(request, "issues/tags.html", {
+        "tab": "tags",
+        "project": issue.project,
+        "issue": issue,
+        "event": last_event,
+        "is_event_page": False,
+        "parsed_data": last_event.get_parsed_data(),
+        "mute_options": GLOBAL_MUTE_OPTIONS,
+    })
+
+
+@atomic_for_request_method
+@issue_membership_required
 def issue_grouping(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
