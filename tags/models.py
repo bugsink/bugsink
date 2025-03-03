@@ -79,6 +79,14 @@ class IssueTag(models.Model):
     value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.CASCADE)
 
     issue = models.ForeignKey('issues.Issue', blank=False, null=True, on_delete=models.SET_NULL, related_name='tags')
+
+    # As it stands, there is only a single counter per issue-tagvalue combination. In principle/theory this type of
+    # denormalization will break down when you want to show this kind of information filtered by some other dimension,
+    # because combining such slicings will lead to a combinatorial explosion. However, the only practical such dimension
+    # we'll likely want to filter by is "environment". So once we'll actually offer that it's more likely that we'll
+    # just implement a separate counter for that dimension, rather than try to do the generic thing ("snuba" at Sentry).
+    # And in that case we can probably add the additional constraint that the number of practically observed
+    # environments is some small number like 10 (even just because of UI constraints like dropdowns).
     count = models.PositiveIntegerField(default=0)
 
     class Meta:
