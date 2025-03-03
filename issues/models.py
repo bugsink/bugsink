@@ -122,20 +122,12 @@ class Issue(models.Model):
         return self._get_issue_tags(25, "Other...")
 
     def _get_issue_tags(self, other_cutoff, other_label):
-        # the 2-step process allows for the filter on count;
-        # one could argue that this is also possible in a single query though...
-
         result = []
 
         ds = self.tags.filter(value__key__mostly_unique=False).order_by("value__key__key").values("value__key")\
             .annotate(cnt=models.Count("value")).distinct()
 
         for d in ds:
-            if d['cnt'] > 10:
-                # the basic idea here is: keys for which we have "very many" values cannot be represented in a way that
-                # yields insight; we just skip 'm. Example: trace_id, which is "almost unique" per event.
-                continue
-
             issue_tags = [
                 issue_tag
                 for issue_tag in
