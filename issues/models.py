@@ -119,6 +119,9 @@ class Issue(models.Model):
 
     @cached_property
     def tags_all(self):
+        # NOTE: Having 25 as a cut-off means there's no way to see all tags when there's more than 25; the way to do
+        # that would be to have a per-key (per issue) page (paginated); for now I don't see the value in that TBH,
+        # because you're well past "this is something I can eyeball-analyse" territory at that point.
         return self._get_issue_tags(25, "Other...")
 
     def _get_issue_tags(self, other_cutoff, other_label):
