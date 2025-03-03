@@ -72,6 +72,9 @@ def deduce_tags(event_data):
     if "browser.name" in tags and "browser.version" in tags:
         tags["browser"] = f"{tags['browser.name']} {tags['browser.version']}"
 
+    if "os.name" in tags and "os.version" in tags:
+        tags["os"] = f"{tags['os.name']} {tags['os.version']}"
+
     if user_tag := deduce_user_tag(contexts):
         tags["user"] = user_tag
 
@@ -91,6 +94,9 @@ def is_mostly_unique(key):
         return True
 
     if key in ["browser.version", "browser"]:
+        return True
+
+    if key in ["os.version", "os"]:
         return True
 
     return False
