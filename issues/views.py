@@ -344,6 +344,9 @@ def _get_event(issue, event_pk, digest_order, nav):
             return Event.objects.filter(issue=issue).order_by("digest_order").last()
 
         if nav in ["prev", "next"]:
+            if digest_order is None:
+                raise Http404("Cannot look up with '%s' without digest_order" % nav)
+
             if nav == "prev":
                 result = Event.objects.filter(
                     issue=issue, digest_order__lt=digest_order).order_by("-digest_order").first()
@@ -356,7 +359,7 @@ def _get_event(issue, event_pk, digest_order, nav):
 
         raise Http404("Cannot look up with '%s'" % nav)
 
-    if event_pk is not None:
+    elif event_pk is not None:
         # we match on both internal and external id, trying internal first
         try:
             return Event.objects.get(pk=event_pk)
@@ -366,7 +369,7 @@ def _get_event(issue, event_pk, digest_order, nav):
     elif digest_order is not None:
         return Event.objects.get(issue=issue, digest_order=digest_order)
     else:
-        raise ValueError("either event_pk or digest_order must be provided")
+        raise Http404("Either event_pk, nav, or digest_order must be provided")
 
 
 @atomic_for_request_method
