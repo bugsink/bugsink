@@ -10,7 +10,7 @@
     {# event-nav only #}
     <div class="flex">
         <div class="overflow-hidden">
-            <div class="italic">{{ event.ingested_at|date:"j M G:i T" }} (Event {{ event.digest_order|intcomma }} of {{ issue.digested_event_count|intcomma }})</div>
+            <div class="italic">{{ event.ingested_at|date:"j M G:i T" }} (Event {{ event.digest_order|intcomma }} of {{ issue.digested_event_count|intcomma }} total{% if q %} — {{ event_qs.count }} found by search{% endif %})</div>
         </div>
 
         <div class="ml-auto flex-none">
@@ -31,7 +31,7 @@
     <div class="flex">
         <div class="overflow-hidden">
             {% if forloop.counter0 == 0 %}
-            <div class="italic">{{ event.ingested_at|date:"j M G:i T" }} (Event {{ event.digest_order|intcomma }} of {{ issue.digested_event_count|intcomma }})</div>
+            <div class="italic">{{ event.ingested_at|date:"j M G:i T" }} (Event {{ event.digest_order|intcomma }} of {{ issue.digested_event_count|intcomma }} total{% if q %} — {{ event_qs.count }} found by search{% endif %})</div>
             {% endif %}
             <h1 class="text-2xl font-bold {% if forloop.counter0 > 0 %}mt-4{% endif %} text-ellipsis whitespace-nowrap overflow-hidden">{{ exception.type }}</h1>
             <div class="text-lg mb-4 text-ellipsis whitespace-nowrap overflow-hidden">{{ exception.value }}</div>

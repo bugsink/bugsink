@@ -3,6 +3,7 @@ import json
 import sentry_sdk
 import re
 
+from django.db.models import Min, Max
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
 from django.db.models import Q, Subquery
@@ -26,7 +27,7 @@ from events.ua_stuff import get_contexts_enriched_with_ua
 
 from compat.timestamp import format_timestamp
 from projects.models import ProjectMembership
-from tags.models import TagValue, IssueTag
+from tags.models import TagValue, IssueTag, EventTag
 
 from .models import Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind
 from .forms import CommentForm
@@ -60,6 +61,13 @@ class KnownCountPaginator(Paginator):
     @property
     def count(self):
         return self._count
+
+
+def _request_repr(parsed_data):
+    if "request" not in parsed_data:
+        return ""
+
+    return parsed_data["request"].get("method", "") + " " + parsed_data["request"].get("url", "")
 
 
 def _is_valid_action(action, issue):
@@ -240,6 +248,9 @@ def _and_join(q_objects):
 
 
 def _search(project, issue_list, q):
+    if not q:
+        return issue_list
+
     # The simplest possible query-language that could have any value: key:value is recognized as such; the rest is "free
     # text"; no support for quoting of spaces.
     slices_to_remove = []
@@ -272,6 +283,44 @@ def _search(project, issue_list, q):
     issue_list = issue_list.filter(_and_join(clauses))
 
     return issue_list
+
+
+def _search_events(project, event_list, q):
+    if not q:
+        return event_list
+
+    # The simplest possible query-language that could have any value: key:value is recognized as such; the rest is "free
+    # text"; no support for quoting of spaces.
+    slices_to_remove = []
+    clauses = []
+    for match in re.finditer(r"(\S+):(\S+)", q):
+        slices_to_remove.append(match.span())
+        key, value = match.groups()
+        try:
+            tag_value_obj = TagValue.objects.get(project=project, key__key=key, value=value)
+        except TagValue.DoesNotExist:
+            # if the tag doesn't exist, we can't have any events with it; the below short-circuit is fine, I think (I
+            # mean: we _could_ say "tag x is to blame" but that's not what one does generally in search, is it?
+            return event_list.none()
+
+        # TODO: Extensive performance testing of various choices here is necessary; in particular the choice of Subquery
+        # vs. joins; and the choice of a separate query to get TagValue v.s. doing everything in a single big query will
+        # have different trade-offs _in practice_.
+        clauses.append(
+            Q(id__in=Subquery(EventTag.objects.filter(value=tag_value_obj).values_list("event_id", flat=True))))
+
+    # this is really TSTTCPW (or more like a "fake it till you make it" thing); but I'd rather "have something" and then
+    # have really-good-search than to have either nothing at all, or half-baked search. Note that we didn't even bother
+    # to set indexes on the fields we search on (nor create a single searchable field for the whole of 'title').
+    plain_text_q = remove_slices(q, slices_to_remove).strip()
+    if plain_text_q:
+        clauses.append(Q(Q(calculated_type__icontains=plain_text_q) | Q(calculated_value__icontains=plain_text_q)))
+
+    # if we reach this point, there's always either a plain_text_q or some key/value pair (this is a condition for
+    # _and_join)
+    event_list = event_list.filter(_and_join(clauses))
+
+    return event_list
 
 
 def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
@@ -336,38 +385,42 @@ def _handle_post(request, issue):
     return HttpResponseRedirect(request.path_info)
 
 
-def _get_event(issue, event_pk, digest_order, nav):
-    if nav is not None:
-        if nav == "first":
-            return Event.objects.filter(issue=issue).order_by("digest_order").first()
-        if nav == "last":
-            return Event.objects.filter(issue=issue).order_by("digest_order").last()
+def _get_event(qs, event_pk, digest_order, nav):
+    """Returns the event using the "url lookup"."""
 
-        if nav in ["prev", "next"]:
+    if nav is not None:
+        if nav not in ["first", "last", "prev", "next"]:
+            raise Http404("Cannot look up with '%s'" % nav)
+
+        if nav == "first":
+            result = qs.order_by("digest_order").first()
+        elif nav == "last":
+            result = qs.order_by("digest_order").last()
+        elif nav in ["prev", "next"]:
             if digest_order is None:
                 raise Http404("Cannot look up with '%s' without digest_order" % nav)
 
             if nav == "prev":
-                result = Event.objects.filter(
-                    issue=issue, digest_order__lt=digest_order).order_by("-digest_order").first()
+                result = qs.filter(digest_order__lt=digest_order).order_by("-digest_order").first()
             elif nav == "next":
-                result = Event.objects.filter(
-                    issue=issue, digest_order__gt=digest_order).order_by("digest_order").first()
-            if result is None:
-                raise Event.DoesNotExist
-            return result
+                result = qs.filter(digest_order__gt=digest_order).order_by("digest_order").first()
 
-        raise Http404("Cannot look up with '%s'" % nav)
+        if result is None:
+            raise Event.DoesNotExist
+        return result
 
     elif event_pk is not None:
         # we match on both internal and external id, trying internal first
+        if event_pk == "none":
+            raise Event.DoesNotExist()
+
         try:
             return Event.objects.get(pk=event_pk)
         except Event.DoesNotExist:
-            return Event.objects.get(issue=issue, event_id=event_pk)
+            return qs.get(event_id=event_pk)
 
     elif digest_order is not None:
-        return Event.objects.get(issue=issue, digest_order=digest_order)
+        return qs.get(digest_order=digest_order)
     else:
         raise Http404("Either event_pk, nav, or digest_order must be provided")
 
@@ -378,10 +431,14 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
     if request.method == "POST":
         return _handle_post(request, issue)
 
+    event_qs = Event.objects.filter(issue=issue)
+    if request.GET.get("q"):
+        event_qs = _search_events(issue.project, event_qs, request.GET["q"])
+
     try:
-        event = _get_event(issue, event_pk, digest_order, nav)
+        event = _get_event(event_qs, event_pk, digest_order, nav)
     except Event.DoesNotExist:
-        return issue_event_404(request, issue, "stacktrace", "event_stacktrace")
+        return issue_event_404(request, issue, event_qs, "stacktrace", "event_stacktrace")
 
     parsed_data = event.get_parsed_data()
 
@@ -425,16 +482,20 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
         "event": event,
         "is_event_page": True,
         "parsed_data": parsed_data,
+        "request_repr": _request_repr(parsed_data),
         "exceptions": exceptions,
         "stack_of_plates": stack_of_plates,
         "mute_options": GLOBAL_MUTE_OPTIONS,
+        "q": request.GET.get("q", ""),
+        "event_qs": event_qs,
+        **_has_next_prev(event, event_qs),
     })
 
 
-def issue_event_404(request, issue, tab, this_view):
+def issue_event_404(request, issue, event_qs, tab, this_view):
     """If the Event is 404, but the issue is not, we can still show the issue page; we show a message for the event"""
 
-    last_event = issue.event_set.order_by("digest_order").last()  # the template needs this for the tabs
+    last_event = event_qs.last()  # used for switching to an event-page (using tabs)
     return render(request, "issues/event_404.html", {
         "tab": tab,
         "this_view": this_view,
@@ -443,6 +504,9 @@ def issue_event_404(request, issue, tab, this_view):
         "event": last_event,
         "is_event_page": False,  # this variable is used to denote "we have event-related info", which we don't
         "mute_options": GLOBAL_MUTE_OPTIONS,
+        "event_qs": event_qs,
+        "q": request.GET.get("q", ""),
+        "event_qs_count": event_qs.count(),  # avoids repeating the count() query
     })
 
 
@@ -452,10 +516,14 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
     if request.method == "POST":
         return _handle_post(request, issue)
 
+    event_qs = Event.objects.filter(issue=issue)
+    if request.GET.get("q"):
+        event_qs = _search_events(issue.project, event_qs, request.GET["q"])
+
     try:
-        event = _get_event(issue, event_pk, digest_order, nav)
+        event = _get_event(event_qs, event_pk, digest_order, nav)
     except Event.DoesNotExist:
-        return issue_event_404(request, issue, "breadcrumbs", "event_breadcrumbs")
+        return issue_event_404(request, issue, event_qs, "breadcrumbs", "event_breadcrumbs")
 
     parsed_data = event.get_parsed_data()
 
@@ -466,9 +534,12 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
         "issue": issue,
         "event": event,
         "is_event_page": True,
-        "parsed_data": parsed_data,
+        "request_repr": _request_repr(parsed_data),
         "breadcrumbs": get_values(parsed_data.get("breadcrumbs")),
         "mute_options": GLOBAL_MUTE_OPTIONS,
+        "q": request.GET.get("q", ""),
+        "event_qs": event_qs,
+        **_has_next_prev(event, event_qs),
     })
 
 
@@ -478,16 +549,28 @@ def _date_with_milis_html(timestamp):
         '<span class="text-xs">' + date(timestamp, "u")[:3] + '</span>')
 
 
+def _has_next_prev(event, event_qs):
+    d = event_qs.aggregate(lo=Min("digest_order"), hi=Max("digest_order"))
+    return {
+        "has_prev": event.digest_order > d["lo"] if d.get("lo") is not None else False,
+        "has_next": event.digest_order < d["hi"] if d.get("hi") is not None else False,
+    }
+
+
 @atomic_for_request_method
 @issue_membership_required
 def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=None):
     if request.method == "POST":
         return _handle_post(request, issue)
 
+    event_qs = Event.objects.filter(issue=issue)
+    if request.GET.get("q"):
+        event_qs = _search_events(issue.project, event_qs, request.GET["q"])
+
     try:
-        event = _get_event(issue, event_pk, digest_order, nav)
+        event = _get_event(event_qs, event_pk, digest_order, nav)
     except Event.DoesNotExist:
-        return issue_event_404(request, issue, "event-details", "event_details")
+        return issue_event_404(request, issue, event_qs, "event-details", "event_details")
     parsed_data = event.get_parsed_data()
 
     key_info = [
@@ -557,11 +640,15 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         "event": event,
         "is_event_page": True,
         "parsed_data": parsed_data,
+        "request_repr": _request_repr(parsed_data),
         "key_info": key_info,
         "logentry_info": logentry_info,
         "deployment_info": deployment_info,
         "contexts": contexts,
         "mute_options": GLOBAL_MUTE_OPTIONS,
+        "q": request.GET.get("q", ""),
+        "event_qs": event_qs,
+        **_has_next_prev(event, event_qs),
     })
 
 
@@ -571,14 +658,15 @@ def issue_history(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    last_event = issue.event_set.order_by("digest_order").last()  # the template needs this for the tabs
+    event_qs = _search_events(issue.project, issue.event_set.order_by("digest_order"), request.GET.get("q", ""))
+    last_event = event_qs.last()  # used for switching to an event-page (using tabs)
     return render(request, "issues/history.html", {
         "tab": "history",
         "project": issue.project,
         "issue": issue,
         "event": last_event,
         "is_event_page": False,
-        "parsed_data": last_event.get_parsed_data(),
+        "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
@@ -589,14 +677,15 @@ def issue_tags(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    last_event = issue.event_set.order_by("digest_order").last()  # the template needs this for the tabs
+    event_qs = _search_events(issue.project, issue.event_set.order_by("digest_order"), request.GET.get("q", ""))
+    last_event = event_qs.last()  # used for switching to an event-page (using tabs)
     return render(request, "issues/tags.html", {
         "tab": "tags",
         "project": issue.project,
         "issue": issue,
         "event": last_event,
         "is_event_page": False,
-        "parsed_data": last_event.get_parsed_data(),
+        "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
@@ -607,14 +696,15 @@ def issue_grouping(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    last_event = issue.event_set.order_by("digest_order").last()  # the template needs this for the tabs
+    event_qs = _search_events(issue.project, issue.event_set.order_by("digest_order"), request.GET.get("q", ""))
+    last_event = event_qs.last()  # used for switching to an event-page (using tabs)
     return render(request, "issues/grouping.html", {
         "tab": "grouping",
         "project": issue.project,
         "issue": issue,
         "event": last_event,
         "is_event_page": False,
-        "parsed_data": last_event.get_parsed_data(),
+        "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
@@ -627,13 +717,18 @@ def issue_event_list(request, issue):
 
     event_list = issue.event_set.order_by("digest_order")
 
-    # re 250: in general "big is good" because it allows a lot "at a glance".
-    paginator = KnownCountPaginator(event_list, 250, count=issue.stored_event_count)
+    if "q" in request.GET:
+        event_list = _search_events(issue.project, event_list, request.GET["q"])
+        paginator = Paginator(event_list, 250)  # might as well use Paginator; the cost of .count() is incurred anyway
+    else:
+        # re 250: in general "big is good" because it allows a lot "at a glance".
+        paginator = KnownCountPaginator(event_list, 250, count=issue.stored_event_count)
 
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
-    last_event = issue.event_set.order_by("digest_order").last()  # the template needs this for the tabs
+    last_event = event_list.last()  # used for switching to an event-page (using tabs)
+
     return render(request, "issues/event_list.html", {
         "tab": "event-list",
         "project": issue.project,
@@ -641,8 +736,9 @@ def issue_event_list(request, issue):
         "event": last_event,
         "event_list": event_list,
         "is_event_page": False,
-        "parsed_data": last_event.get_parsed_data(),
+        "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,
+        "q": request.GET.get("q", ""),
         "page_obj": page_obj,
     })
 

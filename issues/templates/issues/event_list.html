@@ -1,17 +1,23 @@
 {% extends "issues/base.html" %}
 {% load issues %}
+{% load add_to_qs %}
 {% load humanize %}
+{% load add_to_qs %}
 
 {% block tab_content %}
 
 <div class="flex">
     <div class="overflow-hidden">
         <div class="italic">
-            Showing {{ page_obj.start_index|intcomma }} - {{ page_obj.end_index|intcomma }} of {{ page_obj.paginator.count|intcomma }}
-            {% if issue.digested_event_count != issue.stored_event_count %}
-                available events ({{ issue.digested_event_count|intcomma }} total observed).
-            {% else %}
-                total events.
+            Showing {{ page_obj.start_index|intcomma }} - {{ page_obj.end_index|intcomma }} of 
+            {% if page_obj.paginator.count == issue.stored_event_count and issue.stored_event_count == issue.digested_event_count %} {# all equal #}
+                {{ page_obj.paginator.count|intcomma }} total events.
+            {% elif page_obj.paginator.count == issue.stored_event_count and issue.stored_event_count != issue.digested_event_count %} {# evictions applied #}
+                {{ page_obj.paginator.count|intcomma }} available events ({{ issue.digested_event_count|intcomma }} total observed).
+            {% elif page_obj.paginator.count != issue.stored_event_count and issue.stored_event_count == issue.digested_event_count %} {# search filters #}
+                {{ page_obj.paginator.count|intcomma }} events found ({{ issue.digested_event_count|intcomma }} total observed).
+            {% else %} {# everything unequal #}
+                {{ page_obj.paginator.count|intcomma }} events found ({{ issue.digested_event_count|intcomma }} available, {{ issue.digested_event_count|intcomma }} total observed).
             {% endif %}
         </div>
     </div>
@@ -20,8 +26,12 @@
         {# UI / UX question: is it a good idea to reuse-with-different-meaning (pages, not events) for this? #}
         {# adapted copy/pasta from _event_nav #}
         <div class="flex place-content-end">
+                <form action="." method="get">
+                <input type="text" name="q" value="{{ q }}" placeholder="search..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md mr-2"/>
+                </form>
+
                 {% if page_obj.has_previous %} {# no need for 'is_first': if you can go to the left, you can go all the way to the left too #}
-                <a href="?page=1" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="First page">
+                <a href="?{% add_to_qs page=1 %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="First page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M3.22 7.595a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 0 0 1.06-1.06l-2.72-2.72 2.72-2.72a.75.75 0 0 0-1.06-1.06l-3.25 3.25Zm8.25-3.25-3.25 3.25a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 1 0 1.06-1.06l-2.72-2.72 2.72-2.72a.75.75 0 0 0-1.06-1.06Z" clip-rule="evenodd" /></svg></a>
                 {% else %}
                 <div class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md inline-flex items-center justify-center" title="First page">
@@ -30,7 +40,7 @@
                 {% endif %}
 
                 {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="Previous page">
+                <a href="?{% add_to_qs page=page_obj.previous_page_number %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="Previous page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M9.78 4.22a.75.75 0 0 1 0 1.06L7.06 8l2.72 2.72a.75.75 0 1 1-1.06 1.06L5.47 8.53a.75.75 0 0 1 0-1.06l3.25-3.25a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}
@@ -40,7 +50,7 @@
                 {% endif %}
 
                 {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="Next page">
+                <a href="?{% add_to_qs page=page_obj.next_page_number %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="Next page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M6.22 4.22a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06L8.94 8 6.22 5.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}
@@ -50,7 +60,7 @@
                 {% endif %}
 
                 {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.paginator.num_pages }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="Last page">
+                <a href="?{% add_to_qs page=page_obj.paginator.num_pages %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="Last page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M12.78 7.595a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06l2.72-2.72-2.72-2.72a.75.75 0 0 1 1.06-1.06l3.25 3.25Zm-8.25-3.25 3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06l2.72-2.72-2.72-2.72a.75.75 0 0 1 1.06-1.06Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}
@@ -109,11 +119,11 @@ TODO
     <tr class="border-slate-200 border-2 ">
 
         <td class="p-4 font-bold text-slate-500 align-top">
-            <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/">{{ event.digest_order }}</a>
+            <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/{% current_qs %}">{{ event.digest_order }}</a>
         </td>
 
         <td class="p-4 font-bold text-slate-500 align-top"> {# how useful is this really? #}
-            <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/">{{ event.id|truncatechars:9 }}</a>
+            <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/{% current_qs %}">{{ event.id|truncatechars:9 }}</a>
         </td>
 
         <td class="p-4 font-mono whitespace-nowrap align-top">
@@ -139,6 +149,12 @@ TODO
             {{ event.environment|truncatechars:30 }}
         </td>
 
+    </tr>
+{% empty %}
+    <tr>
+        <td colspan="6" class="p-4 text-slate-800 italic">
+            No events found{% if q %} for "{{ q }}"{% endif %}.
+        </td>
     </tr>
 {% endfor %}
 {# note: no "empty" case; event-less issues are not something I expect to really support (for some definition of "really") #}

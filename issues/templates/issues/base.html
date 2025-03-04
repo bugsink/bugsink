@@ -3,6 +3,7 @@
 {% load issues %}
 {% load humanize %}
 {% load stricter_templates %}
+{% load add_to_qs %}
 {% block title %}{{ issue.title }} · {{ block.super }}{% endblock %}
 
 {% block content %}
@@ -95,7 +96,7 @@
     <div class="overflow-hidden"><!-- top, LHS (various texts) -->
         <h1 class="text-4xl font-bold text-ellipsis whitespace-nowrap overflow-hidden pb-1 {# needed for descenders of 'g' #}">{{ issue.calculated_type }}</h1>
         <div class="text-xl text-ellipsis whitespace-nowrap overflow-hidden">{{ issue.calculated_value }}</div>
-        {% if parsed_data.request %}<div class="italic mt-4">{{ parsed_data.request.method }} {{ parsed_data.request.url }}</div>{% endif %}
+        {% if request_repr %}<div class="italic mt-4">{{ request_repr }}</div>{% endif %}
         <div class="text-ellipsis whitespace-nowrap overflow-hidden"><span class="font-bold">{% if issue.last_frame_module %}{{ issue.last_frame_module}}{% else %}{{ issue.last_frame_filename }}{% endif %}</span>{% if issue.last_frame_function %} in <span class="font-bold">{{ issue.last_frame_function }}</span>{% endif %}</div>
     </div> {# top, LHS (various texts) #}
 
@@ -106,13 +107,13 @@
     {# overflow-x-auto is needed at the level of the flex item such that it works at the level where we need it (the code listings)#}
     <div class="ml-4 mb-4 mr-4 border-2 overflow-x-auto flex-[2_1_96rem]"><!-- the whole of the big tabbed view--> {# 96rem is 1536px, which matches the 2xl class; this is no "must" but eyeballing revealed: good result #}
         <div class="flex bg-slate-50 border-b-2"><!-- container for the actual tab buttons -->
-            <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "stacktrace" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Stacktrace</div></a>
-            <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/details/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "event-details" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Event&nbsp;Details</div></a>
-            <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/breadcrumbs/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "breadcrumbs" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Breadcrumbs</div></a>
-            <a href="/issues/issue/{{ issue.id }}/tags/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "tags" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Tags</div></a>
-            <a href="/issues/issue/{{ issue.id }}/events/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "event-list" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Event&nbsp;List</div></a>
-            <a href="/issues/issue/{{ issue.id }}/grouping/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "grouping" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Grouping</div></a>
-            <a href="/issues/issue/{{ issue.id }}/history/"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "history" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">History</div></a>
+            <a href="/issues/issue/{{ issue.id }}/event/{% if event %}{{ event.id }}{% else %}none{% endif %}/{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "stacktrace" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Stacktrace</div></a>
+            <a href="/issues/issue/{{ issue.id }}/event/{% if event %}{{ event.id }}{% else %}none{% endif %}/details/{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "event-details" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Event&nbsp;Details</div></a>
+            <a href="/issues/issue/{{ issue.id }}/event/{% if event %}{{ event.id }}{% else %}none{% endif %}/breadcrumbs/{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "breadcrumbs" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Breadcrumbs</div></a>
+            <a href="/issues/issue/{{ issue.id }}/events/{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "event-list" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Event&nbsp;List</div></a>
+            <a href="/issues/issue/{{ issue.id }}/tags/{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "tags" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Tags</div></a>
+            <a href="/issues/issue/{{ issue.id }}/grouping/{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "grouping" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">Grouping</div></a>
+            <a href="/issues/issue/{{ issue.id }}/history/{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 {% if tab == "history" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">History</div></a>
         </div>
 
         <div class="m-4"><!-- div for tab_content -->

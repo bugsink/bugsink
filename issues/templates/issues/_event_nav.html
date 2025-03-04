@@ -1,5 +1,11 @@
-                {% if event.has_prev %} {# no need for 'is_first': if you can go to the left, you can go all the way to the left too #}
-                <a href="{% url this_view issue_pk=issue.pk nav="first" %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="First event">
+{% load add_to_qs %}
+
+                <form action="{% url this_view issue_pk=issue.pk nav="last" %}" method="get">{# nav="last": when doing a new search on an event-page, you want the most recent matching event to show up #}
+                <input type="text" name="q" value="{{ q }}" placeholder="search..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md mr-2"/>
+                </form>
+
+                {% if has_prev %} {# no need for 'is_first': if you can go to the left, you can go all the way to the left too #}
+                <a href="{% url this_view issue_pk=issue.pk nav="first" %}{% current_qs %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="First event">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M3.22 7.595a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 0 0 1.06-1.06l-2.72-2.72 2.72-2.72a.75.75 0 0 0-1.06-1.06l-3.25 3.25Zm8.25-3.25-3.25 3.25a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 1 0 1.06-1.06l-2.72-2.72 2.72-2.72a.75.75 0 0 0-1.06-1.06Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}
@@ -8,8 +14,8 @@
                 </div>
                 {% endif %}
 
-                {% if event.has_prev %}
-                <a href="{% url this_view issue_pk=issue.pk digest_order=event.digest_order nav="prev" %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="Previous event">
+                {% if has_prev %}
+                <a href="{% url this_view issue_pk=issue.pk digest_order=event.digest_order nav="prev" %}{% current_qs %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="Previous event">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M9.78 4.22a.75.75 0 0 1 0 1.06L7.06 8l2.72 2.72a.75.75 0 1 1-1.06 1.06L5.47 8.53a.75.75 0 0 1 0-1.06l3.25-3.25a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}
@@ -18,8 +24,8 @@
                 </div>
                 {% endif %}
 
-                {% if event.has_next %}
-                <a href="{% url this_view issue_pk=issue.pk digest_order=event.digest_order nav="next" %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="Next event">
+                {% if has_next %}
+                <a href="{% url this_view issue_pk=issue.pk digest_order=event.digest_order nav="next" %}{% current_qs %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="Next event">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M6.22 4.22a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06L8.94 8 6.22 5.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}
@@ -28,8 +34,8 @@
                 </div>
                 {% endif %}
 
-                {% if event.has_next %}
-                <a href="{% url this_view issue_pk=issue.pk nav="last" %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="Last event">
+                {% if has_next %}
+                <a href="{% url this_view issue_pk=issue.pk nav="last" %}{% current_qs %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="Last event">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M12.78 7.595a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06l2.72-2.72-2.72-2.72a.75.75 0 0 1 1.06-1.06l3.25 3.25Zm-8.25-3.25 3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06l2.72-2.72-2.72-2.72a.75.75 0 0 1 1.06-1.06Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}

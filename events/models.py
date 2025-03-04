@@ -4,7 +4,6 @@ import uuid
 
 from django.db import models
 from django.db.utils import IntegrityError
-from django.db.models import Min, Max
 from django.utils.functional import cached_property
 
 from projects.models import Project
@@ -275,18 +274,6 @@ class Event(models.Model):
                 raise
 
             return None, False
-
-    def get_digest_order_bounds(self):
-        if not hasattr(self, "_digest_order_bounds"):
-            d = Event.objects.filter(issue_id=self.issue.id).aggregate(lo=Min("digest_order"), hi=Max("digest_order"))
-            self._digest_order_bounds = d["lo"], d["hi"]
-        return self._digest_order_bounds
-
-    def has_prev(self):
-        return self.digest_order > self.get_digest_order_bounds()[0]
-
-    def has_next(self):
-        return self.digest_order < self.get_digest_order_bounds()[1]
 
     @cached_property
     def get_tags(self):
