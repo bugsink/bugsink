@@ -265,8 +265,12 @@ class Event(models.Model):
 
             return event, created
         except IntegrityError as e:
-            if not re.match(
-                    r".*unique constraint failed.*events_event.*project_id.*events_event.*event_id", str(e).lower()):
+            ignore_patterns = [
+                r".*unique constraint failed.*events_event.*project_id.*events_event.*event_id",
+                r".*duplicate entry.*for key.*events_event.events_event_project_id_event_id.*",
+            ]
+
+            if not any(re.match(p, str(e).lower()) for p in ignore_patterns):
                 raise
 
             return None, False
