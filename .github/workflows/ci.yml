@@ -34,12 +34,24 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        db: [sqlite, mysql]
+        include:
+          - db: mysql
+            db_user: root
+            db_password: root
+    env:
+      DB: ${{ matrix.db }}
+      DB_USER: ${{ matrix.db_user }}
+      DB_PASSWORD: ${{ matrix.db_password }}
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
+    - name: Start MySQL If Needed
+      if: matrix.db == 'mysql'
+      run: sudo systemctl start mysql.service
     - name: Install build
       run: |
         python -m pip install --upgrade pip
@@ -53,6 +65,7 @@ jobs:
     - name: Install development dependencies
       run: |
         pip install -r requirements.development.txt
+        pip install mysqlclient
     - name: Check out event-samples
       uses: actions/checkout@master
       with:

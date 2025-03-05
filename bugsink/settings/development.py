@@ -40,13 +40,25 @@ DEBUG_TOOLBAR_CONFIG = {
 }
 
 
-# In development, we just keep the databases inside the root directory of the source-code. In production this is "not
-# recommended" (very foolish): this path maps to the virualenv's root directory, which is not a good place to store
-# databases.
-DATABASES["default"]["NAME"] = BASE_DIR / 'db.sqlite3'
-DATABASES["default"]["TEST"]["NAME"] = BASE_DIR / 'test.sqlite3'
-DATABASES["snappea"]["NAME"] = BASE_DIR / 'snappea.sqlite3'
+# this way of configuring (DB, DB_USER, DB_PASSWORD) is specific to the development environment
+if os.getenv("DB", "sqlite") == "mysql":
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'bugsink',
+        'USER': os.environ["DB_USER"],
+        'PASSWORD': os.environ["DB_PASSWORD"],
+    }
 
+elif os.getenv("DB", "sqlite") == "sqlite":
+    # In development, we just keep the databases inside the root directory of the source-code. In production this is
+    # "not recommended" (very foolish): this path maps to the virualenv's root directory, which is not a good place to
+    # store databases.
+    DATABASES["default"]["NAME"] = BASE_DIR / 'db.sqlite3'
+    DATABASES["default"]["TEST"]["NAME"] = BASE_DIR / 'test.sqlite3'
+    DATABASES["snappea"]["NAME"] = BASE_DIR / 'snappea.sqlite3'
+
+else:
+    raise ValueError("Unknown DB", os.getenv("DB"))
 
 # {  postponed, for starters we'll do something like SNAPPEA_ALWAYS_EAGER
 # DATABASES["snappea"]["TEST"]["NAME"] = BASE_DIR / 'test.snappea.sqlite3'
