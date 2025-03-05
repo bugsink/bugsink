@@ -1,5 +1,8 @@
 name: Continuous Integration
 
+# we use the fact that MySQL is part of the ubuntu image, which saves us from
+# "service container" complexities (but gives no choices in the version)
+
 on:
   push:
     branches: [ "main" ]
