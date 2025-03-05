@@ -1,4 +1,4 @@
-{% load static tailwind_tags version %}<!DOCTYPE html>
+{% load static tailwind_tags version add_to_qs %}<!DOCTYPE html>
 <html lang="en">
     <!-- version: {% version %} -->
 	<head>
@@ -23,7 +23,7 @@
                 <a href="{% url "project_list" %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl">Projects</div></a>
 
                 {% if project %}
-                <a href="{% url "issue_list_open" project_pk=project.pk %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl">Issues ({{ project.name }})</div></a>
+                <a href="{% url "issue_list_open" project_pk=project.pk %}{% current_qs %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl">Issues ({{ project.name }})</div></a>
                 {% endif %}
 
                 <div class="ml-auto flex">
