@@ -1,5 +1,10 @@
 name: Continuous Integration
 
+# we use the fact that MySQL and Postgres are part of the ubuntu image, which saves us from
+# "service container" complexities (but gives no choices in the version); this is also where
+# the confured username/passwords for mysql come from
+# approach inspired by https://blog.healthchecks.io/2020/11/using-github-actions-to-run-django-tests/
+
 on:
   push:
     branches: [ "main" ]
@@ -34,12 +39,32 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        db: [sqlite, mysql, postgres]
+        include:
+          - db: mysql
+            db_user: root
+            db_password: root
+          - db: postgres
+            db_user: bugsink
+            db_password: bugsink
+    env:
+      DB: ${{ matrix.db }}
+      DB_USER: ${{ matrix.db_user }}
+      DB_PASSWORD: ${{ matrix.db_password }}
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
+    - name: Start MySQL If Needed
+      if: matrix.db == 'mysql'
+      run: sudo systemctl start mysql.service
+    - name: Start PostgreSQL
+      if: matrix.db == 'postgres'
+      run: |
+        sudo systemctl start postgresql.service
+        sudo -u postgres psql -c "CREATE ROLE bugsink PASSWORD 'bugsink' NOSUPERUSER CREATEDB CREATEROLE INHERIT LOGIN;" postgres
     - name: Install build
       run: |
         python -m pip install --upgrade pip
@@ -53,6 +78,7 @@ jobs:
     - name: Install development dependencies
       run: |
         pip install -r requirements.development.txt
+        pip install mysqlclient psycopg2
     - name: Check out event-samples
       uses: actions/checkout@master
       with:
