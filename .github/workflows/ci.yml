@@ -1,7 +1,9 @@
 name: Continuous Integration
 
-# we use the fact that MySQL is part of the ubuntu image, which saves us from
-# "service container" complexities (but gives no choices in the version)
+# we use the fact that MySQL and Postgres are part of the ubuntu image, which saves us from
+# "service container" complexities (but gives no choices in the version); this is also where
+# the confured username/passwords come from
+# approach inspired by https://blog.healthchecks.io/2020/11/using-github-actions-to-run-django-tests/
 
 on:
   push:
@@ -37,11 +39,14 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-        db: [sqlite, mysql]
+        db: [sqlite, mysql, postgres]
         include:
           - db: mysql
             db_user: root
             db_password: root
+          - db: postgres
+            db_user: runner
+            db_password: ''
     env:
       DB: ${{ matrix.db }}
       DB_USER: ${{ matrix.db_user }}
@@ -55,6 +60,11 @@ jobs:
     - name: Start MySQL If Needed
       if: matrix.db == 'mysql'
       run: sudo systemctl start mysql.service
+    - name: Start PostgreSQL
+      if: matrix.db == 'postgres'
+      run: |
+        sudo systemctl start postgresql.service
+        sudo -u postgres createuser -s runner
     - name: Install build
       run: |
         python -m pip install --upgrade pip
@@ -68,7 +78,7 @@ jobs:
     - name: Install development dependencies
       run: |
         pip install -r requirements.development.txt
-        pip install mysqlclient
+        pip install mysqlclient psycopg2
     - name: Check out event-samples
       uses: actions/checkout@master
       with:

@@ -266,8 +266,9 @@ class Event(models.Model):
             return event, created
         except IntegrityError as e:
             ignore_patterns = [
-                r".*unique constraint failed.*events_event.*project_id.*events_event.*event_id",
-                r".*duplicate entry.*for key.*events_event.events_event_project_id_event_id.*",
+                r".*unique constraint failed.*events_event.*project_id.*events_event.*event_id",  # sqlite
+                r".*duplicate entry.*for key.*events_event.events_event_project_id_event_id.*",  # mysql
+                r".*duplicate key value violates unique constraint.*events_event_project_id_event_id.*",  # postgres
             ]
 
             if not any(re.match(p, str(e).lower()) for p in ignore_patterns):

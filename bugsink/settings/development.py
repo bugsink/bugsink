@@ -49,6 +49,15 @@ if os.getenv("DB", "sqlite") == "mysql":
         'PASSWORD': os.environ["DB_PASSWORD"],
     }
 
+elif os.getenv("DB", "sqlite") == "postgres":
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'bugsink',
+        'USER': os.environ["DB_USER"],
+        'PASSWORD': os.environ["DB_PASSWORD"],
+        'HOST': 'localhost',
+    }
+
 elif os.getenv("DB", "sqlite") == "sqlite":
     # In development, we just keep the databases inside the root directory of the source-code. In production this is
     # "not recommended" (very foolish): this path maps to the virualenv's root directory, which is not a good place to
