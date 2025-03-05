@@ -1,12 +1,10 @@
 from collections import namedtuple
 import json
 import sentry_sdk
-import re
 
-from django.db.models import Min, Max
+from django.db.models import Min, Max, Q
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
-from django.db.models import Q, Subquery
 from django.http import HttpResponseRedirect, HttpResponseNotAllowed
 from django.utils.safestring import mark_safe
 from django.template.defaultfilters import date
@@ -17,7 +15,6 @@ from django.core.paginator import Paginator
 
 from sentry.utils.safe import get_path
 
-from bugsink.moreiterutils import tuplewise
 from bugsink.decorators import project_membership_required, issue_membership_required, atomic_for_request_method
 from bugsink.transaction import durable_atomic
 from bugsink.period_utils import add_periods_to_datetime
@@ -27,7 +24,7 @@ from events.ua_stuff import get_contexts_enriched_with_ua
 
 from compat.timestamp import format_timestamp
 from projects.models import ProjectMembership
-from tags.models import TagValue, IssueTag, EventTag
+from tags.search import search_issues, search_events
 
 from .models import Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind
 from .forms import CommentForm
@@ -228,101 +225,6 @@ def _issue_list_pt_1(request, project, state_filter="open"):
     return project, unapplied_issue_ids
 
 
-def remove_slices(s, slices_to_remove):
-    """Returns s with the slices removed."""
-    items = [item for tup in slices_to_remove for item in tup]
-    slices_to_preserve = tuplewise([0] + items + [None])
-    return "".join(s[start:stop] for start, stop in slices_to_preserve)
-
-
-def _and_join(q_objects):
-    if len(q_objects) == 0:
-        # we _could_ just return Q(), but I'd force the calling location to not do this
-        raise ValueError("empty list of Q objects")
-
-    result = q_objects[0]
-    for q in q_objects[1:]:
-        result &= q
-
-    return result
-
-
-def _search(project, issue_list, q):
-    if not q:
-        return issue_list
-
-    # The simplest possible query-language that could have any value: key:value is recognized as such; the rest is "free
-    # text"; no support for quoting of spaces.
-    slices_to_remove = []
-    clauses = []
-    for match in re.finditer(r"(\S+):(\S+)", q):
-        slices_to_remove.append(match.span())
-        key, value = match.groups()
-        try:
-            tag_value_obj = TagValue.objects.get(project=project, key__key=key, value=value)
-        except TagValue.DoesNotExist:
-            # if the tag doesn't exist, we can't have any issues with it; the below short-circuit is fine, I think (I
-            # mean: we _could_ say "tag x is to blame" but that's not what one does generally in search, is it?
-            return issue_list.none()
-
-        # TODO: Extensive performance testing of various choices here is necessary; in particular the choice of Subquery
-        # vs. joins; and the choice of a separate query to get TagValue v.s. doing everything in a single big query will
-        # have different trade-offs _in practice_.
-        clauses.append(
-            Q(id__in=Subquery(IssueTag.objects.filter(value=tag_value_obj).values_list("issue_id", flat=True))))
-
-    # this is really TSTTCPW (or more like a "fake it till you make it" thing); but I'd rather "have something" and then
-    # have really-good-search than to have either nothing at all, or half-baked search. Note that we didn't even bother
-    # to set indexes on the fields we search on (nor create a single searchable field for the whole of 'title').
-    plain_text_q = remove_slices(q, slices_to_remove).strip()
-    if plain_text_q:
-        clauses.append(Q(Q(calculated_type__icontains=plain_text_q) | Q(calculated_value__icontains=plain_text_q)))
-
-    # if we reach this point, there's always either a plain_text_q or some key/value pair (this is a condition for
-    # _and_join)
-    issue_list = issue_list.filter(_and_join(clauses))
-
-    return issue_list
-
-
-def _search_events(project, event_list, q):
-    if not q:
-        return event_list
-
-    # The simplest possible query-language that could have any value: key:value is recognized as such; the rest is "free
-    # text"; no support for quoting of spaces.
-    slices_to_remove = []
-    clauses = []
-    for match in re.finditer(r"(\S+):(\S+)", q):
-        slices_to_remove.append(match.span())
-        key, value = match.groups()
-        try:
-            tag_value_obj = TagValue.objects.get(project=project, key__key=key, value=value)
-        except TagValue.DoesNotExist:
-            # if the tag doesn't exist, we can't have any events with it; the below short-circuit is fine, I think (I
-            # mean: we _could_ say "tag x is to blame" but that's not what one does generally in search, is it?
-            return event_list.none()
-
-        # TODO: Extensive performance testing of various choices here is necessary; in particular the choice of Subquery
-        # vs. joins; and the choice of a separate query to get TagValue v.s. doing everything in a single big query will
-        # have different trade-offs _in practice_.
-        clauses.append(
-            Q(id__in=Subquery(EventTag.objects.filter(value=tag_value_obj).values_list("event_id", flat=True))))
-
-    # this is really TSTTCPW (or more like a "fake it till you make it" thing); but I'd rather "have something" and then
-    # have really-good-search than to have either nothing at all, or half-baked search. Note that we didn't even bother
-    # to set indexes on the fields we search on (nor create a single searchable field for the whole of 'title').
-    plain_text_q = remove_slices(q, slices_to_remove).strip()
-    if plain_text_q:
-        clauses.append(Q(Q(calculated_type__icontains=plain_text_q) | Q(calculated_value__icontains=plain_text_q)))
-
-    # if we reach this point, there's always either a plain_text_q or some key/value pair (this is a condition for
-    # _and_join)
-    event_list = event_list.filter(_and_join(clauses))
-
-    return event_list
-
-
 def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
     d_state_filter = {
         "open": lambda qs: qs.filter(is_resolved=False, is_muted=False),
@@ -337,7 +239,7 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
     ).order_by("-last_seen")
 
     if request.GET.get("q"):
-        issue_list = _search(project, issue_list, request.GET["q"])
+        issue_list = search_issues(project, issue_list, request.GET["q"])
 
     paginator = Paginator(issue_list, 250)
     page_number = request.GET.get("page")
@@ -433,7 +335,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
 
     event_qs = Event.objects.filter(issue=issue)
     if request.GET.get("q"):
-        event_qs = _search_events(issue.project, event_qs, request.GET["q"])
+        event_qs = search_events(issue.project, event_qs, request.GET["q"])
 
     try:
         event = _get_event(event_qs, event_pk, digest_order, nav)
@@ -518,7 +420,7 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
 
     event_qs = Event.objects.filter(issue=issue)
     if request.GET.get("q"):
-        event_qs = _search_events(issue.project, event_qs, request.GET["q"])
+        event_qs = search_events(issue.project, event_qs, request.GET["q"])
 
     try:
         event = _get_event(event_qs, event_pk, digest_order, nav)
@@ -565,7 +467,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
 
     event_qs = Event.objects.filter(issue=issue)
     if request.GET.get("q"):
-        event_qs = _search_events(issue.project, event_qs, request.GET["q"])
+        event_qs = search_events(issue.project, event_qs, request.GET["q"])
 
     try:
         event = _get_event(event_qs, event_pk, digest_order, nav)
@@ -658,7 +560,7 @@ def issue_history(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event_qs = _search_events(issue.project, issue.event_set.order_by("digest_order"), request.GET.get("q", ""))
+    event_qs = search_events(issue.project, issue.event_set.order_by("digest_order"), request.GET.get("q", ""))
     last_event = event_qs.last()  # used for switching to an event-page (using tabs)
     return render(request, "issues/history.html", {
         "tab": "history",
@@ -677,7 +579,7 @@ def issue_tags(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event_qs = _search_events(issue.project, issue.event_set.order_by("digest_order"), request.GET.get("q", ""))
+    event_qs = search_events(issue.project, issue.event_set.order_by("digest_order"), request.GET.get("q", ""))
     last_event = event_qs.last()  # used for switching to an event-page (using tabs)
     return render(request, "issues/tags.html", {
         "tab": "tags",
@@ -696,7 +598,7 @@ def issue_grouping(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event_qs = _search_events(issue.project, issue.event_set.order_by("digest_order"), request.GET.get("q", ""))
+    event_qs = search_events(issue.project, issue.event_set.order_by("digest_order"), request.GET.get("q", ""))
     last_event = event_qs.last()  # used for switching to an event-page (using tabs)
     return render(request, "issues/grouping.html", {
         "tab": "grouping",
@@ -718,7 +620,7 @@ def issue_event_list(request, issue):
     event_list = issue.event_set.order_by("digest_order")
 
     if "q" in request.GET:
-        event_list = _search_events(issue.project, event_list, request.GET["q"])
+        event_list = search_events(issue.project, event_list, request.GET["q"])
         paginator = Paginator(event_list, 250)  # might as well use Paginator; the cost of .count() is incurred anyway
     else:
         # re 250: in general "big is good" because it allows a lot "at a glance".
