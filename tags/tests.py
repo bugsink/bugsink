@@ -1,12 +1,59 @@
+from unittest import TestCase as RegularTestCase
 from django.test import TestCase as DjangoTestCase
 
-from tags.models import store_tags
 from projects.models import Project
 from issues.factories import get_or_create_issue
 from events.factories import create_event
 
+from .models import store_tags
+from .utils import deduce_tags
 
-class TagsTestCase(DjangoTestCase):
+
+class DeduceTagsTestCase(RegularTestCase):
+
+    def test_deduce_tags(self):
+        self.assertEqual(deduce_tags({}), {})
+        self.assertEqual(deduce_tags({"tags": {"foo": "bar"}}), {"foo": "bar"})
+
+        # finally, a more complex example (more or less real-world)
+        event_data = {
+            "server_name": "server",
+            "release": "1.0",
+            "environment": "prod",
+            "transaction": "main",
+            "contexts": {
+                "trace": {
+                    "trace_id": "1f2d3e4f5a6b5c8df9e0a1b2c3d4e5f",
+                    "span_id": "9a8b7c6d5e4f3a2c",
+                },
+                "browser": {
+                    "name": "Chrome",
+                    "version": "88",
+                },
+                "os": {
+                    "name": "Windows",
+                    "version": "10",
+                },
+            },
+        }
+        self.assertEqual(deduce_tags(event_data), {
+            "server_name": "server",
+            "release": "1.0",
+            "environment": "prod",
+            "transaction": "main",
+            "trace": "1f2d3e4f5a6b5c8df9e0a1b2c3d4e5f",
+            "trace.span": "9a8b7c6d5e4f3a2c",
+            "trace.ctx": "1f2d3e4f5a6b5c8df9e0a1b2c3d4e5f.9a8b7c6d5e4f3a2c",
+            "browser.name": "Chrome",
+            "browser.version": "88",
+            "browser": "Chrome 88",
+            "os.name": "Windows",
+            "os.version": "10",
+            "os": "Windows 10",
+        })
+
+
+class StoreTagsTestCase(DjangoTestCase):
     # NOTE: I do quite a few assertNumQueries() in the below; super-brittle and opaque, of course. But at least the
     # brittle part is quick to fix (a single number) and provides a canary for performance regressions.
 
