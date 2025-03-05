@@ -2,11 +2,14 @@ from unittest import TestCase as RegularTestCase
 from django.test import TestCase as DjangoTestCase
 
 from projects.models import Project
-from issues.factories import get_or_create_issue
+from issues.factories import get_or_create_issue, denormalized_issue_fields
 from events.factories import create_event
+from issues.models import Issue
+from events.models import Event
 
 from .models import store_tags
 from .utils import deduce_tags
+from .search import search_events, search_issues
 
 
 class DeduceTagsTestCase(RegularTestCase):
@@ -96,3 +99,54 @@ class StoreTagsTestCase(DjangoTestCase):
 
         self.assertEqual(self.issue.tags.first().count, 2)
         self.assertEqual(self.issue.tags.first().value.key.key, "foo")
+
+
+class SearchTestCase(DjangoTestCase):
+    """'Integration'-test; assuming Tags are stored correctly in the DB, can we search for them?"""
+
+    def setUp(self):
+        self.project = Project.objects.create(name="Test Project")
+
+        issue_with_tags_and_text = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        event_with_tags_and_text = create_event(self.project, issue=issue_with_tags_and_text)
+
+        issue_with_tags_no_text = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        event_with_tags_no_text = create_event(self.project, issue=issue_with_tags_no_text)
+
+        store_tags(event_with_tags_and_text, issue_with_tags_and_text, {f"k-{i}": f"v-{i}" for i in range(5)})
+        store_tags(event_with_tags_no_text, issue_with_tags_no_text, {f"k-{i}": f"v-{i}" for i in range(5)})
+
+        issue_without_tags = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        event_without_tags = create_event(self.project, issue=issue_without_tags)
+
+        for obj in [issue_with_tags_and_text, event_with_tags_and_text, issue_without_tags, event_without_tags]:
+            obj.calculated_type = "FindableException"
+            obj.calculated_value = "findable value"
+            obj.save()
+
+        issue_with_nothing = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        create_event(self.project, issue=issue_with_nothing)
+
+    def _test_search(self, search_x, clz):
+        # we create 2 items with tags
+        self.assertEqual(search_x(self.project, clz.objects.all(), "k-0:v-0").count(), 2)
+
+        # non-matching tag: no results
+        self.assertEqual(search_x(self.project, clz.objects.all(), "k-0:nosuchthing").count(), 0)
+
+        # findable-by-text: 2 such items
+        self.assertEqual(search_x(self.project, clz.objects.all(), "findable value").count(), 2)
+        self.assertEqual(search_x(self.project, clz.objects.all(), "FindableException").count(), 2)
+
+        # non-matching text: no results
+        self.assertEqual(search_x(self.project, clz.objects.all(), "nosuchthing").count(), 0)
+        self.assertEqual(search_x(self.project, clz.objects.all(), "k-0:v-0 nosuchthing").count(), 0)
+
+        # findable-by-text, tagged: 1 such item
+        self.assertEqual(search_x(self.project, clz.objects.all(), "findable value k-0:v-0").count(), 1)
+
+    def test_search_events(self):
+        self._test_search(search_events, Event)
+
+    def test_search_issues(self):
+        self._test_search(search_issues, Issue)
