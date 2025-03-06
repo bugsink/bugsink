@@ -23,6 +23,10 @@ class DeduceTagsTestCase(RegularTestCase):
             "server_name": "server",
             "release": "1.0",
             "environment": "prod",
+            "mechanism": {
+                "type": "exception",
+                "handled": False,
+            },
             "transaction": "main",
             "contexts": {
                 "trace": {
@@ -43,6 +47,7 @@ class DeduceTagsTestCase(RegularTestCase):
             "server_name": "server",
             "release": "1.0",
             "environment": "prod",
+            "handled": "false",
             "transaction": "main",
             "trace": "1f2d3e4f5a6b5c8df9e0a1b2c3d4e5f",
             "trace.span": "9a8b7c6d5e4f3a2c",

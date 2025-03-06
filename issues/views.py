@@ -481,11 +481,18 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         # transaction_info.source avoid information overload; sentry doesn't bother showing this in the UI either
         ("event_id", event.event_id),
         ("bugsink_internal_id", event.id),
+    ]
 
-        # grepping on [private-]samples (admittedly: not a very rich set)  has shown: when there's multiple values for
-        # mechanism, they're always identical. We just pick the 'main' (best guess) if this ever turns out to be false.
-        # sentry repeats this info throughout the chains in the trace, btw, but I don't want to pollute my UI so much.
-        ("handled", get_path(get_main_exception(parsed_data), "mechanism", "handled")),
+    if get_path(get_main_exception(parsed_data), "mechanism", "handled") is not None:
+        key_info += [
+            # grepping on [private-]samples (admittedly: not a very rich set)  has shown: when there's multiple values
+            # for mechanism, they're always identical. We just pick the 'main' (best guess) if this ever turns out to be
+            # false.  sentry repeats this info throughout the chains in the trace, btw, but I don't want to pollute my
+            # UI so much.
+            ("handled", get_path(get_main_exception(parsed_data), "mechanism", "handled")),
+        ]
+
+    key_info += [
         ("mechanism", get_path(get_main_exception(parsed_data), "mechanism", "type")),
 
         ("issue_id", issue.id),

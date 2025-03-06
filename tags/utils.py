@@ -1,14 +1,24 @@
 from events.ua_stuff import get_contexts_enriched_with_ua
 from sentry.utils.safe import get_path
 
+from issues.utils import get_main_exception
+
 
 EVENT_DATA_CONVERSION_TABLE = {
-    # NOTE that "level" is not included here; Sentry puts this front and center, and although we may give it _some_
-    # place in the UI, Bugsink's take is that "level: Error" in an Error Tracker is an open door/waste of space.
-    "server_name": "server_name",
-    "release": "release",
-    "environment": "environment",
-    "transaction": "transaction",
+    # "level" is not included here; Sentry puts this front and center for the tags; although we give it a non-prominent
+    # place in the UI for the event-detail, Bugsink's take is that "level: Error" in an Error Tracker is not useful
+    # enough to warrant display-as-tag, nor even is it a searchable term.
+    # "level": ("level",),
+
+    "server_name": ("server_name",),
+    "release": ("release",),
+    "environment": ("environment",),
+    "transaction": ("transaction",),
+}
+
+
+MAIN_EXCEPTION_CONVERSION_TABLE = {
+    "handled": ("mechanism", "handled"),
 }
 
 
@@ -42,6 +52,12 @@ def deduce_user_tag(contexts):
     return None
 
 
+def _convert_non_strings(value):
+    if isinstance(value, bool):
+        return str(value).lower()
+    return value
+
+
 def deduce_tags(event_data):
     """
     Deduce tags for `event_data`. Used as an "opportunistic" (generic) way to implement counting and searching. Although
@@ -54,9 +70,20 @@ def deduce_tags(event_data):
     tags = event_data.get('tags', {})
 
     for tag_key, lookup_path in EVENT_DATA_CONVERSION_TABLE.items():
-        value = get_path(event_data, lookup_path)
+        value = get_path(event_data, *lookup_path)
+
+        # NOTE: we don't have some kind of "defaulting" mechanism here; if the value is None / non-existent, we simply
+        # don't add the tag.
         if value not in [None, ""]:
-            tags[tag_key] = value
+            tags[tag_key] = _convert_non_strings(value)
+
+    # deduce from main exception
+    main_exception = get_main_exception(event_data)
+    for tag_key, lookup_path in MAIN_EXCEPTION_CONVERSION_TABLE.items():
+        value = get_path(main_exception, *lookup_path)
+
+        if value not in [None, ""]:
+            tags[tag_key] = _convert_non_strings(value)
 
     # deduce from contexts
     contexts = get_contexts_enriched_with_ua(event_data)
@@ -64,7 +91,7 @@ def deduce_tags(event_data):
     for tag_key, path in CONTEXT_CONVERSION_TABLE.items():
         value = get_path(contexts, *path)
         if value not in [None, ""]:
-            tags[tag_key] = value
+            tags[tag_key] = _convert_non_strings(value)
 
     if "trace" in tags and "trace.span" in tags:
         tags["trace.ctx"] = f"{tags['trace']}.{tags['trace.span']}"
