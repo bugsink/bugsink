@@ -166,23 +166,26 @@ def filter_for_work(epoch_bounds_with_irrelevance, pairs, max_total_irrelevance)
 
 
 def eviction_target(max_event_count, stored_event_count):
-    # We always evict at least 500 events, or 5% of the max event count, whichever is less. The reason is: we want to
-    # avoid having to evict again immediately after we've just evicted. Because eviction is relatively expensive, we
-    # want to avoid doing it too often. For the completely reasonable quota of 10_000 events or more, this just means
-    # 500; for lower quota we take 5% to avoid evicting too much (at a small performance penalty).
+    # Calculate a target number of events to evict, which is a balancing act between 2 things:
     #
-    # One reason to pick no higher than 500 (and to delete_with_limit) is that we want to avoid blocking too long on a
-    # single eviction. (both on a single query, to avoid timeouts, but also on the eviciton as a whole, because it
-    # would block other threads/processes and trigger timeouts there). On the slow VPS we've observed deletions taking
-    # in the order of 1-4ms per event, so 500 would put us at 2s, which is still less than 50% of the timeout value.
+    # 1. large enough to avoid having to evict again immediately after we've just evicted (eviction is relatively
+    #    expensive, so we want to avoid doing it too often)
+    # 2. not too large to avoid [a] throwing too much data away unnecessarily and [b] avoid blocking too
+    #    long on a single eviction (both on a single query, to avoid timeouts, but also on the eviction as a whole,
+    #    because it would block other threads/processes and trigger timeouts there).
+    #
+    # Inputs into the calculation are (see test_eviction_target to understand the min/maxing):
+    #
+    # * the constant value of 500
+    # * the over-targetness
+    # * and a percentage of 5% of the target
+    #
+    # On the slow VPS we've observed deletions taking in the order of 1-4ms per event, so 500 would put us at 2s, which
+    # is still less than 50% of the timeout value.
     #
     # Although eviction triggers "a lot" of queries, "a lot" is in the order of 25, so after amortization this is far
     # less than 1 query extra per event (as a result of the actual eviction, checking for the need to evict is a
-    # different story). 5% seems close enough to the limit to stem the "why was so much deleted" questions.
-    #
-    # We also evict at least the number of events that we are over the max event count; this takes care of 2 scenarios:
-    # * a quota that has been adjusted downwards (we want to get rid of the excess);
-    # * quota so ridiculously low that 5% rounds down to 0, in those cases at least delete 1
+    # different story). 5% seems small enough to stem the "why was so much deleted" questions.
     return min(
                max(
                    int(max_event_count * 0.05),
