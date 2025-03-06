@@ -56,9 +56,6 @@ def parse_query(q):
 
     slices_to_remove.sort(key=lambda tup: tup[0])  # _remove_slices expects the slices to be sorted
 
-    # this is really TSTTCPW (or more like a "fake it till you make it" thing); but I'd rather "have something" and then
-    # have really-good-search than to have either nothing at all, or half-baked search. Note that we didn't even bother
-    # to set indexes on the fields we search on (nor create a single searchable field for the whole of 'title').
     plain_text_q = _remove_slices(q, slices_to_remove).strip()
 
     return ParsedQuery(tags, plain_text_q)
@@ -90,6 +87,16 @@ def _search(TagClz, fk_fieldname, project, obj_list, q):
     # this is really TSTTCPW (or more like a "fake it till you make it" thing); but I'd rather "have something" and then
     # have really-good-search than to have either nothing at all, or half-baked search. Note that we didn't even bother
     # to set indexes on the fields we search on (nor create a single searchable field for the whole of 'title').
+    # Some notes on the current limitations and ways to improve:
+    # * performance-wise: icontains queries are expensive (the "%" is on two sides, hence no index can be used); for
+    #   limited data, this may be fine, but for anything over a few thousand records, this will be slow. (We might want
+    #   to just do prefix-matching; or do the "both sides" thing only for small datasets).
+    #
+    # * performance-wise: the initial impl. only supported Issue-search; we now also allow Event-search; but there are
+    #   often many more events than issues.
+    #
+    # * the current implementation does not work for plain text queries that span the type/value boundary; nor does it
+    #   work for searching on "message" (for log messages).
     if parsed.plain_text:
         clauses.append(
             Q(Q(calculated_type__icontains=parsed.plain_text) | Q(calculated_value__icontains=parsed.plain_text)))
