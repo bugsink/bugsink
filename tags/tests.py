@@ -9,7 +9,7 @@ from events.models import Event
 
 from .models import store_tags
 from .utils import deduce_tags
-from .search import search_events, search_issues
+from .search import search_events, search_issues, parse_query
 
 
 class DeduceTagsTestCase(RegularTestCase):
@@ -99,6 +99,54 @@ class StoreTagsTestCase(DjangoTestCase):
 
         self.assertEqual(self.issue.tags.first().count, 2)
         self.assertEqual(self.issue.tags.first().value.key.key, "foo")
+
+
+class SearchParserTestCase(RegularTestCase):
+
+    def test_parser(self):
+        # we don't actually do the below, empty queries are never parsed
+        # self.assertEquals(({}, ""), parse_query(""))
+
+        self.assertEquals(({}, "FindableException"), parse_query("FindableException"))
+        self.assertEquals(({}, "findable value"), parse_query("findable value"))
+
+        self.assertEquals(({"key": "value"}, ""),  parse_query("key:value"))
+        self.assertEquals(
+            ({"key": "value", "anotherkey": "anothervalue"}, ""),
+            parse_query("key:value anotherkey:anothervalue"))
+
+        self.assertEquals(
+            ({"keys.may.have.dots": "values.may.have.dots.too"}, ""),
+            parse_query("keys.may.have.dots:values.may.have.dots.too"))
+
+        self.assertEquals(
+            ({"key": "value"}, "some text goes here"),
+            parse_query("key:value some text goes here"))
+
+        self.assertEquals(
+            ({}, "text  with  spaces  everywhere"),
+            parse_query("text  with  spaces  everywhere"))
+
+        self.assertEquals(
+            ({}, "key: preceded by space"),
+            parse_query("key: preceded by space"))
+
+        self.assertEquals(
+            ({"key": "quoted value"}, ""),
+            parse_query('key:"quoted value"'))
+
+        self.assertEquals(
+            ({"key": "quoted value"}, "and further text"),
+            parse_query('key:"quoted value" and further text'))
+
+        # This is the kind of test that just documents "what is" rather than "what I believe is right". The weirdness
+        # here is mostly the double space "on  both" which is the result of just cutting out the key:value bits. But...
+        # I'm not invested in getting this more precise (yet), because this whole case is a bit weird. I'd much rather
+        # point people in the direction of "put k:v at the beginning, and any free text at the end" (which is something
+        # we could even validate on at some later point).
+        self.assertEquals(
+            ({"key": "value"}, "text on  both sides"),
+            parse_query("text on key:value both sides"))
 
 
 class SearchTestCase(DjangoTestCase):

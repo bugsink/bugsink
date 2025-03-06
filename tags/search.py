@@ -6,10 +6,14 @@ least it means we have all of this together in a separate file this way.
 
 import re
 from django.db.models import Q, Subquery
+from collections import namedtuple
 
 from bugsink.moreiterutils import tuplewise
 
 from .models import TagValue, IssueTag, EventTag
+
+
+ParsedQuery = namedtuple("ParsedQ", ["tags", "plain_text"])
 
 
 def _remove_slices(s, slices_to_remove):
@@ -31,17 +35,45 @@ def _and_join(q_objects):
     return result
 
 
+def parse_query(q):
+    # The simplest possible query-language that could have any value: key:value is recognized as such; the rest is "free
+    # text"; no support for quoting of spaces.
+    tags = {}
+
+    slices_to_remove = []
+
+    # first, match all key:value pairs with unquoted values
+    for match in re.finditer(r'(\S+):([^\s"]+)', q):
+        slices_to_remove.append(match.span())
+        key, value = match.groups()
+        tags[key] = value
+
+    # then, match all key:"quoted value" pairs
+    for match in re.finditer(r'(\S+):"([^"]+)"', q):
+        slices_to_remove.append(match.span())
+        key, value = match.groups()
+        tags[key] = value
+
+    slices_to_remove.sort(key=lambda tup: tup[0])  # _remove_slices expects the slices to be sorted
+
+    # this is really TSTTCPW (or more like a "fake it till you make it" thing); but I'd rather "have something" and then
+    # have really-good-search than to have either nothing at all, or half-baked search. Note that we didn't even bother
+    # to set indexes on the fields we search on (nor create a single searchable field for the whole of 'title').
+    plain_text_q = _remove_slices(q, slices_to_remove).strip()
+
+    return ParsedQuery(tags, plain_text_q)
+
+
 def _search(TagClz, fk_fieldname, project, obj_list, q):
     if not q:
         return obj_list
 
+    parsed = parse_query(q)
+
     # The simplest possible query-language that could have any value: key:value is recognized as such; the rest is "free
     # text"; no support for quoting of spaces.
-    slices_to_remove = []
     clauses = []
-    for match in re.finditer(r"(\S+):(\S+)", q):
-        slices_to_remove.append(match.span())
-        key, value = match.groups()
+    for key, value in parsed.tags.items():
         try:
             tag_value_obj = TagValue.objects.get(project=project, key__key=key, value=value)
         except TagValue.DoesNotExist:
@@ -58,9 +90,9 @@ def _search(TagClz, fk_fieldname, project, obj_list, q):
     # this is really TSTTCPW (or more like a "fake it till you make it" thing); but I'd rather "have something" and then
     # have really-good-search than to have either nothing at all, or half-baked search. Note that we didn't even bother
     # to set indexes on the fields we search on (nor create a single searchable field for the whole of 'title').
-    plain_text_q = _remove_slices(q, slices_to_remove).strip()
-    if plain_text_q:
-        clauses.append(Q(Q(calculated_type__icontains=plain_text_q) | Q(calculated_value__icontains=plain_text_q)))
+    if parsed.plain_text:
+        clauses.append(
+            Q(Q(calculated_type__icontains=parsed.plain_text) | Q(calculated_value__icontains=parsed.plain_text)))
 
     # if we reach this point, there's always either a plain_text_q or some key/value pair (this is a condition for
     # _and_join)
