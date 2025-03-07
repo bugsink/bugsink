@@ -18,7 +18,19 @@ class DryRunException(Exception):
 
 
 def _delete_for_missing_fk(clazz, field_name):
-    """Delete all objects of class clazz of which the field field_name points to a non-existing object or null"""
+    """
+    Delete all objects of class clazz of which the field field_name points to a non-existing object or null.
+
+    ## Dangling FKs:
+    Non-existing objects may come into being when people muddle in the database directly with foreign key checks turned
+    off (note that fk checks are turned off by default in SQLite for backwards compatibility reasons).
+
+    In the future it's further possible that there will be pieces the actual Bugsink code where FK-checks are turned off
+    temporarily (e.g. when deleting a project with very many related objects). (In March 2025 there was no such code
+    yet)
+
+    To make make_consistent() do what it says on the can, we need to delete these dangling objects.
+    """
     BATCH_SIZE = 1_000
 
     dangling_fks = set()
