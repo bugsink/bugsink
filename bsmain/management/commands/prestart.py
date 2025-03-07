@@ -22,7 +22,10 @@ class Command(BaseCommand):
         username, password = os.getenv("CREATE_SUPERUSER").split(":")
 
         if User.objects.all().exists():
-            print("Superuser not created: user(s) already exist.")
+            print(
+                "Superuser not created: _any_ user(s) already exist(s). "
+                "CREATE_SUPERUSER only works for the initial user.")
+
             return
 
         User.objects.create_superuser(username=username, password=password)
