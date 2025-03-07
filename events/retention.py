@@ -272,6 +272,7 @@ def evict_for_irrelevance(
 def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_event_count, include_never_evict):
     from issues.models import TurningPoint
     from .models import Event
+    from tags.models import EventTag
     # evicting "at", based on the total irrelevance split out into 2 parts: max item irrelevance, and an epoch as
     # implied by the age-based irrelevance.
 
@@ -322,6 +323,11 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_eve
             Event.objects.filter(pk__in=pks_to_delete).exclude(storage_backend=None)
             .values_list("id", "storage_backend")
         )
+
+        # Rather than rely on Django's implementation of CASCADE, we "just do this ourselves"; Reason is: Django does an
+        # extra, expensive (all-column), query on Event[...](id__in=pks_to_delete) to extract the Event ids (which we
+        # already have).
+        EventTag.objects.filter(event_id__in=pks_to_delete).delete()
         nr_of_deletions = Event.objects.filter(pk__in=pks_to_delete).delete()[1].get("events.Event", 0)
     else:
         nr_of_deletions = 0

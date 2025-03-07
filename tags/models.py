@@ -49,8 +49,6 @@ class TagKey(models.Model):
 
 class TagValue(models.Model):
     project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
-    # CASCADE: TBD; one argument might be: decouple deletions from events ingestion, but at least have them internally
-    # consistent
     key = models.ForeignKey(TagKey, blank=False, null=False, on_delete=models.CASCADE)
     value = models.CharField(max_length=200, blank=False, null=False, db_index=True)
 
@@ -68,12 +66,16 @@ class EventTag(models.Model):
     # value already implies key in our current setup.
     value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.CASCADE)
 
-    event = models.ForeignKey('events.Event', blank=False, null=True, on_delete=models.SET_NULL, related_name='tags')
+    # DO_NOTHING: we manually implement CASCADE (i.e. when an event is cleaned up, clean up associated tags) in the
+    # eviction process.  Why CASCADE? [1] you'll have to do it "at some point", so you might as well do it right when
+    # evicting (async in the 'most resilient setup' anyway, b/c that happens when ingesting) [2] the order of magnitude
+    # is "tens of deletions per event", so that's no reason to postpone.
+    event = models.ForeignKey('events.Event', blank=False, null=False, on_delete=models.DO_NOTHING, related_name='tags')
 
     class Meta:
         unique_together = ('value', 'event')
         indexes = [
-            models.Index(fields=['event', 'value']),  # make lookups by event (for details page) faster
+            models.Index(fields=['event', 'value']),  # make lookups by event (for details page, deletions) faster
         ]
 
 
@@ -87,15 +89,17 @@ class IssueTag(models.Model):
     # value already implies key in our current setup.
     value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.CASCADE)
 
+    # SET_NULL: Issue deletion is not actually possible yet, so this is moot (for now).
     issue = models.ForeignKey('issues.Issue', blank=False, null=True, on_delete=models.SET_NULL, related_name='tags')
 
-    # As it stands, there is only a single counter per issue-tagvalue combination. In principle/theory this type of
+    # 1. As it stands, there is only a single counter per issue-tagvalue combination. In principle/theory this type of
     # denormalization will break down when you want to show this kind of information filtered by some other dimension,
     # because combining such slicings will lead to a combinatorial explosion. However, the only practical such dimension
     # we'll likely want to filter by is "environment". So once we'll actually offer that it's more likely that we'll
     # just implement a separate counter for that dimension, rather than try to do the generic thing ("snuba" at Sentry).
     # And in that case we can probably add the additional constraint that the number of practically observed
     # environments is some small number like 10 (even just because of UI constraints like dropdowns).
+    # 2. counts are "seen counts", i.e. when events are deleted, the counts are not updated. This is intentional.
     count = models.PositiveIntegerField(default=0)
 
     class Meta:
