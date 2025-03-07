@@ -326,7 +326,7 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_eve
 
         # Rather than rely on Django's implementation of CASCADE, we "just do this ourselves"; Reason is: Django does an
         # extra, expensive (all-column), query on Event[...](id__in=pks_to_delete) to extract the Event ids (which we
-        # already have).
+        # already have). If Django ever gets DB-CASCADE, this may change: https://code.djangoproject.com/ticket/21961
         EventTag.objects.filter(event_id__in=pks_to_delete).delete()
         nr_of_deletions = Event.objects.filter(pk__in=pks_to_delete).delete()[1].get("events.Event", 0)
     else:

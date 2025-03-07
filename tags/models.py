@@ -69,7 +69,7 @@ class EventTag(models.Model):
     # DO_NOTHING: we manually implement CASCADE (i.e. when an event is cleaned up, clean up associated tags) in the
     # eviction process.  Why CASCADE? [1] you'll have to do it "at some point", so you might as well do it right when
     # evicting (async in the 'most resilient setup' anyway, b/c that happens when ingesting) [2] the order of magnitude
-    # is "tens of deletions per event", so that's no reason to postpone.
+    # is "tens of deletions per event", so that's no reason to postpone. "Why manually" is explained in events/retention
     event = models.ForeignKey('events.Event', blank=False, null=False, on_delete=models.DO_NOTHING, related_name='tags')
 
     class Meta:
