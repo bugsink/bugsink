@@ -23,9 +23,13 @@ class DeduceTagsTestCase(RegularTestCase):
             "server_name": "server",
             "release": "1.0",
             "environment": "prod",
-            "mechanism": {
-                "type": "exception",
-                "handled": False,
+            "exception": {
+                "values": [{
+                    "mechanism": {
+                        "type": "exception",
+                        "handled": False,
+                    },
+                }],
             },
             "transaction": "main",
             "contexts": {
