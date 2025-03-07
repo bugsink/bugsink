@@ -16,6 +16,13 @@
                 </div>
             {% endfor %}
         </div>
+    {% empty %}
+        <h1 class="text-2xl font-bold mt-4">No tags</h1>
+
+        <div class="mb-6">
+            No tags found for this issue.
+        </div>
+
     {% endfor %}
 
 {% endblock %}
