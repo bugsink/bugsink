@@ -5,6 +5,7 @@ from releases.models import Release
 from issues.models import Issue, Grouping, TurningPoint
 from events.models import Event
 from projects.models import Project
+from tags.models import TagKey, TagValue, EventTag, IssueTag
 
 from bugsink.transaction import immediate_atomic
 from bugsink.timed_sqlite_backend.base import allow_long_running_queries
@@ -65,6 +66,19 @@ def make_consistent():
 
     _delete_for_missing_fk(Event, 'project')
     _delete_for_missing_fk(Event, 'issue')
+
+    _delete_for_missing_fk(IssueTag, 'project')
+    _delete_for_missing_fk(IssueTag, 'value')
+    _delete_for_missing_fk(IssueTag, 'issue')
+
+    _delete_for_missing_fk(EventTag, 'project')
+    _delete_for_missing_fk(EventTag, 'value')
+    _delete_for_missing_fk(EventTag, 'event')
+
+    _delete_for_missing_fk(TagValue, 'project')
+    _delete_for_missing_fk(TagValue, 'key')
+
+    _delete_for_missing_fk(TagKey, 'project')
 
     for event in Event.objects.filter(turningpoint__isnull=False, never_evict=False).distinct():
         print("Setting event %s to never_evict because it has a turningpoint" % event)
