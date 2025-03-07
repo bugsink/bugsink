@@ -24,6 +24,16 @@ from django.db.models import Q, F
 from projects.models import Project
 from tags.utils import deduce_tags, is_mostly_unique
 
+# Notes on .project as it lives on TagValue, IssueTag and EventTag:
+# In all cases, project could be derived through other means: for TagValue it's implied by TagKey.project; for IssueTag
+# it's implied by TagValue (directly, or transitively through TagKey) as well as Issue; likewise for EventTag (but
+# through Event there).
+# In our current setup, we also always reach these models through queries through one of the models that have .project
+# already. Thus, a good case could be made to drop it from the model; but that more or less ties us to the current
+# implementation, and I'm not quite willing to do that yet. Hence .project everywhere.
+# Once we cleanup-by-project through a filter on project on the model-to-be deleted directly, we will need and
+# additional index on 'project' for these models, i.e. models.Index(fields=['project'])
+
 
 class TagKey(models.Model):
     project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
@@ -39,12 +49,8 @@ class TagKey(models.Model):
     # is_deduced = models.BooleanField(default=False)
 
     class Meta:
+        # the obvious constraint, which doubles as a lookup index for store_tags and search.
         unique_together = ('project', 'key')
-        indexes = [
-            # Untested assumption: when searching, we search by TagValue[..]key__key=key, so we need an
-            # index-not-prefixed-by-project too
-            models.Index(fields=['key']),
-        ]
 
 
 class TagValue(models.Model):
@@ -53,8 +59,10 @@ class TagValue(models.Model):
     value = models.CharField(max_length=200, blank=False, null=False, db_index=True)
 
     class Meta:
-        # matches what we do in search
-        unique_together = ('project', 'key', 'value')
+        # This is the obvious constraint, which doubles as a lookup index for
+        # * store_tags (where we look up by both)
+        # * search (where we join on key)
+        unique_together = ('key', 'value')
 
     def __str__(self):
         return f"{self.key.key}:{self.value}"
@@ -73,9 +81,11 @@ class EventTag(models.Model):
     event = models.ForeignKey('events.Event', blank=False, null=False, on_delete=models.DO_NOTHING, related_name='tags')
 
     class Meta:
+        # This is the obvious constraint, which doubles as a lookup index for search (a big OR-match on value).
         unique_together = ('value', 'event')
+
         indexes = [
-            models.Index(fields=['event', 'value']),  # make lookups by event (for details page, deletions) faster
+            models.Index(fields=['event']),  # for lookups by event (for event-details page, event-deletions)
         ]
 
 
@@ -103,12 +113,18 @@ class IssueTag(models.Model):
     count = models.PositiveIntegerField(default=0)
 
     class Meta:
-        # searching: by value, then Issue (is this so though? .qs is already on the other!)
+        # This is the obvious constraint, which doubles as a lookup index for:
+        # * search (a big OR-match on value).
+        # * store_tags (counter update filters on both of these)
         unique_together = ('value', 'issue')
+
         indexes = [
-            models.Index(fields=['issue', 'value']),  # make lookups by issue (for detail pages) faster
-            # a point _could_ be made for ['issue', 'value' 'count'] we'll probably order by the latter in the end.
-            # but I suspect that in practice the sorting on by count can be done easily for a small number of items
+            # TODO I once had "value" here but I'd rather try without first, i.e. wouldn't the DB you basically "look up
+            # all for issue, filter withouth the use of indexes?
+            models.Index(fields=['issue']),  # for lookups by issue (for detail pages i.e. _get_issue_tags)
+
+            # A point _could_ be made for ['issue', '?value?' 'count'] since we order on that as part of _get_issue_tags
+            # However, I suspect that in practice the sorting on by count is done fast for a small number of items
             # (and I suspect that if there are very many items, sorting is not useful, because the sparse information
             # does not lead to much insight... but I might be wrong (a few tags with many values, and a long tail would
             # be the counter-example))
@@ -169,6 +185,8 @@ def store_tags(event, issue, tags):
     # update_conflicts parameter disable setting the primary key on each model instance (if the database normally
     # support it)." in Django 4.2; in Django 5.0 and up this is no longer so for `update_conflicts`, so we could use
     # that instead and save a query.
+    # Re 'project_id': in the selection-queries below the non-necessity of the project_id is mentioned a number of
+    # times, but that's precisly _because_ we encode the link to project in TagKay. i.e. here it is needed.
     tag_key_objects = TagKey.objects.filter(project_id=event.project_id, key__in=tags.keys())
 
     TagValue.objects.bulk_create([
@@ -177,8 +195,9 @@ def store_tags(event, issue, tags):
 
     # Select-back what we just created (or was already there); see above; the resulting SQL is a bit more complex than
     # the previous one though, which raises the question whether this is performant.
+    # Re 'project_id': this is not needed here, because it's already implied by key_obj.
     tag_value_objects = TagValue.objects.filter(_or_join([
-        Q(project_id=event.project_id, key=key_obj, value=tags[key_obj.key]) for key_obj in tag_key_objects]))
+        Q(key=key_obj, value=tags[key_obj.key]) for key_obj in tag_key_objects]))
 
     EventTag.objects.bulk_create([
         EventTag(project_id=event.project_id, value=tag_value, event=event) for tag_value in tag_value_objects
@@ -188,6 +207,7 @@ def store_tags(event, issue, tags):
         IssueTag(project_id=event.project_id, value=tag_value, issue=issue) for tag_value in tag_value_objects
     ], ignore_conflicts=True)
 
-    IssueTag.objects.filter(project_id=event.project_id, value__in=tag_value_objects, issue=issue).update(
+    # Re 'project_id': this is not needed here, because it's already implied by both tag_value_objects and issue.
+    IssueTag.objects.filter(value__in=tag_value_objects, issue=issue).update(
         count=F('count') + 1
     )

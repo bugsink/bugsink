@@ -7,9 +7,9 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("events", "0019_event_storage_backend"),
         ("issues", "0012_alter_issue_calculated_type_and_more"),
         ("projects", "0011_fill_stored_event_count"),
+        ("events", "0019_event_storage_backend"),
     ]
 
     operations = [
@@ -36,6 +36,9 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
+            options={
+                "unique_together": {("project", "key")},
+            },
         ),
         migrations.CreateModel(
             name="TagValue",
@@ -66,7 +69,7 @@ class Migration(migrations.Migration):
                 ),
             ],
             options={
-                "unique_together": {("project", "key", "value")},
+                "unique_together": {("key", "value")},
             },
         ),
         migrations.CreateModel(
@@ -106,6 +109,14 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
+            options={
+                "indexes": [
+                    models.Index(
+                        fields=["issue"], name="tags_issuet_issue_i_266542_idx"
+                    )
+                ],
+                "unique_together": {("value", "issue")},
+            },
         ),
         migrations.CreateModel(
             name="EventTag",
@@ -142,33 +153,13 @@ class Migration(migrations.Migration):
                     ),
                 ),
             ],
-        ),
-        migrations.AddIndex(
-            model_name="tagkey",
-            index=models.Index(fields=["key"], name="tags_tagkey_key_5e8a5a_idx"),
-        ),
-        migrations.AlterUniqueTogether(
-            name="tagkey",
-            unique_together={("project", "key")},
-        ),
-        migrations.AddIndex(
-            model_name="issuetag",
-            index=models.Index(
-                fields=["issue", "value"], name="tags_issuet_issue_i_f06f20_idx"
-            ),
-        ),
-        migrations.AlterUniqueTogether(
-            name="issuetag",
-            unique_together={("value", "issue")},
-        ),
-        migrations.AddIndex(
-            model_name="eventtag",
-            index=models.Index(
-                fields=["event", "value"], name="tags_eventt_event_i_86e88e_idx"
-            ),
-        ),
-        migrations.AlterUniqueTogether(
-            name="eventtag",
-            unique_together={("value", "event")},
+            options={
+                "indexes": [
+                    models.Index(
+                        fields=["event"], name="tags_eventt_event_i_ac6453_idx"
+                    )
+                ],
+                "unique_together": {("value", "event")},
+            },
         ),
     ]

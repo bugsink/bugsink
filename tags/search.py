@@ -72,7 +72,9 @@ def _search(TagClz, fk_fieldname, project, obj_list, q):
     clauses = []
     for key, value in parsed.tags.items():
         try:
-            tag_value_obj = TagValue.objects.get(project=project, key__key=key, value=value)
+            # Since we have project as a field on TagValue, we _could_ filter on project directly; with our current set
+            # of indexes the below formulation is a nice way to reuse the index on TagKey (project, key) though.
+            tag_value_obj = TagValue.objects.get(key__project=project, key__key=key, value=value)
         except TagValue.DoesNotExist:
             # if the tag doesn't exist, we can't have any issues with it; the below short-circuit is fine, I think (I
             # mean: we _could_ say "tag x is to blame" but that's not what one does generally in search, is it?
