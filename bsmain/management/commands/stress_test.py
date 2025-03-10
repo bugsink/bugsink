@@ -110,7 +110,6 @@ class Command(BaseCommand):
             for tag in options["tag"]:
                 tag = tag[0]  # it's a list of lists... how to prevent this is not immediately clear
                 k, v = tag.split(":", 1)
-                data["tags"][k] = v
 
                 if v == "RANDOM":
                     # avoids numbers in the type because I imagine numbers may at some point be ignored in the grouping.
@@ -118,6 +117,8 @@ class Command(BaseCommand):
 
                     unevenly_distributed_number = int(1 / (random.random() + 0.0000001))
                     v = "value-" + into_chars(unevenly_distributed_number)
+
+                data["tags"][k] = v
 
         if options["random_type"]:
             # avoids numbers in the type because I imagine numbers may at some point be ignored in the grouping.
