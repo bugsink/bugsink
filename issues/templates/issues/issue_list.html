@@ -146,7 +146,11 @@
 </svg>&nbsp;&nbsp;{% endif %}{{ issue.title|truncatechars:100 }}</a>
                 </div>
                 <div class="text-sm">from <b>{{ issue.first_seen|date:"j M G:i T" }}</b> | last <b>{{ issue.last_seen|date:"j M G:i T" }}</b> | with <b>{{ issue.digested_event_count|intcomma }}</b> events
-                    {% if issue.transaction %}| <span class="font-bold">{{ issue.transaction }} </span>{% endif %}
+                {% if issue.digested_event_count != issue.stored_event_count %}
+                    <span class="text-xs">({{ issue.stored_event_count|intcomma }}&thinsp;av{#ilable#})<span>
+                {% endif %}
+
+                {% if issue.transaction %}| <span class="font-bold">{{ issue.transaction }} </span>{% endif %}
                 </div>
             </td>
 

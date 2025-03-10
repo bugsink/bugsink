@@ -61,17 +61,28 @@ if os.getenv("DATABASE_URL"):
     DATABASE_URL = os.getenv("DATABASE_URL")
     parsed = urlparse(DATABASE_URL)
 
-    if parsed.scheme != "mysql":
-        raise ValueError("For DATABASE_URL, only mysql is supported.")
+    if parsed.scheme == "mysql":
+        DATABASES['default'] = {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': parsed.path.lstrip('/'),
+            "USER": parsed.username,
+            "PASSWORD": parsed.password,
+            "HOST": parsed.hostname,
+            "PORT": parsed.port or "3306",
+        }
 
-    DATABASES['default'] = {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': parsed.path.lstrip('/'),
-        "USER": parsed.username,
-        "PASSWORD": parsed.password,
-        "HOST": parsed.hostname,
-        "PORT": parsed.port or "3306",
-    }
+    elif parsed.scheme == ["postgres", "postgresql"]:
+        DATABASES['default'] = {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': parsed.path.lstrip('/'),
+            "USER": parsed.username,
+            "PASSWORD": parsed.password,
+            "HOST": parsed.hostname,
+            "PORT": parsed.port or "5432",
+        }
+
+    else:
+        raise ValueError("For DATABASE_URL, only mysql and postgres are supported.")
 
 else:
     # similar to the default, but the fallback is /data/db.sqlite3; we also create the directory if it doesn't exist,
