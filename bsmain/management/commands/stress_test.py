@@ -112,6 +112,13 @@ class Command(BaseCommand):
                 k, v = tag.split(":", 1)
                 data["tags"][k] = v
 
+                if v == "RANDOM":
+                    # avoids numbers in the type because I imagine numbers may at some point be ignored in the grouping.
+                    into_chars = lambda i: "".join([chr(ord("A") + int(c)) for c in str(i)])  # noqa
+
+                    unevenly_distributed_number = int(1 / (random.random() + 0.0000001))
+                    v = "value-" + into_chars(unevenly_distributed_number)
+
         if options["random_type"]:
             # avoids numbers in the type because I imagine numbers may at some point be ignored in the grouping.
             into_chars = lambda i: "".join([chr(ord("A") + int(c)) for c in str(i)])  # noqa
