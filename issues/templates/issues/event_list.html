@@ -17,7 +17,7 @@
             {% elif page_obj.paginator.count != issue.stored_event_count and issue.stored_event_count == issue.digested_event_count %} {# search filters #}
                 {{ page_obj.paginator.count|intcomma }} events found ({{ issue.digested_event_count|intcomma }} total observed).
             {% else %} {# everything unequal #}
-                {{ page_obj.paginator.count|intcomma }} events found ({{ issue.digested_event_count|intcomma }} available, {{ issue.digested_event_count|intcomma }} total observed).
+                {{ page_obj.paginator.count|intcomma }} events found ({{ issue.stored_event_count|intcomma }} available, {{ issue.digested_event_count|intcomma }} total observed).
             {% endif %}
         </div>
     </div>
