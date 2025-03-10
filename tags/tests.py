@@ -114,37 +114,37 @@ class SearchParserTestCase(RegularTestCase):
 
     def test_parser(self):
         # we don't actually do the below, empty queries are never parsed
-        # self.assertEquals(({}, ""), parse_query(""))
+        # self.assertEqual(({}, ""), parse_query(""))
 
-        self.assertEquals(({}, "FindableException"), parse_query("FindableException"))
-        self.assertEquals(({}, "findable value"), parse_query("findable value"))
+        self.assertEqual(({}, "FindableException"), parse_query("FindableException"))
+        self.assertEqual(({}, "findable value"), parse_query("findable value"))
 
-        self.assertEquals(({"key": "value"}, ""),  parse_query("key:value"))
-        self.assertEquals(
+        self.assertEqual(({"key": "value"}, ""),  parse_query("key:value"))
+        self.assertEqual(
             ({"key": "value", "anotherkey": "anothervalue"}, ""),
             parse_query("key:value anotherkey:anothervalue"))
 
-        self.assertEquals(
+        self.assertEqual(
             ({"keys.may.have.dots": "values.may.have.dots.too"}, ""),
             parse_query("keys.may.have.dots:values.may.have.dots.too"))
 
-        self.assertEquals(
+        self.assertEqual(
             ({"key": "value"}, "some text goes here"),
             parse_query("key:value some text goes here"))
 
-        self.assertEquals(
+        self.assertEqual(
             ({}, "text  with  spaces  everywhere"),
             parse_query("text  with  spaces  everywhere"))
 
-        self.assertEquals(
+        self.assertEqual(
             ({}, "key: preceded by space"),
             parse_query("key: preceded by space"))
 
-        self.assertEquals(
+        self.assertEqual(
             ({"key": "quoted value"}, ""),
             parse_query('key:"quoted value"'))
 
-        self.assertEquals(
+        self.assertEqual(
             ({"key": "quoted value"}, "and further text"),
             parse_query('key:"quoted value" and further text'))
 
@@ -153,7 +153,7 @@ class SearchParserTestCase(RegularTestCase):
         # I'm not invested in getting this more precise (yet), because this whole case is a bit weird. I'd much rather
         # point people in the direction of "put k:v at the beginning, and any free text at the end" (which is something
         # we could even validate on at some later point).
-        self.assertEquals(
+        self.assertEqual(
             ({"key": "value"}, "text on  both sides"),
             parse_query("text on key:value both sides"))
 
