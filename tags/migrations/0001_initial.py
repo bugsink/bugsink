@@ -8,8 +8,8 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("issues", "0012_alter_issue_calculated_type_and_more"),
-        ("events", "0019_event_storage_backend"),
         ("projects", "0011_fill_stored_event_count"),
+        ("events", "0019_event_storage_backend"),
     ]
 
     operations = [
@@ -95,6 +95,12 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 (
+                    "key",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, to="tags.tagkey"
+                    ),
+                ),
+                (
                     "project",
                     models.ForeignKey(
                         null=True,
@@ -112,7 +118,8 @@ class Migration(migrations.Migration):
             options={
                 "indexes": [
                     models.Index(
-                        fields=["issue"], name="tags_issuet_issue_i_266542_idx"
+                        fields=["issue", "key", "count"],
+                        name="tags_issuet_issue_i_91a1dd_idx",
                     )
                 ],
                 "unique_together": {("value", "issue")},

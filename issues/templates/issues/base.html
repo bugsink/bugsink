@@ -220,7 +220,7 @@
             </div>
         </div>
 
-        {% if issue.tags_summary and tab != "tags" %}
+        {% if tab != "tags" and issue.tags_summary %}
         <div class="border-2 mb-4 mr-4"><!-- "issue: tags" box -->
             <div class="font-bold border-b-2">
                 <div class="p-4 border-slate-50 text-slate-500">
@@ -230,7 +230,7 @@
             <div class="p-4">
                 {% for issuetags in issue.tags_summary %}
                     <div class="mb-4">
-                        <div class="text-sm font-bold text-slate-500">{{ issuetags.0.value.key.key }}:</div>
+                        <div class="text-sm font-bold text-slate-500">{{ issuetags.0.key.key }}:</div>
                         <div>
                         {% for issuetag in issuetags %} 
                             <span>{{ issuetag.value.value }} <span class="text-xs">({{ issuetag.pct }}%)</span>{% if not forloop.last %}</span>,{% endif %}

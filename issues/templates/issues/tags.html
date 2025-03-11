@@ -5,7 +5,7 @@
 
     {% for issuetags in issue.tags_all %}
 
-        <h1 id="{{ issuetags.0.value.key.key }}" class="text-2xl font-bold mt-4">{{ issuetags.0.value.key.key }}:</h1>
+        <h1 id="{{ issuetags.0.key.key }}" class="text-2xl font-bold mt-4">{{ issuetags.0.key.key }}:</h1>
 
         <div class="mb-6">
             {% for issuetag in issuetags %} 

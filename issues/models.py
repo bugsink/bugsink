@@ -1,7 +1,6 @@
 import json
 import uuid
 from functools import partial
-from itertools import groupby
 
 from django.db import models, transaction
 from django.db.models import F, Value
@@ -128,22 +127,25 @@ class Issue(models.Model):
     def _get_issue_tags(self, other_cutoff, other_label):
         result = []
 
-        all_issue_tags = (
-            IssueTag.objects
-            .filter(issue=self, value__key__mostly_unique=False)  # note: project is implied through issue
-            .order_by("value__key__key", "-count")
-            .select_related("value", "value__key"))
+        ds = self.tags \
+            .filter(key__mostly_unique=False)\
+            .values("key")\
+            .annotate(count_sum=models.Sum("count"))\
+            .distinct()\
+            .order_by("key__key")
 
-        # NOTE: at some point in the past we did grouping in SQL first; and then did 1 per-group query to get the
-        # the actual values. This was less efficient in terms of the number of queries, but had the advantage of quickly
-        # stopping work when there were very many values for a certain key. We now rely on the 'mostly_unique' property
-        # for the line below to not do way too much work; if it ever turns out to be so, we may even push the
-        # 'mostly_unique' property to be dynamically calculated (setting it to True when very many values are observed)
-        grouped = groupby(all_issue_tags, lambda x: x.value.key.key)
+        for d in ds:
+            issue_tags = [
+                issue_tag
+                for issue_tag in
+                (IssueTag.objects
+                 .filter(issue=self, key=d['key'])  # note: project is implied through issue
+                 .order_by("-count")
+                 .select_related("value", "key")[:other_cutoff + 1]  # +1 to see if we need to add "Other"
+                 )
+            ]
 
-        for key, group in grouped:
-            issue_tags = list(group)
-            total_seen = sum(issue_tag.count for issue_tag in issue_tags)
+            total_seen = d["count_sum"]
 
             seen_till_now = 0
             if len(issue_tags) > other_cutoff:

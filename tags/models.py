@@ -106,6 +106,9 @@ class EventTag(models.Model):
 class IssueTag(models.Model):
     project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
 
+    # denormalization that allows for a single-table-index for efficient search.
+    key = models.ForeignKey(TagKey, blank=False, null=False, on_delete=models.CASCADE)
+
     # value already implies key in our current setup.
     value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.CASCADE)
 
@@ -129,15 +132,8 @@ class IssueTag(models.Model):
         unique_together = ('value', 'issue')
 
         indexes = [
-            # TODO I once had "value" here but I'd rather try without first, i.e. wouldn't the DB you basically "look up
-            # all for issue, filter withouth the use of indexes?
-            models.Index(fields=['issue']),  # for lookups by issue (for detail pages i.e. _get_issue_tags)
-
-            # A point _could_ be made for ['issue', '?value?' 'count'] since we order on that as part of _get_issue_tags
-            # However, I suspect that in practice the sorting on by count is done fast for a small number of items
-            # (and I suspect that if there are very many items, sorting is not useful, because the sparse information
-            # does not lead to much insight... but I might be wrong (a few tags with many values, and a long tail would
-            # be the counter-example))
+            # for lookups by issue (for detail pages i.e. _get_issue_tags)
+            models.Index(fields=['issue', 'key', 'count']),
         ]
 
 
@@ -180,7 +176,8 @@ def store_tags(event, issue, tags):
     #         tag_value, _ = TagValue.objects.get_or_create(project_id=event.project_id, key=tag_key, value=value)
     #         EventTag.objects.get_or_create(project_id=event.project_id, value=tag_value, event=event,
     #             defaults={'issue': issue})
-    #         IssueTag.objects.get_or_create(project_id=event.project_id, value=tag_value, issue=issue)
+    #         IssueTag.objects.get_or_create(
+    #            project_id=event.project_id, key_id=tag_value.key_id, value=tag_value, issue=issue)
     #
     #     # the 0-case is implied here too, which avoids some further guards in the code below
     #     return
@@ -220,7 +217,12 @@ def store_tags(event, issue, tags):
     ], ignore_conflicts=True)
 
     IssueTag.objects.bulk_create([
-        IssueTag(project_id=event.project_id, value=tag_value, issue=issue) for tag_value in tag_value_objects
+        IssueTag(
+            project_id=event.project_id,
+            key_id=tag_value.key_id,
+            value=tag_value,
+            issue=issue,
+        ) for tag_value in tag_value_objects
     ], ignore_conflicts=True)
 
     # Re 'project_id': this is not needed here, because it's already implied by both tag_value_objects and issue.
