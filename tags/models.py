@@ -74,6 +74,11 @@ class EventTag(models.Model):
     # value already implies key in our current setup.
     value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.CASCADE)
 
+    # issue is a denormalization that allows for a single-table-index for efficient search.
+    # SET_NULL: Issue deletion is not actually possible yet, so this is moot (for now).
+    issue = models.ForeignKey(
+        'issues.Issue', blank=False, null=True, on_delete=models.SET_NULL, related_name="event_tags")
+
     # DO_NOTHING: we manually implement CASCADE (i.e. when an event is cleaned up, clean up associated tags) in the
     # eviction process.  Why CASCADE? [1] you'll have to do it "at some point", so you might as well do it right when
     # evicting (async in the 'most resilient setup' anyway, b/c that happens when ingesting) [2] the order of magnitude
@@ -81,11 +86,16 @@ class EventTag(models.Model):
     event = models.ForeignKey('events.Event', blank=False, null=False, on_delete=models.DO_NOTHING, related_name='tags')
 
     class Meta:
-        # This is the obvious constraint, which doubles as a lookup index for search (a big OR-match on value).
+        # This is the obvious constraint
         unique_together = ('value', 'event')
 
         indexes = [
             models.Index(fields=['event']),  # for lookups by event (for event-details page, event-deletions)
+
+            # for search, which filters a list of EventTag down to those matching certain values and a given issue.
+            # (both orderings of the index would work for the current search query; if we ever introduce "search across
+            # issues" the below would work for that too (but the reverse wouldn't))
+            models.Index(fields=['value', 'issue']),
         ]
 
 
@@ -168,7 +178,8 @@ def store_tags(event, issue, tags):
     #         tag_key, _ = TagKey.objects.get_or_create(
     #             project_id=event.project_id, key=key, mostly_unique=is_mostly_unique(key))
     #         tag_value, _ = TagValue.objects.get_or_create(project_id=event.project_id, key=tag_key, value=value)
-    #         EventTag.objects.get_or_create(project_id=event.project_id, value=tag_value, event=event)
+    #         EventTag.objects.get_or_create(project_id=event.project_id, value=tag_value, event=event,
+    #             defaults={'issue': issue})
     #         IssueTag.objects.get_or_create(project_id=event.project_id, value=tag_value, issue=issue)
     #
     #     # the 0-case is implied here too, which avoids some further guards in the code below
@@ -200,7 +211,12 @@ def store_tags(event, issue, tags):
         Q(key=key_obj, value=tags[key_obj.key]) for key_obj in tag_key_objects]))
 
     EventTag.objects.bulk_create([
-        EventTag(project_id=event.project_id, value=tag_value, event=event) for tag_value in tag_value_objects
+        EventTag(
+            project_id=event.project_id,
+            value=tag_value,
+            event=event,
+            issue=issue
+        ) for tag_value in tag_value_objects
     ], ignore_conflicts=True)
 
     IssueTag.objects.bulk_create([

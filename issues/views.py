@@ -2,7 +2,7 @@ from collections import namedtuple
 import json
 import sentry_sdk
 
-from django.db.models import Min, Max, Q
+from django.db.models import Q
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponseRedirect, HttpResponseNotAllowed
@@ -333,9 +333,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event_qs = Event.objects.filter(issue=issue)
-    if request.GET.get("q"):
-        event_qs = search_events(issue.project, event_qs, request.GET["q"])
+    event_qs = search_events(issue.project, issue, request.GET.get("q", ""))
 
     try:
         event = _get_event(event_qs, event_pk, digest_order, nav)
@@ -397,7 +395,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
 def issue_event_404(request, issue, event_qs, tab, this_view):
     """If the Event is 404, but the issue is not, we can still show the issue page; we show a message for the event"""
 
-    last_event = event_qs.last()  # used for switching to an event-page (using tabs)
+    last_event = event_qs.order_by("digest_order").last()  # used for switching to an event-page (using tabs)
     return render(request, "issues/event_404.html", {
         "tab": tab,
         "this_view": this_view,
@@ -418,9 +416,7 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event_qs = Event.objects.filter(issue=issue)
-    if request.GET.get("q"):
-        event_qs = search_events(issue.project, event_qs, request.GET["q"])
+    event_qs = search_events(issue.project, issue, request.GET.get("q", ""))
 
     try:
         event = _get_event(event_qs, event_pk, digest_order, nav)
@@ -452,10 +448,16 @@ def _date_with_milis_html(timestamp):
 
 
 def _has_next_prev(event, event_qs):
-    d = event_qs.aggregate(lo=Min("digest_order"), hi=Max("digest_order"))
+    # guarding against empty event_qs is not necessary, because we only get here if any event exists (because otherwise
+    # event would be None too)
+
+    # this was once implemented with Min/Max, but just doing 2 queries is (on sqlite at least) ~100× faster.
+    first = event_qs.order_by("digest_order").values("digest_order").first()
+    last = event_qs.order_by("-digest_order").values("digest_order").first()
+
     return {
-        "has_prev": event.digest_order > d["lo"] if d.get("lo") is not None else False,
-        "has_next": event.digest_order < d["hi"] if d.get("hi") is not None else False,
+        "has_prev": event.digest_order > first["digest_order"],
+        "has_next": event.digest_order < last["digest_order"],
     }
 
 
@@ -465,9 +467,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event_qs = Event.objects.filter(issue=issue)
-    if request.GET.get("q"):
-        event_qs = search_events(issue.project, event_qs, request.GET["q"])
+    event_qs = search_events(issue.project, issue, request.GET.get("q", ""))
 
     try:
         event = _get_event(event_qs, event_pk, digest_order, nav)
@@ -571,8 +571,8 @@ def issue_history(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event_qs = search_events(issue.project, issue.event_set.order_by("digest_order"), request.GET.get("q", ""))
-    last_event = event_qs.last()  # used for switching to an event-page (using tabs)
+    event_qs = search_events(issue.project, issue, request.GET.get("q", ""))
+    last_event = event_qs.order_by("digest_order").last()  # used for switching to an event-page (using tabs)
     return render(request, "issues/history.html", {
         "tab": "history",
         "project": issue.project,
@@ -590,8 +590,8 @@ def issue_tags(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event_qs = search_events(issue.project, issue.event_set.order_by("digest_order"), request.GET.get("q", ""))
-    last_event = event_qs.last()  # used for switching to an event-page (using tabs)
+    event_qs = search_events(issue.project, issue, request.GET.get("q", ""))
+    last_event = event_qs.order_by("digest_order").last()  # used for switching to an event-page (using tabs)
     return render(request, "issues/tags.html", {
         "tab": "tags",
         "project": issue.project,
@@ -609,8 +609,8 @@ def issue_grouping(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event_qs = search_events(issue.project, issue.event_set.order_by("digest_order"), request.GET.get("q", ""))
-    last_event = event_qs.last()  # used for switching to an event-page (using tabs)
+    event_qs = search_events(issue.project, issue, request.GET.get("q", ""))
+    last_event = event_qs.order_by("digest_order").last()  # used for switching to an event-page (using tabs)
     return render(request, "issues/grouping.html", {
         "tab": "grouping",
         "project": issue.project,
@@ -628,12 +628,11 @@ def issue_event_list(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event_list = issue.event_set.order_by("digest_order")
-
     if "q" in request.GET:
-        event_list = search_events(issue.project, event_list, request.GET["q"])
+        event_list = search_events(issue.project, issue, request.GET["q"]).order_by("digest_order")
         paginator = Paginator(event_list, 250)  # might as well use Paginator; the cost of .count() is incurred anyway
     else:
+        event_list = issue.event_set.order_by("digest_order")
         # re 250: in general "big is good" because it allows a lot "at a glance".
         paginator = KnownCountPaginator(event_list, 250, count=issue.stored_event_count)
 

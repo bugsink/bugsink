@@ -9,6 +9,7 @@ from django.db.models import Q, Subquery
 from collections import namedtuple
 
 from bugsink.moreiterutils import tuplewise
+from events.models import Event
 
 from .models import TagValue, IssueTag, EventTag
 
@@ -61,9 +62,9 @@ def parse_query(q):
     return ParsedQuery(tags, plain_text_q)
 
 
-def _search(TagClz, fk_fieldname, project, obj_list, q):
+def _search(m2m_qs, fk_fieldname, project, obj_list_all, obj_list_filtered, q):
     if not q:
-        return obj_list
+        return obj_list_filtered
 
     parsed = parse_query(q)
 
@@ -78,13 +79,17 @@ def _search(TagClz, fk_fieldname, project, obj_list, q):
         except TagValue.DoesNotExist:
             # if the tag doesn't exist, we can't have any issues with it; the below short-circuit is fine, I think (I
             # mean: we _could_ say "tag x is to blame" but that's not what one does generally in search, is it?
-            return obj_list.none()
+            return obj_list_all.none()
 
         # TODO: Extensive performance testing of various choices here is necessary; in particular the choice of Subquery
         # vs. joins; and the choice of a separate query to get TagValue v.s. doing everything in a single big query will
         # have different trade-offs _in practice_.
         clauses.append(
-            Q(id__in=Subquery(TagClz.objects.filter(value=tag_value_obj).values_list(fk_fieldname, flat=True))))
+            Q(id__in=Subquery(m2m_qs.filter(value=tag_value_obj).values_list(fk_fieldname, flat=True))))
+
+    # the idea is: if there are clauses from m2m tags, the filter (on Issue, for Events) is implied by those and not
+    # involving the on the base_qs is more efficient; if there aren't any clauses, that's necessary though.
+    obj_list = obj_list_all if clauses else obj_list_filtered
 
     # this is really TSTTCPW (or more like a "fake it till you make it" thing); but I'd rather "have something" and then
     # have really-good-search than to have either nothing at all, or half-baked search. Note that we didn't even bother
@@ -111,8 +116,15 @@ def _search(TagClz, fk_fieldname, project, obj_list, q):
 
 
 def search_issues(project, issue_list, q):
-    return _search(IssueTag, "issue_id", project, issue_list, q)
+    return _search(IssueTag.objects.all(), "issue_id", project, issue_list, issue_list, q)
 
 
-def search_events(project, event_list, q):
-    return _search(EventTag, "event_id", project, event_list, q)
+def search_events(project, issue, q):
+    return _search(
+        EventTag.objects.filter(issue=issue),
+        "event_id",
+        project,
+        Event.objects.all(),
+        Event.objects.filter(issue=issue),
+        q,
+    )

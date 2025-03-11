@@ -5,9 +5,8 @@ from projects.models import Project
 from issues.factories import get_or_create_issue, denormalized_issue_fields
 from events.factories import create_event
 from issues.models import Issue
-from events.models import Event
 
-from .models import store_tags
+from .models import store_tags, EventTag
 from .utils import deduce_tags
 from .search import search_events, search_issues, parse_query
 
@@ -88,6 +87,7 @@ class StoreTagsTestCase(DjangoTestCase):
         self.assertEqual(self.issue.tags.count(), 1)
 
         self.assertEqual(self.event.tags.first().value.value, "bar")
+        self.assertEqual(self.event.tags.first().issue, self.issue)
 
         self.assertEqual(self.issue.tags.first().count, 1)
         self.assertEqual(self.issue.tags.first().value.key.key, "foo")
@@ -164,46 +164,69 @@ class SearchTestCase(DjangoTestCase):
     def setUp(self):
         self.project = Project.objects.create(name="Test Project")
 
+        # we create a single issue to group all the events under; this is not what would happen in the real world
+        # scenario (in which there would be some relation between the tags of issues and events), but it allows us to
+        # test event_search more easily (if each event is tied to a different issue, searching for tags is meaningless,
+        # since you always search within the context of an issue).
+        self.global_issue = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+
         issue_with_tags_and_text = Issue.objects.create(project=self.project, **denormalized_issue_fields())
-        event_with_tags_and_text = create_event(self.project, issue=issue_with_tags_and_text)
+        event_with_tags_and_text = create_event(self.project, issue=self.global_issue)
 
         issue_with_tags_no_text = Issue.objects.create(project=self.project, **denormalized_issue_fields())
-        event_with_tags_no_text = create_event(self.project, issue=issue_with_tags_no_text)
+        event_with_tags_no_text = create_event(self.project, issue=self.global_issue)
 
         store_tags(event_with_tags_and_text, issue_with_tags_and_text, {f"k-{i}": f"v-{i}" for i in range(5)})
         store_tags(event_with_tags_no_text, issue_with_tags_no_text, {f"k-{i}": f"v-{i}" for i in range(5)})
+        # fix the EventTag objects' issue, which is broken per the non-real-world setup (see above)
+        EventTag.objects.all().update(issue=self.global_issue)
 
         issue_without_tags = Issue.objects.create(project=self.project, **denormalized_issue_fields())
-        event_without_tags = create_event(self.project, issue=issue_without_tags)
+        event_without_tags = create_event(self.project, issue=self.global_issue)
 
         for obj in [issue_with_tags_and_text, event_with_tags_and_text, issue_without_tags, event_without_tags]:
             obj.calculated_type = "FindableException"
             obj.calculated_value = "findable value"
             obj.save()
 
-        issue_with_nothing = Issue.objects.create(project=self.project, **denormalized_issue_fields())
-        create_event(self.project, issue=issue_with_nothing)
+        Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        create_event(self.project, issue=self.global_issue)
 
-    def _test_search(self, search_x, clz):
-        # we create 2 items with tags
-        self.assertEqual(search_x(self.project, clz.objects.all(), "k-0:v-0").count(), 2)
+    def _test_search(self, search_x):
+        # no query: all results
+        self.assertEqual(search_x("").count(), search_x("").model.objects.count())
+
+        # in the above, we create 2 items with tags
+        self.assertEqual(search_x("k-0:v-0").count(), 2)
 
         # non-matching tag: no results
-        self.assertEqual(search_x(self.project, clz.objects.all(), "k-0:nosuchthing").count(), 0)
+        self.assertEqual(search_x("k-0:nosuchthing").count(), 0)
 
         # findable-by-text: 2 such items
-        self.assertEqual(search_x(self.project, clz.objects.all(), "findable value").count(), 2)
-        self.assertEqual(search_x(self.project, clz.objects.all(), "FindableException").count(), 2)
+        self.assertEqual(search_x("findable value").count(), 2)
+        self.assertEqual(search_x("FindableException").count(), 2)
 
         # non-matching text: no results
-        self.assertEqual(search_x(self.project, clz.objects.all(), "nosuchthing").count(), 0)
-        self.assertEqual(search_x(self.project, clz.objects.all(), "k-0:v-0 nosuchthing").count(), 0)
+        self.assertEqual(search_x("nosuchthing").count(), 0)
+        self.assertEqual(search_x("k-0:v-0 nosuchthing").count(), 0)
 
         # findable-by-text, tagged: 1 such item
-        self.assertEqual(search_x(self.project, clz.objects.all(), "findable value k-0:v-0").count(), 1)
+        self.assertEqual(search_x("findable value k-0:v-0").count(), 1)
 
     def test_search_events(self):
-        self._test_search(search_events, Event)
+        self._test_search(lambda query: search_events(self.project, self.global_issue, query))
+
+    def test_search_events_wrong_issue(self):
+        issue_without_events = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+
+        search_x = lambda query: search_events(self.project, issue_without_events, query)
+
+        # those lines from _test_search() that had non-zero results are now expected to have 0 results
+        self.assertEqual(search_x("").count(), 0)
+        self.assertEqual(search_x("k-0:v-0").count(), 0)
+        self.assertEqual(search_x("findable value").count(), 0)
+        self.assertEqual(search_x("FindableException").count(), 0)
+        self.assertEqual(search_x("findable value k-0:v-0").count(), 0)
 
     def test_search_issues(self):
-        self._test_search(search_issues, Issue)
+        self._test_search(lambda query: search_issues(self.project, Issue.objects.all(), query))
