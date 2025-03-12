@@ -7,26 +7,35 @@ from django.db.backends.sqlite3.base import (
 )
 
 
-_allow_long_running_queries = False
+_runtime_limit = 5.0
 
 
 def allow_long_running_queries():
     """Set a global flag to allow long-running queries. Useful for one-off commands, where slowness is expected."""
-    global _allow_long_running_queries
-    _allow_long_running_queries = True
+    global _runtime_limit
+    _runtime_limit = float("inf")
 
 
 @contextmanager
-def limit_runtime(conn, seconds):
-    global _allow_long_running_queries
+def different_runtime_limit(seconds):
+    global _runtime_limit
+    old = _runtime_limit
+    _runtime_limit = seconds
+
+    try:
+        yield
+    finally:
+        _runtime_limit = old
+
+
+@contextmanager
+def limit_runtime(conn):
+    global _runtime_limit
 
     start = time.time()
 
     def check_time():
-        if _allow_long_running_queries:  # check in-the-callback, to avoid
-            return 0
-
-        if time.time() > start + seconds:
+        if time.time() > start + _runtime_limit:
             return 1
 
         return 0
@@ -91,7 +100,7 @@ class SQLiteCursorWrapper(UnpatchedSQLiteCursorWrapper):
             # migrations in Sqlite are often slow (drop/recreate tables, etc); so we don't want to limit them
             return super().execute(query, params)
 
-        with limit_runtime(self.connection, 5.0):
+        with limit_runtime(self.connection):
             return super().execute(query, params)
 
     def executemany(self, query, param_list):
@@ -99,5 +108,5 @@ class SQLiteCursorWrapper(UnpatchedSQLiteCursorWrapper):
             # migrations in Sqlite are often slow (drop/recreate tables, etc); so we don't want to limit them
             return super().executemany(query, param_list)
 
-        with limit_runtime(self.connection, 5.0):
+        with limit_runtime(self.connection):
             return super().executemany(query, param_list)

@@ -12,12 +12,14 @@ from django.urls import reverse
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from django.core.paginator import Paginator
+from django.db.utils import OperationalError
 
 from sentry.utils.safe import get_path
 
 from bugsink.decorators import project_membership_required, issue_membership_required, atomic_for_request_method
 from bugsink.transaction import durable_atomic
 from bugsink.period_utils import add_periods_to_datetime
+from bugsink.timed_sqlite_backend.base import different_runtime_limit
 
 from events.models import Event
 from events.ua_stuff import get_contexts_enriched_with_ua
@@ -334,6 +336,20 @@ def _get_event(qs, issue, event_pk, digest_order, nav, bounds):
         raise Http404("Either event_pk, nav, or digest_order must be provided")
 
 
+def _event_count(request, issue, event_x_qs):
+    # We want to be able to show the number of matching events for some query in the UI, but counting is potentially
+    # expensive, because it's a full scan over all matching events. We just show "many" if this takes too long.
+    # different_runtime_limit is sqlite-only, it doesn't affect other backends.
+
+    with different_runtime_limit(0.1):
+        try:
+            return event_x_qs.count() if request.GET.get("q") else issue.stored_event_count
+        except OperationalError as e:
+            if e.args[0] != "interrupted":
+                raise
+            return "many"
+
+
 @atomic_for_request_method
 @issue_membership_required
 def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav=None):
@@ -395,7 +411,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
         "stack_of_plates": stack_of_plates,
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
-        "event_qs_count": event_x_qs.count() if request.GET.get("q") else issue.stored_event_count,
+        "event_qs_count": _event_count(request, issue, event_x_qs),
         "has_prev": event.digest_order > first_do,
         "has_next": event.digest_order < last_do,
     })
@@ -412,7 +428,7 @@ def issue_event_404(request, issue, event_x_qs, tab, this_view):
         "is_event_page": False,  # this variable is used to denote "we have event-related info", which we don't
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
-        "event_qs_count": event_x_qs.count() if request.GET.get("q") else issue.stored_event_count,
+        "event_qs_count": _event_count(request, issue, event_x_qs),
     })
 
 
@@ -443,7 +459,7 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
         "breadcrumbs": get_values(parsed_data.get("breadcrumbs")),
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
-        "event_qs_count": event_x_qs.count() if request.GET.get("q") else issue.stored_event_count,
+        "event_qs_count": _event_count(request, issue, event_x_qs),
         "has_prev": event.digest_order > first_do,
         "has_next": event.digest_order < last_do,
     })
@@ -562,7 +578,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         "contexts": contexts,
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
-        "event_qs_count": event_x_qs.count() if request.GET.get("q") else issue.stored_event_count,
+        "event_qs_count": _event_count(request, issue, event_x_qs),
         "has_prev": event.digest_order > first_do,
         "has_next": event.digest_order < last_do,
     })
@@ -633,6 +649,7 @@ def issue_event_list(request, issue):
     if "q" in request.GET:
         event_list = search_events(issue.project, issue, request.GET["q"]).order_by("digest_order")
         event_x_qs = search_events_optimized(issue.project, issue, request.GET.get("q", ""))
+        # we don't do the `_event_count` optimization here, because we need the correct number for pagination
         paginator = KnownCountPaginator(event_list, 250, count=event_x_qs.count())
     else:
         event_list = issue.event_set.order_by("digest_order")
