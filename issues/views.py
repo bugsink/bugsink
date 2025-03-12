@@ -24,7 +24,7 @@ from events.ua_stuff import get_contexts_enriched_with_ua
 
 from compat.timestamp import format_timestamp
 from projects.models import ProjectMembership
-from tags.search import search_issues, search_events
+from tags.search import search_issues, search_events, search_events_optimized
 
 from .models import Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind
 from .forms import CommentForm
@@ -287,42 +287,49 @@ def _handle_post(request, issue):
     return HttpResponseRedirect(request.path_info)
 
 
-def _get_event(qs, event_pk, digest_order, nav):
-    """Returns the event using the "url lookup"."""
+def _get_event(qs, issue, event_pk, digest_order, nav, bounds):
+    """
+    Returns the event using the "url lookup".
+    The passed qs is "something you can use to deduce digest_order (for next/prev)."
+    When a direct (non-nav) method is used, we do _not_ check against existence in qs; this is more performant, and it's
+    not clear that being pedantic in this case is actually more valuable from a UX perspective.
+    """
 
     if nav is not None:
         if nav not in ["first", "last", "prev", "next"]:
             raise Http404("Cannot look up with '%s'" % nav)
 
         if nav == "first":
-            result = qs.order_by("digest_order").first()
+            # basically, the below. But because first/last are calculated anyway for "_has_next_prev", we pass these
+            # digest_order = qs.order_by("digest_order").values_list("digest_order", flat=True).first()
+            digest_order = bounds[0]
         elif nav == "last":
-            result = qs.order_by("digest_order").last()
+            # digest_order = qs.order_by("digest_order").values_list("digest_order", flat=True).last()
+            digest_order = bounds[1]
         elif nav in ["prev", "next"]:
             if digest_order is None:
                 raise Http404("Cannot look up with '%s' without digest_order" % nav)
 
             if nav == "prev":
-                result = qs.filter(digest_order__lt=digest_order).order_by("-digest_order").first()
+                digest_order = qs.filter(digest_order__lt=digest_order).values_list("digest_order", flat=True)\
+                    .order_by("-digest_order").first()
             elif nav == "next":
-                result = qs.filter(digest_order__gt=digest_order).order_by("digest_order").first()
+                digest_order = qs.filter(digest_order__gt=digest_order).values_list("digest_order", flat=True)\
+                    .order_by("digest_order").first()
 
-        if result is None:
+        if digest_order is None:
             raise Event.DoesNotExist
-        return result
+        return Event.objects.get(issue=issue, digest_order=digest_order)
 
     elif event_pk is not None:
         # we match on both internal and external id, trying internal first
-        if event_pk == "none":
-            raise Event.DoesNotExist()
-
         try:
             return Event.objects.get(pk=event_pk)
         except Event.DoesNotExist:
-            return qs.get(event_id=event_pk)
+            return Event.objects.get(event_id=event_pk)
 
     elif digest_order is not None:
-        return qs.get(digest_order=digest_order)
+        return Event.objects.get(digest_order=digest_order)
     else:
         raise Http404("Either event_pk, nav, or digest_order must be provided")
 
@@ -333,12 +340,13 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event_qs = search_events(issue.project, issue, request.GET.get("q", ""))
+    event_x_qs = search_events_optimized(issue.project, issue, request.GET.get("q", ""))
+    first_do, last_do = _first_last(event_x_qs)
 
     try:
-        event = _get_event(event_qs, event_pk, digest_order, nav)
+        event = _get_event(event_x_qs, issue, event_pk, digest_order, nav, (first_do, last_do))
     except Event.DoesNotExist:
-        return issue_event_404(request, issue, event_qs, "stacktrace", "event_stacktrace")
+        return issue_event_404(request, issue, event_x_qs, "stacktrace", "event_stacktrace")
 
     parsed_data = event.get_parsed_data()
 
@@ -387,26 +395,24 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
         "stack_of_plates": stack_of_plates,
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
-        "event_qs": event_qs,
-        **_has_next_prev(event, event_qs),
+        "event_qs_count": event_x_qs.count(),
+        "has_prev": event.digest_order > first_do,
+        "has_next": event.digest_order < last_do,
     })
 
 
-def issue_event_404(request, issue, event_qs, tab, this_view):
+def issue_event_404(request, issue, event_x_qs, tab, this_view):
     """If the Event is 404, but the issue is not, we can still show the issue page; we show a message for the event"""
 
-    last_event = event_qs.order_by("digest_order").last()  # used for switching to an event-page (using tabs)
     return render(request, "issues/event_404.html", {
         "tab": tab,
         "this_view": this_view,
         "project": issue.project,
         "issue": issue,
-        "event": last_event,
         "is_event_page": False,  # this variable is used to denote "we have event-related info", which we don't
         "mute_options": GLOBAL_MUTE_OPTIONS,
-        "event_qs": event_qs,
         "q": request.GET.get("q", ""),
-        "event_qs_count": event_qs.count(),  # avoids repeating the count() query
+        "event_qs_count": event_x_qs.count(),
     })
 
 
@@ -416,12 +422,13 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event_qs = search_events(issue.project, issue, request.GET.get("q", ""))
+    event_x_qs = search_events_optimized(issue.project, issue, request.GET.get("q", ""))
+    first_do, last_do = _first_last(event_x_qs)
 
     try:
-        event = _get_event(event_qs, event_pk, digest_order, nav)
+        event = _get_event(event_x_qs, issue, event_pk, digest_order, nav, (first_do, last_do))
     except Event.DoesNotExist:
-        return issue_event_404(request, issue, event_qs, "breadcrumbs", "event_breadcrumbs")
+        return issue_event_404(request, issue, event_x_qs, "breadcrumbs", "event_breadcrumbs")
 
     parsed_data = event.get_parsed_data()
 
@@ -436,8 +443,9 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
         "breadcrumbs": get_values(parsed_data.get("breadcrumbs")),
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
-        "event_qs": event_qs,
-        **_has_next_prev(event, event_qs),
+        "event_qs_count": event_x_qs.count(),
+        "has_prev": event.digest_order > first_do,
+        "has_next": event.digest_order < last_do,
     })
 
 
@@ -447,18 +455,11 @@ def _date_with_milis_html(timestamp):
         '<span class="text-xs">' + date(timestamp, "u")[:3] + '</span>')
 
 
-def _has_next_prev(event, event_qs):
-    # guarding against empty event_qs is not necessary, because we only get here if any event exists (because otherwise
-    # event would be None too)
-
-    # this was once implemented with Min/Max, but just doing 2 queries is (on sqlite at least) ~100× faster.
-    first = event_qs.order_by("digest_order").values("digest_order").first()
-    last = event_qs.order_by("-digest_order").values("digest_order").first()
-
-    return {
-        "has_prev": event.digest_order > first["digest_order"],
-        "has_next": event.digest_order < last["digest_order"],
-    }
+def _first_last(qs_with_digest_order):
+    # this was once implemented with Min/Max, but just doing 2 queries is (on sqlite at least) much faster.
+    first = qs_with_digest_order.order_by("digest_order").values_list("digest_order", flat=True).first()
+    last = qs_with_digest_order.order_by("-digest_order").values_list("digest_order", flat=True).first()
+    return first, last
 
 
 @atomic_for_request_method
@@ -467,12 +468,13 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    event_qs = search_events(issue.project, issue, request.GET.get("q", ""))
+    event_x_qs = search_events_optimized(issue.project, issue, request.GET.get("q", ""))
+    first_do, last_do = _first_last(event_x_qs)
 
     try:
-        event = _get_event(event_qs, event_pk, digest_order, nav)
+        event = _get_event(event_x_qs, issue, event_pk, digest_order, nav, (first_do, last_do))
     except Event.DoesNotExist:
-        return issue_event_404(request, issue, event_qs, "event-details", "event_details")
+        return issue_event_404(request, issue, event_x_qs, "event-details", "event_details")
     parsed_data = event.get_parsed_data()
 
     key_info = [
@@ -560,8 +562,9 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         "contexts": contexts,
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
-        "event_qs": event_qs,
-        **_has_next_prev(event, event_qs),
+        "event_qs_count": event_x_qs.count(),
+        "has_prev": event.digest_order > first_do,
+        "has_next": event.digest_order < last_do,
     })
 
 
@@ -572,12 +575,11 @@ def issue_history(request, issue):
         return _handle_post(request, issue)
 
     event_qs = search_events(issue.project, issue, request.GET.get("q", ""))
-    last_event = event_qs.order_by("digest_order").last()  # used for switching to an event-page (using tabs)
+    last_event = event_qs.order_by("digest_order").last()
     return render(request, "issues/history.html", {
         "tab": "history",
         "project": issue.project,
         "issue": issue,
-        "event": last_event,
         "is_event_page": False,
         "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,
@@ -591,12 +593,11 @@ def issue_tags(request, issue):
         return _handle_post(request, issue)
 
     event_qs = search_events(issue.project, issue, request.GET.get("q", ""))
-    last_event = event_qs.order_by("digest_order").last()  # used for switching to an event-page (using tabs)
+    last_event = event_qs.order_by("digest_order").last()
     return render(request, "issues/tags.html", {
         "tab": "tags",
         "project": issue.project,
         "issue": issue,
-        "event": last_event,
         "is_event_page": False,
         "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,
@@ -610,12 +611,11 @@ def issue_grouping(request, issue):
         return _handle_post(request, issue)
 
     event_qs = search_events(issue.project, issue, request.GET.get("q", ""))
-    last_event = event_qs.order_by("digest_order").last()  # used for switching to an event-page (using tabs)
+    last_event = event_qs.order_by("digest_order").last()
     return render(request, "issues/grouping.html", {
         "tab": "grouping",
         "project": issue.project,
         "issue": issue,
-        "event": last_event,
         "is_event_page": False,
         "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,
@@ -628,9 +628,12 @@ def issue_event_list(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
+    # because we we need _actual events_ for display, and we don't have the regular has_prev/has_next (paginator
+    # instead), we don't try to optimize using search_events_optimized in this view (except for counting)
     if "q" in request.GET:
         event_list = search_events(issue.project, issue, request.GET["q"]).order_by("digest_order")
-        paginator = Paginator(event_list, 250)  # might as well use Paginator; the cost of .count() is incurred anyway
+        event_x_qs = search_events_optimized(issue.project, issue, request.GET.get("q", ""))
+        paginator = KnownCountPaginator(event_list, 250, count=event_x_qs.count())
     else:
         event_list = issue.event_set.order_by("digest_order")
         # re 250: in general "big is good" because it allows a lot "at a glance".
@@ -639,13 +642,12 @@ def issue_event_list(request, issue):
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
-    last_event = event_list.last()  # used for switching to an event-page (using tabs)
+    last_event = event_list.last()
 
     return render(request, "issues/event_list.html", {
         "tab": "event-list",
         "project": issue.project,
         "issue": issue,
-        "event": last_event,
         "event_list": event_list,
         "is_event_page": False,
         "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",

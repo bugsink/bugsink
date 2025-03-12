@@ -61,7 +61,7 @@ def _format_query_plan(rows):
 
 
 @contextmanager
-def query_debugger():
+def query_debugger(print_all):
     d = {}
     queries_i = len(connection.queries)
     yield d
@@ -70,7 +70,10 @@ def query_debugger():
     print('Queries executed:', len(connection.queries) - queries_i)
     print('Total query time:', sum(float(query['time']) for query in connection.queries[queries_i:]))
 
-    interesting_queries = [query for query in connection.queries[queries_i:] if float(query['time']) > 0.005]
+    if print_all:
+        interesting_queries = connection.queries[queries_i:]
+    else:
+        interesting_queries = [query for query in connection.queries[queries_i:] if float(query['time']) > 0.005]
 
     for query in interesting_queries:
         print()
@@ -89,7 +92,7 @@ def query_debugger():
 class Command(BaseCommand):
     """Internal (debugging) command to test the performance of search queries."""
 
-    def _test_url(self, url, title, description):
+    def _test_url(self, url, title, description, print_all=False):
         """
         Runs the view code that matches the given URL with a fake request; prints relevant stats
         """
@@ -105,7 +108,7 @@ class Command(BaseCommand):
         print(description)
         print()
 
-        with query_debugger() as d:
+        with query_debugger(print_all) as d:
             view(request, *args, **kwargs)
 
         self.total_time += d['total_time']

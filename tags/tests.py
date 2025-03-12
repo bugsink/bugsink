@@ -8,7 +8,7 @@ from issues.models import Issue
 
 from .models import store_tags, EventTag
 from .utils import deduce_tags
-from .search import search_events, search_issues, parse_query
+from .search import search_events, search_issues, parse_query, search_events_optimized
 
 
 class DeduceTagsTestCase(RegularTestCase):
@@ -199,8 +199,12 @@ class SearchTestCase(DjangoTestCase):
         # in the above, we create 2 items with tags
         self.assertEqual(search_x("k-0:v-0").count(), 2)
 
+        # an "AND" query should yield the same 2
+        self.assertEqual(search_x("k-0:v-0 k-1:v-1").count(), 2)
+
         # non-matching tag: no results
         self.assertEqual(search_x("k-0:nosuchthing").count(), 0)
+        self.assertEqual(search_x("k-0:nosuchthing k-1:v-1").count(), 0)
 
         # findable-by-text: 2 such items
         self.assertEqual(search_x("findable value").count(), 2)
@@ -215,6 +219,9 @@ class SearchTestCase(DjangoTestCase):
 
     def test_search_events(self):
         self._test_search(lambda query: search_events(self.project, self.global_issue, query))
+
+    def test_search_events_optimized(self):
+        self._test_search(lambda query: search_events_optimized(self.project, self.global_issue, query))
 
     def test_search_events_wrong_issue(self):
         issue_without_events = Issue.objects.create(project=self.project, **denormalized_issue_fields())

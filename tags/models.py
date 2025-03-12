@@ -79,6 +79,9 @@ class EventTag(models.Model):
     issue = models.ForeignKey(
         'issues.Issue', blank=False, null=True, on_delete=models.SET_NULL, related_name="event_tags")
 
+    # digest_order is a denormalization that allows for a single-table-index for efficient search.
+    digest_order = models.PositiveIntegerField(blank=False, null=False)
+
     # DO_NOTHING: we manually implement CASCADE (i.e. when an event is cleaned up, clean up associated tags) in the
     # eviction process.  Why CASCADE? [1] you'll have to do it "at some point", so you might as well do it right when
     # evicting (async in the 'most resilient setup' anyway, b/c that happens when ingesting) [2] the order of magnitude
@@ -93,9 +96,9 @@ class EventTag(models.Model):
             models.Index(fields=['event']),  # for lookups by event (for event-details page, event-deletions)
 
             # for search, which filters a list of EventTag down to those matching certain values and a given issue.
-            # (both orderings of the index would work for the current search query; if we ever introduce "search across
-            # issues" the below would work for that too (but the reverse wouldn't))
-            models.Index(fields=['value', 'issue']),
+            # (both orderings of the (value, issue) would work for the current search query; if we ever introduce
+            # "search across issues" the below would work for that too (but the reverse wouldn't))
+            models.Index(fields=['value', 'issue', 'digest_order']),
         ]
 
 
@@ -175,7 +178,7 @@ def store_tags(event, issue, tags):
     #             project_id=event.project_id, key=key, mostly_unique=is_mostly_unique(key))
     #         tag_value, _ = TagValue.objects.get_or_create(project_id=event.project_id, key=tag_key, value=value)
     #         EventTag.objects.get_or_create(project_id=event.project_id, value=tag_value, event=event,
-    #             defaults={'issue': issue})
+    #             defaults={'issue': issue, 'digest_order': event.digest_order})
     #         IssueTag.objects.get_or_create(
     #            project_id=event.project_id, key_id=tag_value.key_id, value=tag_value, issue=issue)
     #
@@ -212,7 +215,8 @@ def store_tags(event, issue, tags):
             project_id=event.project_id,
             value=tag_value,
             event=event,
-            issue=issue
+            issue=issue,
+            digest_order=event.digest_order,
         ) for tag_value in tag_value_objects
     ], ignore_conflicts=True)
 
