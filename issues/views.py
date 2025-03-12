@@ -395,7 +395,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
         "stack_of_plates": stack_of_plates,
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
-        "event_qs_count": event_x_qs.count(),
+        "event_qs_count": event_x_qs.count() if request.GET.get("q") else issue.stored_event_count,
         "has_prev": event.digest_order > first_do,
         "has_next": event.digest_order < last_do,
     })
@@ -412,7 +412,7 @@ def issue_event_404(request, issue, event_x_qs, tab, this_view):
         "is_event_page": False,  # this variable is used to denote "we have event-related info", which we don't
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
-        "event_qs_count": event_x_qs.count(),
+        "event_qs_count": event_x_qs.count() if request.GET.get("q") else issue.stored_event_count,
     })
 
 
@@ -443,7 +443,7 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
         "breadcrumbs": get_values(parsed_data.get("breadcrumbs")),
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
-        "event_qs_count": event_x_qs.count(),
+        "event_qs_count": event_x_qs.count() if request.GET.get("q") else issue.stored_event_count,
         "has_prev": event.digest_order > first_do,
         "has_next": event.digest_order < last_do,
     })
@@ -562,7 +562,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         "contexts": contexts,
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
-        "event_qs_count": event_x_qs.count(),
+        "event_qs_count": event_x_qs.count() if request.GET.get("q") else issue.stored_event_count,
         "has_prev": event.digest_order > first_do,
         "has_next": event.digest_order < last_do,
     })
