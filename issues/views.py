@@ -11,7 +11,7 @@ from django.template.defaultfilters import date
 from django.urls import reverse
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
-from django.core.paginator import Paginator
+from django.core.paginator import Paginator, Page
 from django.db.utils import OperationalError
 
 from sentry.utils.safe import get_path
@@ -50,7 +50,27 @@ GLOBAL_MUTE_OPTIONS = [
 ]
 
 
-class KnownCountPaginator(Paginator):
+class EagerPaginator(Paginator):
+    # Eager meaning non-lazy; this is a paginator that doesn't postpone the query (implicit in object_list) until the
+    # last moment (i.e. when the page is actually rendered). Prompted by the following unhappy combination of facts:
+    # * failure in evaluation in the object_list (in my case interrupt, but since this is DB-related: could be anything)
+    # * usage of sentry_sdk (when dogfooding)
+    # * sentry_sdk's serializer sees a Sequence (Page is a subclass of that) and proceeds accordingly ("fancily")
+    # * evaluating the qs and putting it in a list (caching) is in Page.__getitem__ only
+    # together, this means that sentry_sdk's serializer will again try to evaulate the QS, right after (and because),
+    # this failed, in an attempt to serialize local vars. When that happens: again. Etc.
+    #
+    # I'm blaming Django, btw: if you implement Sequence, don't do database stuff to get elements.
+    #
+    # On the now-removed lazyness: when you generate a page, you're going to display it, so just do that right away.
+
+    def _get_page(self, *args, **kwargs):
+        object_list = args[0]
+        object_list = list(object_list)
+        return Page(object_list, *(args[1:]), **kwargs)
+
+
+class KnownCountPaginator(EagerPaginator):
     """optimization: we know the total count of the queryset, so we can avoid a count() query"""
 
     def __init__(self, *args, **kwargs):
@@ -243,7 +263,7 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
     if request.GET.get("q"):
         issue_list = search_issues(project, issue_list, request.GET["q"])
 
-    paginator = Paginator(issue_list, 250)
+    paginator = EagerPaginator(issue_list, 250)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
