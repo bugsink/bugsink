@@ -186,7 +186,12 @@
 
                 <div class="mb-4">
                     <div class="text-sm font-bold text-slate-500">Nr. of events:</div>
-                    <div>{{ issue.digested_event_count|intcomma }}</div>
+                    <div>{{ issue.digested_event_count|intcomma }}
+                    {% if issue.digested_event_count != issue.stored_event_count %}
+                        total seen</div><div>{{ issue.stored_event_count|intcomma }} available</div>
+                    {% else %}
+                        </div>
+                    {% endif %}
                 </div>
 
                 {% if issue.digested_event_count > 1 %}
