@@ -1,6 +1,6 @@
 # Changes
 
-## 1.4.0 (11 March 2025)
+## 1.4.0 (13 March 2025)
 
 ### Introducing (Tag-based) Search
 
