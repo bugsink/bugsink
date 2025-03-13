@@ -7,9 +7,9 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
+        ("events", "0019_event_storage_backend"),
         ("issues", "0012_alter_issue_calculated_type_and_more"),
         ("projects", "0011_fill_stored_event_count"),
-        ("events", "0019_event_storage_backend"),
     ]
 
     operations = [
@@ -137,6 +137,7 @@ class Migration(migrations.Migration):
                         verbose_name="ID",
                     ),
                 ),
+                ("digest_order", models.PositiveIntegerField()),
                 (
                     "event",
                     models.ForeignKey(
@@ -175,7 +176,8 @@ class Migration(migrations.Migration):
                         fields=["event"], name="tags_eventt_event_i_ac6453_idx"
                     ),
                     models.Index(
-                        fields=["value", "issue"], name="tags_eventt_value_i_255b9c_idx"
+                        fields=["value", "issue", "digest_order"],
+                        name="tags_eventt_value_i_6f1823_idx",
                     ),
                 ],
                 "unique_together": {("value", "event")},
