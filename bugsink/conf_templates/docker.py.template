@@ -71,7 +71,7 @@ if os.getenv("DATABASE_URL"):
             "PORT": parsed.port or "3306",
         }
 
-    elif parsed.scheme == ["postgres", "postgresql"]:
+    elif parsed.scheme in ["postgres", "postgresql"]:
         DATABASES['default'] = {
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': parsed.path.lstrip('/'),
@@ -82,7 +82,7 @@ if os.getenv("DATABASE_URL"):
         }
 
     else:
-        raise ValueError("For DATABASE_URL, only mysql and postgres are supported.")
+        raise ValueError("For DATABASE_URL, only mysql and postgres are supported, not '%s'" % parsed.scheme)
 
 else:
     # similar to the default, but the fallback is /data/db.sqlite3; we also create the directory if it doesn't exist,
