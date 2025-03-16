@@ -105,6 +105,9 @@ else:
     # print("WARNING: EMAIL_HOST not set; email will not be sent")
     EMAIL_BACKEND = "bugsink.email_backends.QuietConsoleEmailBackend"
 
+if os.getenv("EMAIL_TIMEOUT"):
+    EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT"))
+
 SERVER_EMAIL = DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Bugsink <bugsink@example.org>")
 
 # constants for "create by" (user/team/project) settings
