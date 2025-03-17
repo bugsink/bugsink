@@ -64,6 +64,7 @@ elif os.getenv("DB", "sqlite") == "sqlite":
     # store databases.
     DATABASES["default"]["NAME"] = BASE_DIR / 'db.sqlite3'
     DATABASES["default"]["TEST"]["NAME"] = BASE_DIR / 'test.sqlite3'
+    DATABASES["default"]["OPTIONS"]["query_timeout"] = 0.1  # canary config: fail-fast in development.
     DATABASES["snappea"]["NAME"] = BASE_DIR / 'snappea.sqlite3'
 
 else:

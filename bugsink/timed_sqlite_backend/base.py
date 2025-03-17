@@ -1,7 +1,9 @@
+from copy import deepcopy
 import time
 from contextlib import contextmanager
 from django.conf import settings
 
+from django.db import DEFAULT_DB_ALIAS
 from django.db.backends.sqlite3.base import (
     DatabaseWrapper as UnpatchedDatabaseWrapper, SQLiteCursorWrapper as UnpatchedSQLiteCursorWrapper,
 )
@@ -73,8 +75,14 @@ class PrintOnClose(object):
 
 class DatabaseWrapper(UnpatchedDatabaseWrapper):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, settings_dict, alias=DEFAULT_DB_ALIAS):
+        global _runtime_limit
+        settings_dict = deepcopy(settings_dict)
+        # clobbering of the global var should not be a problem, because connections are single-threaded in Django
+        configured_runtime_limit = settings_dict.get("OPTIONS").pop("query_timeout", 5.0)
+        _runtime_limit = configured_runtime_limit
+
+        super().__init__(settings_dict, alias=alias)
 
         # This makes the cursor act like a debug cursor (storing queries) even when DEBUG=False. We need this in
         # PerformanceStatsMiddleware to provide a query-count. We expect the number of such-stored queries to be small

@@ -163,9 +163,21 @@ DATABASES = {
             "NAME": os.getenv("TEST_DATABASE_PATH", 'test.sqlite3'),
         },
         'OPTIONS': {
-            # the "timeout" option here is passed to the Python sqlite3.connect() translates into the busy_timeout
-            # PRAGMA in SQLite.  (5000ms is just a starting point; we can adjust it after we have some data, or even
-            # make it configurable)
+            # This is the per-query timeout for timed_sqlite_backend. Setting this to something shorter will result in
+            # long-running queries being interrupted. When combined with a "dogfooding" setup, this can be useful to
+            # catch queries that are too slow, rather than wait for e.g. gunicorn's timeout to kill the whole process,
+            # or to have the user wait for a long time. The (obvious) flip side is that the user gets to see an error
+            # message rather than a slow page.
+            # The default (from timed_sqlite_backend) is 5 seconds, we're just being explicit.
+            'query_timeout': 5,
+
+            # The "timeout" option here is passed to the Python sqlite3.connect() and translates into the busy_timeout
+            # PRAGMA in SQLite. busy_timeout is the time SQLIte waits for a lock to be released before giving up. i.e.
+            # this is about "how long are we waiting for _other processes_ to finish their transactions". Given
+            # Bugsink's architecture, Since we precede "immediate transactions" with a semaphore in Python for most
+            # write-heavy operations (snappea), I don't expect the below to be a main point of configuration, and
+            # haven't seen it be so in running Bugsink over a year, but it's here for completeness.
+            # The default (from Django) is 5 seconds, we're just being explicit.
             'timeout': 5,  # this is the default (as per the Python sqlite3 package); we're just being explicit
         },
     },
