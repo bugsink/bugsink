@@ -1,5 +1,11 @@
 # Changes
 
+## 1.4.1 (17 March 2025)
+
+* Bugfixes on the experimental postgres support, see #21, #61
+* sqlite: per-query timeout configurable
+* Make `EMAIL_TIMEOUT` configurable on Docker, fixes #60
+
 ## 1.4.0 (13 March 2025)
 
 ### Introducing (Tag-based) Search
