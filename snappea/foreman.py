@@ -99,15 +99,19 @@ class Foreman:
         # just a small check to prevent the regularly occurring cases:
         # * starting a second runsnappea in development
         # * running 2 separate instances of bugsink on a single machine without properly distinguishing them
-        if os.path.exists(self.settings.PID_FILE):
-            with open(self.settings.PID_FILE, "r") as f:
-                old_pid = int(f.read())
-            if os.path.exists(f"/proc/{old_pid}"):
-                logger.error("Startup: snappea is already running with pid %s, EXIT", old_pid)
-                sys.exit(1)
-            else:
-                logger.warning("Startup: stale pid file found, removing %s", self.settings.PID_FILE)
-                os.remove(self.settings.PID_FILE)
+        try:
+            if os.path.exists(self.settings.PID_FILE):
+                with open(self.settings.PID_FILE, "r") as f:
+                    old_pid = int(f.read())
+                if os.path.exists(f"/proc/{old_pid}"):
+                    logger.error("Startup: snappea is already running with pid %s, EXIT", old_pid)
+                    sys.exit(1)
+                else:
+                    logger.warning("Startup: stale pid file found, removing %s", self.settings.PID_FILE)
+                    os.remove(self.settings.PID_FILE)
+        except Exception as e:
+            # as per the above: not bullet proof, and non-critical, hence also: not a reason to crash on this.
+            logger.error("Startup: Ignored Error while checking PID file", exc_info=e)
 
         os.makedirs(os.path.dirname(self.settings.PID_FILE), exist_ok=True)
         with open(self.settings.PID_FILE, "w") as f:
