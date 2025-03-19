@@ -13,7 +13,8 @@ from issues.models import Issue
 from issues.factories import denormalized_issue_fields
 
 from .factories import create_event
-from .retention import eviction_target, should_evict, evict_for_max_events, get_epoch_bounds_with_irrelevance
+from .retention import (
+    eviction_target, should_evict, evict_for_max_events, get_epoch_bounds_with_irrelevance, filter_for_work)
 from .utils import annotate_with_meta
 
 User = get_user_model()
@@ -202,6 +203,16 @@ class RetentionTestCase(DjangoTestCase):
             self.assertEqual(1, evicted)
 
             project_stored_event_count -= evicted
+
+    def test_filter_for_work(self):
+        # this test is mostly to help clarify how filter_for_work actually works
+
+        epoch_bounds = [((455832, None), 0), ((455829, 455832), 1), ((None, 455829), 2)]
+        pairs = [(0, 0), (1, 2), (2, 2)]
+        max_total_irrelevance = 3
+
+        # only the oldest epoch has a total irrelevance exceeding the max; return only that:
+        self.assertEqual([((None, 455829), 2)], list(filter_for_work(epoch_bounds, pairs, max_total_irrelevance)))
 
 
 class AnnotateWithMetaTestCase(RegularTestCase):

@@ -237,10 +237,13 @@ def evict_for_max_events(project, timestamp, stored_event_count=None, include_ne
             # given value)
             max_total_irrelevance -= 1
 
+            epoch_bounds_with_irrelevance_with_possible_work = list(
+                filter_for_work(epoch_bounds_with_irrelevance, pairs, max_total_irrelevance))
+
             evicted += evict_for_irrelevance(
                 project,
                 max_total_irrelevance,
-                list(filter_for_work(epoch_bounds_with_irrelevance, pairs, max_total_irrelevance)),
+                epoch_bounds_with_irrelevance_with_possible_work,
                 include_never_evict,
                 target - evicted,
             )
