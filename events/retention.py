@@ -201,7 +201,7 @@ def eviction_target(max_event_count, stored_event_count):
            )
 
 
-def evict_for_max_events(project, timestamp, stored_event_count=None, include_never_evict=False):
+def evict_for_max_events(project, timestamp, stored_event_count, include_never_evict=False):
     # This function evicts, with a number-based target of events in mind. It does so by repeatedly calling
     # evict_for_irrelevance (i.e. irrelevance-based target), lowering the target irrelevance until the target number of
     # events has been evicted.
@@ -214,14 +214,9 @@ def evict_for_max_events(project, timestamp, stored_event_count=None, include_ne
     # epoch bounds are passed to the irrelevance-based eviction; pairs is used to determine the starting max irrelevance
     # and in an optimization (skipping epochs where it's obvious no work is needed).
 
-    from .models import Event
     qs_kwargs = {} if include_never_evict else {"never_evict": False}
 
     with time_and_query_count() as phase0:
-        if stored_event_count is None:
-            # allowed as a pass-in to save a query (we generally start off knowing this); +1 because call-before-add
-            stored_event_count = Event.objects.filter(project=project).count() + 1
-
         epoch_bounds_with_irrelevance = get_epoch_bounds_with_irrelevance(project, timestamp, qs_kwargs)
 
         # we start off with the currently observed max total irrelevance
