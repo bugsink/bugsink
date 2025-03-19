@@ -1,0 +1,51 @@
+[run]
+omit = 
+    */migrations/*
+    bugsink/event_schema.py
+    bugsink/scripts/*
+    */tests*
+
+    bugsink/wsgi.py
+    bsmain/management/commands/check_migrations.py 
+    bsmain/management/commands/fetch_event_schema_json.py 
+    bsmain/management/commands/migrate.py 
+    bsmain/management/commands/prestart.py 
+    bsmain/management/commands/raise_exception.py 
+    bsmain/management/commands/send_json.py 
+    bsmain/management/commands/showstat.py 
+    bsmain/management/commands/stress_test.py 
+
+    events/management/commands/cleanup_eventstorage.py 
+    events/management/commands/make_consistent.py 
+    events/management/commands/migrate_to_current_eventstorage.py 
+    events/management/commands/nuke_events.py 
+
+    performance/bursty_data.py 
+    performance/management/commands/pftest_search.py 
+    phonehome/management/commands/print_phonehome.py 
+
+    snappea/management/commands/checksnappea.py 
+    snappea/management/commands/runsnappea.py 
+    tags/management/commands/init_tags.py
+    users/management/commands/send_welcome_email.py 
+
+source =
+    alerts
+    bsmain
+    bugsink
+    compat
+    events
+    ee
+    ingest
+    issues
+    performance
+    phonehome
+    projects
+    releases
+    sentry
+    sentry_sdk_extensions
+    snappea
+    tags
+    teams
+    theme
+    users

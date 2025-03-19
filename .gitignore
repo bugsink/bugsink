@@ -1,6 +1,7 @@
 # Python
 *.pyc
 __pycache__
+.coverage
 
 # Virtual Environments / build
 /.env
