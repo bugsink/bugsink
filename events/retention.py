@@ -259,8 +259,8 @@ def evict_for_max_events(project, timestamp, stored_event_count=None, include_ne
                 # "should not happen", let's log it and break out of the loop
                 # the reason I can think of this happening is when stored_event_count is wrong (too high).
                 bugsink_logger.error(
-                    "Failed to evict enough events; %d < %d (max %d, stored %d) including never_evict=%s", evicted,
-                    target, project.retention_max_event_count, stored_event_count, include_never_evict)
+                    "Failed to evict enough events; %d < %d (max %d, stored %d)", evicted, target,
+                    project.retention_max_event_count, stored_event_count)
                 break
 
     # phase 0: SELECT statements to identify per-epoch observed irrelevances
