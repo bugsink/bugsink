@@ -176,31 +176,40 @@ class RetentionTestCase(DjangoTestCase):
         # this test contains just the key bits of ingest/views.py such that we can test `evict_for_max_events`;
         # at the same time, we diverge a bit from what would happen "in reality", such that we can make a test that's
         # both interesting (hits enough edge cases) and still understandable. In particular, we first load up on events
-        # (over max) and then repeatedly evict (with a target of 1) so we can see what's happening.
+        # (over max) and then repeatedly evict (with small batch sizes) so we can see what's happening.
         project_stored_event_count = 0
 
         self.project = Project.objects.create(retention_max_event_count=999)
         self.issue = Issue.objects.create(project=self.project, **denormalized_issue_fields())
 
         current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+        # the irrelevances here are chosen to be somewhat similar to reality as well as triggering interesting code
+        # paths, in particular the "high irrelevances for recent epochs, non-consecutive" makes it so that you'll get
+        # quite a few deletions where nothing happens (a branch that we also want to test).
         data = reversed(list(
-            (digest_order, current_timestamp - datetime.timedelta(hours=digest_order))
-            for digest_order in range(1, 10)))
+            (i + 1, irrelevance, current_timestamp - datetime.timedelta(hours=i))
+            for i, irrelevance in enumerate([0, 1, 2, 0, 1, 2, 0, 1, 4, 8])))
 
-        for digest_order, digested_at in data:
-            irrelevance = digest_order % 3  # this gives us a bit of variety in the irrelevance values
-
+        for digest_order, irrelevance, digested_at in data:
             project_stored_event_count += 1  # +1 pre-create, as in the ingestion view
             event = create_event(self.project, self.issue, timestamp=digested_at)
             event.irrelevance_for_retention = irrelevance
+
+            # totally unrealistic scenario of "everything is never_evict" is great for testing: it just means the
+            # eviction framework is tested in "include_never_evict" mode which is "normal mode but more cases", i.e. it
+            # tests the regular flow but also the special one.
+            event.never_evict = True
             event.save()
 
         while project_stored_event_count > 1:
-            self.project.retention_max_event_count = project_stored_event_count - 1  # just manually "make tighter"
+            # Just manually set the target a bit lower each time. We take batches of 2 because that's small enough to
+            # have many batches, but big enough that a single batch will trigger multiple branches in our codebase.
+            self.project.retention_max_event_count = project_stored_event_count - 2
             self.project.save()
 
             evicted = evict_for_max_events(self.project, current_timestamp, project_stored_event_count)
-            self.assertEqual(1, evicted)
+            self.assertEqual(2, evicted)
 
             project_stored_event_count -= evicted
 
