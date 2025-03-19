@@ -13,7 +13,7 @@ from issues.models import Issue
 from issues.factories import denormalized_issue_fields
 
 from .factories import create_event
-from .retention import eviction_target, should_evict, evict_for_max_events
+from .retention import eviction_target, should_evict, evict_for_max_events, get_epoch_bounds_with_irrelevance
 from .utils import annotate_with_meta
 
 User = get_user_model()
@@ -101,8 +101,51 @@ class RetentionUtilsTestCase(RegularTestCase):
 
 
 class RetentionTestCase(DjangoTestCase):
-    # test-second TestCase for retention/eviction. "At least have something that touches the main parts of the code to
-    # avoid the most obvious kinds of breakages". Not a full test of all features/code paths (yet).
+
+    def test_epoch_bounds_with_irrelevance_empty_project(self):
+        project = Project.objects.create()
+        current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+        bounds = get_epoch_bounds_with_irrelevance(project, current_timestamp)
+
+        self.assertEqual([((None, None), 0)], bounds)
+
+    def test_epoch_bounds_with_irrelevance_single_current_event(self):
+        project = Project.objects.create()
+        current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        create_event(project, timestamp=current_timestamp)
+
+        bounds = get_epoch_bounds_with_irrelevance(project, current_timestamp)
+
+        # all events are in the same (current) epoch, i.e. no explicit bounds, and no age-based irrelevance
+        self.assertEqual([((None, None), 0)], bounds)
+
+    def test_epoch_bounds_with_irrelevance_single_hour_old_event(self):
+        project = Project.objects.create()
+        current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        create_event(project, timestamp=current_timestamp - datetime.timedelta(hours=1))
+
+        bounds = get_epoch_bounds_with_irrelevance(project, current_timestamp)
+
+        # with an observed event in the previous epoch, we get explicit bounds.
+        self.assertEqual([
+            ((455832, None), 0),  # present-till-future; no age-based irrelevance
+            ((None, 455832), 1)  # all the past-till-present; age-based irrelevance 1
+        ], bounds)
+
+    def test_epoch_bounds_with_irrelevance_day_old_event(self):
+        project = Project.objects.create()
+        current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        create_event(project, timestamp=current_timestamp - datetime.timedelta(days=1))
+
+        bounds = get_epoch_bounds_with_irrelevance(project, current_timestamp)
+
+        self.assertEqual([
+            ((455832, None),   0),
+            ((455829, 455832), 1),
+            ((455817, 455829), 2),
+            ((None,   455817), 3)],
+            bounds)
 
     def test_retention(self):
         # this test contains just the key bits of ingest/views.py such that we can test `evict_for_max_events`

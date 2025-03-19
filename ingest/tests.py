@@ -408,7 +408,7 @@ class IngestViewTestCase(TransactionTestCase):
     def test_filestore(self):
         # quick & dirty way to test the filestore; in absence of a proper test for it, we just run a more-or-less
         # integration test with the FileEventStorage activated. This will at least show the absence of the most obvious
-        # errors. We then run
+        # errors. We then run eviction to make sure that the eviction removes the files as expected.
         with tempfile.TemporaryDirectory() as tempdir:
             with override_event_storages({"local_flat_files": {
                         "STORAGE": "events.storage.FileEventStorage",

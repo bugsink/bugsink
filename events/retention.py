@@ -122,6 +122,8 @@ def get_age_for_irrelevance(age_based_irrelevance):
 
 
 def get_epoch_bounds_with_irrelevance(project, current_timestamp, qs_kwargs={"never_evict": False}):
+    """Returns the epoch bounds for the project (newest first), with the age-based irrelevance for each epoch."""
+
     from .models import Event
 
     oldest = Event.objects.filter(project=project, **qs_kwargs).aggregate(val=Min('digested_at'))['val']
@@ -131,11 +133,15 @@ def get_epoch_bounds_with_irrelevance(project, current_timestamp, qs_kwargs={"ne
 
     difference = current_epoch - first_epoch
 
-    # because we construct in reverse order (from the most recent to the oldest) we end up with the pairs swapped
-    swapped_bounds = pairwise(
-        [None] + [current_epoch - age for age in list(map_N_until(get_age_for_irrelevance, difference))] + [None])
+    ages = list(map_N_until(get_age_for_irrelevance, difference))  # e.g. [0, 3, 15]
+    epochs = [current_epoch - age for age in ages]  # e.g. [100, 97, 85]
+    swapped_bounds = pairwise([None] + epochs + [None])  # e.g. [(None, 100), (100, 97), (97, 85), (85, None)]
 
-    return [((lb, ub), age_based_irrelevance) for age_based_irrelevance, (ub, lb) in enumerate(swapped_bounds)]
+    # because ages and epochs are constructed new-to-old, we get (newer, older) pairs but we need the reverse
+    bounds = [(older, newer) for (newer, older) in swapped_bounds]  # e.g [(100, None), (97, 100), ...]
+
+    # age based irrelevance is simply "counting back" now; e.g. [((100, None), 0), ((97, 100), 1), ...]
+    return [((lb, ub), age_based_irrelevance) for (age_based_irrelevance, (lb, ub)) in enumerate(bounds)]
 
 
 def get_irrelevance_pairs(project, epoch_bounds_with_irrelevance, qs_kwargs={"never_evict": False}):
@@ -196,6 +202,18 @@ def eviction_target(max_event_count, stored_event_count):
 
 
 def evict_for_max_events(project, timestamp, stored_event_count=None, include_never_evict=False):
+    # This function evicts, with a number-based target of events in mind. It does so by repeatedly calling
+    # evict_for_irrelevance (i.e. irrelevance-based target), lowering the target irrelevance until the target number of
+    # events has been evicted.
+    #
+    # Before any actual work is done, we map out the terrain:
+    #
+    # * epoch_bounds_with_irrelevance: pairs of epoch bounds with their age_based_irrelevance
+    # * pairs: adds to that the observed max irrelevance for each epoch
+    #
+    # epoch bounds are passed to the irrelevance-based eviction; pairs is used to determine the starting max irrelevance
+    # and in an optimization (skipping epochs where it's obvious no work is needed).
+
     from .models import Event
     qs_kwargs = {} if include_never_evict else {"never_evict": False}
 
@@ -309,7 +327,7 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_eve
 
     # We generate the list of events-to-delete (including the LIMIT) before proceeding; this allows us:
     # A. to have a portable delete_with_limit (e.g. Django does not support that, nor does Postgres).
-    # B. to apply both deletion and cleanup_events_on_storage() on the same list.
+    # B. to apply deletions of Events and their consequences (cleanup_events_on_storage(), EventTag) on the same list.
     #
     # Implementation notes:
     # 1. We force evaluation here with a `list()`; this means subsequent usages do _not_ try to "just use an inner
