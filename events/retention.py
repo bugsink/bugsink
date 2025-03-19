@@ -123,6 +123,10 @@ def get_age_for_irrelevance(age_based_irrelevance):
 
 def get_epoch_bounds_with_irrelevance(project, current_timestamp, qs_kwargs={"never_evict": False}):
     """Returns the epoch bounds for the project (newest first), with the age-based irrelevance for each epoch."""
+    # newest-first is something we rely on in the below; e.g. in our 'single age-based UB-check'. Why this was chosen
+    # originally, I can't tell for sure, but it seems somewhat natural in the light of the newest epochs being the ones
+    # with the most variation in irrelevance (high-irrelevance events which have not yet been evicted are most likely to
+    # live in fresh epochs)
 
     from .models import Event
 
