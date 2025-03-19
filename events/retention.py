@@ -276,15 +276,16 @@ def evict_for_irrelevance(
             project, epoch_ub_exclusive, max_item_irrelevance, current_max, include_never_evict)
 
         if max_item_irrelevance <= -1:
-            # in the actual eviction, the test on max_item_irrelevance is done exclusively, i.e. only items of greater
-            # irrelevance are evicted. The minimal actually occuring value is 0. Such items can be evicted with a call
-            # with max_item_irrelevance = -1. This means that if we just did such an eviction, we're done for all epochs
+            # break: we've just done the most aggressive eviction possible: we're done for all epochs. (because the test
+            # on max_item_irrelevance in evict_for_epoch is done exclusively (i.e. `gt`), and the lowest existing value
+            # is 0, and because we don't do a LB check when deleting, a single call for -1 deletes all that can be
+            # deleted (respecting include_never_evict, max_event_count)).
             break
 
         if evicted >= max_event_count:
-            # We've reached the target; we can stop early. In this case not all events with greater than max_total_irr
-            # will have been evicted; if this is the case older items are more likely to be spared (because epochs are
-            # visited in reverse order).
+            # We've reached the target; we don't need to evict from further epochs. In this case not all events with
+            # greater than max_total_irr will have been evicted; if this is the case older items are more likely to be
+            # spared (because epochs are visited in reverse order).
             break
 
     return evicted

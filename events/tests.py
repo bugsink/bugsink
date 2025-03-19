@@ -147,7 +147,7 @@ class RetentionTestCase(DjangoTestCase):
             ((None,   455817), 3)],
             bounds)
 
-    def test_retention(self):
+    def test_retention_simple_case(self):
         # this test contains just the key bits of ingest/views.py such that we can test `evict_for_max_events`
         project_stored_event_count = 0
         digested_at = timezone.now()
@@ -168,6 +168,38 @@ class RetentionTestCase(DjangoTestCase):
 
             self.assertEqual(1 if expected_should_evict else 0, evicted)
             self.assertEqual(expected_should_evict, should_evict(self.project, digested_at, project_stored_event_count))
+
+            project_stored_event_count -= evicted
+
+    def test_retention_multiple_epochs(self):
+        # this test contains just the key bits of ingest/views.py such that we can test `evict_for_max_events`;
+        # at the same time, we diverge a bit from what would happen "in reality", such that we can make a test that's
+        # both interesting (hits enough edge cases) and still understandable. In particular, we first load up on events
+        # (over max) and then repeatedly evict (with a target of 1) so we can see what's happening.
+        project_stored_event_count = 0
+
+        self.project = Project.objects.create(retention_max_event_count=999)
+        self.issue = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+
+        current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        data = reversed(list(
+            (digest_order, current_timestamp - datetime.timedelta(hours=digest_order))
+            for digest_order in range(1, 10)))
+
+        for digest_order, digested_at in data:
+            irrelevance = digest_order % 3  # this gives us a bit of variety in the irrelevance values
+
+            project_stored_event_count += 1  # +1 pre-create, as in the ingestion view
+            event = create_event(self.project, self.issue, timestamp=digested_at)
+            event.irrelevance_for_retention = irrelevance
+            event.save()
+
+        while project_stored_event_count > 1:
+            self.project.retention_max_event_count = project_stored_event_count - 1  # just manually "make tighter"
+            self.project.save()
+
+            evicted = evict_for_max_events(self.project, current_timestamp, project_stored_event_count)
+            self.assertEqual(1, evicted)
 
             project_stored_event_count -= evicted
 
