@@ -63,8 +63,15 @@ if settings.DEBUG:
         path('debug-users-email/<str:template_name>/', debug_users_email),
         path('debug-teams-email/<str:template_name>/', debug_teams_email),
         path('trigger-error/', trigger_error),
-        path("__debug__/", include("debug_toolbar.urls")),
     ]
+
+    try:
+        import debug_toolbar  # noqa
+        urlpatterns = [
+            path('__debug__/', include('debug_toolbar.urls')),
+        ] + urlpatterns
+    except ImportError:
+        pass
 
 
 handler400 = "bugsink.views.bad_request"
