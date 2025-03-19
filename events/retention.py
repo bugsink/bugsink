@@ -248,15 +248,23 @@ def evict_for_max_events(project, timestamp, stored_event_count=None, include_ne
                 target - evicted,
             )
 
-            if max_total_irrelevance < -1:  # < -1: as in `evict_for_irrelevance`
+            if evicted < target and max_total_irrelevance <= -1:
+                # if max_total_irrelevance <= -1 the analogous check for max_total_irrelevance in evict_for_irrelevance
+                # will certainly have fired (item_irr <= total_irr) which means "no more can be achieved".
+
                 if not include_never_evict:
                     # everything that remains is 'never_evict'. 'never say never' and evict those as a last measure
                     return evicted + evict_for_max_events(project, timestamp, stored_event_count - evicted, True)
 
-                raise Exception("No more effective eviction possible but target not reached")  # "should not happen"
+                # "should not happen", let's log it and break out of the loop
+                # the reason I can think of this happening is when stored_event_count is wrong (too high).
+                bugsink_logger.error(
+                    "Failed to evict enough events; %d < %d (max %d, stored %d) including never_evict=%s", evicted,
+                    target, project.retention_max_event_count, stored_event_count, include_never_evict)
+                break
 
     # phase 0: SELECT statements to identify per-epoch observed irrelevances
-    # phase 1: DELETE (evictions) and SELECT total count ("are we there yet?")
+    # phase 1: SELECT with LIMIT for deletions and DELETE themselves (evictions)
     performance_logger.info(
         "%6.2fms EVICT; down to %d, max irr. from %d to %d in %dms+%dms and %d+%d queries",
         phase0.took + phase1.took,
