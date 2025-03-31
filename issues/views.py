@@ -359,7 +359,9 @@ def _get_event(qs, issue, event_pk, digest_order, nav, bounds):
 def _event_count(request, issue, event_x_qs):
     # We want to be able to show the number of matching events for some query in the UI, but counting is potentially
     # expensive, because it's a full scan over all matching events. We just show "many" if this takes too long.
-    # different_runtime_limit is sqlite-only, it doesn't affect other backends.
+    # different_runtime_limit is sqlite-only, it doesn't affect other backends. (interrupting-and-ignoring works for
+    # SELECT; if we instead used '''INSERT, UPDATE, or DELETE [..] inside an explicit transaction [..] the entire
+    # [..] transaction will be rolled back automatically.''' https://www.sqlite.org/c3ref/interrupt.html
 
     with different_runtime_limit(0.1):
         try:
