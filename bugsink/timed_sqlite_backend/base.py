@@ -32,8 +32,6 @@ def different_runtime_limit(seconds):
 
 @contextmanager
 def limit_runtime(conn):
-    global _runtime_limit
-
     start = time.time()
 
     def check_time():
