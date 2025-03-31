@@ -52,17 +52,17 @@ CONTEXT_CONVERSION_TABLE = {
 }
 
 
-def deduce_user_tag(contexts):
+def deduce_user_tag(event_data):
     # quick & dirty / barebones implementation; we don't try to mimick Sentry's full behavior, instead just pick the
     # most relevant piece of the user context that we can find. For reference, Sentry has the concept of an "EventUser"
     # (`src/sentry/models/eventuser.py`)
 
-    if "user" not in contexts:
+    if "user" not in event_data:
         return None
 
     for key in ["id", "username", "email", "ip_address"]:
-        if contexts["user"].get(key):
-            return contexts["user"][key]
+        if event_data["user"].get(key):
+            return event_data["user"][key]
 
     return None
 
@@ -117,7 +117,7 @@ def deduce_tags(event_data):
     if "os.name" in tags and "os.version" in tags:
         tags["os"] = f"{tags['os.name']} {tags['os.version']}"
 
-    if user_tag := deduce_user_tag(contexts):
+    if user_tag := deduce_user_tag(event_data):
         tags["user"] = user_tag
 
     # TODO url is probably useful, but I imagine that its `mostly_unique` property is not statically known, i.e. some

@@ -30,6 +30,9 @@ class DeduceTagsTestCase(RegularTestCase):
                     },
                 }],
             },
+            "user": {
+                "username": "johndoe",
+            },
             "transaction": "main",
             "contexts": {
                 "trace": {
@@ -61,6 +64,7 @@ class DeduceTagsTestCase(RegularTestCase):
             "os.name": "Windows",
             "os.version": "10",
             "os": "Windows 10",
+            "user": "johndoe",
         })
 
 
