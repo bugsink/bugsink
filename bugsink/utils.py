@@ -36,7 +36,22 @@ def deduce_allowed_hosts(base_url):
         # * accessing Bugsink on your local network by ip (192.etc)
         # In production setups, the expectation is that deduce_allowed_hosts is not used with localhost/127.0.0.1
         return ["*"]
-    return [url.hostname]
+
+    # in production setups, we want to be explicit about the allowed hosts; however, we _still_ add localhost and
+    # 127.0.0.1 explicitly, to allow for local loopback testing (e.g. health-checks from the same machine). I believe
+    # this is OK (i.e. not a security risk) because the goal of ALLOWED_HOSTS is to "prevent an attacker from poisoning
+    # caches and triggering password reset emails with links to malicious hosts by submitting requests with a fake HTTP
+    # Host header." Without claiming have a full overview of possible attacks, I believe that they all hinge on the fact
+    # that the "poisonous host" is a host under the control of the attacker. I fail to see how "localhost" is a
+    # meaningful target in such an attack (since the attacker would already have control over the machine).
+    #
+    # sources:
+    # https://stackoverflow.com/questions/30579248/
+    # https://docs.djangoproject.com/en/5.2/ref/settings/#allowed-hosts
+    # https://code.djangoproject.com/ticket/28693 (the main source for the relation between CSRF and ALLOWED_HOSTS)
+    #
+    # security-officers disagreeing with this above: feel free to reach out (and set ALLOWED_HOSTS explicitly).
+    return [url.hostname] + ["localhost", "127.0.0.1"]
 
 
 # Note: the excessive string-matching in the below is intentional:
