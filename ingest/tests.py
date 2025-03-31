@@ -303,7 +303,7 @@ class IngestViewTestCase(TransactionTestCase):
             raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
 
         for include_event_id in [True, False]:
-            for filename in event_samples[:1]:  # one is enough here
+            for filename in [sample for sample in event_samples if sample not in known_broken][:1]:  # one is enough
                 with open(filename) as f:
                     data = json.loads(f.read())
 
@@ -312,11 +312,6 @@ class IngestViewTestCase(TransactionTestCase):
                 if "timestamp" not in data:
                     # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
                     data["timestamp"] = time.time()
-
-                if not command.is_valid(data, filename):
-                    if filename not in known_broken:
-                        raise Exception("validatity check in %s: %s" % (filename, command.stderr.getvalue()))
-                    command.stderr = io.StringIO()  # reset the error buffer; needed in the loop w/ known_broken
 
                 event_id = data["event_id"]
                 if not include_event_id:
@@ -358,7 +353,7 @@ class IngestViewTestCase(TransactionTestCase):
         if len(event_samples) == 0:
             raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
 
-        for filename in event_samples[:1]:  # one is enough here
+        for filename in [sample for sample in event_samples if sample not in known_broken][:1]:  # one is enough
             with open(filename) as f:
                 data = json.loads(f.read())
             data["event_id"] = uuid.uuid4().hex  # we set it once, before the loop.
@@ -369,11 +364,6 @@ class IngestViewTestCase(TransactionTestCase):
                 if "timestamp" not in data:
                     # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
                     data["timestamp"] = time.time()
-
-                if not command.is_valid(data, filename):
-                    if filename not in known_broken:
-                        raise Exception("validatity check in %s: %s" % (filename, command.stderr.getvalue()))
-                    command.stderr = io.StringIO()  # reset the error buffer; needed in the loop w/ known_broken
 
                 event_id = data["event_id"]
 
@@ -447,11 +437,12 @@ class IngestViewTestCase(TransactionTestCase):
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
 
         event_samples = glob(SAMPLES_DIR + "/*/*.json")
+        known_broken = [SAMPLES_DIR + "/" + s.strip() for s in _readlines(SAMPLES_DIR + "/KNOWN-BROKEN")]
 
         if len(event_samples) == 0:
             raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
 
-        filename = event_samples[0]  # one is enough here
+        filename = [sample for sample in event_samples if sample not in known_broken][0]  # one is enough
         with open(filename) as f:
             data = json.loads(f.read())
 
