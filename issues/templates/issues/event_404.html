@@ -58,8 +58,9 @@
 
 <div class="mb-6">
     {# We apply the heuristic (textually) that if you have some events in your event_qs, but no current event, you're in a "404-like" ("This event not found") state #}
-    {# and if there's really no events in the qs, that that fact is what you should focus on. #}
+    {# and if there's really no events in the qs, that fact is what you should focus on. #}
     {# This works well in practice (better than trying to match these texts to "where in _get_event() did we go wrong?" #}
+    {# note: this _even_ works for the interrupted-shows-"many" case, because the implication is "many records" -> text says "many" -> python evaulates to True #}
     {% if event_qs_count %}
     This event cannot be found. It could have been removed manually or as part of the eviction process.
     {% elif q %}
