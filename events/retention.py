@@ -83,6 +83,9 @@ def get_random_irrelevance(stored_event_count):
     if `cnt` "hovers" around a certain value (which is likely to happen when there's repeated eviction/fill-up). ×2 is
     simply to correct for random() (which returns .5 on average).
     """
+    # assert as a tripwire to check our assumptions; note that the actual calculation actually "succeeds" for < 1, but
+    # it becomes non-sensical, so I'd rather have it fail. The present event is part of the count, i.e. always >= 1
+    assert stored_event_count >= 1
     return nonzero_leading_bits(round(random() * stored_event_count * 2))
 
 

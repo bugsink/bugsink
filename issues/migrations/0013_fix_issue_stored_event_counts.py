@@ -18,6 +18,10 @@ def fill_stored_event_count(apps, schema_editor):
             issue.stored_event_count = correct_value
             issue.save()
 
+    # Note: because "irrelevances" have been calculated based on stored_event_count, those will be wrong too... but
+    # there doesn't seem to be an easy way to recover from that, so we'll just let the problem fix itself over time.
+    # easy meaning: both easy-enough to write a datamigration for, and not super-expensive to run.
+
 
 class Migration(migrations.Migration):
 
