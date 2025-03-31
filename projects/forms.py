@@ -78,6 +78,8 @@ class ProjectForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         team_qs = kwargs.pop("team_qs", None)
         super().__init__(*args, **kwargs)
+
+        self.fields["retention_max_event_count"].help_text = "The maximum number of events to store before evicting."
         if self.instance is not None and self.instance.pk is not None:
             # for editing, we disallow changing the team. consideration: it's somewhat hard to see what the consequences
             # for authorization are (from the user's perspective).
@@ -111,7 +113,7 @@ class ProjectForm(forms.ModelForm):
     class Meta:
         model = Project
 
-        fields = ["team", "name", "visibility"]
+        fields = ["team", "name", "visibility", "retention_max_event_count"]
         # "slug",  <= for now, we just do this in the model; if we want to do it in the form, I would want to have some
         # JS in place like we have in the admin. django/contrib/admin/static/admin/js/prepopulate.js is an example of
         # how Django does this (but it requires JQuery)
