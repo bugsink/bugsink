@@ -167,10 +167,10 @@ class RetentionTestCase(DjangoTestCase):
 
             evicted = evict_for_max_events(self.project, digested_at, project_stored_event_count)
 
-            self.assertEqual(1 if expected_should_evict else 0, evicted)
+            self.assertEqual(1 if expected_should_evict else 0, evicted.total)
             self.assertEqual(expected_should_evict, should_evict(self.project, digested_at, project_stored_event_count))
 
-            project_stored_event_count -= evicted
+            project_stored_event_count -= evicted.total
 
     def test_retention_multiple_epochs(self):
         # this test contains just the key bits of ingest/views.py such that we can test `evict_for_max_events`;
@@ -209,9 +209,9 @@ class RetentionTestCase(DjangoTestCase):
             self.project.save()
 
             evicted = evict_for_max_events(self.project, current_timestamp, project_stored_event_count)
-            self.assertEqual(2, evicted)
+            self.assertEqual(2, evicted.total)
 
-            project_stored_event_count -= evicted
+            project_stored_event_count -= evicted.total
 
     def test_filter_for_work(self):
         # this test is mostly to help clarify how filter_for_work actually works

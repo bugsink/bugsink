@@ -8,7 +8,7 @@ import fastjsonschema
 
 from django.conf import settings
 from django.shortcuts import get_object_or_404
-from django.db.models import Max
+from django.db.models import Max, F
 from django.views import View
 from django.core import exceptions
 from django.core.exceptions import ValidationError
@@ -31,7 +31,7 @@ from bugsink.streams import content_encoding_reader, MaxDataReader, MaxDataWrite
 from bugsink.app_settings import get_settings
 
 from events.models import Event
-from events.retention import evict_for_max_events, should_evict
+from events.retention import evict_for_max_events, should_evict, EvictionCounts
 from releases.models import create_release_if_needed
 from alerts.tasks import send_new_issue_alert, send_regression_alert
 from compat.timestamp import format_timestamp, parse_timestamp
@@ -51,6 +51,17 @@ HTTP_501_NOT_IMPLEMENTED = 501
 
 logger = logging.getLogger("bugsink.ingest")
 performance_logger = logging.getLogger("bugsink.performance.ingest")
+
+
+def update_issue_counts(per_issue):
+    # we minimize the number of queries by grouping them by count; in the worst case we'll need 32 queries for 500
+    # event evictions (because 1 + 2 + ... + 31 + 32 > 500)
+    by_count = {}
+    for issue_id, count in per_issue.items():
+        by_count.setdefault(count, []).append(issue_id)
+
+    for count, issue_ids in by_count.items():
+        Issue.objects.filter(id__in=issue_ids).update(stored_event_count=F("stored_event_count") - count)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -303,11 +314,16 @@ class BaseIngestAPIView(View):
             # causes the work to be outside of the 'rush hour' -- OTOH this also introduces a lot of complexity about
             # "what is a limit anyway, if you can go either over it, or work is done before the limit is reached")
             evicted = evict_for_max_events(project, digested_at, project_stored_event_count)
-        else:
-            evicted = 0
 
-        issue.stored_event_count = issue.stored_event_count + 1 - evicted  # +1 because we're about to add one event
-        project.stored_event_count = project_stored_event_count - evicted
+            # digest_event() is responsible for this update because we have "issue" open (i.e. to "save a query" /
+            # "avoid updating stale objects")
+            update_issue_counts({k: cnt for (k, cnt) in evicted.per_issue.items() if k != issue.id})
+        else:
+            evicted = EvictionCounts(0, {})
+
+        # +1 because we're about to add one event
+        issue.stored_event_count = issue.stored_event_count + 1 - evicted.per_issue.get(issue.id, 0)
+        project.stored_event_count = project_stored_event_count - evicted.total
         project.save(update_fields=["stored_event_count"])
 
         event, event_created = Event.from_ingested(

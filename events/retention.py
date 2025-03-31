@@ -1,5 +1,5 @@
 import logging
-from django.db.models import Q, Min, Max
+from django.db.models import Q, Min, Max, Count
 
 from random import random
 from datetime import timezone, datetime
@@ -11,6 +11,22 @@ from .storage_registry import get_storage
 
 bugsink_logger = logging.getLogger("bugsink")
 performance_logger = logging.getLogger("bugsink.performance.retention")
+
+
+class EvictionCounts:
+
+    def __init__(self, total, per_issue):
+        self.total = total
+        self.per_issue = per_issue
+
+    def __add__(self, other):
+        return EvictionCounts(
+            self.total + other.total,
+            {k: self.per_issue.get(k, 0) + other.per_issue.get(k, 0)
+             for k in set(self.per_issue) | set(other.per_issue)})
+
+    def __repr__(self):
+        return f"EvictionCounts(total={self.total})"
 
 
 def get_epoch(datetime_obj):
@@ -228,9 +244,9 @@ def evict_for_max_events(project, timestamp, stored_event_count, include_never_e
         max_total_irrelevance = orig_max_total_irrelevance = max(sum(pair) for pair in pairs)
 
     with time_and_query_count() as phase1:
-        evicted = 0
+        evicted = EvictionCounts(0, {})
         target = eviction_target(project.retention_max_event_count, stored_event_count)
-        while evicted < target:
+        while evicted.total < target:
             # -1 at the beginning of the loop; this means the actually observed max value is precisely the first thing
             # that will be evicted (since `evict_for_irrelevance` will evict anything above (but not including) the
             # given value)
@@ -244,21 +260,21 @@ def evict_for_max_events(project, timestamp, stored_event_count, include_never_e
                 max_total_irrelevance,
                 epoch_bounds_with_irrelevance_with_possible_work,
                 include_never_evict,
-                target - evicted,
+                target - evicted.total,
             )
 
-            if evicted < target and max_total_irrelevance <= -1:
+            if evicted.total < target and max_total_irrelevance <= -1:
                 # if max_total_irrelevance <= -1 the analogous check for max_total_irrelevance in evict_for_irrelevance
                 # will certainly have fired (item_irr <= total_irr) which means "no more can be achieved".
 
                 if not include_never_evict:
                     # everything that remains is 'never_evict'. 'never say never' and evict those as a last measure
-                    return evicted + evict_for_max_events(project, timestamp, stored_event_count - evicted, True)
+                    return evicted + evict_for_max_events(project, timestamp, stored_event_count - evicted.total, True)
 
                 # "should not happen", let's log it and break out of the loop
                 # the reason I can think of this happening is when stored_event_count is wrong (too high).
                 bugsink_logger.error(
-                    "Failed to evict enough events; %d < %d (max %d, stored %d)", evicted, target,
+                    "Failed to evict enough events; %d < %d (max %d, stored %d)", evicted.total, target,
                     project.retention_max_event_count, stored_event_count)
                 break
 
@@ -267,7 +283,7 @@ def evict_for_max_events(project, timestamp, stored_event_count, include_never_e
     performance_logger.info(
         "%6.2fms EVICT; down to %d, max irr. from %d to %d in %dms+%dms and %d+%d queries",
         phase0.took + phase1.took,
-        stored_event_count - evicted - 1,  # down to: -1, because the +1 happens post-eviction
+        stored_event_count - evicted.total - 1,  # down to: -1, because the +1 happens post-eviction
         orig_max_total_irrelevance, max_total_irrelevance, phase0.took, phase1.took, phase0.count, phase1.count)
 
     return evicted
@@ -276,12 +292,12 @@ def evict_for_max_events(project, timestamp, stored_event_count, include_never_e
 def evict_for_irrelevance(
         project, max_total_irrelevance, epoch_bounds_with_irrelevance, include_never_evict=False, max_event_count=0):
     # max_total_irrelevance: the total may not exceed this (but it may equal it)
-    evicted = 0
+    evicted = EvictionCounts(0, {})
 
     for (_, epoch_ub_exclusive), irrelevance_for_age in epoch_bounds_with_irrelevance:
         max_item_irrelevance = max_total_irrelevance - irrelevance_for_age
 
-        current_max = max_event_count - evicted
+        current_max = max_event_count - evicted.total
         evicted += evict_for_epoch_and_irrelevance(
             project, epoch_ub_exclusive, max_item_irrelevance, current_max, include_never_evict)
 
@@ -292,7 +308,7 @@ def evict_for_irrelevance(
             # deleted (respecting include_never_evict, max_event_count)).
             break
 
-        if evicted >= max_event_count:
+        if evicted.total >= max_event_count:
             # We've reached the target; we don't need to evict from further epochs. In this case not all events with
             # greater than max_total_irr will have been evicted; if this is the case older items are more likely to be
             # spared (because epochs are visited in reverse order).
@@ -337,8 +353,10 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_eve
         TurningPoint.objects.filter(triggering_event__in=qs).update(triggering_event=None)
 
     # We generate the list of events-to-delete (including the LIMIT) before proceeding; this allows us:
+    #
     # A. to have a portable delete_with_limit (e.g. Django does not support that, nor does Postgres).
     # B. to apply deletions of Events and their consequences (cleanup_events_on_storage(), EventTag) on the same list.
+    # C. count per-issue
     #
     # Implementation notes:
     # 1. We force evaluation here with a `list()`; this means subsequent usages do _not_ try to "just use an inner
@@ -355,6 +373,9 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_eve
             Event.objects.filter(pk__in=pks_to_delete).exclude(storage_backend=None)
             .values_list("id", "storage_backend")
         )
+        issue_deletions = {
+            d['issue_id']: d['count'] for d in
+            Event.objects.filter(pk__in=pks_to_delete).values("issue_id").annotate(count=Count("issue_id"))}
 
         # Rather than rely on Django's implementation of CASCADE, we "just do this ourselves"; Reason is: Django does an
         # extra, expensive (all-column), query on Event[...](id__in=pks_to_delete) to extract the Event ids (which we
@@ -363,8 +384,9 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_eve
         nr_of_deletions = Event.objects.filter(pk__in=pks_to_delete).delete()[1].get("events.Event", 0)
     else:
         nr_of_deletions = 0
+        issue_deletions = {}
 
-    return nr_of_deletions
+    return EvictionCounts(nr_of_deletions, issue_deletions)
 
 
 def cleanup_events_on_storage(todos):

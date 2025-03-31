@@ -23,6 +23,7 @@ from events.retention import evict_for_max_events
 from events.storage_registry import override_event_storages
 from issues.factories import get_or_create_issue
 from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
+from issues.utils import get_values
 from bugsink.app_settings import override_settings
 from compat.timestamp import format_timestamp
 from compat.dsn import get_header_value
@@ -426,6 +427,68 @@ class IngestViewTestCase(TransactionTestCase):
                 evict_for_max_events(project, timezone.now(), stored_event_count=2)
 
                 self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
+
+    @tag("samples")
+    def test_ingest_eviction(self):
+        # dirty copy/paste from the test_envelope_endpoint, but with a focus on the eviction part.
+        # ("the simplest copy/pasta that could prove a problem")
+
+        project = Project.objects.create(name="test")
+        project.retention_max_event_count = 10
+        project.save()
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        # first, we ingest many issues
+        command = SendJsonCommand()
+        command.stdout = io.StringIO()
+        command.stderr = io.StringIO()
+
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
+
+        event_samples = glob(SAMPLES_DIR + "/*/*.json")
+
+        if len(event_samples) == 0:
+            raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
+
+        filename = event_samples[0]  # one is enough here
+        with open(filename) as f:
+            data = json.loads(f.read())
+
+        for taipe in ["one", "two", "three", "four", "five"]:
+            for i in range(5):
+                data["event_id"] = uuid.uuid4().hex  # for good measure we reset this to avoid duplicates.
+                values = get_values(data["exception"])
+                values[0]["type"] = taipe
+
+                if "timestamp" not in data:
+                    # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
+                    data["timestamp"] = time.time()
+
+                event_id = data["event_id"]
+
+                data_bytes = json.dumps(data).encode("utf-8")
+                data_bytes = (
+                    b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") + data_bytes)
+
+                response = self.client.post(
+                    f"/api/{ project.id }/envelope/",
+                    content_type="application/json",
+                    headers={
+                        "X-Sentry-Auth": sentry_auth_header,
+                        "X-BugSink-DebugInfo": filename,
+                    },
+                    data=data_bytes,
+                )
+                self.assertEqual(
+                    200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+        for issue in Issue.objects.all():
+            # even though, because of the nature of random irrelevances, the below is not actually deterministic, it's
+            # deterministic enough to prove the original problem that this test was written for, because when this test
+            # was written the resulting stored_event_count values were [5, 5, 0, 0, 0] (eviction always led to
+            # subtracting the full deletion count from event.issue); thus, as a regression test this is good enough.
+            self.assertEqual(issue.stored_event_count, issue.event_set.all().count())
 
     @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=0)
     @patch("ingest.views.check_for_thresholds")
