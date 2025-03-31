@@ -127,9 +127,14 @@ class Issue(models.Model):
     def _get_issue_tags(self, other_cutoff, other_label):
         result = []
 
-        ds = self.tags \
-            .filter(key__mostly_unique=False)\
-            .values("key")\
+        if self.digested_event_count > other_cutoff:
+            base_qs = self.tags.filter(key__mostly_unique=False)
+        else:
+            # for low-event-count issues, we just show all tags and their values; we _can_ just do it because there's
+            # not too many, and it's actually useful (and maybe even what you expect).
+            base_qs = self.tags
+
+        ds = base_qs.values("key")\
             .annotate(count_sum=models.Sum("count"))\
             .distinct()\
             .order_by("key__key")

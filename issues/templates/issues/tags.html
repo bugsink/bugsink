@@ -25,4 +25,10 @@
 
     {% endfor %}
 
+    {% if issue.digested_event_count > 25 %}
+        <div class="mt-4 italic">
+            Note: Tags which have values that are mostly unique per event (such as <span class="not-italic">trace, user, browser version and os version</span>) are not displayed here.
+        </div>
+    {% endif %}
+
 {% endblock %}
