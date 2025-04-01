@@ -1,5 +1,13 @@
 # Changes
 
+## 1.4.2 (1 April 2025)
+
+* `deduce_allowed_hosts`: allow for localhost, see #46
+* `retention_max_event_count`: in project settings form
+* `issue.stored_event_count`: fix (it was incorrectly calculated). Running the migrations will
+    automatically fix the existing values too.
+* Fix user tag deduction (user tags were not correctly calculated from the event data)
+
 ## 1.4.1 (17 March 2025)
 
 * Bugfixes on the experimental postgres support, see #21, #61
