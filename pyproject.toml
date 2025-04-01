@@ -13,7 +13,7 @@ authors = [
 description = "Self-hosted Error Tracking"
 readme = "README.md"
 requires-python = ">=3.9"
-license = {file = "LICENSE"}
+license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
