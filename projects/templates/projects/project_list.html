@@ -31,7 +31,7 @@
     <div class="flex">
     <a href="{% url "project_list_mine" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 {% if ownership_filter == "mine" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">My Projects</div></a>
     {% if not app_settings.SINGLE_USER %}
-    <a href="{% url "project_list_teams" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 {% if ownership_filter == "teams" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">Other Team Projects</div></a>
+    <a href="{% url "project_list_teams" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 {% if ownership_filter == "teams" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">Team Projects</div></a>
     <a href="{% url "project_list_other" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 {% if ownership_filter == "other" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">Other Projects</div></a>
     {% endif %}
     </div>
