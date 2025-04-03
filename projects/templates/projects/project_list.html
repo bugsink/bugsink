@@ -137,7 +137,7 @@
                         </div> 
                     {% endif %}
                 {% else %}
-                    {% if project.is_joinable or request.user.is_superuser %}
+                    {% if ownership_filter == "teams" or project.is_joinable or request.user.is_superuser %}{# ownership_filter check: you can always join your own team's projects, so if you're looking at a list of them... #}
                         <div>
                             <button name="action" value="join:{{ project.id }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Join</button>
                         </div>

@@ -8,7 +8,7 @@ from bugsink.app_settings import get_settings
 
 from compat.dsn import build_dsn
 
-from teams.models import TeamMembership, TeamRole
+from teams.models import TeamMembership
 
 
 class ProjectRole(models.IntegerChoices):
@@ -104,9 +104,8 @@ class Project(models.Model):
         if user is not None:
             # take the user's team membership into account
             try:
-                tm = TeamMembership.objects.get(team=self.team, user=user)
-                if tm.role == TeamRole.ADMIN:
-                    return True
+                TeamMembership.objects.get(team=self.team, user=user)
+                return True
             except TeamMembership.DoesNotExist:
                 pass
 
