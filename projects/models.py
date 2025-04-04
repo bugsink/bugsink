@@ -11,6 +11,37 @@ from compat.dsn import build_dsn
 from teams.models import TeamMembership
 
 
+# ## Visibility/Access-design
+#
+# Some more "philosophical/architectural" thoughts on visibility and access across projects and teams. As bullets:
+#
+# * The primary way to organize issues is the _project_
+# * A Team models a group of people that work together on related projects.
+# * A Team membership implies: Project-membership is available (a "Join" button is shown, no further approval needed)
+# * Project-membership must be explicitly opted into.
+#       This is "as it stands", i.e. that's how it currently works; I'm not committed to that approach though. Reasons
+#       in favor of this approach:
+#       * explicit over implicit
+#       * forces a choice about notification settings on the user.
+#       * allows users to self-organise their workflow: not everyone on every team cares about every project.
+#       against / possible changes
+#       * yet another action needed
+#       * possible change: allow access to the project without clicking "join", but keep it in a separate tab (workflow)
+#
+# * visibility of teams does not affect visibility of associated projects
+# * user.is_superuser can see/do everything
+#
+# Some open ends/ choices to be made:
+#
+# * team admin role: should it be inherited on the project level? My sense is "yes", and this is implemented in
+#     `_check_project_admin` but not in the templates.
+# * team admins currently have the ability to see projects, diverging from the "explicitly opted into" rule. Makes some
+#       sense, but could be an argument for the general "allow access" option mentioned above.
+# * if there are very many generally visible teams/projects, some more means of organisation may be needed (search?).
+#       a first step towards that is probably: navigate by-team (we currently just have a "team projects" tab.
+#       "icebox" though, because at that scale we'll first have to deal with other questions of scale.
+
+
 class ProjectRole(models.IntegerChoices):
     MEMBER = 0
     ADMIN = 1
@@ -19,8 +50,20 @@ class ProjectRole(models.IntegerChoices):
 class ProjectVisibility(models.IntegerChoices):
     # PUBLIC = 0  # anyone can see the project and its members; not sure if I want this or always require click-in
     JOINABLE = 1  # anyone can join
-    DISCOVERABLE = 10  # the project's existance is visible, you can request to join(?), but this needs to be approved
-    TEAM_MEMBERS = 99  # the project is only visible to team-members (and for some(?) things they need to click "join")
+
+    # the project's existance is visible, but the project itself is not. the idea would be that you can "request to
+    # join" (which is currently not implemented as a button, but you could do it 'out of bands' i.e. via email or chat).
+    DISCOVERABLE = 10
+
+    # the project's exsitance is only visible to team-members; you still need to explicitly click "join" which will
+    # immediately make you a member
+    TEAM_MEMBERS = 99
+
+    # having projects that are part of a certain team, but not visible to the team members, was considered, but
+    # rejected. The basic thinking on the rejection is: it would hollow out the concept of Team to the point of
+    # meaninglessness. If you want "secret" projects, you can just create a hidden team (possibly even with just a
+    # single member) and add the project to that.
+    # HIDDEN
 
 
 class Project(models.Model):

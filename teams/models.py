@@ -13,8 +13,14 @@ class TeamRole(models.IntegerChoices):
 class TeamVisibility(models.IntegerChoices):
     # PUBLIC = 0  # anyone can see the team and its members  not sure if I want this or always want to require click-in
     JOINABLE = 1  # anyone can join
-    DISCOVERABLE = 10  # the team is visible, you can request to join(?), but this needs to be approved
-    HIDDEN = 99  # the team is not visible to non-members; you need to be invited
+
+    # the team's existance is visible in lists, but there is no "Join" button. the idea would be that you can "request
+    # to join" (which is currently not implemented as a button, but you could do it 'out of bands' i.e. via email or
+    # chat).
+    DISCOVERABLE = 10
+
+    # the team is not visible to non-members; you need to be invited
+    HIDDEN = 99
 
 
 class Team(models.Model):
