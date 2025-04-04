@@ -15,18 +15,36 @@ ARG PYTHON_VERSION=3.12
 # Build image: non-slim, in particular to build the mysqlclient wheel
 FROM python:${PYTHON_VERSION} AS build
 
-ARG WHEEL_FILE=wheelfile-not-specified.whoops
-
-COPY dist/$WHEEL_FILE /wheels/
+# mysqlclient is not available as a .whl on PyPI, so we need to build it from
+# source and store the .whl. This is both the most expensive part of the build
+# and the one that is least likely to change, so we do it first.
 RUN --mount=type=cache,target=/var/cache/buildkit/pip \
-    pip wheel --wheel-dir /wheels /wheels/${WHEEL_FILE} mysqlclient
+    pip wheel --wheel-dir /wheels mysqlclient
+
+# NOTE: At some point in the past, we built all requirements as encoded in the
+# Bugsink wheel file into wheels at this point. It is not clear that this saves
+# any build time however, because:
+#
+# * this moves the dependency on the bugsink wheel up in the build-order, and
+#     that's precisely the most changing part, i.e. the thing that breaks caching.
+#
+# * all current (Apr 2025) dependencies .whl files are available on PyPI anyway.
+#     Exception: inotify_simple, but it's a pure python tar.gz; Nothing much
+#     is gained by fetch-first-install-later. And if we ever depend on further
+#     packages that require a build step, explicit action is probably needed
+#     anyway b/c of the build deps.
+#
+# * pointing to requirements.txt here instead of the wheel is tempting, but
+#     breaks the idea of "just build the wheel" (requirements.txt is whatever
+#     it happens to be right now, not what it was at the time the wheel was
+#     built)
 
 
 # Actual image (based on slim)
 FROM python:${PYTHON_VERSION}-slim
 
-# ARGs are not inherited from the build stage; https://stackoverflow.com/a/56748289/339144
-ARG WHEEL_FILE
+ARG WHEEL_FILE=wheelfile-not-specified.whoops
+
 ENV PYTHONUNBUFFERED=1
 
 ENV PORT=8000
@@ -37,10 +55,17 @@ WORKDIR /app
 RUN apt update && apt install default-libmysqlclient-dev -y
 
 COPY --from=build /wheels /wheels
+
 RUN --mount=type=cache,target=/var/cache/buildkit/pip \
-    pip install --find-links /wheels --no-index /wheels/$WHEEL_FILE mysqlclient
+    pip install --find-links /wheels --no-index mysqlclient
+
 RUN --mount=type=cache,target=/var/cache/buildkit/pip \
     pip install "psycopg[binary]"
+
+COPY dist/$WHEEL_FILE /wheels/
+
+RUN --mount=type=cache,target=/var/cache/buildkit/pip \
+    pip install /wheels/$WHEEL_FILE
 
 COPY bugsink/conf_templates/docker.py.template bugsink_conf.py
 
