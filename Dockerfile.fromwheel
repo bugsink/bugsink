@@ -38,7 +38,10 @@ RUN --mount=type=cache,target=/var/cache/buildkit/pip \
 #     breaks the idea of "just build the wheel" (requirements.txt is whatever
 #     it happens to be right now, not what it was at the time the wheel was
 #     built)
-
+# 
+# Moreover, there's the argument of image _size_ rather than build time, and
+# copying over all wheels instead of just their unpacked equivalents increases
+# that.
 
 # Actual image (based on slim)
 FROM python:${PYTHON_VERSION}-slim
