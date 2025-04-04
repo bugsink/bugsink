@@ -26,4 +26,4 @@ else
 fi
 
 
-docker buildx  build --platform linux/amd64,linux/arm64  --build-arg WHEEL_FILE=$WHEEL_FILE $TAGS . --push
+docker buildx  build -f Dockerfile.fromwheel --platform linux/amd64,linux/arm64  --build-arg WHEEL_FILE=$WHEEL_FILE $TAGS . --push

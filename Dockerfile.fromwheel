@@ -1,3 +1,15 @@
+# This is the Dockerfile that builds an image given a specified WHEEL_FILE,
+# rather than from source/working dir.
+#
+# The reason for this is that, although Bugsink is certainly available as a
+# Docker image, it is available as a Python package first. We thus want
+# the Docker image to be as faithful as possible to the Python package.
+#
+# Because the typical expectation for a Dockerfile is that it "just works"
+# and that it builds from source (the working directory), the present file
+# is not named Dockerfile, but an explicitly postfixed one. Still, for the
+# purpose of what actually ends up on Docker hub, the present file is the
+# one that's used.
 ARG PYTHON_VERSION=3.12
 
 # Build image: non-slim, in particular to build the mysqlclient wheel
