@@ -52,19 +52,22 @@ CONTEXT_CONVERSION_TABLE = {
 }
 
 
-def deduce_user_tag(event_data):
-    # quick & dirty / barebones implementation; we don't try to mimick Sentry's full behavior, instead just pick the
-    # most relevant piece of the user context that we can find. For reference, Sentry has the concept of an "EventUser"
-    # (`src/sentry/models/eventuser.py`)
+def deduce_user_tags(event_data):
+    # we don't try to mimick Sentry's full behavior, instead just pick the most relevant piece of the user context that
+    # we can find, and put the rest in dotted paths. It's simple, easy to explain, and we're not aiming for Sentry
+    # compatibility here. (If we ever want that, for reference, Sentry has the concept of an "EventUser" (eventuser.py))
 
     if "user" not in event_data:
-        return None
+        return {}
 
+    result = {}
     for key in ["id", "username", "email", "ip_address"]:
         if event_data["user"].get(key):
-            return event_data["user"][key]
+            result["user." + key] = event_data["user"][key]
+            if "user" not in result:
+                result["user"] = event_data["user"][key]
 
-    return None
+    return result
 
 
 def _convert_non_strings(value):
@@ -117,8 +120,7 @@ def deduce_tags(event_data):
     if "os.name" in tags and "os.version" in tags:
         tags["os"] = f"{tags['os.name']} {tags['os.version']}"
 
-    if user_tag := deduce_user_tag(event_data):
-        tags["user"] = user_tag
+    tags.update(deduce_user_tags(event_data))
 
     # TODO url is probably useful, but I imagine that its `mostly_unique` property is not statically known, i.e. some
     # issues may have single url, others may have a few (useful for tag-breakdown) and yet others may have very many

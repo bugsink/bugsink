@@ -31,7 +31,10 @@ class DeduceTagsTestCase(RegularTestCase):
                 }],
             },
             "user": {
+                "id": "12345",
                 "username": "johndoe",
+                "email": "john@doe.org",
+                "ip_address": "123.123.123.123",
             },
             "transaction": "main",
             "contexts": {
@@ -64,7 +67,11 @@ class DeduceTagsTestCase(RegularTestCase):
             "os.name": "Windows",
             "os.version": "10",
             "os": "Windows 10",
-            "user": "johndoe",
+            "user": "12345",
+            "user.id": "12345",
+            "user.username": "johndoe",
+            "user.email": "john@doe.org",
+            "user.ip_address": "123.123.123.123",
         })
 
 
