@@ -157,7 +157,7 @@ def digest_tags(event_data, event, issue):
     # The max length of 200 is from TFM for user-provided tags. Still, we just apply it on deduced tags as well;
     # It's a reasonably safe guess that this will not terribly confuse people, and avoids triggering errors on-save.
     tags = {
-        k: v[:200] for k, v in deduce_tags(event_data).items()
+        k: str(v)[:200] for k, v in deduce_tags(event_data).items()
     }
     store_tags(event, issue, tags)
 
