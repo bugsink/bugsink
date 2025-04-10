@@ -10,6 +10,7 @@ from teams.views import debug_email as debug_teams_email
 from bugsink.app_settings import get_settings
 from users.views import signup, confirm_email, resend_confirmation, request_reset_password, reset_password, preferences
 from ingest.views import download_envelope
+from files.views import chunk_upload, artifact_bundle_assemble
 
 from .views import home, trigger_error, favicon, settings_view, silence_email_system_warning
 from .debug_views import csrf_debug
@@ -37,6 +38,13 @@ urlpatterns = [
 
     # many user-related views are directly exposed above (/accounts/), the rest is here:
     path("users/", include("users.urls")),
+
+    # these are sentry-cli endpoint for uploading; they're unrelated to e.g. the ingestion API.
+    # the /api/0/ is just a hard prefix (for the ingest API, that position indicates the project id, but here it's just
+    # a prefix)
+    path("api/0/organizations/<slug:organization_slug>/chunk-upload/", chunk_upload, name="chunk_upload"),
+    path("api/0/organizations/<slug:organization_slug>/artifactbundle/assemble/", artifact_bundle_assemble,
+         name="artifact_bundle_assemble"),
 
     path('api/', include('ingest.urls')),
 
