@@ -11,15 +11,21 @@ class Chunk(models.Model):
 
 
 class File(models.Model):
-    # NOTE: as it stands, this is exactly the same thing as Chunk; and since we do single-chunk uploads, optimizations
-    # are imaginable. Make it work first though
+    # NOTE: since we do single-chunk uploads, optimizations are imaginable. Make it work first though
 
     checksum = models.CharField(max_length=40, unique=True)  # unique implies index, which we also use for lookups
+
+    # the filename is not unique, nor meaningful in the sense that you could use it to identify the file. It is only
+    # here for convenience, i.e. to eye-ball the file in a list. note that we store by checksum, and the filename gets
+    # associated on the first successful store. i.e. it's possible that a file would be stored again with a different
+    # name but that would go undetected by us. all that is to say: convenience thingie without strong guarantees.
+    filename = models.CharField(max_length=255)
+
     size = models.PositiveIntegerField()
     data = models.BinaryField(null=False)  # as with Events, we can "eventually" move this out of the database
 
     def __str__(self):
-        return self.checksum
+        return self.filename
 
 
 class FileMetadata(models.Model):

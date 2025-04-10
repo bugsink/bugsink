@@ -41,6 +41,7 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 ("checksum", models.CharField(max_length=40, unique=True)),
+                ("filename", models.CharField(max_length=255)),
                 ("size", models.PositiveIntegerField()),
                 ("data", models.BinaryField()),
             ],

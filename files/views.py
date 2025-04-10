@@ -143,7 +143,7 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
     # NOTE: there's also the concept of an artifact bundle as _tied_ to a release, i.e. without debug_ids. We don't
     # support that, but if we ever were to support it we'd need a separate method/param to distinguish it.
 
-    bundle_file, _ = assemble_file(bundle_checksum, chunk_checksums)
+    bundle_file, _ = assemble_file(bundle_checksum, chunk_checksums, filename=f"{bundle_checksum}.zip")
 
     bundle_zip = ZipFile(BytesIO(bundle_file.data))  # NOTE: in-memory handling of zips.
     manifest_bytes = bundle_zip.read("manifest.json")
@@ -154,9 +154,12 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
 
         checksum = sha1(file_data).hexdigest()
 
+        filename = manifest_entry.get("url", filename)[:255]
+
         file, _ = File.objects.get_or_create(
             checksum=checksum,
             defaults={
+                "filename": filename,
                 "size": len(file_data),
                 "data": file_data,
             })
@@ -179,7 +182,7 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
     # NOTE we _could_ get rid of the file at this point (but we don't). Ties in to broader questions of retention.
 
 
-def assemble_file(checksum, chunk_checksums):
+def assemble_file(checksum, chunk_checksums, filename):
     """Assembles a file from chunks"""
 
     # NOTE: unimplemented checks/tricks
@@ -200,6 +203,7 @@ def assemble_file(checksum, chunk_checksums):
         defaults={
             "size": len(data),
             "data": data,
+            "filename": filename,
         })
 
 

@@ -11,7 +11,7 @@ class ChunkAdmin(admin.ModelAdmin):
 
 @admin.register(File)
 class FileAdmin(admin.ModelAdmin):
-    list_display = ('checksum', 'size')
+    list_display = ('filename', 'checksum', 'size')
     search_fields = ('checksum',)
     readonly_fields = ('data',)
 
