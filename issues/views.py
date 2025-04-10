@@ -31,7 +31,7 @@ from tags.search import search_issues, search_events, search_events_optimized
 from .models import Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind
 from .forms import CommentForm
 from .utils import get_values, get_main_exception
-from events.utils import annotate_with_meta
+from events.utils import annotate_with_meta, apply_sourcemaps
 
 
 MuteOption = namedtuple("MuteOption", ["for_or_until", "period_name", "nr_of_periods", "gte_threshold"])
@@ -399,6 +399,12 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
         # with "_meta" in it, we're not quite sure what the full structure could be in the wild. Because the
         # 'incomplete' annotations are not absolutely necessary (Sentry itself went without it for years) we silently
         # swallow the error in that case.
+        sentry_sdk.capture_exception(e)
+
+    try:
+        apply_sourcemaps(parsed_data)
+    except Exception as e:
+        # sourcemaps are still experimental; we don't want to fail on them, so we just log the error and move on.
         sentry_sdk.capture_exception(e)
 
     # NOTE: I considered making this a clickable button of some sort, but decided against it in the end. Getting the UI
