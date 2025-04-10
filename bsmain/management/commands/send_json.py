@@ -29,6 +29,7 @@ class Command(BaseCommand):
         parser.add_argument("--tag", nargs="*", action="append")
         parser.add_argument("--compress", action="store", choices=["gzip", "deflate", "br"], default=None)
         parser.add_argument("--use-envelope", action="store_true")
+        parser.add_argument("--chunked-encoding", action="store_true")
         parser.add_argument(
             "--x-forwarded-for", action="store",
             help="Set the X-Forwarded-For header to test whether your setup is properly ignoring it")
@@ -96,6 +97,15 @@ class Command(BaseCommand):
         for filename in successfully_sent:
             print(filename)
 
+    @classmethod
+    def chunk_encoded(self, data):
+        # > Requests also supports Chunked transfer encoding for outgoing and incoming requests. To send a chunk-encoded
+        # > request, simply provide a generator (or any iterator without a length) for your body
+        i = 0
+        while chunk := data[i:i + 1024]:
+            yield chunk
+            i += 1024
+
     def send_to_server(self, dsn, options, identifier, data, use_envelope, compress):
         if options["fresh_timestamp"]:
             # If promted, we just update the timestamp to 'now' to be able to avoid any 'ignore old stuff'
@@ -159,6 +169,9 @@ class Command(BaseCommand):
                     wbits = WBITS_PARAM_FOR_DEFLATE
 
                 compressed_data = compress_with_zlib(io.BytesIO(data_bytes), wbits)
+                if options["chunked_encoding"]:
+                    compressed_data = self.chunk_encoded(compressed_data)
+
                 response = requests.post(
                     get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
                     headers=headers,
@@ -168,6 +181,8 @@ class Command(BaseCommand):
             elif compress == "br":
                 headers["Content-Encoding"] = "br"
                 compressed_data = brotli.compress(data_bytes)
+                if options["chunked_encoding"]:
+                    compressed_data = self.chunk_encoded(compressed_data)
                 response = requests.post(
                     get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
                     headers=headers,
@@ -175,6 +190,9 @@ class Command(BaseCommand):
                 )
 
             else:
+                if options["chunked_encoding"]:
+                    data_bytes = self.chunk_encoded(data_bytes)
+
                 response = requests.post(
                     get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
                     headers=headers,
