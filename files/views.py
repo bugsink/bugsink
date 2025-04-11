@@ -3,9 +3,11 @@ import json
 from hashlib import sha1
 from gzip import GzipFile
 from io import BytesIO
+from os.path import basename
 
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.decorators import user_passes_test
 
 from sentry.assemble import ChunkFileState
 
@@ -154,7 +156,7 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
 
         checksum = sha1(file_data).hexdigest()
 
-        filename = manifest_entry.get("url", filename)[:255]
+        filename = basename(manifest_entry.get("url", filename))[:255]
 
         file, _ = File.objects.get_or_create(
             checksum=checksum,
@@ -226,3 +228,11 @@ def artifact_bundle_assemble(request, organization_slug):
     # NOTE: as it stands, we process the bundle inline, so arguably we could return "OK" here too; "CREATED" is what
     # sentry returns though, so for faithful mimicking it's the safest bet.
     return JsonResponse({"state": ChunkFileState.CREATED, "missingChunks": []})
+
+
+@user_passes_test(lambda u: u.is_superuser)
+def download_file(request, checksum):
+    file = File.objects.get(checksum=checksum)
+    response = HttpResponse(file.data, content_type="application/octet-stream")
+    response["Content-Disposition"] = f"attachment; filename={file.filename}"
+    return response
