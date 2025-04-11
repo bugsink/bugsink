@@ -13,6 +13,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from django.core.paginator import Paginator, Page
 from django.db.utils import OperationalError
+from django.conf import settings
 
 from sentry.utils.safe import get_path
 
@@ -404,6 +405,10 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
     try:
         apply_sourcemaps(parsed_data)
     except Exception as e:
+        if settings.DEBUG or settings.I_AM_RUNNING == "TEST":
+            # when developing/testing, I _do_ want to get notified
+            raise
+
         # sourcemaps are still experimental; we don't want to fail on them, so we just log the error and move on.
         sentry_sdk.capture_exception(e)
 
