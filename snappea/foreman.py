@@ -10,11 +10,12 @@ import time
 import signal
 import threading
 from inotify_simple import INotify, flags
-from sentry_sdk import capture_exception
+import sentry_sdk
 
 from django.conf import settings
 from django.db import connections
 
+from sentry_sdk_extensions import capture_or_log_exception
 from performance.context_managers import time_to_logger
 from bugsink.transaction import durable_atomic
 
@@ -180,9 +181,11 @@ class Foreman:
                     function(*inner_args, **inner_kwargs)
 
             except Exception as e:
-                # Potential TODO: make this configurable / depend on our existing config in bugsink/settings.py
-                logger.warning("Snappea caught Exception: %s", str(e))
-                capture_exception(e)
+                if sentry_sdk.is_initialized():
+                    # Only for the case where full error is captured to Dogfooded Bugsink, do we want to draw some
+                    # attention to this; in the other case the big error in the logs (full traceback) is clear enough.
+                    logger.warning("Snappea caught Exception: %s", str(e))
+                capture_or_log_exception(e, logger)
             finally:
                 # equivalent to the below, but slightly more general (and thus more future-proof). In both cases nothing
                 # happens with already-closed/never opened connections):
@@ -324,7 +327,7 @@ class Foreman:
                 logger.error('Create workers: can\'t execute "%s": %s', task.task_name, e)
                 with time_to_logger(performance_logger, "Snappea delete Task"):
                     task.delete()  # we delete the task because we can't do anything with it, and we don't want to hang
-                capture_exception(e)
+                capture_or_log_exception(e, logger)
                 self.worker_semaphore.release()
                 continue
 

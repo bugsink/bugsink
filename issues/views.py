@@ -1,6 +1,7 @@
 from collections import namedtuple
 import json
 import sentry_sdk
+import logging
 
 from django.db.models import Q
 from django.utils import timezone
@@ -16,6 +17,7 @@ from django.db.utils import OperationalError
 from django.conf import settings
 
 from sentry.utils.safe import get_path
+from sentry_sdk_extensions import capture_or_log_exception
 
 from bugsink.decorators import project_membership_required, issue_membership_required, atomic_for_request_method
 from bugsink.transaction import durable_atomic
@@ -33,6 +35,8 @@ from .models import Issue, IssueQuerysetStateManager, IssueStateManager, Turning
 from .forms import CommentForm
 from .utils import get_values, get_main_exception
 from events.utils import annotate_with_meta, apply_sourcemaps
+
+logger = logging.getLogger("bugsink.issues")
 
 
 MuteOption = namedtuple("MuteOption", ["for_or_until", "period_name", "nr_of_periods", "gte_threshold"])
@@ -410,7 +414,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
             raise
 
         # sourcemaps are still experimental; we don't want to fail on them, so we just log the error and move on.
-        sentry_sdk.capture_exception(e)
+        capture_or_log_exception(e, logger)
 
     # NOTE: I considered making this a clickable button of some sort, but decided against it in the end. Getting the UI
     # right is quite hard (https://ux.stackexchange.com/questions/1318) but more generally I would assume that having
