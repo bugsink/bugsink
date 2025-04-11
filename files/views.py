@@ -161,8 +161,6 @@ def chunk_upload(request, organization_slug):
                 "data": data,  # NOTE: further possible optimization: don't even read the file when already existing
             })
 
-    open('/tmp/chunk.zip', "wb").write(data)  # TODO: remove this line; it's just for debugging
-
     return HttpResponse()
 
 
