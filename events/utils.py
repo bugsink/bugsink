@@ -1,10 +1,12 @@
 class IncompleteList(list):
+    """A list that indicates how many items were trimmed from the list."""
     def __init__(self, lst, cnt):
         super().__init__(lst)
         self.incomplete = cnt
 
 
 class IncompleteDict(dict):
+    """A dict that indicates how many items were trimmed from the dict."""
     def __init__(self, dct, cnt):
         super().__init__(dct)
         self.incomplete = cnt
@@ -51,15 +53,20 @@ def annotate_var_with_meta(var, meta_var):
     """
     'var' is a (potentially trimmed) list or dict, 'meta_var' is a dict describing the trimming.
     """
-    assert isinstance(var, (list, dict))
+    assert isinstance(var, (list, dict, str))
 
     if isinstance(var, list):
         Incomplete = IncompleteList
         at = lambda k: int(k)  # noqa; (for some reason the meta_k for list lookups is stored as a string)
 
-    else:  # isinstance(var, dict):
+    elif isinstance(var, dict):
         Incomplete = IncompleteDict
         at = lambda k: k  # noqa
+
+    else:  # str
+        # The case I've seen: var == '[Filtered]' and meta_var == {"": {"rem": [["!config", "s"]]}}
+        # but I'm not going to assert on that.
+        return var
 
     for meta_k, meta_v in meta_var.items():
         if meta_k == "":

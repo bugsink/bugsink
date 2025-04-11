@@ -270,7 +270,8 @@ EXAMPLE_META = r'''{
                 "self": "<django.apps.registry.Apps object at 0x7f65d4bdfeb0>",
                 "installed_apps": [
                   "'projects'"
-                ]
+                ],
+                "csrf_token": "[Filtered]"
               }
             },
             {
@@ -310,6 +311,16 @@ EXAMPLE_META = r'''{
                   "installed_apps": {
                     "": {
                       "len": 16
+                    }
+                  },
+                  "csrf_token": {
+                    "": {
+                      "rem": [
+                        [
+                          "!config",
+                          "s"
+                        ]
+                      ]
                     }
                   }
                 }
