@@ -9,12 +9,14 @@ from compat.dsn import get_header_value
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project, ProjectMembership
 from events.models import Event
+from bsmain.models import AuthToken
 
 
 User = get_user_model()
 
 
 class FilesTests(TransactionTestCase):
+    # Integration-test of file-upload and does-it-render-sourcemaps
 
     def setUp(self):
         super().setUp()
@@ -22,6 +24,28 @@ class FilesTests(TransactionTestCase):
         self.project = Project.objects.create()
         ProjectMembership.objects.create(project=self.project, user=self.user)
         self.client.force_login(self.user)
+        self.auth_token = AuthToken.objects.create()
+        self.token_headers = {"Authorization": f"Bearer {self.auth_token.token}"}
+
+    def test_auth_no_header(self):
+        response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers={})
+        self.assertEqual(401, response.status_code)
+        self.assertEqual({"error": "Authorization header not found"}, response.json())
+
+    def test_auth_empty_header(self):
+        response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers={"Authorization": ""})
+        self.assertEqual(401, response.status_code)
+        self.assertEqual({"error": "Authorization header not found"}, response.json())
+
+    def test_auth_overfull_header(self):
+        response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers={"Authorization": "Bearer a b"})
+        self.assertEqual(401, response.status_code)
+        self.assertEqual({"error": "Expecting 'Authorization: Token abc123...' but got 'Bearer a b'"}, response.json())
+
+    def test_auth_wrong_token(self):
+        response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers={"Authorization": "Bearer xxx"})
+        self.assertEqual(401, response.status_code)
+        self.assertEqual({"error": "Invalid token"}, response.json())
 
     def test_assemble_artifact_bundle(self):
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
@@ -45,9 +69,7 @@ class FilesTests(TransactionTestCase):
             response = self.client.post(
                 "/api/0/organizations/anyorg/chunk-upload/",
                 data={"file_gzip": gzipped_file},
-                headers={
-                    # once we have auth
-                },
+                headers=self.token_headers,
             )
 
             self.assertEqual(
@@ -69,9 +91,7 @@ class FilesTests(TransactionTestCase):
                 "/api/0/organizations/anyorg/artifactbundle/assemble/",
                 json.dumps(data),
                 content_type="application/json",
-                headers={
-                    # once we have auth
-                },
+                headers=self.token_headers,
             )
 
             self.assertEqual(

@@ -12,6 +12,7 @@ from django.contrib.auth.decorators import user_passes_test
 from sentry.assemble import ChunkFileState
 
 from bugsink.app_settings import get_settings
+from bsmain.models import AuthToken
 
 from .models import Chunk, File, FileMetadata
 
@@ -100,9 +101,35 @@ def get_chunk_upload_settings(request, organization_slug):
     })
 
 
+def requires_auth_token(view_function):
+    # {"error": "..."} (status=401) response is API-compatible; for that to work we need the present function to be a
+    # decorator (so we can return, rather than raise, which plain-Django doesn't support for 401)
+
+    def first_require_auth_token(request, *args, **kwargs):
+        header_value = request.META.get("HTTP_AUTHORIZATION")
+        if not header_value:
+            return JsonResponse({"error": "Authorization header not found"}, status=401)
+
+        header_values = header_value.split()
+
+        if len(header_values) != 2:
+            return JsonResponse(
+                {"error": "Expecting 'Authorization: Token abc123...' but got '%s'" % header_value}, status=401)
+
+        the_word_bearer, token = header_values
+
+        if AuthToken.objects.filter(token=token).count() < 1:
+            return JsonResponse({"error": "Invalid token"}, status=401)
+
+        return view_function(request, *args, **kwargs)
+
+    first_require_auth_token.__name__ = view_function.__name__
+    return first_require_auth_token
+
+
 @csrf_exempt
+@requires_auth_token
 def chunk_upload(request, organization_slug):
-    # TODO authenticate
     # Bugsink has a single-organization model; we simply ignore organization_slug
     # NOTE: we don't check against chunkSize, maxRequestSize and chunksPerRequest (yet), we expect the CLI to behave.
 
@@ -210,8 +237,8 @@ def assemble_file(checksum, chunk_checksums, filename):
 
 
 @csrf_exempt  # we're in API context here; this could potentially be pulled up to a higher level though
+@requires_auth_token
 def artifact_bundle_assemble(request, organization_slug):
-    # TODO authenticate
     # Bugsink has a single-organization model; we simply ignore organization_slug
 
     # NOTE a JSON-schema for this endpoint is available under Apache 2 license (2 year anniversary rule) at
