@@ -133,6 +133,7 @@ def settings_view(request):
             "EMAIL_HOST_PASSWORD",
             "EMAIL_PORT",
             "EMAIL_USE_TLS",
+            "EMAIL_USE_SSL",
             "EMAIL_BACKEND",
             "DEFAULT_FROM_EMAIL",
         )
