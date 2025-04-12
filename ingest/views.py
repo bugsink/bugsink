@@ -538,12 +538,16 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         try:
             return self._post2(request, input_stream, ingested_at, project_pk)
         finally:
-            # storing stuff in the DB on-ingest (rather than on digest-only) is not "as architected"; it's OK because
-            # this is a debug-only thing.
+            # storing stuff in the DB on-ingest (rather than on digest-only) is not "as architected"; it's only
+            # acceptible because this is a debug-only thing which is turned off by default; but even for me and other
+            # debuggers the trade-off may not be entirely worth it. One way forward might be: store in Filesystem
+            # instead.
             #
             # note: in finally, so this happens even for all paths, including errors and 404 (i.e. wrong DSN). By design
             # b/c the error-paths are often the interesting ones when debugging. We even store when over quota (429),
-            # that's more of a trade-off to avoid adding extra complexity for a debug-tool.
+            # that's more of a trade-off to avoid adding extra complexity for a debug-tool. Also: because this touches
+            # the DB again (in finally, so always) even when an error occurs, it may occlude other problems. ("dirty
+            # transaction" in the DB).
             input_stream.store()
 
     def _post2(self, request, input_stream, ingested_at, project_pk=None):
