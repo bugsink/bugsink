@@ -1,5 +1,45 @@
 # Changes
 
+## 1.5.0 (14 April 2025)
+
+Bugsink 1.5.0 introduces preliminary support for sourcemaps.
+
+_preliminary_ because only the following combination (all must apply) of features works:
+
+* Uploading "manually", using `sentry-cli`
+* sourcemaps & sources are related using `debug-id`, which must be injected by `sentry-cli`
+
+Tested with the followin `sentry-cli` invocation:
+
+```
+uglifyjs captureException.js   -o captureException.min.js   --source-map url=captureException.min.js.map,includeSources
+sentry-cli sourcemaps inject captureException.min.js captureException.min.js.map
+SENTRY_AUTH_TOKEN=a sentry-cli --url https://YOURBUGSINK/ sourcemaps --org bugsinkhasnoorgs --project=ignoredalso upload .
+```
+
+Implemented with 3 endpoints Bugsink-side:
+
+* upload-chunks GET tells the CLI what our capabilities are
+* upload-chunks POST allows the CLI to upload the files (the CLI bundles everything first, and adds a manifest)
+* assemble-artifact: unpack that thing and put it in the right location.
+
+[This comment contains a longer overview of the current state](https://github.com/bugsink/bugsink/issues/19#issuecomment-2796304379)
+
+### Further Features & Fixes
+
+* Add `EMAIL_USE_SSL` to settings/templates.
+
+* Print full stacktraces when _not_ dogfooding (i.e. when sentry-sdk is not configured).
+
+* Various Dockerfile improvements (See #68 and the top of the Dockerfile for details)
+
+* Allow users to join their own team's projects Fix #56
+* Don't crash on non-str tag-values: Fixes #76
+
+* Add `user.id`, `user.username`, `user.email` and `user.ip_address` tags in `deduce_tags`
+  allows for direct matching on one of those rather than just "whatever is avaialble"
+  (which goes into the not further qualified `user` tag)
+
 ## 1.4.2 (1 April 2025)
 
 * `deduce_allowed_hosts`: allow for localhost, see #46
@@ -53,7 +93,7 @@ or run the `init_tags` command to determine the tags for the already-existing is
 ## 1.3.0 (20 February 2025)
 
 ### Introduce FileEventStorage
-    
+
 An (optional) way to store the `event_data` (full event as JSON)
 outside the DB. This is expected to be useful for larger setups,
 because it gives you:
@@ -105,7 +145,7 @@ Related utilities:
 
 ### Features
 
-* Docker: The SQLite database now defaults to being stored in `/data/`, with a warning if the directory needs to be created.  
+* Docker: The SQLite database now defaults to being stored in `/data/`, with a warning if the directory needs to be created.
 * Show 'event grouping', 'handled' and 'mechanism' in the event details
 * Ingestion performance fixes (most notable when >1M events are stored). See 615d2da4c8b5
 * UI performance fixes (most notable in the UI, when >1M events are stored). See 86e8c4318bc2
