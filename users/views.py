@@ -17,19 +17,19 @@ from .models import EmailVerification
 from .tasks import send_confirm_email, send_reset_email
 
 
-UserModel = get_user_model()
+User = get_user_model()
 
 
 @atomic_for_request_method
 @user_passes_test(lambda u: u.is_superuser)
 def user_list(request):
-    users = UserModel.objects.all().order_by('username')
+    users = User.objects.all().order_by('username')
 
     if request.method == 'POST':
         full_action_str = request.POST.get('action')
         action, user_pk = full_action_str.split(":", 1)
         if action == "deactivate":
-            user = UserModel.objects.get(pk=user_pk)
+            user = User.objects.get(pk=user_pk)
             user.is_active = False
             user.save()
 
@@ -37,7 +37,7 @@ def user_list(request):
             return redirect('user_list')
 
         if action == "activate":
-            user = UserModel.objects.get(pk=user_pk)
+            user = User.objects.get(pk=user_pk)
             user.is_active = True
             user.save()
 
@@ -52,7 +52,7 @@ def user_list(request):
 @atomic_for_request_method
 @user_passes_test(lambda u: u.is_superuser)
 def user_edit(request, user_pk):
-    user = UserModel.objects.get(pk=user_pk)
+    user = User.objects.get(pk=user_pk)
     if request.method == 'POST':
         form = UserEditForm(request.POST, instance=user)
 
@@ -130,7 +130,7 @@ def resend_confirmation(request):
         form = ResendConfirmationForm(request.POST)
 
         if form.is_valid():
-            user = UserModel.objects.get(username=form.cleaned_data['email'])
+            user = User.objects.get(username=form.cleaned_data['email'])
             if user.is_active:
                 raise Http404("This email is already confirmed.")
 
@@ -152,7 +152,7 @@ def request_reset_password(request):
         form = RequestPasswordResetForm(request.POST)
 
         if form.is_valid():
-            user = UserModel.objects.get(username=form.cleaned_data['email'])
+            user = User.objects.get(username=form.cleaned_data['email'])
             # if not user.is_active  no separate branch for this: password-reset implies email-confirmation
 
             # we reuse the EmailVerification model for password resets; security wise it doesn't matter, because the

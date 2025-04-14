@@ -22,7 +22,7 @@ def _(x):
     return x
 
 
-UserModel = get_user_model()
+User = get_user_model()
 
 
 class UserCreationForm(BaseUserCreationForm):
@@ -47,11 +47,11 @@ class UserCreationForm(BaseUserCreationForm):
         self.fields['password2'].help_text = None  # "Confirm password" is descriptive enough
 
     class Meta:
-        model = UserModel
+        model = User
         fields = ("username",)
 
     def clean_username(self):
-        if UserModel.objects.filter(username=self.cleaned_data['username'], is_active=False).exists():
+        if User.objects.filter(username=self.cleaned_data['username'], is_active=False).exists():
             raise ValidationError(mark_safe(
                 'This email is already registered but not yet confirmed. Please check your email for the confirmation '
                 'link or <b><a href="' + reverse("resend_confirmation") + "?email=" +
@@ -92,11 +92,11 @@ class UserEditForm(ModelForm):
         self.fields['username'].help_text = None  # "Email" is descriptive enough
 
     class Meta:
-        model = UserModel
+        model = User
         fields = ("username",)
 
     def clean_username(self):
-        if UserModel.objects.exclude(pk=self.instance.pk).filter(username=self.cleaned_data['username']).exists():
+        if User.objects.exclude(pk=self.instance.pk).filter(username=self.cleaned_data['username']).exists():
             raise ValidationError(mark_safe("This email is already registered by another user."))
         return self.cleaned_data['username']
 
@@ -118,7 +118,7 @@ class RequestPasswordResetForm(forms.Form):
 
     def clean_email(self):
         email = self.cleaned_data['email']
-        if not UserModel.objects.filter(username=email).exists():
+        if not User.objects.filter(username=email).exists():
             # Many sites say "if the email is registered, we've sent you an email with a password reset link" instead.
             # The idea is not to leak information about which emails are registered. But in our setup we're already
             # leaking that information in the signup form. At least for now, I'm erring on the side of
@@ -142,5 +142,5 @@ class PreferencesForm(ModelForm):
         label=_("Send email alerts"), choices=TRUE_FALSE_CHOICES, required=False, widget=forms.Select())
 
     class Meta:
-        model = UserModel
+        model = User
         fields = ("send_email_alerts",)

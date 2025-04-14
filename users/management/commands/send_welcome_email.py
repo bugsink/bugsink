@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from users.models import EmailVerification
 from users.tasks import send_welcome_email
 
-UserModel = get_user_model()
+User = get_user_model()
 
 
 class Command(BaseCommand):
@@ -18,7 +18,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         email = options["email"]
-        user = UserModel.objects.get(email=email)
+        user = User.objects.get(email=email)
 
         # copy/paste from views.py (excluding the comments)
         verification = EmailVerification.objects.create(user=user, email=user.username)
