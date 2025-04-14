@@ -33,6 +33,7 @@
 
                 {% if user.is_superuser %}
                 <a href="/users/"><div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl">Users</div></a>
+                <a href="/bsmain/auth_tokens/"><div class="px-4 py-2 my-2 hover:bg-slate-300 rounded-xl">Tokens</div></a>
                 {% endif %}
 
                 {% if logged_in_user.is_anonymous %}

@@ -56,6 +56,7 @@ urlpatterns = [
     path('events/', include('events.urls')),
     path('issues/', include('issues.urls')),
     path('files/', include('files.urls')),
+    path('bsmain/', include('bsmain.urls')),
 
     path('admin/', admin.site.urls),
 

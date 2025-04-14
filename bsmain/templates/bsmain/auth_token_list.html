@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Auth Tokens · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+<div class="flex items-center justify-center">
+
+    <div class="m-4 max-w-4xl flex-auto">
+
+        {% if messages %}
+        <ul class="mb-4">
+            {% for message in messages %}
+                {# if we introduce different levels we can use{% message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %} #}
+                <li class="bg-cyan-50 border-2 border-cyan-800 p-4 rounded-lg">{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        <div class="flex">
+            <h1 class="text-4xl mt-4 font-bold">Auth Tokens</h1>
+
+            <div class="ml-auto mt-6">
+                <form action="{% url "auth_token_create" %}" method="post">
+                {% csrf_token %} {# margins display slightly different from the <a href version that I have for e.g. project memembers, but I don't care _that_ much #}
+                    <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md">Add Token</button>
+                </form>
+            </div> 
+        </div>
+
+        <div>
+          <form action="." method="post">
+          {% csrf_token %}
+
+          <table class="w-full mt-8">
+          <tbody>
+                <thead>
+                <tr class="bg-slate-200">
+                    <th class="w-full p-4 text-left text-xl" colspan="2">Auth Tokens</th>
+                </tr>
+
+                {% for auth_token in auth_tokens %}
+                <tr class="bg-white border-slate-200 border-b-2">
+                <td class="w-full p-4">
+                    <div>
+                        {{ auth_token.token }}
+                    </div>
+                </td>
+
+                <td class="p-4">
+                    <div class="flex justify-end">
+                        <button name="action" value="delete:{{ auth_token.id }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 active:ring rounded-md">Delete</button>
+                    </div> 
+                </td>
+
+                </tr>
+                {% empty %}
+                <tr class="bg-white border-slate-200 border-b-2">
+                <td class="w-full p-4">
+                    <div>
+                        No Auth Tokens.
+                    </div>
+                </td>
+
+                <td class="p-4">
+                </td>
+
+                </tr>
+                {% endfor %}
+
+            </tbody>
+            </table>
+
+            </form>
+        </div>
+
+</div>
+
+{% endblock %}
