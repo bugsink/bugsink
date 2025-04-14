@@ -1,9 +1,7 @@
-from zipfile import ZipFile
 import json
 from hashlib import sha1
 from gzip import GzipFile
 from io import BytesIO
-from os.path import basename
 
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -14,7 +12,8 @@ from sentry.assemble import ChunkFileState
 from bugsink.app_settings import get_settings
 from bsmain.models import AuthToken
 
-from .models import Chunk, File, FileMetadata
+from .models import Chunk, File
+from .tasks import assemble_artifact_bundle
 
 
 _KIBIBYTE = 1024
@@ -164,76 +163,6 @@ def chunk_upload(request, organization_slug):
     return HttpResponse()
 
 
-def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
-    # NOTE: as it stands we don't store the (optional) extra info of release/dist.
-
-    # NOTE: there's also the concept of an artifact bundle as _tied_ to a release, i.e. without debug_ids. We don't
-    # support that, but if we ever were to support it we'd need a separate method/param to distinguish it.
-
-    bundle_file, _ = assemble_file(bundle_checksum, chunk_checksums, filename=f"{bundle_checksum}.zip")
-
-    bundle_zip = ZipFile(BytesIO(bundle_file.data))  # NOTE: in-memory handling of zips.
-    manifest_bytes = bundle_zip.read("manifest.json")
-    manifest = json.loads(manifest_bytes.decode("utf-8"))
-
-    for filename, manifest_entry in manifest["files"].items():
-        file_data = bundle_zip.read(filename)
-
-        checksum = sha1(file_data).hexdigest()
-
-        filename = basename(manifest_entry.get("url", filename))[:255]
-
-        file, _ = File.objects.get_or_create(
-            checksum=checksum,
-            defaults={
-                "filename": filename,
-                "size": len(file_data),
-                "data": file_data,
-            })
-
-        debug_id = manifest_entry.get("headers", {}).get("debug-id", None)
-        file_type = manifest_entry.get("type", None)
-        if debug_id is None or file_type is None:
-            # such records exist and we could store them, but we don't, since we don't have a purpose for them.
-            continue
-
-        FileMetadata.objects.get_or_create(
-            debug_id=debug_id,
-            file_type=file_type,
-            defaults={
-                "file": file,
-                "data": json.dumps(manifest_entry),
-            }
-        )
-
-    # NOTE we _could_ get rid of the file at this point (but we don't). Ties in to broader questions of retention.
-
-
-def assemble_file(checksum, chunk_checksums, filename):
-    """Assembles a file from chunks"""
-
-    # NOTE: unimplemented checks/tricks
-    # * total file-size v.s. some max
-    # * explicit check chunk availability (as it stands, our processing is synchronous, so no need)
-    # * skip-on-checksum-exists
-
-    chunks = Chunk.objects.filter(checksum__in=chunk_checksums)
-    chunks_dicts = {chunk.checksum: chunk for chunk in chunks}
-    chunks_in_order = [chunks_dicts[checksum] for checksum in chunk_checksums]  # implicitly checks chunk availability
-    data = b"".join([chunk.data for chunk in chunks_in_order])
-
-    if sha1(data).hexdigest() != checksum:
-        raise Exception("checksum mismatch")
-
-    return File.objects.get_or_create(
-        checksum=checksum,
-        defaults={
-            "size": len(data),
-            "data": data,
-            "filename": filename,
-        })
-
-
 @csrf_exempt  # we're in API context here; this could potentially be pulled up to a higher level though
 @requires_auth_token
 def artifact_bundle_assemble(request, organization_slug):
@@ -244,14 +173,14 @@ def artifact_bundle_assemble(request, organization_slug):
     # (not worth the trouble of extracting right now, since our /sentry dir contains BSD-3 licensed code (2019 version)
 
     data = json.loads(request.body)
-    assemble_artifact_bundle(data["checksum"], data["chunks"])
+    assemble_artifact_bundle.delay(data["checksum"], data["chunks"])
 
     # NOTE sentry & glitchtip _always_ return an empty list for "missingChunks" in this view; I don't really understand
     # what's being achieved with that, but it seems to be the expected behavior. Working hypothesis: this was introduced
     # for DIF uploads, and the present endpoint doesn't use it at all. Not even for "v2", surprisingly.
 
-    # NOTE: as it stands, we process the bundle inline, so arguably we could return "OK" here too; "CREATED" is what
-    # sentry returns though, so for faithful mimicking it's the safest bet.
+    # In the ALWAYS_EAGER setup, we process the bundle inline, so arguably we could return "OK" here too; "CREATED" is
+    # what sentry returns though, so for faithful mimicking it's the safest bet.
     return JsonResponse({"state": ChunkFileState.CREATED, "missingChunks": []})
 
 
