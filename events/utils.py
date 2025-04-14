@@ -128,7 +128,7 @@ def apply_sourcemaps(event_data):
 
     source_for_filename = {}
     for filename, meta in filenames_with_metas:
-        sm_data = json.loads(meta.file.data)
+        sm_data = json.loads(_postgres_fix(meta.file.data))
         if "sourcesContent" not in sm_data or len(sm_data["sourcesContent"]) != 1:
             # our assumption is: 1 sourcemap, 1 source. The fact that both "sources" (a list of filenames) and
             # "sourcesContent" are lists seems to indicate that this assumption does not generally hold. But it not
