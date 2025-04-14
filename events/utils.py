@@ -89,6 +89,15 @@ def annotate_var_with_meta(var, meta_var):
     return var
 
 
+def _postgres_fix(memoryview_or_bytes):
+    if isinstance(memoryview_or_bytes, memoryview):
+        # This is a workaround for the fact that some versions of psycopg return a memoryview instead of bytes;
+        # see https://code.djangoproject.com/ticket/27813. This problem will go away "eventually", but here's the fix
+        # till then (psycopg>=3.0.17 is OK)
+        return bytes(memoryview_or_bytes)
+    return memoryview_or_bytes
+
+
 def apply_sourcemaps(event_data):
     images = event_data.get("debug_meta", {}).get("images", [])
     if not images:
@@ -113,7 +122,7 @@ def apply_sourcemaps(event_data):
         ]
 
     sourcemap_for_filename = {
-        filename: sourcemap.loads(meta.file.data)
+        filename: sourcemap.loads(_postgres_fix(meta.file.data))
         for (filename, meta) in filenames_with_metas
     }
 
