@@ -3,6 +3,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 from django.contrib.auth import views as auth_views
+from django.views.generic import RedirectView
 
 from alerts.views import debug_email as debug_alerts_email
 from users.views import debug_email as debug_users_email
@@ -56,6 +57,12 @@ urlpatterns = [
     path('events/', include('events.urls')),
     path('issues/', include('issues.urls')),
     path('files/', include('files.urls')),
+
+    # this weird URL is what sentry-cli uses as part of their "login" flow. weird, because the word ':orgslug' shows up
+    # verbatim. In any case, we simply redirect to the auth token list, such that you can set one up
+    path('orgredirect/organizations/:orgslug/settings/auth-tokens/',
+         RedirectView.as_view(url='/bsmain/auth_tokens/', permanent=False)),
+
     path('bsmain/', include('bsmain.urls')),
 
     path('admin/', admin.site.urls),
