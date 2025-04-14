@@ -1,3 +1,15 @@
+import json
+import sourcemap
+from issues.utils import get_values
+
+from files.models import FileMetadata
+
+
+# Dijkstra, Sourcemaps and Python lists start at 0, but editors and our UI show lines starting at 1.
+FROM_DISPLAY = -1
+TO_DISPLAY = 1
+
+
 class IncompleteList(list):
     """A list that indicates how many items were trimmed from the list."""
     def __init__(self, lst, cnt):
@@ -75,3 +87,59 @@ def annotate_var_with_meta(var, meta_var):
             var[at(meta_k)] = annotate_var_with_meta(var[at(meta_k)], meta_v)
 
     return var
+
+
+def apply_sourcemaps(event_data):
+    images = event_data.get("debug_meta", {}).get("images", [])
+    if not images:
+        return
+
+    debug_id_for_filename = {
+        image["code_file"]: image["debug_id"]
+        for image in images
+        if "debug_id" in image and "code_file" in image and image["type"] == "sourcemap"
+    }
+
+    metadata_obj_lookup = {
+        str(metadata_obj.debug_id): metadata_obj
+        for metadata_obj in FileMetadata.objects.filter(
+            debug_id__in=debug_id_for_filename.values(), file_type="source_map").select_related("file")
+    }
+
+    filenames_with_metas = [
+        (filename, metadata_obj_lookup[debug_id])
+        for (filename, debug_id) in debug_id_for_filename.items()
+        if debug_id in metadata_obj_lookup  # if not: sourcemap not uploaded
+        ]
+
+    sourcemap_for_filename = {
+        filename: sourcemap.loads(meta.file.data)
+        for (filename, meta) in filenames_with_metas
+    }
+
+    source_for_filename = {}
+    for filename, meta in filenames_with_metas:
+        sm_data = json.loads(meta.file.data)
+        if "sourcesContent" not in sm_data or len(sm_data["sourcesContent"]) != 1:
+            # our assumption is: 1 sourcemap, 1 source. The fact that both "sources" (a list of filenames) and
+            # "sourcesContent" are lists seems to indicate that this assumption does not generally hold. But it not
+            # holding does not play well with the id of debug_id, I think?
+            continue
+
+        source_for_filename[filename] = sm_data["sourcesContent"][0].splitlines()
+
+    for exception in get_values(event_data.get("exception", {})):
+        for frame in exception.get("stacktrace", {}).get("frames", []):
+            # NOTE: try/except in the loop would allow us to selectively skip frames that we fail to process
+
+            if frame.get("filename") in sourcemap_for_filename and frame["filename"] in source_for_filename:
+                sm = sourcemap_for_filename[frame["filename"]]
+                lines = source_for_filename[frame["filename"]]
+
+                token = sm.lookup(frame["lineno"] + FROM_DISPLAY, frame["colno"])
+
+                frame["pre_context"] = lines[max(0, token.src_line - 5):token.src_line]
+                frame["context_line"] = lines[token.src_line]
+                frame["post_context"] = lines[token.src_line + 1:token.src_line + 5]
+                frame["lineno"] = token.src_line + TO_DISPLAY
+                # frame["colno"] = token.src_col + TO_DISPLAY  not actually used

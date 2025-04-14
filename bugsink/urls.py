@@ -3,6 +3,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 from django.contrib.auth import views as auth_views
+from django.views.generic import RedirectView
 
 from alerts.views import debug_email as debug_alerts_email
 from users.views import debug_email as debug_users_email
@@ -10,6 +11,7 @@ from teams.views import debug_email as debug_teams_email
 from bugsink.app_settings import get_settings
 from users.views import signup, confirm_email, resend_confirmation, request_reset_password, reset_password, preferences
 from ingest.views import download_envelope
+from files.views import chunk_upload, artifact_bundle_assemble
 
 from .views import home, trigger_error, favicon, settings_view, silence_email_system_warning
 from .debug_views import csrf_debug
@@ -38,6 +40,13 @@ urlpatterns = [
     # many user-related views are directly exposed above (/accounts/), the rest is here:
     path("users/", include("users.urls")),
 
+    # these are sentry-cli endpoint for uploading; they're unrelated to e.g. the ingestion API.
+    # the /api/0/ is just a hard prefix (for the ingest API, that position indicates the project id, but here it's just
+    # a prefix)
+    path("api/0/organizations/<slug:organization_slug>/chunk-upload/", chunk_upload, name="chunk_upload"),
+    path("api/0/organizations/<slug:organization_slug>/artifactbundle/assemble/", artifact_bundle_assemble,
+         name="artifact_bundle_assemble"),
+
     path('api/', include('ingest.urls')),
 
     # not in /api/ because it's not part of the ingest API, but still part of the ingest app
@@ -47,6 +56,14 @@ urlpatterns = [
     path('teams/', include('teams.urls')),
     path('events/', include('events.urls')),
     path('issues/', include('issues.urls')),
+    path('files/', include('files.urls')),
+
+    # this weird URL is what sentry-cli uses as part of their "login" flow. weird, because the word ':orgslug' shows up
+    # verbatim. In any case, we simply redirect to the auth token list, such that you can set one up
+    path('orgredirect/organizations/:orgslug/settings/auth-tokens/',
+         RedirectView.as_view(url='/bsmain/auth_tokens/', permanent=False)),
+
+    path('bsmain/', include('bsmain.urls')),
 
     path('admin/', admin.site.urls),
 

@@ -1,3 +1,4 @@
+import traceback
 import types
 
 from sentry_sdk.utils import current_stacktrace
@@ -111,3 +112,19 @@ def capture_stacktrace(message):
         }
     }
     sentry_sdk.capture_event(event)
+
+
+def capture_or_log_exception(e, logger):
+    try:
+        if sentry_sdk.is_initialized():
+            sentry_sdk.capture_exception(e)
+        else:
+            # this gnarly approach makes it so that each line of the traceback gets the same prefixes (dates etc)
+            for bunch_of_lines in traceback.format_exception(e):
+                for line in bunch_of_lines.splitlines():
+                    # Note: when .is_initialized() is True, .error is spammy (it gets captured) but we don't have that
+                    # problem in this branch.
+                    logger.error(line)
+    except Exception as e2:
+        # We just never want our error-handling code to be the cause of an error.
+        print("Error in capture_or_log_exception", str(e2), "during handling of", str(e))

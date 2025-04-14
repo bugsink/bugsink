@@ -419,6 +419,10 @@ class ViewTests(TransactionTestCase):
         response = self.client.get(f"/issues/issue/{self.issue.id}/tags/")
         self.assertContains(response, self.issue.title())
 
+    def test_issue_grouping(self):
+        response = self.client.get(f"/issues/issue/{self.issue.id}/grouping/")
+        self.assertContains(response, self.issue.title())
+
     def test_issue_history(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/history/")
         self.assertContains(response, self.issue.title())

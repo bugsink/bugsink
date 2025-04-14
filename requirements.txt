@@ -15,3 +15,4 @@ monofy==1.1.*
 user-agents==2.2.*
 fastjsonschema==2.21.*
 verbose_csrf_middleware==1.0.*
+sourcemap==0.2.*
