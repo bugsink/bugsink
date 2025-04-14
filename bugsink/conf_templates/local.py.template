@@ -74,4 +74,14 @@ BUGSINK = {
     "SINGLE_USER": True,
     "SINGLE_TEAM": True,
     "USER_REGISTRATION": CB_NOBODY,
+
+    # "EVENT_STORAGES": {
+    #     "local_flat_files": {  # a meaningful name of your choosing
+    #         "STORAGE": "events.storage.FileEventStorage",
+    #         "OPTIONS": {
+    #             "basepath": "{{ base_dir }}/event_storage",
+    #         },
+    #         "USE_FOR_WRITE": True,
+    #     },
+    # },
 }

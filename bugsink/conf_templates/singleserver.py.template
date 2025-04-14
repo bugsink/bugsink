@@ -100,6 +100,17 @@ BUGSINK = {
     # Optionally, you can set the following to True to further minimize information exposure in the UI. (The default is
     # False, which we've judged to still not expose too much in most cases, but you might have different requirements.)
     "MINIMIZE_INFORMATION_EXPOSURE": False,
+
+    # "EVENT_STORAGES": {
+    #     "local_flat_files": {  # a meaningful name of your choosing
+    #         "STORAGE": "events.storage.FileEventStorage",
+    #         "OPTIONS": {
+    #             "basepath": "{{ base_dir }}/event_storage",
+    #         },
+    #         "USE_FOR_WRITE": True,
+    #     },
+    # },
+
 }
 
 ALLOWED_HOSTS = deduce_allowed_hosts(BUGSINK["BASE_URL"])
