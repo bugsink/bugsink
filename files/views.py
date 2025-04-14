@@ -10,6 +10,7 @@ from django.contrib.auth.decorators import user_passes_test
 from sentry.assemble import ChunkFileState
 
 from bugsink.app_settings import get_settings
+from bugsink.transaction import durable_atomic, immediate_atomic
 from bsmain.models import AuthToken
 
 from .models import Chunk, File
@@ -153,12 +154,13 @@ def chunk_upload(request, organization_slug):
         if sha1(data).hexdigest() != chunk.name:
             raise Exception("checksum mismatch")
 
-        _, _ = Chunk.objects.get_or_create(
-            checksum=chunk.name,
-            defaults={
-                "size": len(data),
-                "data": data,  # NOTE: further possible optimization: don't even read the file when already existing
-            })
+        with immediate_atomic():  # a snug fit around the only DB-writing thing we do here to ensure minimal blocking
+            _, _ = Chunk.objects.get_or_create(
+                checksum=chunk.name,
+                defaults={
+                    "size": len(data),
+                    "data": data,  # NOTE: further possible optimization: don't even read the file when already existing
+                })
 
     return HttpResponse()
 
@@ -185,6 +187,7 @@ def artifact_bundle_assemble(request, organization_slug):
 
 
 @user_passes_test(lambda u: u.is_superuser)
+@durable_atomic
 def download_file(request, checksum):
     file = File.objects.get(checksum=checksum)
     response = HttpResponse(file.data, content_type="application/octet-stream")
