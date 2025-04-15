@@ -183,6 +183,9 @@ DATABASES = {
             'timeout': 5,  # this is the default (as per the Python sqlite3 package); we're just being explicit
         },
     },
+
+    # This is a "database as message queue" setup; If you're reading this and are thinking of replacing this particular
+    # DB with mysql/postgres, know that you "probably shouldn't". https://www.bugsink.com/blog/snappea-design/
     "snappea": {
         'ENGINE': 'bugsink.timed_sqlite_backend',
         'NAME': os.getenv("SNAPPEA_DATABASE_PATH", 'snappea.sqlite3'),
