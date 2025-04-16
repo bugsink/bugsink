@@ -117,7 +117,7 @@ BUGSINK = {
     # Has the added benefit that the integration tests can run (event_samples repo contains broken events).
     "VALIDATE_ON_DIGEST": "warn",
 
-    "KEEP_ENVELOPES": 10,
+    # "KEEP_ENVELOPES": 10,
 
     # set MAX_EVENTS* very high to be able to do serious performance testing (which I do often in my dev environment)
     "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": 1_000_000,
