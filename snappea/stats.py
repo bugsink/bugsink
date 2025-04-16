@@ -1,13 +1,17 @@
 from datetime import datetime, timezone, timedelta
 import threading
+import logging
 
 from django.db import OperationalError
 from django.db.models import Count
 
 from bugsink.transaction import immediate_atomic
 from bugsink.timed_sqlite_backend.base import different_runtime_limit
+from performance.context_managers import time_to_logger
 
 from .models import Task, Stat
+
+performance_logger = logging.getLogger("bugsink.performance.snappea")
 
 
 class Stats:
@@ -53,7 +57,7 @@ class Stats:
 
     def _possibly_write(self):
         # we only write once-a-minute; this means the cost of writing stats is amortized (at least when it matters, i.e.
-        # under pressure) by approx 1/(60*30);
+        # under pressure) by approx 1/(60*30); (the cost (see time_to_logger) was 8ms on my local env in initial tests)
         #
         # "edge" cases, in which nothing is written:
         # * snappea-shutdown
@@ -70,28 +74,29 @@ class Stats:
             # the Stat w/ timestamp x is for the one-minute bucket from that point in time forwards:
             timestamp = datetime(*(self.last_write_at), tzinfo=timezone.utc)
 
-            with immediate_atomic(using="snappea"):  # explicit is better than implicit; and we combine read/write here
-                # having stats is great, but I don't want to hog task-processing too long (which would happen precisely
-                # when the backlog grows large)
-                with different_runtime_limit(0.1):
-                    try:
-                        task_counts = Task.objects.values("task_name").annotate(count=Count("task_name"))
-                    except OperationalError as e:
-                        if e.args[0] != "interrupted":
-                            raise
-                        task_counts = None
+            with time_to_logger(performance_logger, "Snappea write Stats"):
+                with immediate_atomic(using="snappea"):  # explicit is better than impl.; and we combine read/write here
+                    # having stats is great, but I don't want to hog task-processing too long (which would happen
+                    # precisely when the backlog grows large)
+                    with different_runtime_limit(0.1):
+                        try:
+                            task_counts = Task.objects.values("task_name").annotate(count=Count("task_name"))
+                        except OperationalError as e:
+                            if e.args[0] != "interrupted":
+                                raise
+                            task_counts = None
 
-                task_counts_d = {d['task_name']: d['count'] for d in task_counts} if task_counts else None
-                stats = [
-                    Stat(
-                        timestamp=timestamp,
-                        task_name=task_name,
-                        task_count=task_counts_d.get(task_name, 0) if task_counts is not None else None,
-                        **kwargs,
-                    ) for task_name, kwargs in self.d.items()
-                ]
+                    task_counts_d = {d['task_name']: d['count'] for d in task_counts} if task_counts else None
+                    stats = [
+                        Stat(
+                            timestamp=timestamp,
+                            task_name=task_name,
+                            task_count=task_counts_d.get(task_name, 0) if task_counts is not None else None,
+                            **kwargs,
+                        ) for task_name, kwargs in self.d.items()
+                    ]
 
-                Stat.objects.bulk_create(stats)
+                    Stat.objects.bulk_create(stats)
 
             # re-init:
             self.last_write_at = tup
