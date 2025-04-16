@@ -33,11 +33,17 @@ immediate_semaphore = threading.Semaphore(1)
 
 class SemaphoreContext:
     def __enter__(self):
+        t0 = time.time()
         if not immediate_semaphore.acquire(timeout=10):
             # "should never happen", but I'd rather have a clear error message than a silent deadlock; the timeout of 10
             # is chosen to be longer than the DB-related timeouts. i.e. when this happens it's presumably an error in
             # the locking mechanism specifically, not actually caused by the DB being busy.
             raise RuntimeError("Could not acquire immediate_semaphore")
+
+        took = (time.time() - t0) * 1_000
+        # textually, slightly misleading since it's not literally "BEGIN IMMEDIATE" we're waiting for here (instead: the
+        # semaphore) but it's clear enough
+        performance_logger.info(f"{took:6.2f}ms BEGIN IMMEDIATE, A.K.A. get-write-lock")
 
     def __exit__(self, exc_type, exc_value, traceback):
         immediate_semaphore.release()
@@ -141,7 +147,6 @@ class ImmediateAtomic(SuperDurableAtomic):
             connection._start_transaction_under_autocommit = types.MethodType(
                 _start_transaction_under_autocommit_patched, connection)
 
-        self.t0 = time.time()
         super(ImmediateAtomic, self).__enter__()
 
         if connection.vendor != 'sqlite':
@@ -157,8 +162,6 @@ class ImmediateAtomic(SuperDurableAtomic):
             from django.contrib.contenttypes.models import ContentType
             ContentType.objects.select_for_update().order_by("pk").first()
 
-        took = (time.time() - self.t0) * 1_000
-        performance_logger.info(f"{took:6.2f}ms BEGIN IMMEDIATE, A.K.A. get-write-lock")
         self.t0 = time.time()
 
     def __exit__(self, exc_type, exc_value, traceback):
