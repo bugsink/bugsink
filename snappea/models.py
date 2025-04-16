@@ -21,6 +21,28 @@ class Task(models.Model):
         ]
 
 
+class Stat(models.Model):
+    timestamp = models.DateTimeField(null=False)
+    task_name = models.CharField(max_length=255)
+    task_count = models.PositiveIntegerField(null=True)  # null signifies "too much to count quickly"
+    done = models.PositiveIntegerField(null=False)
+    errors = models.PositiveIntegerField(null=False)
+    wall_time = models.FloatField(null=False)
+    wait_time = models.FloatField(null=False)
+    write_time = models.FloatField(null=False)
+    max_wall_time = models.FloatField(null=False)
+    max_wait_time = models.FloatField(null=False)
+    max_write_time = models.FloatField(null=False)
+
+    class Meta:
+        unique_together = (
+            ('timestamp', 'task_name'),  # in this order, for efficient deletions
+        )
+
+    def __str__(self):
+        return f"{self.timestamp.isoformat()[:16]} - {self.task_name}"
+
+
 def wakeup_server():
     wakeup_file = os.path.join(get_settings().WAKEUP_CALLS_DIR, thread_uuid)
 

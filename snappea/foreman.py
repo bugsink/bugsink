@@ -17,13 +17,14 @@ from django.db import connections
 
 from sentry_sdk_extensions import capture_or_log_exception
 from performance.context_managers import time_to_logger
-from bugsink.transaction import durable_atomic
+from bugsink.transaction import durable_atomic, get_stat
 
 from . import registry
 from .models import Task
 from .datastructures import Workers
 from .settings import get_settings
 from .utils import run_task_context
+from .stats import Stats
 
 
 logger = logging.getLogger("snappea.foreman")
@@ -76,6 +77,7 @@ class Foreman:
         self.settings = get_settings()
 
         self.workers = Workers()
+        self.stats = Stats()
         self.stopping = False
 
         # We deal with both of these in the same way: gracefully terminate. SIGINT is sent (at least) when running this
@@ -170,9 +172,8 @@ class Foreman:
     def run_in_thread(self, task_id, function, *args, **kwargs):
         # NOTE: we expose args & kwargs in the logs; as it stands no sensitive stuff lives there in our case, but this
         # is something to keep an eye on
-        logger.info(
-            'Starting %s for "%s.%s" with %s, %s',
-            short_id(task_id), function.__module__, function.__name__, args, kwargs)
+        task_name = "%s.%s" % (function.__module__, function.__name__)
+        logger.info('Starting %s for "%s" with %s, %s', short_id(task_id), task_name, args, kwargs)
 
         def non_failing_function(*inner_args, **inner_kwargs):
             t0 = time.time()
@@ -181,11 +182,14 @@ class Foreman:
                     function(*inner_args, **inner_kwargs)
 
             except Exception as e:
+                errored = True  # at the top to avoid error-in-handler leaving us with unset variable
                 if sentry_sdk.is_initialized():
                     # Only for the case where full error is captured to Dogfooded Bugsink, do we want to draw some
                     # attention to this; in the other case the big error in the logs (full traceback) is clear enough.
                     logger.warning("Snappea caught Exception: %s", str(e))
                 capture_or_log_exception(e, logger)
+            else:
+                errored = False
             finally:
                 # equivalent to the below, but slightly more general (and thus more future-proof). In both cases nothing
                 # happens with already-closed/never opened connections):
@@ -194,9 +198,10 @@ class Foreman:
                 for connection in connections.all():
                     connection.close()
 
-                logger.info(
-                    'Worker done for "%s.%s" in %.3fs',
-                    function.__module__, function.__name__, time.time() - t0)
+                runtime = time.time() - t0
+                logger.info('Worker done for "%s" in %.3fs', task_name, runtime)
+                self.stats.done(
+                    task_name, runtime, get_stat("get_write_lock"), get_stat("immediate_transaction"), errored)
                 self.workers.stopped(task_id)
                 self.worker_semaphore.release()
 

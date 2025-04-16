@@ -9,6 +9,7 @@ from django.db import transaction as django_db_transaction
 from django.db import DEFAULT_DB_ALIAS
 
 performance_logger = logging.getLogger("bugsink.performance.db")
+local_storage = threading.local()
 
 # as per https://sqlite.org/forum/forumpost/f2427b925c1669b7 (the text below is slightly improved)
 #
@@ -47,10 +48,11 @@ class SemaphoreContext:
             # the locking mechanism specifically, not actually caused by the DB being busy.
             raise RuntimeError("Could not acquire immediate_semaphore")
 
-        took = (time.time() - t0) * 1_000
+        took = time.time() - t0
+        inc_stat(self.using, "get_write_lock", took)
         # textually, slightly misleading since it's not literally "BEGIN IMMEDIATE" we're waiting for here (instead: the
         # semaphore) but it's clear enough
-        performance_logger.info(f"{took:6.2f}ms BEGIN IMMEDIATE, A.K.A. get-write-lock")
+        performance_logger.info(f"{took * 1000:6.2f}ms BEGIN IMMEDIATE, A.K.A. get-write-lock")
 
     def __exit__(self, exc_type, exc_value, traceback):
         immediate_semaphores[self.using].release()
@@ -174,8 +176,9 @@ class ImmediateAtomic(SuperDurableAtomic):
     def __exit__(self, exc_type, exc_value, traceback):
         super(ImmediateAtomic, self).__exit__(exc_type, exc_value, traceback)
 
-        took = (time.time() - self.t0) * 1000
-        performance_logger.info(f"{took:6.2f}ms IMMEDIATE transaction")
+        took = time.time() - self.t0
+        inc_stat(self.using, "immediate_transaction", took)
+        performance_logger.info(f"{took * 1000:6.2f}ms IMMEDIATE transaction")
 
         connection = django_db_transaction.get_connection(self.using)
         if hasattr(connection, "_start_transaction_under_autocommit"):
@@ -194,13 +197,13 @@ def immediate_atomic(using=None, savepoint=True, durable=True):
     # but rather, "are savepoints allowed inside the current context". (The former would imply that it could never be
     # combined with durable=True, which is not the case.)
     assert durable, "immediate_atomic should always be used with durable=True"
+    using = DEFAULT_DB_ALIAS if using is None else using  # harmonize to "default" at the top for downstream lookups
 
     if callable(using):
         immediate_atomic = ImmediateAtomic(DEFAULT_DB_ALIAS, savepoint, durable)(using)
     else:
         immediate_atomic = ImmediateAtomic(using, savepoint, durable)
 
-    using = DEFAULT_DB_ALIAS if using is None else using
     # https://stackoverflow.com/a/45681273/339144 provides some context on nesting context managers; and how to proceed
     # if you want to do this with an arbitrary number of context managers.
     with SemaphoreContext(using), immediate_atomic:
@@ -209,3 +212,24 @@ def immediate_atomic(using=None, savepoint=True, durable=True):
 
 def delay_on_commit(function, *args, **kwargs):
     django_db_transaction.on_commit(partial(function.delay, *args, **kwargs))
+
+
+def inc_stat(using, stat, took):
+    if using != "default":
+        return  # function signature ready for such stats; not actually collected though
+
+    if not hasattr(local_storage, "stats"):
+        # In practice, I've found that this needs to be done lazily (module-level doesn't work)
+        local_storage.stats = {}
+
+    # the rest of the lazyness is because (using, stat) pairs are not always used.
+    if stat not in local_storage.stats:
+        # a single set-to-0 is good for our architecture (no "reset" operation needed); we only care about these stats
+        # in the context of snappea anyway, and in snappea we get a fresh thread (with 0-stat) for each task.
+        local_storage.stats[stat] = 0
+
+    local_storage.stats[stat] += took
+
+
+def get_stat(stat):
+    return getattr(local_storage, "stats", {}).get(stat, 0)
