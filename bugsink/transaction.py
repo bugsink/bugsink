@@ -27,14 +27,21 @@ performance_logger = logging.getLogger("bugsink.performance.db")
 #
 # The immediate_semaphore is TSTTCPW to serialize writes more aggressively than just using IMMEDIATE. (For cross-process
 # locking that's still no help, but [a] in the recommended setup there is barely any cross-process locking and [b] this
-# lock only is only there to prevent WAL-growth, it's not for correctness (IMMEDIATE is for correctness).)
-immediate_semaphore = threading.Semaphore(1)
+# lock only is only there to prevent WAL-growth, it's not for correctness (IMMEDIATE is for correctness).) implemented
+# as a hard-coded dict to avoid having to implement locking around the a lazy initializer.
+immediate_semaphores = {
+    DEFAULT_DB_ALIAS: threading.Semaphore(1),
+    "snappea": threading.Semaphore(1),
+}
 
 
 class SemaphoreContext:
+    def __init__(self, using):
+        self.using = using
+
     def __enter__(self):
         t0 = time.time()
-        if not immediate_semaphore.acquire(timeout=10):
+        if not immediate_semaphores[self.using].acquire(timeout=10):
             # "should never happen", but I'd rather have a clear error message than a silent deadlock; the timeout of 10
             # is chosen to be longer than the DB-related timeouts. i.e. when this happens it's presumably an error in
             # the locking mechanism specifically, not actually caused by the DB being busy.
@@ -46,7 +53,7 @@ class SemaphoreContext:
         performance_logger.info(f"{took:6.2f}ms BEGIN IMMEDIATE, A.K.A. get-write-lock")
 
     def __exit__(self, exc_type, exc_value, traceback):
-        immediate_semaphore.release()
+        immediate_semaphores[self.using].release()
 
 
 class SuperDurableAtomic(django_db_transaction.Atomic):
@@ -193,9 +200,10 @@ def immediate_atomic(using=None, savepoint=True, durable=True):
     else:
         immediate_atomic = ImmediateAtomic(using, savepoint, durable)
 
+    using = DEFAULT_DB_ALIAS if using is None else using
     # https://stackoverflow.com/a/45681273/339144 provides some context on nesting context managers; and how to proceed
     # if you want to do this with an arbitrary number of context managers.
-    with SemaphoreContext(), immediate_atomic:
+    with SemaphoreContext(using), immediate_atomic:
         yield
 
 
