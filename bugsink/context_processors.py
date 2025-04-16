@@ -77,8 +77,10 @@ def useful_settings_processor(request):
 
     system_warnings = []
 
+    # This list does not include e.g. the dummy.EmailBackend; intentional, because setting _that_ is always an
+    # indication of intentional "shut up I don't want to send emails" (and we don't want to warn about that). (as
+    # opposed to QuietConsoleEmailBackend, which is the default for the Docker "no EMAIL_HOST set" situation)
     if settings.EMAIL_BACKEND in [
-            'django.core.mail.backends.console.EmailBackend',
             'bugsink.email_backends.QuietConsoleEmailBackend'] and not installation.silence_email_system_warning:
 
         if getattr(request, "user", AnonymousUser()).is_superuser:
