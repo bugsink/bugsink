@@ -50,8 +50,11 @@ SNAPPEA = {
 
 # Email settings:
 # to configure email, switch the EMAIL_BACKEND to a real backend and set the EMAIL_* settings.
-EMAIL_BACKEND = "bugsink.email_backends.QuietConsoleEmailBackend"
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_BACKEND = "bugsink.email_backends.QuietConsoleEmailBackend"  # instead of sending, write the subject to console
+# EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"  # dump the whole email to the console (noisy)
+# EMAIL_BACKEND = "django.core.mail.backends.dummy.EmailBackend"  # do nothing (no email sent), not even to console
+
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'  # SMTP; use together with the settings below
 # EMAIL_HOST = ...
 # EMAIL_HOST_USER = ...
 # EMAIL_HOST_PASSWORD = ...
