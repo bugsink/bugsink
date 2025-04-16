@@ -32,6 +32,8 @@ DEFAULTS = {
 
     "TASK_QS_LIMIT": 100,
 
+    "STATS_RETENTION_MINUTES": 60 * 24 * 7,
+
     "HOOK_ADD_TASK_KWARGS": "snappea.utils.dont_add_anything",
     "HOOK_RUN_TASK_CONTEXT": "snappea.utils.no_context",
 }
