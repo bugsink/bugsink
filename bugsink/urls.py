@@ -13,7 +13,7 @@ from users.views import signup, confirm_email, resend_confirmation, request_rese
 from ingest.views import download_envelope
 from files.views import chunk_upload, artifact_bundle_assemble
 
-from .views import home, trigger_error, favicon, settings_view, silence_email_system_warning
+from .views import home, trigger_error, favicon, settings_view, silence_email_system_warning, counts
 from .debug_views import csrf_debug
 
 
@@ -69,6 +69,7 @@ urlpatterns = [
 
     path('silence-email-system-warning/', silence_email_system_warning, name='silence_email_system_warning'),
     path('settings/', settings_view, name='settings'),
+    path('counts/', counts, name='counts'),
     path('debug/csrf/', csrf_debug, name='csrf_debug'),
 
     path("favicon.ico", favicon),

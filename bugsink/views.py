@@ -1,5 +1,6 @@
 import sys
 
+from django import apps
 from django.http import HttpResponseServerError, HttpResponseBadRequest, HttpResponseRedirect
 from django.template import TemplateDoesNotExist, loader
 from django.views.decorators.csrf import requires_csrf_token
@@ -144,6 +145,39 @@ def settings_view(request):
         "snappea_settings": get_snappea_settings(),
         "misc_settings": misc_settings,
         "version": __version__,
+    })
+
+
+@user_passes_test(lambda u: u.is_superuser)
+def counts(request):
+    interesting_apps = [
+        # "admin",
+        # "auth",
+        "bsmain",
+        # "contenttypes",
+        "events",
+        "files",
+        "ingest",
+        "issues",
+        # "phonehome",
+        "projects",
+        "releases",
+        # "sessions",
+        "snappea",
+        "tags",
+        "teams",
+        "users",
+    ]
+
+    counts = {}
+    for app_label in interesting_apps:
+        counts[app_label] = {}
+        app_config = apps.apps.get_app_config(app_label)
+        for model in app_config.get_models():
+            counts[app_label][model.__name__] = model.objects.count()
+
+    return render(request, "bugsink/counts.html", {
+        "counts": counts,
     })
 
 
