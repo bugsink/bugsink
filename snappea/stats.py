@@ -65,6 +65,9 @@ class Stats:
         # * snappea-shutdown
         # * "no new minute" (only happens when there's almost no load, in which case you don't care)
         # but low overhead, robustness and a simple impl are more important than after-the-comma precision.
+        # further reason to use separate "Stat" rather than "just write into Task": the latter would incur extra write-
+        # pressure on the Snappea DB: because of at-most-once we delete _before_ doing any work, and the stats are only
+        # known _after_ the work is done (which would then be the extra write).
 
         # we look at the clock ourselves, rather than pass this in, such that the looking at the clock happens only
         # once we've grabbed the lock; this ensures our times are monotonicially increasing (assuming no system
