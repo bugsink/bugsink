@@ -1,10 +1,12 @@
 from datetime import datetime, timezone, timedelta
 import threading
 import logging
+import sentry_sdk
 
 from django.db import OperationalError
 from django.db.models import Count
 
+from sentry_sdk_extensions import capture_or_log_exception
 from bugsink.transaction import immediate_atomic
 from bugsink.timed_sqlite_backend.base import different_runtime_limit
 from performance.context_managers import time_to_logger
@@ -12,6 +14,7 @@ from performance.context_managers import time_to_logger
 from .models import Task, Stat
 from .settings import get_settings
 
+logger = logging.getLogger("snappea.foreman")
 performance_logger = logging.getLogger("bugsink.performance.snappea")
 
 
@@ -43,19 +46,28 @@ class Stats:
     def done(self, task_name, wall_time, wait_time, write_time, error):
         # we take "did it error" as a param to enable a single call-side path avoid duplicating taking timings call-side
 
-        with self.lock:
-            self._possibly_write()
+        try:
+            with self.lock:
+                self._possibly_write()
 
-            self._ensure_task(task_name)
-            self.d[task_name]["done"] += 1
-            self.d[task_name]["wall_time"] += wall_time
-            self.d[task_name]["wait_time"] += wait_time
-            self.d[task_name]["write_time"] += write_time
-            self.d[task_name]["max_wall_time"] = max(self.d[task_name]["max_wall_time"], wall_time)
-            self.d[task_name]["max_wait_time"] = max(self.d[task_name]["max_wait_time"], wait_time)
-            self.d[task_name]["max_write_time"] = max(self.d[task_name]["max_write_time"], write_time)
-            if error:
-                self.d[task_name]["errors"] += 1
+                self._ensure_task(task_name)
+                self.d[task_name]["done"] += 1
+                self.d[task_name]["wall_time"] += wall_time
+                self.d[task_name]["wait_time"] += wait_time
+                self.d[task_name]["write_time"] += write_time
+                self.d[task_name]["max_wall_time"] = max(self.d[task_name]["max_wall_time"], wall_time)
+                self.d[task_name]["max_wait_time"] = max(self.d[task_name]["max_wait_time"], wait_time)
+                self.d[task_name]["max_write_time"] = max(self.d[task_name]["max_write_time"], write_time)
+                if error:
+                    self.d[task_name]["errors"] += 1
+
+        except Exception as e:
+            # Problems with Stats should _never_ bring down snappea.
+            if sentry_sdk.is_initialized():
+                # Only for the case where full error is captured to Dogfooded Bugsink, do we want to draw some
+                # attention to this; in the other case the big error in the logs (full traceback) is clear enough.
+                logger.warning("Snappea Stat Exception: %s", str(e))
+            capture_or_log_exception(e, logger)
 
     def _possibly_write(self):
         # we only write once-a-minute; this means the cost of writing stats is amortized (at least when it matters, i.e.
