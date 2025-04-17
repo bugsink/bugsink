@@ -83,8 +83,8 @@ class Command(BaseCommand):
     def snappea_stats(self, filter_task_name):
         now_floor = datetime(*(datetime.now(timezone.utc).timetuple()[:5]), tzinfo=timezone.utc)
 
-        print("""past n minutes  task                                              AVG                  MAX
-                                                  done/s err/s   wall   wait  write   wall   wait  write   backlog""")
+        print("""past n minutes  task                                              AVG                 SAT    MAX
+                                                  done/s err/s   wall   wait  write   sat   wall   wait  write backlog""")  # noqa
 
         with durable_atomic(using="snappea"):
             for window in [1, 2, 5, 10, 60, 5 * 60, 24 * 60]:
@@ -109,6 +109,8 @@ class Command(BaseCommand):
                     max_task_count=Max("task_count"),
                 )
                 for stat in stats:
+                    stat["write_saturation"] = stat["write_time"] / seconds_in_window
+
                     for field in ["wall_time", "wait_time", "write_time"]:
                         stat[field] /= stat["done"]
 
@@ -124,7 +126,8 @@ class Command(BaseCommand):
                           f"{stat['errors']:5.1f} "
                           f"{stat['wall_time']:6.3f} "
                           f"{stat['wait_time']:6.3f} "
-                          f"{stat['write_time']:6.3f} "
+                          f"{stat['write_time']:6.3f}  "
+                          f"{stat['write_saturation']:3.2f} "
                           f"{stat['max_wall_time']:6.3f} "
                           f"{stat['max_wait_time']:6.3f} "
                           f"{stat['max_write_time']:6.3f} " +
