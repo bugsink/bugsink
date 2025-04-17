@@ -54,6 +54,7 @@ SNAPPEA = {
     "WORKAHOLIC": True,  # hard-coded, corresponds to Docker setup
 
     "NUM_WORKERS": int(os.getenv("SNAPPEA_NUM_WORKERS", 2)),
+    "STATS_RETENTION_MINUTES": int(os.getenv("SNAPPEA_STATS_RETENTION_MINUTES", 60 * 24 * 7)),
 }
 
 

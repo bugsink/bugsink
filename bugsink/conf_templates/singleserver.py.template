@@ -45,6 +45,7 @@ SNAPPEA = {
 
     "PID_FILE": "{{ base_dir }}/snappea/snappea.pid",
     "WAKEUP_CALLS_DIR": "{{ base_dir }}/snappea/wakeup",
+    "STATS_RETENTION_MINUTES": 60 * 24 * 7,
 }
 
 
