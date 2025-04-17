@@ -27,6 +27,13 @@ class Command(BaseCommand):
             default=None,
         )
 
+        parser.add_argument(
+            "--window",
+            help="Window size in minutes (snappea-stats only)",
+            type=int,
+            default=None,
+        )
+
     def handle(self, *args, **options):
         stat = options["stat"]
 
@@ -38,7 +45,7 @@ class Command(BaseCommand):
                 print(Event.objects.all().count())
 
         if stat == "snappea-stats":
-            return self.snappea_stats(options["task_name"])
+            return self.snappea_stats(options["task_name"], options["window"])
 
         if stat == "digestion_speed":
             # NOTE: is this still a valuable stat? snappea_stat for "digest" task is more useful, I'd say. esp. given
@@ -80,14 +87,16 @@ class Command(BaseCommand):
                     factor = digestion_window / ingestion_window
                     print(f"  ingestion window: {ingestion_window:.1f}s, factor: {factor:.1f}")
 
-    def snappea_stats(self, filter_task_name):
+    def snappea_stats(self, filter_task_name, window=None):
         now_floor = datetime(*(datetime.now(timezone.utc).timetuple()[:5]), tzinfo=timezone.utc)
 
         print("""past n minutes  task                                              AVG                 SAT    MAX
                                                   done/s err/s   wall   wait  write   sat   wall   wait  write backlog""")  # noqa
 
+        windows = [1, 2, 5, 10, 60, 5 * 60, 24 * 60] if window is None else [window]
+
         with durable_atomic(using="snappea"):
-            for window in [1, 2, 5, 10, 60, 5 * 60, 24 * 60]:
+            for window in windows:
                 since = now_floor - timedelta(minutes=window)
                 seconds_in_window = 60 * window
 
