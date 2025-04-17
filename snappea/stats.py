@@ -19,6 +19,7 @@ class Stats:
 
     def __init__(self):
         self.lock = threading.Lock()
+        # initialize to "one minute ago" to ensure reset-at-first-check
         self.last_write_at = (datetime.now(timezone.utc) - timedelta(minutes=1)).timetuple()[:5]
         self.d = {}
 
@@ -71,7 +72,7 @@ class Stats:
         now = datetime.now(timezone.utc)
 
         tup = now.timetuple()[:5]  # len("YMDHM")  i.e. cut off at minute
-        if tup != self.last_write_at:
+        if tup > self.last_write_at:  # > rather than != means backwards clock drifting is silently/gracefully ignored
             # the Stat w/ timestamp x is for the one-minute bucket from that point in time forwards:
             timestamp = datetime(*(self.last_write_at), tzinfo=timezone.utc)
 
