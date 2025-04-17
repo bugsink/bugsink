@@ -343,6 +343,7 @@ class Foreman:
             #       (see 'counterpoint' in decorators.py for a counterpoint)
             # * delete-before-run is the implementation of our at-most-once guarantee
             with time_to_logger(performance_logger, "Snappea Task.delete()"):
+                # observed timings: ~1.5ms, see also: https://www.bugsink.com/blog/snappea-design/#throughput
                 task.delete()
 
             self.run_in_thread(task_id, function, *args, **kwargs)

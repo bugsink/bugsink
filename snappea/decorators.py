@@ -27,6 +27,7 @@ def shared_task(function):
             # No need for a transaction: we just write something (not connected to any other object, and we will never
             # touch it again). Counterpoint: if we'd have a transaction, we could distinguish between "wait for write
             # lock" and "actually write".
+            # observed timings: ~2.8ms, see also: https://www.bugsink.com/blog/snappea-design/#throughput
             kwargs.update(add_task_kwargs())
             Task.objects.create(task_name=name, args=json.dumps(args), kwargs=json.dumps(kwargs))
 
