@@ -5,9 +5,11 @@ from django.utils import timezone
 from django.utils.safestring import mark_safe
 from django.urls import reverse
 from django.contrib.auth.models import AnonymousUser
+from django.db.utils import OperationalError
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
 from bugsink.transaction import durable_atomic
+from bugsink.timed_sqlite_backend.base import different_runtime_limit
 
 from snappea.settings import get_settings as get_snappea_settings
 from snappea.models import Task
@@ -36,7 +38,14 @@ def get_snappea_warnings():
         return []
 
     with durable_atomic(using="snappea"):
-        task_count = Task.objects.all().count()
+        with different_runtime_limit(0.1):
+            try:
+                task_count = Task.objects.all().count()
+            except OperationalError as e:
+                if e.args[0] != "interrupted":
+                    raise
+                task_count = "many"
+
         if task_count == 0:
             # No tasks, no warnings.
             return []
