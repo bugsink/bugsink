@@ -1,4 +1,5 @@
 import sys
+from collections import namedtuple
 
 from django import apps
 from django.http import HttpResponseServerError, HttpResponseBadRequest, HttpResponseRedirect
@@ -10,6 +11,7 @@ from django.views.defaults import (
 )
 from django.shortcuts import redirect
 from django.conf import settings
+from django.db.utils import OperationalError
 
 from django.template.defaultfilters import filesizeformat
 from django.views.decorators.http import require_GET
@@ -26,11 +28,17 @@ from bugsink.version import __version__
 from bugsink.decorators import login_exempt
 from bugsink.app_settings import get_settings as get_bugsink_settings
 from bugsink.decorators import atomic_for_request_method
+from bugsink.timed_sqlite_backend.base import different_runtime_limit
 
 from phonehome.tasks import send_if_due
 from phonehome.models import Installation
 
 from ingest.views import BaseIngestAPIView
+from bsmain.models import CachedModelCount
+from bsmain.tasks import count_model
+
+
+AnnotatedCount = namedtuple("AnnotatedCount", ["count", "timestamp"])
 
 
 def cors_for_api_view(view):
@@ -149,6 +157,7 @@ def settings_view(request):
 
 
 @user_passes_test(lambda u: u.is_superuser)
+@atomic_for_request_method  # get a consistent view (barring cached, which are marked as such)
 def counts(request):
     interesting_apps = [
         # "admin",
@@ -170,11 +179,31 @@ def counts(request):
     ]
 
     counts = {}
-    for app_label in interesting_apps:
-        counts[app_label] = {}
-        app_config = apps.apps.get_app_config(app_label)
-        for model in app_config.get_models():
-            counts[app_label][model.__name__] = model.objects.count()
+
+    # when you have some 7 - 10 models (tag-related, events, issues) that can have many instances, spending max .3 on
+    # each before giving up would seem reasonable to stay below th 5s limit; the rest is via the caches anyway.
+    with different_runtime_limit(0.3):
+        for app_label in interesting_apps:
+            counts[app_label] = {}
+            app_config = apps.apps.get_app_config(app_label)
+            for model in app_config.get_models():
+                if model.__name__ == "CachedModelCount":
+                    continue  # skip the CachedModelCount model itself
+
+                try:
+                    counts[app_label][model.__name__] = AnnotatedCount(model.objects.count(), None)
+                except OperationalError as e:
+                    if e.args[0] != "interrupted":
+                        raise
+
+                    # too many to quickly count; schedule a recount, and display any we might have.
+                    count_model.delay(app_label, model.__name__)
+
+                    try:
+                        cached = CachedModelCount.objects.get(app_label=app_label, model_name=model.__name__)
+                        counts[app_label][model.__name__] = AnnotatedCount(cached.count, cached.last_updated)
+                    except CachedModelCount.DoesNotExist:
+                        counts[app_label][model.__name__] = AnnotatedCount("too many; count scheduled in snappea", None)
 
     return render(request, "bugsink/counts.html", {
         "counts": counts,
