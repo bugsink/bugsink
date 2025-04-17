@@ -50,8 +50,8 @@ def get_snappea_warnings():
             # No tasks, no warnings.
             return []
 
-        oldest_task_age = (
-            int(timezone.now() - Task.objects.all().order_by('created_at').first().created_at).total_seconds())
+        oldest_task_age = int(
+            (timezone.now() - Task.objects.all().order_by('created_at').first().created_at).total_seconds())
 
     WARNING = SystemWarning((f"Snappea has {task_count} tasks in the queue, the oldest being {oldest_task_age}s old. "
                              f"It may be either overwhelmed, blocked, not running, or misconfigured."), None)
