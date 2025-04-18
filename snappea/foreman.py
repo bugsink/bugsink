@@ -236,6 +236,20 @@ class Foreman:
         self.worker_semaphore.release()
 
     def run_forever(self):
+        try:
+            self._run_forever()
+        except Exception:
+            # We allow problems with foreman to bring down Snappea. The idea is "once this happens, the state of the
+            # system is undetermined, so we might as well restart" (which happens in systemd or in the thing that
+            # monitors your monofied docker container). Still, we want to let the workers finish.
+
+            logger.info("Stopping: CAUGHT exception in Foreman")
+            self.stop_deadline = time.time() + self.settings.GRACEFUL_TIMEOUT
+            self.stop()
+            logger.info("Stopping: EXCEPTION in Foreman")
+            raise
+
+    def _run_forever(self):
         pre_existing_wakeup_notifications = glob.glob(os.path.join(self.settings.WAKEUP_CALLS_DIR, "*"))
         if len(pre_existing_wakeup_notifications) > 0:
             # We clear the wakeup_calls_dir on startup. Not strictly necessary because such files would be cleared by in
@@ -364,13 +378,19 @@ class Foreman:
         if not self.stopping:
             return
 
+        self.stop()
+
+        logger.info("Stopping: EXIT")
+        sys.exit()
+
+    def stop(self):
         if self.settings.WORKAHOLIC:
             with durable_atomic(using="snappea"):
                 if Task.objects.exists():
                     logger.info("Not stopping yet: Workaholic mode, waiting for all tasks to finish")
                     return
 
-        logger.info("Stopping")
+        logger.info("Stopping: waiting for/stopping workers")
 
         # Loop over all tasks, waiting for them to finish. If they don't finish in time (GRACEFUL_TIMEOUT), we'll kill
         # them with a system-exit.
@@ -391,6 +411,3 @@ class Foreman:
                         short_id(task_id), self.settings.GRACEFUL_TIMEOUT)
 
         os.remove(self.settings.PID_FILE)
-
-        logger.info("Stopping: EXIT")
-        sys.exit()
