@@ -52,7 +52,8 @@ class SemaphoreContext:
         inc_stat(self.using, "get_write_lock", took)
         # textually, slightly misleading since it's not literally "BEGIN IMMEDIATE" we're waiting for here (instead: the
         # semaphore) but it's clear enough
-        performance_logger.info(f"{took * 1000:6.2f}ms BEGIN IMMEDIATE, A.K.A. get-write-lock")
+        using_clause = f" ({ self.using })" if self.using != DEFAULT_DB_ALIAS else ""
+        performance_logger.info(f"{took * 1000:6.2f}ms BEGIN IMMEDIATE, A.K.A. get-write-lock{using_clause}")
 
     def __exit__(self, exc_type, exc_value, traceback):
         immediate_semaphores[self.using].release()
@@ -178,7 +179,8 @@ class ImmediateAtomic(SuperDurableAtomic):
 
         took = time.time() - self.t0
         inc_stat(self.using, "immediate_transaction", took)
-        performance_logger.info(f"{took * 1000:6.2f}ms IMMEDIATE transaction")
+        using_clause = f" ({ self.using })" if self.using != DEFAULT_DB_ALIAS else ""
+        performance_logger.info(f"{took * 1000:6.2f}ms IMMEDIATE transaction{using_clause}")
 
         connection = django_db_transaction.get_connection(self.using)
         if hasattr(connection, "_start_transaction_under_autocommit"):
