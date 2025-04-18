@@ -1,3 +1,4 @@
+from datetime import timedelta
 from collections import namedtuple
 
 from django.conf import settings
@@ -6,13 +7,14 @@ from django.utils.safestring import mark_safe
 from django.urls import reverse
 from django.contrib.auth.models import AnonymousUser
 from django.db.utils import OperationalError
+from django.db.models import Sum
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
 from bugsink.transaction import durable_atomic
 from bugsink.timed_sqlite_backend.base import different_runtime_limit
 
 from snappea.settings import get_settings as get_snappea_settings
-from snappea.models import Task
+from snappea.models import Task, Stat
 
 from phonehome.models import Installation
 
@@ -50,11 +52,26 @@ def get_snappea_warnings():
             # No tasks, no warnings.
             return []
 
+        # We care more about completeness than precision for this view, so we don't do any "at least 1m old" stuff here.
+        ten_minutes_ago = timezone.now() - timedelta(minutes=10)
+        done = Stat.objects.filter(timestamp__gt=ten_minutes_ago).aggregate(done=Sum('done')).get('done', 0)
+
         oldest_task_age = int(
             (timezone.now() - Task.objects.all().order_by('created_at').first().created_at).total_seconds())
 
-    WARNING = SystemWarning((f"Snappea has {task_count} tasks in the queue, the oldest being {oldest_task_age}s old. "
-                             f"It may be either overwhelmed, blocked, not running, or misconfigured."), None)
+    snappea_warning = f"Snappea has {task_count} tasks in the queue, the oldest being {oldest_task_age}s old. "
+    if done:
+        # "per 10 minutes" display is intentional to not suggest too much precision.
+        snappea_warning += f"It's processed approximately { done } tasks in the last 10 minutes. "
+    elif oldest_task_age > 70:
+        # extra check for "well over a minute" because only then are Stats expected.
+        snappea_warning += "No tasks processed recently. Snappea may not be running, misconfigured or blocked."
+    else:
+        # the case in which we can't tell the cause.
+        # this only happens if you have no tasks _at all_ for 10m and then a sudden spike.
+        snappea_warning += "Snappea may be either backlogged, not running, misconfigured or blocked."
+
+    WARNING = SystemWarning((snappea_warning), None)
 
     # 1. "a lot" of tasks in the backlog.
     # We have a backlog because spikes are always to be expected, and dealing with them in a backlog is the feature that
