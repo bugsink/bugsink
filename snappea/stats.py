@@ -113,9 +113,11 @@ class Stats:
                     except OperationalError as e:
                         if e.args[0] != "interrupted":
                             raise
-                        task_counts = None
+                        task_counts = None  # explicitly "unknown"; which we want to propagate to the stats in that case
 
-                task_counts_d = {d['task_name']: d['count'] for d in task_counts} if task_counts else None
+                task_counts_d = {d['task_name']: d['count'] for d in task_counts} if task_counts is not None else None
+
+                # store stats; combining the counted 'handled' (done) tasks with the 'counts' (backlog)
                 stats = [
                     Stat(
                         timestamp=timestamp,
@@ -124,7 +126,6 @@ class Stats:
                         **kwargs,
                     ) for task_name, kwargs in self.d.items()
                 ]
-
                 Stat.objects.bulk_create(stats)
 
                 Stat.objects.filter(
