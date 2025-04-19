@@ -16,6 +16,30 @@ Code contributions are welcome! We use the GitHub PR process to review and merge
 
 * Bugsink uses flake8, with rules/exceptions documented in tox.ini
 
+#### Tailwind
+
+Bugsink uses tailwind for styling.
+
+If you're working on HTML, you should probably develop while running the following somewhere:
+
+```
+python manage.py tailwind start
+```
+
+The above is the "tailwind development server", a thing that watches your files
+for changes and generates the relevant `styles.css` on the fly.
+
+Bugsink "vendors" its generated `styles.css` in source control management (git) from the pragmatic
+perspective that this saves "everybody else" from doing the tailwind build.
+
+Before committing, run the following:
+
+```
+python manage.py tailwind build
+git add theme/static/css/dist/styles.css
+```
+
+
 ### Security
 
 For security-related contributions, please refer to the [Security Policy](/SECURITY.md).
