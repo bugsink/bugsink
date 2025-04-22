@@ -40,7 +40,7 @@ def get_snappea_warnings():
         return []
 
     with durable_atomic(using="snappea"):
-        with different_runtime_limit(0.1):
+        with different_runtime_limit(0.1, using="snappea"):
             try:
                 task_count = Task.objects.all().count()
             except OperationalError as e:

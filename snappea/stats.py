@@ -107,7 +107,7 @@ class Stats:
             with immediate_atomic(using="snappea"):  # explicit is better than impl.; and we combine read/write here
                 # having stats is great, but I don't want to hog task-processing too long (which would happen
                 # precisely when the backlog grows large)
-                with different_runtime_limit(0.1):
+                with different_runtime_limit(0.1, using="snappea"):
                     try:
                         task_counts = Task.objects.values("task_name").annotate(count=Count("task_name"))
                     except OperationalError as e:

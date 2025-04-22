@@ -64,8 +64,12 @@ elif os.getenv("DB", "sqlite") == "sqlite":
     # store databases.
     DATABASES["default"]["NAME"] = BASE_DIR / 'db.sqlite3'
     DATABASES["default"]["TEST"]["NAME"] = BASE_DIR / 'test.sqlite3'
-    DATABASES["default"]["OPTIONS"]["query_timeout"] = 0.1  # canary config: fail-fast in development.
+    DATABASES["default"]["OPTIONS"]["query_timeout"] = 0.11  # canary config: fail-fast in development.
+
     DATABASES["snappea"]["NAME"] = BASE_DIR / 'snappea.sqlite3'
+    # canary config: fail-fast. slightly distinct value from the above to allow for eadier debugging of the timeout
+    # mechanism itself. (i.e. to eyeball where the value came from)
+    DATABASES["snappea"]["OPTIONS"]["query_timeout"] = 0.12
 
 else:
     raise ValueError("Unknown DB", os.getenv("DB"))

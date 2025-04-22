@@ -1,33 +1,78 @@
+from collections import namedtuple
 from copy import deepcopy
 import time
 from contextlib import contextmanager
 from django.conf import settings
+from threading import local
 
 from django.db import DEFAULT_DB_ALIAS
 from django.db.backends.sqlite3.base import (
     DatabaseWrapper as UnpatchedDatabaseWrapper, SQLiteCursorWrapper as UnpatchedSQLiteCursorWrapper,
 )
 
+# We disinguish between the default runtime limit for a connection (set in the settings) and a runtime limit set by the
+# "with different_runtime_limit" idiom, i.e. temporarily. The reason we need to distinguish these two concepts (and keep
+# track of their values) explicitly, and provide the fallback getter mechanism (cm if available, otherwise
+# connection-default) rather than have the program's stack determine this implicitly, is that we do not generally know
+# the moment the connection default value is set. It's set when a connection is needed, which may in fact be _after_
+# some CMs have already been called. (For nested CMs we do not have this problem, so we just keep track of "old" values
+# inside the CMs as they live on the Python stack)
+Runtimes = namedtuple("Runtimes", ["default_for_connection", "override_by_cm"])
+NoneRuntimes = Runtimes(None, None)
 
-_runtime_limit = 5.0
+thread_locals = local()
+
+
+def _set_runtime_limit(using, is_default_for_connection, seconds):
+    if using is None:
+        using = DEFAULT_DB_ALIAS
+
+    if not hasattr(thread_locals, "runtime_limits"):
+        thread_locals.runtime_limits = {}
+
+    if is_default_for_connection:
+        thread_locals.runtime_limits[using] = Runtimes(
+            default_for_connection=seconds,
+            override_by_cm=thread_locals.runtime_limits.get(using, NoneRuntimes).override_by_cm,
+        )
+    else:
+        thread_locals.runtime_limits[using] = Runtimes(
+            default_for_connection=thread_locals.runtime_limits.get(using, NoneRuntimes).default_for_connection,
+            override_by_cm=seconds,
+        )
+
+
+def _get_runtime_limit(using=None):
+    if using is None:
+        using = DEFAULT_DB_ALIAS
+
+    if not hasattr(thread_locals, "runtime_limits"):
+        # somewhat overly defensive, since you'd always pass through the DatabaseWrapper which sets at least once.
+        thread_locals.runtime_limits = {}
+
+    tup = thread_locals.runtime_limits.get(using, NoneRuntimes)
+    return tup.override_by_cm if tup.override_by_cm is not None else tup.default_for_connection
 
 
 def allow_long_running_queries():
     """Set a global flag to allow long-running queries. Useful for one-off commands, where slowness is expected."""
-    global _runtime_limit
-    _runtime_limit = float("inf")
+    # we use is_default_for_connection=False here, to make this act like a "context manager which doesn't reset", i.e.
+    # what we do here takes precedence over the connection default value.
+    _set_runtime_limit(using=None, is_default_for_connection=False, seconds=float("inf"))
 
 
 @contextmanager
-def different_runtime_limit(seconds):
-    global _runtime_limit
-    old = _runtime_limit
-    _runtime_limit = seconds
+def different_runtime_limit(seconds, using=None):
+    if using is None:
+        using = DEFAULT_DB_ALIAS
+
+    old = _get_runtime_limit(using=using)
+    _set_runtime_limit(using=using, is_default_for_connection=False, seconds=seconds)
 
     try:
         yield
     finally:
-        _runtime_limit = old
+        _set_runtime_limit(using=using, is_default_for_connection=False, seconds=old)
 
 
 @contextmanager
@@ -35,7 +80,7 @@ def limit_runtime(conn):
     start = time.time()
 
     def check_time():
-        if time.time() > start + _runtime_limit:
+        if time.time() > start + _get_runtime_limit():
             return 1
 
         return 0
@@ -74,11 +119,9 @@ class PrintOnClose(object):
 class DatabaseWrapper(UnpatchedDatabaseWrapper):
 
     def __init__(self, settings_dict, alias=DEFAULT_DB_ALIAS):
-        global _runtime_limit
         settings_dict = deepcopy(settings_dict)
-        # clobbering of the global var should not be a problem, because connections are single-threaded in Django
-        configured_runtime_limit = settings_dict.get("OPTIONS").pop("query_timeout", 5.0)
-        _runtime_limit = configured_runtime_limit
+        configured_runtime_limit = settings_dict.get("OPTIONS", {}).pop("query_timeout", 5.0)
+        _set_runtime_limit(using=alias, is_default_for_connection=True, seconds=configured_runtime_limit)
 
         super().__init__(settings_dict, alias=alias)
 
