@@ -129,26 +129,29 @@ def apply_sourcemaps(event_data):
     source_for_filename = {}
     for filename, meta in filenames_with_metas:
         sm_data = json.loads(_postgres_fix(meta.file.data))
-        if "sourcesContent" not in sm_data or len(sm_data["sourcesContent"]) != 1:
-            # our assumption is: 1 sourcemap, 1 source. The fact that both "sources" (a list of filenames) and
-            # "sourcesContent" are lists seems to indicate that this assumption does not generally hold. But it not
-            # holding does not play well with the id of debug_id, I think?
-            continue
 
-        source_for_filename[filename] = sm_data["sourcesContent"][0].splitlines()
+        sources = sm_data.get("sources", [])
+        sources_content = sm_data.get("sourcesContent", [])
+
+        for (source_file_name, source_file) in zip(sources, sources_content):
+            source_for_filename[source_file_name] = source_file.splitlines()
 
     for exception in get_values(event_data.get("exception", {})):
         for frame in exception.get("stacktrace", {}).get("frames", []):
             # NOTE: try/except in the loop would allow us to selectively skip frames that we fail to process
 
-            if frame.get("filename") in sourcemap_for_filename and frame["filename"] in source_for_filename:
+            if frame.get("filename") in sourcemap_for_filename:
                 sm = sourcemap_for_filename[frame["filename"]]
-                lines = source_for_filename[frame["filename"]]
 
                 token = sm.lookup(frame["lineno"] + FROM_DISPLAY, frame["colno"])
 
-                frame["pre_context"] = lines[max(0, token.src_line - 5):token.src_line]
-                frame["context_line"] = lines[token.src_line]
-                frame["post_context"] = lines[token.src_line + 1:token.src_line + 5]
-                frame["lineno"] = token.src_line + TO_DISPLAY
-                # frame["colno"] = token.src_col + TO_DISPLAY  not actually used
+                if token.src in source_for_filename:
+                    lines = source_for_filename[token.src]
+
+                    frame["pre_context"] = lines[max(0, token.src_line - 5):token.src_line]
+                    frame["context_line"] = lines[token.src_line]
+                    frame["post_context"] = lines[token.src_line + 1:token.src_line + 5]
+                    frame["lineno"] = token.src_line + TO_DISPLAY
+                    frame['filename'] = token.src
+                    frame['function'] = token.name
+                    # frame["colno"] = token.src_col + TO_DISPLAY  not actually used
