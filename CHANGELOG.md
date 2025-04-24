@@ -25,6 +25,7 @@ Various fixes and improvements:
 * When is the `email_system_warning` shown? change & document
 * Snappea foreman: on catastrophic errors, wait for workers, see 9b6fbe523f3c
 * Explain tailwind usage during development & vendoring step, see 5c0e45a16db2
+* Fix Header/Grouper for Log Messages using deprecated SDKs (See #85)
 
 ## 1.5.0 (14 April 2025)
 

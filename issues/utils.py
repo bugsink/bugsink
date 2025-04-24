@@ -61,7 +61,15 @@ def get_exception_type_and_value_for_logmessage(data):
     message = strip(
         get_path(data, "logentry", "message")
         or get_path(data, "logentry", "formatted")
+
+        # top-level "message" (deprecated, but still used by some SDKs, with a dict as with "logentry")
+        or get_path(data, "message", "message")
+        or get_path(data, "message", "formatted")
     )
+
+    if not message and isinstance(data.get("message"), str):
+        # top-level "message" as a string (even more deprecated, but still used by some SDKs)
+        message = data.get("message")
 
     if message:
         return "Log Message", message.splitlines()[0][:1024]
