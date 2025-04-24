@@ -101,8 +101,10 @@ if os.getenv("EMAIL_HOST"):
     EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
     EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
     EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
-    EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() in ("true", "1", "yes")
+    # When neither EMAIL_USE_xxx is set, we default to EMAIL_USE_TLS=True (this matches port 587). If either is set to
+    # True, we use that.
     EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False").lower() in ("true", "1", "yes")
+    EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", str(not EMAIL_USE_SSL)).lower() in ("true", "1", "yes")
 else:
     # print("WARNING: EMAIL_HOST not set; email will not be sent")
     EMAIL_BACKEND = "bugsink.email_backends.QuietConsoleEmailBackend"

@@ -27,6 +27,10 @@ Various fixes and improvements:
 * Explain tailwind usage during development & vendoring step, see 5c0e45a16db2
 * Fix Header/Grouper for Log Messages using deprecated SDKs (See #85)
 
+* `EMAIL_USE_TLS`: false by default (as was documented). See 7c3c19b6c8f2
+* `EMAIL_USE_SSL`: `not EMAIL_USE_TLS` by default (avoids crashing on "both
+  true" when only `EMAIL_USE_TLS` is explicitly configured
+
 ## 1.5.0 (14 April 2025)
 
 Bugsink 1.5.0 introduces preliminary support for sourcemaps.
