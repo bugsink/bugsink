@@ -1,5 +1,31 @@
 # Changes
 
+## 1.5.1 (24 April 2025)
+
+Various fixes and improvements:
+
+* 2 new tools to get a handle on performance of systems under load:
+    * A [snappea-stats] subcommand to gain insight in
+    * A page was added at `http://YOURINSTALL/counts/` that shows, for each type of object, the number of objects in the
+      DB. (superuser only)
+
+* Fix `different_runtime_limit` race conditions, see 53d4be818334
+* `immediate_semaphore`: implement alias "using", see 67f769d3e5be
+* `immediate atomic` 'get-write-lock' performance logging: fix it, see f8db5edf82ed
+
+* Various improvements in the yellow warning bar for "backlogged snappea":
+    * Better 'yellow bar' for snappea warnings (using Stat info)
+    * Oldest task age warning: display as int
+    * snappea task warning should itself never slow down the site (max runtime)
+
+* Add some examples to the "conf templates"
+    * `EVENT_STORAGES`: add (commented-out) example configuration to `conf_templates`
+    * Clarify options for `EMAIL_BACKEND` in the `conf_templates`
+
+* When is the `email_system_warning` shown? change & document
+* Snappea foreman: on catastrophic errors, wait for workers, see 9b6fbe523f3c
+* Explain tailwind usage during development & vendoring step, see 5c0e45a16db2
+
 ## 1.5.0 (14 April 2025)
 
 Bugsink 1.5.0 introduces preliminary support for sourcemaps.
