@@ -183,6 +183,9 @@ def counts(request):
     # when you have some 7 - 10 models (tag-related, events, issues) that can have many instances, spending max .3 on
     # each before giving up would seem reasonable to stay below th 5s limit; the rest is via the caches anyway.
     for app_label in interesting_apps:
+        # NOTE: the limit_runtime approach here doesn't actually work, presumably because the VM-instruction-based
+        # approach doesn't work for COUNT queries. See https://sqlite.org/forum/forumpost/fa65709226a6a263
+        # maybe we can swap out sqlite3 for APSW, see https://sqlite.org/forum/forumpost/3e59895b85ddfa10
         with different_runtime_limit(0.3, using="snappea" if app_label == "snappea" else "default"):
             counts[app_label] = {}
             app_config = apps.apps.get_app_config(app_label)
