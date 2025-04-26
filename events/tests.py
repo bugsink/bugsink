@@ -105,7 +105,7 @@ class RetentionTestCase(DjangoTestCase):
 
     def test_epoch_bounds_with_irrelevance_empty_project(self):
         project = Project.objects.create()
-        current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
 
         bounds = get_epoch_bounds_with_irrelevance(project, current_timestamp)
 
@@ -113,7 +113,7 @@ class RetentionTestCase(DjangoTestCase):
 
     def test_epoch_bounds_with_irrelevance_single_current_event(self):
         project = Project.objects.create()
-        current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
         create_event(project, timestamp=current_timestamp)
 
         bounds = get_epoch_bounds_with_irrelevance(project, current_timestamp)
@@ -123,7 +123,7 @@ class RetentionTestCase(DjangoTestCase):
 
     def test_epoch_bounds_with_irrelevance_single_hour_old_event(self):
         project = Project.objects.create()
-        current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
         create_event(project, timestamp=current_timestamp - datetime.timedelta(hours=1))
 
         bounds = get_epoch_bounds_with_irrelevance(project, current_timestamp)
@@ -136,7 +136,7 @@ class RetentionTestCase(DjangoTestCase):
 
     def test_epoch_bounds_with_irrelevance_day_old_event(self):
         project = Project.objects.create()
-        current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
         create_event(project, timestamp=current_timestamp - datetime.timedelta(days=1))
 
         bounds = get_epoch_bounds_with_irrelevance(project, current_timestamp)
@@ -182,7 +182,7 @@ class RetentionTestCase(DjangoTestCase):
         self.project = Project.objects.create(retention_max_event_count=999)
         self.issue = Issue.objects.create(project=self.project, **denormalized_issue_fields())
 
-        current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
 
         # the irrelevances here are chosen to be somewhat similar to reality as well as triggering interesting code
         # paths, in particular the "high irrelevances for recent epochs, non-consecutive" makes it so that you'll get
