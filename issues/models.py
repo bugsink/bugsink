@@ -198,14 +198,21 @@ class Grouping(models.Model):
         "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
 
     # NOTE: I don't want to have any principled maximum on the grouping key, nor do I want to prematurely optimize the
-    # lookup. If lookups are slow, we _could_ examine whether manually hashing these values and matching on the hash
-    # helps.
+    # lookup. If lookups are slow (even with an index), we _could_ examine whether manually hashing these values and
+    # matching on the hash helps.
     grouping_key = models.TextField(blank=False, null=False)
 
     issue = models.ForeignKey("Issue", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
 
     def __str__(self):
         return self.grouping_key
+
+    class Meta:
+        unique_together = [
+            # principled: grouping _key_ is a _key_ for a reason (within a project). This also implies the main way of
+            # looking up groupings has an appropriate index.
+            ("project", "grouping_key"),
+        ]
 
 
 def format_unmute_reason(unmute_metadata):
