@@ -305,7 +305,6 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
     return render(request, "issues/issue_list.html", {
         "project": project,
         "member": ProjectMembership.objects.get(project=project, user=request.user),
-        "issue_list": issue_list,
         "state_filter": state_filter,
         "mute_options": GLOBAL_MUTE_OPTIONS,
 

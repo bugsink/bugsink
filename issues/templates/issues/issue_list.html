@@ -39,12 +39,14 @@
       {% csrf_token %}
 
       <table class="w-full">
-      <thead> {# I briefly considered hiding this thead 'if not issue_list' but it actually looks worse; instead, we just hide that one checkbox #}
+      <thead> {# I briefly considered hiding this thead if there are no items but it actually looks worse; instead, we just hide that one checkbox #}
 
             <tr class="bg-white border-slate-300 border-l-2 border-r-2">
             <td>
                 <div class="m-1 rounded-full hover:bg-slate-100 cursor-pointer" onclick="toggleContainedCheckbox(this); matchIssueCheckboxesStateToMain(this)">
-                    {% if issue_list %}<input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4 cursor-pointer js-main-checkbox" onclick="event.stopPropagation(); matchIssueCheckboxesStateToMain(this.parentNode)"/>{% endif %}
+
+                    {# the below sounds expensive, but this list is cached #}
+                    {% if page_obj.object_list|length > 0 %}<input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4 cursor-pointer js-main-checkbox" onclick="event.stopPropagation(); matchIssueCheckboxesStateToMain(this.parentNode)"/>{% endif %}
                 </div>
             </td>
             <td class="w-full ml-0 pb-4 pt-4 pr-4 flex">
@@ -200,7 +202,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6 text-slate-200"><path fill-rule="evenodd" d="M9.78 4.22a.75.75 0 0 1 0 1.06L7.06 8l2.72 2.72a.75.75 0 1 1-1.06 1.06L5.47 8.53a.75.75 0 0 1 0-1.06l3.25-3.25a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" /></svg>
                 {% endif %}
 
-                {% if page_obj.object_list|length > 0 %}
+                {% if page_obj.object_list|length > 0 %}{# sounds expensive, but this list is cached #}
                 Issues {{ page_obj.start_index|intcomma }} – {{ page_obj.end_index|intcomma }}
                 {% else %}
                     {% if page_obj.number > 1 %}
