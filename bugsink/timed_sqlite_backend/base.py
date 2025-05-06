@@ -1,3 +1,4 @@
+import logging
 from collections import namedtuple
 from copy import deepcopy
 import time
@@ -9,6 +10,9 @@ from django.db import DEFAULT_DB_ALIAS
 from django.db.backends.sqlite3.base import (
     DatabaseWrapper as UnpatchedDatabaseWrapper, SQLiteCursorWrapper as UnpatchedSQLiteCursorWrapper,
 )
+
+
+logger = logging.getLogger("bugsink")
 
 # We disinguish between the default runtime limit for a connection (set in the settings) and a runtime limit set by the
 # "with different_runtime_limit" idiom, i.e. temporarily. The reason we need to distinguish these two concepts (and keep
@@ -76,7 +80,8 @@ def different_runtime_limit(seconds, using=None):
 
 
 @contextmanager
-def limit_runtime(conn):
+def limit_runtime(conn, query=None, params=None):
+    # query & params are only used for logging purposes; they are not used to actually limit the runtime.
     start = time.time()
 
     def check_time():
@@ -92,6 +97,18 @@ def limit_runtime(conn):
     conn.set_progress_handler(check_time, 10_000)
 
     yield
+
+    if time.time() > start + _get_runtime_limit() + 0.01:
+        # https://sqlite.org/forum/forumpost/fa65709226 to see why we need this.
+        #
+        # Doing an actual timeout _now_ doesn't achieve anything (the goal is generally to avoid things taking too long,
+        # once you're here only time-travel can help you). So `logger.error()` rather than `raise OperationalError`.
+        #
+        # + 0.05s to avoid false positives like so: the query completing in exactly runtime_limit with the final check
+        # coming a fraction of a second later (0.01s is assumed to be well on the "avoid false positives" side of the
+        # trade-off)
+        took = time.time() - start
+        logger.error("limit_runtime miss (%.3fs): %s %s", took, query, params)
 
     conn.set_progress_handler(None, 0)
 
@@ -149,7 +166,7 @@ class SQLiteCursorWrapper(UnpatchedSQLiteCursorWrapper):
             # migrations in Sqlite are often slow (drop/recreate tables, etc); so we don't want to limit them
             return super().execute(query, params)
 
-        with limit_runtime(self.connection):
+        with limit_runtime(self.connection, query=query, params=params):
             return super().execute(query, params)
 
     def executemany(self, query, param_list):
@@ -157,5 +174,5 @@ class SQLiteCursorWrapper(UnpatchedSQLiteCursorWrapper):
             # migrations in Sqlite are often slow (drop/recreate tables, etc); so we don't want to limit them
             return super().executemany(query, param_list)
 
-        with limit_runtime(self.connection):
+        with limit_runtime(self.connection, query=query, params=param_list):
             return super().executemany(query, param_list)
