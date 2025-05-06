@@ -16,6 +16,19 @@ from bugsink.streams import compress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARA
 from issues.utils import get_values
 
 
+def random_postfix():
+    # avoids numbers, because when usedd in the type I imagine numbers may at some point be ignored in the grouping.
+    random_number = random.random()
+
+    if random_number < 0.1:
+        # 10% of the time we simply sample from 1M to create a "fat tail".
+        unevenly_distributed_number = int(random.random() * 1_000_000)
+    else:
+        unevenly_distributed_number = int(1 / random_number)
+
+    return "".join([chr(ord("A") + int(c)) for c in str(unevenly_distributed_number)])
+
+
 class Command(BaseCommand):
 
     def add_arguments(self, parser):
@@ -112,21 +125,13 @@ class Command(BaseCommand):
                 k, v = tag.split(":", 1)
 
                 if v == "RANDOM":
-                    # avoids numbers in the type because I imagine numbers may at some point be ignored in the grouping.
-                    into_chars = lambda i: "".join([chr(ord("A") + int(c)) for c in str(i)])  # noqa
-
-                    unevenly_distributed_number = int(1 / (random.random() + 0.0000001))
-                    v = "value-" + into_chars(unevenly_distributed_number)
+                    v = "value-" + random_postfix()
 
                 data["tags"][k] = v
 
         if options["random_type"]:
-            # avoids numbers in the type because I imagine numbers may at some point be ignored in the grouping.
-            into_chars = lambda i: "".join([chr(ord("A") + int(c)) for c in str(i)])  # noqa
-
-            unevenly_distributed_number = int(1 / (random.random() + 0.0000001))
             values = get_values(data["exception"])
-            values[0]["type"] = "Exception" + into_chars(unevenly_distributed_number)
+            values[0]["type"] = "Exception" + random_postfix()
 
         data_bytes = json.dumps(data).encode("utf-8")
 
