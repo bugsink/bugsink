@@ -176,13 +176,11 @@ class Issue(models.Model):
             ("project", "digest_order"),
         ]
         indexes = [
-            models.Index(fields=["first_seen"]),
-            models.Index(fields=["last_seen"]),
-
-            # 3 indexes for the list view (state_filter)
-            models.Index(fields=["is_resolved", "is_muted", "last_seen"]),  # filter on resolved/muted
-            models.Index(fields=["is_muted", "last_seen"]),  # filter on muted
-            models.Index(fields=["is_resolved", "last_seen"]),  # filter on resolved
+            # 4 indexes for the list view (state_filter)
+            models.Index(fields=["project", "is_resolved", "is_muted", "last_seen"], name="issue_list_open"),
+            models.Index(fields=["project", "is_muted", "last_seen"], name="issue_list_muted"),
+            models.Index(fields=["project", "is_resolved", "last_seen"], name="issue_list_resolved"),  # and unresolved
+            models.Index(fields=["project", "last_seen"], name="issue_list_all"),  # all
         ]
 
 
