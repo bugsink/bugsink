@@ -15,6 +15,7 @@ from django.http import Http404
 from django.core.paginator import Paginator, Page
 from django.db.utils import OperationalError
 from django.conf import settings
+from django.utils.functional import cached_property
 
 from sentry.utils.safe import get_path
 from sentry_sdk_extensions import capture_or_log_exception
@@ -85,6 +86,35 @@ class KnownCountPaginator(EagerPaginator):
     @property
     def count(self):
         return self._count
+
+
+class UncountablePage(Page):
+    """The Page subclass to be used with UncountablePaginator."""
+
+    @cached_property
+    def has_next(self):
+        # hack that works 249/250 times: if the current page is full, we have a next page
+        return len(self.object_list) == self.paginator.per_page
+
+    @cached_property
+    def end_index(self):
+        return (self.paginator.per_page * (self.number - 1)) + len(self.object_list)
+
+
+class UncountablePaginator(EagerPaginator):
+    """optimization: counting is too expensive; to be used in a template w/o .count and .last"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def _get_page(self, *args, **kwargs):
+        object_list = args[0]
+        object_list = list(object_list)
+        return UncountablePage(object_list, *(args[1:]), **kwargs)
+
+    @property
+    def count(self):
+        return 1_000_000_000  # big enough to be bigger than what you can click through or store in the DB.
 
 
 def _request_repr(parsed_data):
@@ -268,7 +298,7 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
     if request.GET.get("q"):
         issue_list = search_issues(project, issue_list, request.GET["q"])
 
-    paginator = EagerPaginator(issue_list, 250)
+    paginator = UncountablePaginator(issue_list, 250)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
