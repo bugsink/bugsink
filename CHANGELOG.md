@@ -1,5 +1,20 @@
 # Changes
 
+## 1.5.2 (6 May 2025)
+
+Various performance fixes when there are many (millions) of _issues_
+(rather than just events) in the database:
+
+* Add index for `Grouping.grouping_key` (and project), see 392f5a30be18, 49e6700d4a81
+* Digest: check Grouping.exists only once (save a query)
+* Remove `open_issue_count` from homepage; it's too expensive
+* Issue Paginator: don't attempt to count the Issues, see 378366105496
+* Stress test command: more fat-tailed randomness (d5a449020d03)
+
+Compatibility fix:
+
+* `format_exception` in `capture_or_log_exception`: python 3.9 compatible
+
 ## 1.5.1 (24 April 2025)
 
 Various fixes and improvements:
