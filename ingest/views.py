@@ -269,7 +269,16 @@ class BaseIngestAPIView(View):
 
         grouping_key = get_issue_grouper_for_data(event_data, calculated_type, calculated_value)
 
-        if not Grouping.objects.filter(project_id=event_metadata["project_id"], grouping_key=grouping_key).exists():
+        try:
+            grouping = Grouping.objects.get(project_id=event_metadata["project_id"], grouping_key=grouping_key)
+            issue = grouping.issue
+            issue_created = False
+
+            # update the denormalized fields
+            issue.last_seen = ingested_at
+            issue.digested_event_count += 1
+
+        except Grouping.DoesNotExist:
             # we don't have Project.issue_count here ('premature optimization') so we just do an aggregate instead.
             max_current = Issue.objects.filter(project_id=event_metadata["project_id"]).aggregate(
                 Max("digest_order"))["digest_order__max"]
@@ -293,15 +302,6 @@ class BaseIngestAPIView(View):
                 grouping_key=grouping_key,
                 issue=issue,
             )
-
-        else:
-            grouping = Grouping.objects.get(project_id=event_metadata["project_id"], grouping_key=grouping_key)
-            issue = grouping.issue
-            issue_created = False
-
-            # update the denormalized fields
-            issue.last_seen = ingested_at
-            issue.digested_event_count += 1
 
         # +1 because we're about to add one event.
         project_stored_event_count = project.stored_event_count + 1
