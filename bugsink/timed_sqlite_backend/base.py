@@ -46,7 +46,7 @@ def _set_runtime_limit(using, is_default_for_connection, seconds):
         )
 
 
-def _get_runtime_limit(using=None):
+def _get_runtime_limit(using):
     if using is None:
         using = DEFAULT_DB_ALIAS
 
@@ -80,12 +80,12 @@ def different_runtime_limit(seconds, using=None):
 
 
 @contextmanager
-def limit_runtime(conn, query=None, params=None):
+def limit_runtime(alias, conn, query=None, params=None):
     # query & params are only used for logging purposes; they are not used to actually limit the runtime.
     start = time.time()
 
     def check_time():
-        if time.time() > start + _get_runtime_limit():
+        if time.time() > start + _get_runtime_limit(alias):
             return 1
 
         return 0
@@ -98,7 +98,7 @@ def limit_runtime(conn, query=None, params=None):
 
     yield
 
-    if time.time() > start + _get_runtime_limit() + 0.01:
+    if time.time() > start + _get_runtime_limit(alias) + 0.01:
         # https://sqlite.org/forum/forumpost/fa65709226 to see why we need this.
         #
         # Doing an actual timeout _now_ doesn't achieve anything (the goal is generally to avoid things taking too long,
@@ -156,23 +156,29 @@ class DatabaseWrapper(UnpatchedDatabaseWrapper):
     #     return PrintOnClose(result)
 
     def create_cursor(self, name=None):
-        return self.connection.cursor(factory=SQLiteCursorWrapper)
+        return self.connection.cursor(factory=get_sqlite_cursor_wrapper(self.alias))
 
 
-class SQLiteCursorWrapper(UnpatchedSQLiteCursorWrapper):
+def get_sqlite_cursor_wrapper(alias):
+    if alias is None:
+        alias = DEFAULT_DB_ALIAS
 
-    def execute(self, query, params=None):
-        if settings.I_AM_RUNNING == "MIGRATE":
-            # migrations in Sqlite are often slow (drop/recreate tables, etc); so we don't want to limit them
-            return super().execute(query, params)
+    class SQLiteCursorWrapper(UnpatchedSQLiteCursorWrapper):
 
-        with limit_runtime(self.connection, query=query, params=params):
-            return super().execute(query, params)
+        def execute(self, query, params=None):
+            if settings.I_AM_RUNNING == "MIGRATE":
+                # migrations in Sqlite are often slow (drop/recreate tables, etc); so we don't want to limit them
+                return super().execute(query, params)
 
-    def executemany(self, query, param_list):
-        if settings.I_AM_RUNNING == "MIGRATE":
-            # migrations in Sqlite are often slow (drop/recreate tables, etc); so we don't want to limit them
-            return super().executemany(query, param_list)
+            with limit_runtime(alias, self.connection, query=query, params=params):
+                return super().execute(query, params)
 
-        with limit_runtime(self.connection, query=query, params=param_list):
-            return super().executemany(query, param_list)
+        def executemany(self, query, param_list):
+            if settings.I_AM_RUNNING == "MIGRATE":
+                # migrations in Sqlite are often slow (drop/recreate tables, etc); so we don't want to limit them
+                return super().executemany(query, param_list)
+
+            with limit_runtime(alias, self.connection, query=query, params=param_list):
+                return super().executemany(query, param_list)
+
+    return SQLiteCursorWrapper
