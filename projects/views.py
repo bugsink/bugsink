@@ -84,7 +84,8 @@ def project_list(request, ownership_filter=None):
         raise ValueError(f"Invalid ownership_filter: {ownership_filter}")
 
     project_list = base_qs.annotate(
-        open_issue_count=models.Count('issue', filter=models.Q(issue__is_resolved=False, issue__is_muted=False)),
+        # open_issue_count disabled, it's too expensive
+        # open_issue_count=models.Count('issue', filter=models.Q(issue__is_resolved=False, issue__is_muted=False)),
         member_count=models.Count(
             'projectmembership', distinct=True, filter=models.Q(projectmembership__accepted=True)),
     ).select_related('team')
