@@ -5,12 +5,12 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("projects", "0011_fill_stored_event_count"),
-        ("issues", "0013_fix_issue_stored_event_counts"),
+        ("issues", "0015_set_grouping_hash"),
     ]
 
     operations = [
         migrations.AlterUniqueTogether(
             name="grouping",
-            unique_together={("project", "grouping_key")},
+            unique_together={("project", "grouping_key_hash")},
         ),
     ]

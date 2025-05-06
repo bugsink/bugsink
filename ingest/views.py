@@ -1,3 +1,4 @@
+import hashlib
 import os
 import logging
 import io
@@ -270,7 +271,10 @@ class BaseIngestAPIView(View):
         grouping_key = get_issue_grouper_for_data(event_data, calculated_type, calculated_value)
 
         try:
-            grouping = Grouping.objects.get(project_id=event_metadata["project_id"], grouping_key=grouping_key)
+            grouping = Grouping.objects.get(
+                project_id=event_metadata["project_id"], grouping_key=grouping_key,
+                grouping_key_hash=hashlib.sha256(grouping_key.encode()).hexdigest())
+
             issue = grouping.issue
             issue_created = False
 
@@ -300,6 +304,7 @@ class BaseIngestAPIView(View):
             grouping = Grouping.objects.create(
                 project_id=event_metadata["project_id"],
                 grouping_key=grouping_key,
+                grouping_key_hash=hashlib.sha256(grouping_key.encode()).hexdigest(),
                 issue=issue,
             )
 

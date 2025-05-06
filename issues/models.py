@@ -197,10 +197,10 @@ class Grouping(models.Model):
     project = models.ForeignKey(
         "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
 
-    # NOTE: I don't want to have any principled maximum on the grouping key, nor do I want to prematurely optimize the
-    # lookup. If lookups are slow (even with an index), we _could_ examine whether manually hashing these values and
-    # matching on the hash helps.
     grouping_key = models.TextField(blank=False, null=False)
+
+    # we hash the key to make it indexable on MySQL, see https://code.djangoproject.com/ticket/2495
+    grouping_key_hash = models.CharField(max_length=64, blank=False, null=False)
 
     issue = models.ForeignKey("Issue", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
 
@@ -211,7 +211,7 @@ class Grouping(models.Model):
         unique_together = [
             # principled: grouping _key_ is a _key_ for a reason (within a project). This also implies the main way of
             # looking up groupings has an appropriate index.
-            ("project", "grouping_key"),
+            ("project", "grouping_key_hash"),
         ]
 
 
