@@ -1,5 +1,14 @@
 # Changes
 
+## 1.5.3 (7 May 2025)
+
+* Performance fixes of the issue-list when there are many (millions) of _issues_ (rather than just events) in the
+  database; see aad0f624f904 & 0dfd01db9b38.
+
+* Fix: `different_runtime_limit` applying to the wrong DB alias, see 699f6e587d28
+
+* `CREATE_SUPERUSER` shortcut: robust for ':' in password, see 9b0f0e04f4e4
+
 ## 1.5.2 (6 May 2025)
 
 Various performance fixes when there are many (millions) of _issues_
