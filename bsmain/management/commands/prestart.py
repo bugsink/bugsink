@@ -19,7 +19,7 @@ class Command(BaseCommand):
         if ":" not in os.getenv("CREATE_SUPERUSER"):
             raise ValueError("CREATE_SUPERUSER should be in the format 'username:password'")
 
-        username, password = os.getenv("CREATE_SUPERUSER").split(":")
+        username, password = os.getenv("CREATE_SUPERUSER").split(":", 1)
 
         if User.objects.all().exists():
             print(
