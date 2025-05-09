@@ -22,6 +22,7 @@ dynamic = ["version", "dependencies"]
 [project.scripts]
 bugsink-show-version = "bugsink.scripts.show_version:main"
 bugsink-manage = "bugsink.scripts.manage:main"
+bugsink-util = "bugsink.scripts.util:main"
 bugsink-create-conf = "bugsink.scripts.create_conf:main"
 bugsink-runsnappea = "bugsink.scripts.runsnappea:main"
 
