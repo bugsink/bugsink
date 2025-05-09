@@ -302,9 +302,14 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
+    try:
+        member = ProjectMembership.objects.get(project=project, user=request.user)
+    except ProjectMembership.DoesNotExist:
+        member = None  # this can happen if the user is superuser (as per `project_membership_required` decorator)
+
     return render(request, "issues/issue_list.html", {
         "project": project,
-        "member": ProjectMembership.objects.get(project=project, user=request.user),
+        "member": member,
         "state_filter": state_filter,
         "mute_options": GLOBAL_MUTE_OPTIONS,
 
