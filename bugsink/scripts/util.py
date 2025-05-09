@@ -17,7 +17,7 @@ import sys
 def find_commands(management_dir):
     # explicitly enumerate Django (settings)-independent commands here (for --help)
     if 'bsmain' in management_dir:
-        return ["stress_test"]
+        return ["stress_test", "send_json"]
     return []
 
 
