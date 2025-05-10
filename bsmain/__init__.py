@@ -1,3 +1,5 @@
+import urllib.parse
+
 from django.core.checks import Warning, register
 from django.conf import settings
 
@@ -31,3 +33,28 @@ def check_event_storage_properly_configured(app_configs, **kwargs):
             id="bsmain.W002",
             ))
     return errors
+
+
+@register("bsmain")
+def check_base_url_is_url(app_configs, **kwargs):
+    try:
+        parts = urllib.parse.urlsplit(get_settings().BASE_URL)
+    except ValueError as e:
+        return [Warning(
+            str(e),
+            id="bsmain.W003",
+        )]
+
+    if parts.scheme not in ["http", "https"]:
+        return [Warning(
+            "The base_url setting must be a valid URL (starting with http or https).",
+            id="bsmain.W003",
+        )]
+
+    if not parts.hostname:
+        return [Warning(
+            "The base_url setting must be a valid URL. The hostname must be set.",
+            id="bsmain.W003",
+        )]
+
+    return []
