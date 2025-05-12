@@ -36,7 +36,6 @@ class Command(BaseCommand):
         parser.add_argument("--requests", type=int, default=1)
 
         parser.add_argument("--dsn", nargs="+", action="extend")
-        parser.add_argument("--fresh-id", action="store_true")
         parser.add_argument("--fresh-timestamp", action="store_true")
         parser.add_argument("--fresh-trace", action="store_true")
         parser.add_argument("--tag", nargs="*", action="append")
@@ -95,8 +94,8 @@ class Command(BaseCommand):
 
             data["timestamp"] = time.time()
 
-        if options["fresh_id"]:
-            data["event_id"] = uuid.uuid4().hex
+        # in stress tests, we generally send many events, so they must be unique to be meaningful.
+        data["event_id"] = uuid.uuid4().hex
 
         if options["fresh_trace"]:
             if "contexts" not in data:
