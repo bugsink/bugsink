@@ -1,5 +1,13 @@
 # Changes
 
+## 1.5.4 (12 May 2025)
+
+* Add bugsink-util script to allow settings-independent commands to be run
+* UX of the `stress_test` command (param cleanup)
+* checks on `settings.BASE_URL`
+* Show _all_ Request Headers in `CSRF_DEBUG` view (see #100)
+* Fix obj not found when visiting project as a non-member superuser
+
 ## 1.5.3 (7 May 2025)
 
 * Performance fixes of the issue-list when there are many (millions) of _issues_ (rather than just events) in the
