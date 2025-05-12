@@ -185,10 +185,14 @@ DATABASES = {
     },
 
     # This is a "database as message queue" setup; If you're reading this and are thinking of replacing this particular
-    # DB with mysql/postgres, know that you "probably shouldn't". https://www.bugsink.com/blog/snappea-design/
+    # DB with mysql/postgres, know that you "probably shouldn't".
+    # Regarding the NAME (path) of the file: the expecation is that this is local to your Bugsink instance, and that
+    # there is a your setup has exactly an equal number of [a] gunicorn webservers, [b] snappea foremans, and [c]
+    # snappea databases; [d] machines/containers (with a strong preference for that number being 1).
+    # https://www.bugsink.com/blog/snappea-design/
     "snappea": {
         'ENGINE': 'bugsink.timed_sqlite_backend',
-        'NAME': os.getenv("SNAPPEA_DATABASE_PATH", 'snappea.sqlite3'),
+        'NAME': os.getenv("SNAPPEA_DATABASE_PATH", 'snappea.sqlite3'),  # NOTE: read the above comment
         # 'TEST': {  postponed, for starters we'll do something like SNAPPEA_ALWAYS_EAGER
         'OPTIONS': {
             'timeout': 5,
