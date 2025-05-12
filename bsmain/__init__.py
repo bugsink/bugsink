@@ -47,13 +47,13 @@ def check_base_url_is_url(app_configs, **kwargs):
 
     if parts.scheme not in ["http", "https"]:
         return [Warning(
-            "The base_url setting must be a valid URL (starting with http or https).",
+            "The BASE_URL setting must be a valid URL (starting with http or https).",
             id="bsmain.W003",
         )]
 
     if not parts.hostname:
         return [Warning(
-            "The base_url setting must be a valid URL. The hostname must be set.",
+            "The BASE_URL setting must be a valid URL. The hostname must be set.",
             id="bsmain.W003",
         )]
 
