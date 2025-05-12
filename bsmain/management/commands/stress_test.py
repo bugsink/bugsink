@@ -11,7 +11,7 @@ import requests
 
 from django.core.management.base import BaseCommand
 
-from compat.dsn import get_store_url, get_envelope_url, get_header_value
+from compat.dsn import get_envelope_url, get_header_value
 from bugsink.streams import compress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE
 from issues.utils import get_values
 
@@ -41,7 +41,6 @@ class Command(BaseCommand):
         parser.add_argument("--fresh-trace", action="store_true")
         parser.add_argument("--tag", nargs="*", action="append")
         parser.add_argument("--compress", action="store", choices=["gzip", "deflate", "br"], default=None)
-        parser.add_argument("--use-envelope", action="store_true")
         parser.add_argument("--random-type", action="store_true", default=False)  # generate random exception type
 
         parser.add_argument("filename")
@@ -51,12 +50,7 @@ class Command(BaseCommand):
         signal.signal(signal.SIGINT, self.handle_signal)
 
         compress = options['compress']
-        use_envelope = options['use_envelope']
 
-        # non-envelope mode is deprecated by Sentry; we only implement DIGEST_IMMEDIATELY=True for that mode which is
-        # usually not what we want to do our stress-tests for. (if this assumption is still true later in 2024, we can
-        # just remove the non-envelope mode support completely.)
-        assert use_envelope, "Only envelope mode is supported"
         dsns = options['dsn']
 
         json_filename = options["filename"]
@@ -70,7 +64,7 @@ class Command(BaseCommand):
             prepared_data[i_thread] = {}
             for i_request in range(options["requests"]):
                 prepared_data[i_thread][i_request] = self.prepare(
-                    data, options, i_thread, i_request, compress, use_envelope)
+                    data, options, i_thread, i_request, compress)
 
                 timings[i_thread] = []
 
@@ -78,7 +72,7 @@ class Command(BaseCommand):
         t0 = time.time()
         for i in range(options["threads"]):
             t = threading.Thread(target=self.loop_send_to_server, args=(
-                dsns, options, use_envelope, compress, prepared_data[i], timings[i]))
+                dsns, options, compress, prepared_data[i], timings[i]))
             t.start()
 
         print("waiting for threads to finish")
@@ -90,7 +84,7 @@ class Command(BaseCommand):
         self.print_stats(options["threads"], options["requests"], total_time, timings)
         print("done")
 
-    def prepare(self, data, options, i_thread, i_request, compress, use_envelope):
+    def prepare(self, data, options, i_thread, i_request, compress):
         if "timestamp" not in data or options["fresh_timestamp"]:
             # weirdly enough a large numer of sentry test data don't actually have this required attribute set.
             # thus, we set it to something arbitrary on the sending side rather than have our server be robust
@@ -135,10 +129,9 @@ class Command(BaseCommand):
 
         data_bytes = json.dumps(data).encode("utf-8")
 
-        if use_envelope:
-            # the smallest possible envelope:
-            data_bytes = (b'{"event_id": "%s"}\n{"type": "event"}\n' % (data["event_id"]).encode("utf-8") +
-                          data_bytes)
+        # the smallest possible envelope:
+        data_bytes = (b'{"event_id": "%s"}\n{"type": "event"}\n' % (data["event_id"]).encode("utf-8") +
+                      data_bytes)
 
         if compress in ["gzip", "deflate"]:
             if compress == "gzip":
@@ -157,19 +150,19 @@ class Command(BaseCommand):
 
         return compressed_data
 
-    def loop_send_to_server(self, dsns, options, use_envelope, compress, compressed_datas, timings):
+    def loop_send_to_server(self, dsns, options, compress, compressed_datas, timings):
         for compressed_data in compressed_datas.values():
             if self.stopping:
                 return
             dsn = random.choice(dsns)
 
             t0 = time.time()
-            success = Command.send_to_server(dsn, options, use_envelope, compress, compressed_data)
+            success = Command.send_to_server(dsn, options, compress, compressed_data)
             taken = time.time() - t0
             timings.append((success, taken))
 
     @staticmethod
-    def send_to_server(dsn, options, use_envelope, compress, compressed_data):
+    def send_to_server(dsn, options, compress, compressed_data):
         try:
             headers = {
                 "Content-Type": "application/json",
@@ -184,7 +177,7 @@ class Command(BaseCommand):
                     headers["Content-Encoding"] = "deflate"
 
                 response = requests.post(
-                    get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
+                    get_envelope_url(dsn),
                     headers=headers,
                     data=compressed_data,
                 )
@@ -192,13 +185,13 @@ class Command(BaseCommand):
             elif compress == "br":
                 headers["Content-Encoding"] = "br"
                 response = requests.post(
-                    get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
+                    get_envelope_url(dsn),
                     headers=headers,
                     data=compressed_data,
                 )
 
             response = requests.post(
-                get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
+                get_envelope_url(dsn),
                 headers=headers,
                 data=compressed_data,
             )
