@@ -151,7 +151,9 @@ def get_issue_grouper_for_data(data, calculated_type=None, calculated_value=None
 
     if fingerprint:
         return " ⋄ ".join([
-            default_issue_grouper(calculated_type, calculated_value, transaction) if part == "{{ default }}" else part
+            (default_issue_grouper(calculated_type, calculated_value, transaction)
+             if part == "{{ default }}"
+             else str(part))
             for part in fingerprint
         ])
 
