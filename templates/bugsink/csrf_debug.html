@@ -29,9 +29,9 @@
     </form>
     {% else %}
 
-    <h2 class="text-2xl font-bold mt-4">META</h2>
+    <h2 class="text-2xl font-bold mt-4">Request Headers (META)</h2>
     {% for key, value in META|items %}
-        <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
+    <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %} {% if key == "HTTP_ORIGIN" or key == "HTTP_REFERER" or key == SECURE_PROXY_SSL_HEADER %}text-black{% else %}text-slate-300{% endif %}">
             <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
             <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
         </div>

@@ -217,11 +217,10 @@ def csrf_debug(request):
             "posted": True,
             "POST": request.POST,
             "META": {
-                k: request.META.get(k) for k in [
-                    "HTTP_ORIGIN",
-                    "HTTP_REFERER",
-                ]
+                k: request.META.get(k) for k in request.META.keys() if k.startswith("HTTP_")
             },
+            "SECURE_PROXY_SSL_HEADER": settings.SECURE_PROXY_SSL_HEADER[0] if settings.SECURE_PROXY_SSL_HEADER else None,
+
             "process_view": _process_view_steps(middleware, request, context),
         })
 
