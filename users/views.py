@@ -44,6 +44,16 @@ def user_list(request):
             messages.success(request, 'User %s activated' % user.username)
             return redirect('user_list')
 
+        if action == "delete":
+            user = User.objects.get(pk=user_pk)
+            if user.is_active:
+                messages.error(request, 'Cannot delete active user %s' % user.username)
+            else:
+                username = user.username
+                user.delete()
+                messages.success(request, 'User %s deleted' % username)
+            return redirect('user_list')
+
     return render(request, 'users/user_list.html', {
         'users': users,
     })
@@ -184,7 +194,7 @@ def reset_password(request, token=None):
         raise Http404("Invalid or expired token")
 
     user = verification.user
-    next = request.POST.get("next", request.GET.get("next", reverse("home")))
+    next_url = request.POST.get("next", request.GET.get("next", reverse("home")))
 
     if request.method == 'POST':
         form = SetPasswordForm(user, request.POST)
@@ -197,12 +207,12 @@ def reset_password(request, token=None):
 
             login(request, verification.user)
 
-            return redirect(next)
+            return redirect(next_url)
 
     else:
         form = SetPasswordForm(user)
 
-    return render(request, "users/reset_password.html", {"form": form, "next": next})
+    return render(request, "users/reset_password.html", {"form": form, "next": next_url})
 
 
 @atomic_for_request_method
