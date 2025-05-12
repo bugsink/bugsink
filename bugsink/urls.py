@@ -13,7 +13,7 @@ from users.views import signup, confirm_email, resend_confirmation, request_rese
 from ingest.views import download_envelope
 from files.views import chunk_upload, artifact_bundle_assemble
 
-from .views import home, trigger_error, favicon, settings_view, silence_email_system_warning, counts
+from .views import home, trigger_error, favicon, settings_view, silence_email_system_warning, counts, health_check_ready
 from .debug_views import csrf_debug
 
 
@@ -24,6 +24,8 @@ admin.site.index_title = "Admin"  # everyone calls this the "admin" anyway. Let'
 
 urlpatterns = [
     path('', home, name='home'),
+
+    path("health/ready", health_check_ready, name="health_check_ready"),
 
     path("accounts/signup/", signup, name="signup"),
     path("accounts/resend-confirmation/", resend_confirmation, name="resend_confirmation"),

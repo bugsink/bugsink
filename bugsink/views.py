@@ -99,6 +99,20 @@ def home(request):
 
 
 @login_exempt
+def health_check_ready(request):
+    """
+    A simple health check that returns 200 if the server is up and running. To be used in containerized environments
+    in a way that 'makes sense to you', e.g. as a readiness probe in Kubernetes.
+
+    What this "proves" is that the application server is up and accepting requests.
+
+    By design, this health check does not check the database connection; we only make a statement about _our own
+    health_; this is to avoid killing the app-server if the database is down.
+    """
+    return HttpResponse("OK", content_type="text/plain")
+
+
+@login_exempt
 def trigger_error(request):
     raise Exception("Exception triggered on purpose to debug error handling")
 
