@@ -49,4 +49,6 @@ RUN pip install -e .
 
 RUN ["bugsink-manage", "migrate", "snappea", "--database=snappea"]
 
+HEALTHCHECK CMD python -c 'import requests; requests.get("http://localhost:8000/health/ready").raise_for_status()'
+
 CMD [ "monofy", "bugsink-manage", "check", "--deploy", "--fail-level", "WARNING", "&&", "bugsink-manage", "migrate", "&&", "bugsink-manage", "prestart", "&&", "gunicorn", "--bind=0.0.0.0:$PORT", "--workers=10", "--access-logfile", "-", "bugsink.wsgi", "|||", "bugsink-runsnappea"]
