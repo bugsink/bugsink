@@ -126,7 +126,7 @@ class FilesTests(TransactionTestCase):
                     200, response.status_code, response.content if response.status_code != 302 else response.url)
 
                 # we could/should make this more general later; this is great for example nr.1:
-                key_phrase = '<span class="font-bold">captureException</span> line <span class="font-bold">15</span>'
+                key_phrase = '<span class="font-bold">captureException.js</span> line <span class="font-bold">7</span>'
                 self.assertTrue(key_phrase in response.content.decode('utf-8'))
 
             except Exception as e:
