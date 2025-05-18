@@ -158,8 +158,22 @@ def project_edit(request, project_pk):
     _check_project_admin(project, request.user)
 
     if request.method == 'POST':
-        form = ProjectForm(request.POST, instance=project)
+        action = request.POST.get('action')
 
+        if action == 'delete':
+            # Double-check that the user is an admin or superuser
+            if not request.user.is_superuser and \
+               not ProjectMembership.objects.filter(
+                    project=project, user=request.user, role=ProjectRole.ADMIN, accepted=True).exists() and \
+               not TeamMembership.objects.filter(team=project.team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists():
+                raise PermissionDenied("Only project or team admins can delete projects")
+
+            # Delete the project
+            project.delete()
+            messages.success(request, f'Project "{project.name}" has been deleted successfully.')
+            return redirect('project_list')
+
+        form = ProjectForm(request.POST, instance=project)
         if form.is_valid():
             form.save()
             return redirect('project_members', project_pk=project.id)
