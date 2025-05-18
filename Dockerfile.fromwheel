@@ -51,7 +51,6 @@ ARG WHEEL_FILE=wheelfile-not-specified.whoops
 ENV PYTHONUNBUFFERED=1
 
 ENV PORT=8000
-ENV GUNICORN_CMD_ARGS="--workers=10"
 
 WORKDIR /app
 

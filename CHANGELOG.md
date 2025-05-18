@@ -1,5 +1,17 @@
 # Changes
 
+## x.x.x (xx xxx xxxx)
+
+### Backwards-incompatible changes
+
+* The default number of web processes (gunicorn server workers) in the
+  dockerized setup is now 1 (it used to be 10).
+
+  set `WEB_CONCURRENCY=...` or `GUNICORN_CMD_ARGS="--workers=..."` to
+  restore the previous behavior or choose a custom number.
+
+### ...
+
 ## 1.5.4 (12 May 2025)
 
 * Add bugsink-util script to allow settings-independent commands to be run
