@@ -296,7 +296,7 @@ class IngestViewTestCase(TransactionTestCase):
 
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
 
-        event_samples = glob(SAMPLES_DIR + "/*/*.json")
+        event_samples = glob(SAMPLES_DIR + "/sentry/mobile1-xen.json")  # pick a fixed one for reproducibility
         known_broken = [SAMPLES_DIR + "/" + s.strip() for s in _readlines(SAMPLES_DIR + "/KNOWN-BROKEN")]
 
         if len(event_samples) == 0:
@@ -436,7 +436,8 @@ class IngestViewTestCase(TransactionTestCase):
 
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
 
-        event_samples = glob(SAMPLES_DIR + "/*/*.json")
+        event_samples = glob(SAMPLES_DIR + "/sentry/mobile1-xen.json")  # this one has 'exception.values[0].type'
+
         known_broken = [SAMPLES_DIR + "/" + s.strip() for s in _readlines(SAMPLES_DIR + "/KNOWN-BROKEN")]
 
         if len(event_samples) == 0:
