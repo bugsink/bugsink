@@ -3,7 +3,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 from django.contrib.auth import views as auth_views
-from django.views.generic import RedirectView
+from django.views.generic import RedirectView, TemplateView
 
 from alerts.views import debug_email as debug_alerts_email
 from users.views import debug_email as debug_users_email
@@ -12,6 +12,7 @@ from bugsink.app_settings import get_settings
 from users.views import signup, confirm_email, resend_confirmation, request_reset_password, reset_password, preferences
 from ingest.views import download_envelope
 from files.views import chunk_upload, artifact_bundle_assemble
+from bugsink.decorators import login_exempt
 
 from .views import home, trigger_error, favicon, settings_view, silence_email_system_warning, counts, health_check_ready
 from .debug_views import csrf_debug
@@ -75,6 +76,7 @@ urlpatterns = [
     path('debug/csrf/', csrf_debug, name='csrf_debug'),
 
     path("favicon.ico", favicon),
+    path("robots.txt", login_exempt(TemplateView.as_view(template_name="robots.txt", content_type="text/plain"))),
 ]
 
 if settings.DEBUG:
