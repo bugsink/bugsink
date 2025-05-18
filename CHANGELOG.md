@@ -5,10 +5,10 @@
 ### Backwards-incompatible changes
 
 * The default number of web processes (gunicorn server workers) in the
-  dockerized setup is now 1 (it used to be 10).
+  dockerized setup is now equal to `min(cpu_count, 4)`; (it used to be 10).
 
-  set `WEB_CONCURRENCY=...` or `GUNICORN_CMD_ARGS="--workers=..."` to
-  restore the previous behavior or choose a custom number.
+  set `GUNICORN_CMD_ARGS="--workers=..."` to restore the previous behavior or
+  choose a custom number.
 
 ### ...
 
