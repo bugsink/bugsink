@@ -1,3 +1,4 @@
+from uuid import UUID
 import json
 import sourcemap
 from issues.utils import get_values
@@ -104,13 +105,13 @@ def apply_sourcemaps(event_data):
         return
 
     debug_id_for_filename = {
-        image["code_file"]: image["debug_id"]
+        image["code_file"]: UUID(image["debug_id"])
         for image in images
         if "debug_id" in image and "code_file" in image and image["type"] == "sourcemap"
     }
 
     metadata_obj_lookup = {
-        str(metadata_obj.debug_id): metadata_obj
+        metadata_obj.debug_id: metadata_obj
         for metadata_obj in FileMetadata.objects.filter(
             debug_id__in=debug_id_for_filename.values(), file_type="source_map").select_related("file")
     }
