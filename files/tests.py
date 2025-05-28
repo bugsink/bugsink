@@ -1,3 +1,4 @@
+from uuid import UUID
 import json
 import gzip
 from io import BytesIO
@@ -10,6 +11,8 @@ from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project, ProjectMembership
 from events.models import Event
 from bsmain.models import AuthToken
+
+from .models import File, FileMetadata
 
 
 User = get_user_model()
@@ -46,6 +49,30 @@ class FilesTests(TransactionTestCase):
         response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers={"Authorization": "Bearer xxx"})
         self.assertEqual(401, response.status_code)
         self.assertEqual({"error": "Invalid token"}, response.json())
+
+    def test_uuid_behavior_of_django(self):
+        # test to check Django is doing the thing of converting various UUID-like things on "both sides" before
+        # comparing. "this probably shouldn't be necessary" to test, but I'd rather have a test that proves it works
+        # than to have to reason about it. Context: https://github.com/bugsink/bugsink/issues/105
+
+        uuids = [
+            "12345678123456781234567812345678",  # uuid_str_no_dashes
+            "12345678-1234-5678-1234-567812345678",  # uuid_str_with_dashes
+            UUID("12345678-1234-5678-1234-567812345678"),  # uuid_object
+        ]
+
+        file = File.objects.create(size=0)
+        for create_with in uuids:
+            FileMetadata.objects.all().delete()  # clean up before each test
+            FileMetadata.objects.create(
+                debug_id=create_with,
+                file_type="source_map",
+                file=file,
+            )
+
+            for test_with in uuids:
+                fms = FileMetadata.objects.filter(debug_id__in=[test_with])
+                self.assertEqual(1, fms.count())
 
     def test_assemble_artifact_bundle(self):
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
