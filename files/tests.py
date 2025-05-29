@@ -146,7 +146,13 @@ class FilesTests(TransactionTestCase):
                 200, response.status_code, "Error in %s: %s" % (
                     filename, response.content if response.status_code != 302 else response.url))
 
-        for event in Event.objects.all():
+        for event_id, key_phrase in [
+                ("af4d4093e2d548bea61683abecb8ee95", '<span class="font-bold">captureException.js</span> in <span class="font-bold">foo</span> line <span class="font-bold">15</span>'),  # noqa
+                ("ed483af389554d9cac475049ed9f560f", '<span class="font-bold">captureException.js</span> in <span class="font-bold">foo</span> line <span class="font-bold">10</span>'),  # noqa
+                    ]:
+
+            event = Event.objects.get(event_id=event_id)
+
             url = f'/issues/issue/{ event.issue.id }/event/{ event.id }/'
             try:
                 response = self.client.get(url)
@@ -154,10 +160,8 @@ class FilesTests(TransactionTestCase):
                 self.assertEqual(
                     200, response.status_code, response.content if response.status_code != 302 else response.url)
 
-                # we could/should make this more general later; this is great for example nr.1:
-                key_phrase = '<span class="font-bold">captureException.js</span> line <span class="font-bold">7</span>'
                 self.assertTrue(key_phrase in response.content.decode('utf-8'))
 
             except Exception as e:
                 # we want to know _which_ event failed, hence the raise-from-e here
-                raise AssertionError("Error rendering event %s" % event.debug_info) from e
+                raise AssertionError("Error rendering event %s" % event.event_id) from e
