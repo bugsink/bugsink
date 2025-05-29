@@ -76,12 +76,15 @@ class FilesTests(TransactionTestCase):
 
     def test_assemble_artifact_bundle(self):
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
-        event_samples = [SAMPLES_DIR + fn for fn in ["/bugsink/uglifyjs-minified-sourcemaps-in-bundle.json"]]
+        event_samples = [SAMPLES_DIR + fn for fn in [
+            "/bugsink/uglifyjs-minified-sourcemaps-in-bundle.json",
+            "/bugsink/uglifyjs-minified-sourcemaps-in-bundle-multi-file.json",
+            ]]
 
         artifact_bundles = glob(SAMPLES_DIR + "/*/artifact_bundles/*.zip")
 
-        if len(artifact_bundles) == 0:
-            raise Exception(f"No artifact bundles found in {SAMPLES_DIR}; I insist on having some to test with.")
+        if len(artifact_bundles) != 2:
+            raise Exception(f"Not all artifact bundles found in {SAMPLES_DIR}; I insist on having some to test with.")
 
         for filename in artifact_bundles:
             with open(filename, 'rb') as f:
@@ -146,7 +149,6 @@ class FilesTests(TransactionTestCase):
         for event in Event.objects.all():
             url = f'/issues/issue/{ event.issue.id }/event/{ event.id }/'
             try:
-                # we just check for a 200; this at least makes sure we have no failing template rendering
                 response = self.client.get(url)
 
                 self.assertEqual(
