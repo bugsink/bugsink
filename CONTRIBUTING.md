@@ -18,7 +18,8 @@ Code contributions are welcome! We use the GitHub PR process to review and merge
 
 #### Tailwind
 
-Bugsink uses tailwind for styling.
+Bugsink uses tailwind for styling, and [django-tailwind](https://github.com/timonweb/django-tailwind/)
+to "do tailwind stuff from the Django world".
 
 If you're working on HTML, you should probably develop while running the following somewhere:
 

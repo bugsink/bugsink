@@ -167,3 +167,6 @@ LOGGING["loggers"]["snappea"]["level"] = "DEBUG"
 LOGGING["formatters"]["snappea"]["format"] = "{asctime} - {threadName} - {levelname:7} - {message}"
 
 ALLOWED_HOSTS = deduce_allowed_hosts(BUGSINK["BASE_URL"])
+
+# django-tailwind setting; the below allows for environment-variable overriding of the npm binary path.
+NPM_BIN_PATH = os.getenv("NPM_BIN_PATH", "npm")
