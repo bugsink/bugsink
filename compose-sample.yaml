@@ -26,6 +26,8 @@ services:
       CREATE_SUPERUSER: admin:admin  # Change this (or remove it and execute 'createsuperuser' against the running container)
       PORT: 8000
       DATABASE_URL: mysql://root:change_your_passwords_for_real_usage@mysql:3306/bugsink
+      BEHIND_HTTPS_PROXY: "false"  # Change this for setups behind a proxy w/ ssl enabled
+      BASE_URL: "http://localhost:8000"
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import requests; requests.get(\"http://localhost:8000/\").raise_for_status()'"]
       interval: 5s
