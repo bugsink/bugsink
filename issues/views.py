@@ -612,6 +612,8 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         logentry_key = "logentry" if "logentry" in parsed_data else "message"
 
         if isinstance(parsed_data.get(logentry_key), dict):
+            # NOTE: event.schema.json says "If `message` and `params` are given, Sentry will attempt to backfill
+            # `formatted` if empty." but we don't do that yet.
             if parsed_data.get(logentry_key, {}).get("formatted"):
                 logentry_info.append(("formatted", parsed_data[logentry_key]["formatted"]))
 
@@ -626,7 +628,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
                 for param_k, param_v in params.items():
                     logentry_info.append((param_k, param_v))
 
-        elif isinstance(parsed_data.get(logentry_key), str):
+        elif isinstance(parsed_data.get(logentry_key), str):  # robust for top-level as str (see #55)
             logentry_info.append(("message", parsed_data[logentry_key]))
 
     key_info += [
