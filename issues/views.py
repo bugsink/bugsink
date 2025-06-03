@@ -612,6 +612,9 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         logentry_key = "logentry" if "logentry" in parsed_data else "message"
 
         if isinstance(parsed_data.get(logentry_key), dict):
+            if parsed_data.get(logentry_key, {}).get("formatted"):
+                logentry_info.append(("formatted", parsed_data[logentry_key]["formatted"]))
+
             if parsed_data.get(logentry_key, {}).get("message"):
                 logentry_info.append(("message", parsed_data[logentry_key]["message"]))
 
