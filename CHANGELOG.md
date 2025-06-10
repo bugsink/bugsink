@@ -1,16 +1,30 @@
 # Changes
 
-## x.x.x (xx xxx xxxx)
+## 1.6.0 (10 June 2025)
+
+### Slack Alerts
+
+Bugsink 1.6.0 introduces Slack Alerts (through webhooks); see #3.
 
 ### Backwards-incompatible changes
 
 * The default number of web processes (gunicorn server workers) in the
   dockerized setup is now equal to `min(cpu_count, 4)`; (it used to be 10).
 
-  set `GUNICORN_CMD_ARGS="--workers=..."` to restore the previous behavior or
+  set `GUNICORN_CMD_ARGS="--workers=10"` to restore the previous behavior or
   choose a custom number.
 
-### ...
+### Various Features & Fixes
+
+* Display formatted log message when available (see #111)
+* Add 2 env variables to compose-sample.yaml (See #110)
+* Add delete functionality for users (See #108)
+* Multi-file sourcemaps (See #87)
+* Lookup by `debug_id` in dicts: use UUID (See #105)
+* Add robots.txt that disallows crawling
+* Add HEALTHCHECK command to Dockerfiles (See #98)
+* Fingerprint: convert to string before concatenating (See #102)
+* Add /health/ready endpoint (See #98)
 
 ## 1.5.4 (12 May 2025)
 
