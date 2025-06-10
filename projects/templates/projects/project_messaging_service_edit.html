@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% load static %}
+{% load tailwind_forms %}
+
+{% block title %}Messaging Service · {{ project.name }}  · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+<div class="flex items-center justify-center">
+
+    <div class="m-4 max-w-4xl flex-auto">
+        <form action="." method="post">
+        {% csrf_token %}
+
+        {% if messages %}
+        <ul>
+            {% for message in messages %}
+                {# if we introduce different levels we can use{% message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %} #}
+                <li class="bg-cyan-50 border-2 border-cyan-800 p-4 rounded-lg">{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        <div>
+            <h1 class="text-4xl my-4 font-bold">Messaging Service | {{ project.name }}</h1>
+        </div>
+
+        {% for field in form %}
+            {% tailwind_formfield field %}
+        {% endfor %}
+
+        {% for field in config_form %}
+            {% tailwind_formfield field %}
+        {% endfor %}
+
+        <button name="action" value="add" class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md">Save</button>
+        <a href="{% url "project_alerts_setup" project_pk=project.pk %}" class="font-bold text-slate-500 ml-4">Cancel</a>
+
+        </form>
+
+    </div>
+</div>
+
+{% endblock %}

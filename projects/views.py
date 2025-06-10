@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 
 from django.shortcuts import render
@@ -16,6 +17,10 @@ from teams.models import TeamMembership, Team, TeamRole
 
 from bugsink.app_settings import get_settings, CB_ANYBODY, CB_MEMBERS, CB_ADMINS
 from bugsink.decorators import login_exempt, atomic_for_request_method
+
+from alerts.models import MessagingServiceConfig
+from alerts.forms import MessagingServiceConfigForm
+from alerts.service_backends.slack import SlackConfigForm
 
 from .models import Project, ProjectMembership, ProjectRole, ProjectVisibility
 from .forms import ProjectMembershipForm, MyProjectMembershipForm, ProjectMemberInviteForm, ProjectForm
@@ -398,4 +403,85 @@ def project_sdk_setup(request, project_pk, platform=""):
     return render(request, template_name, {
         "project": project,
         "dsn": project.dsn,
+    })
+
+
+@atomic_for_request_method
+def project_alerts_setup(request, project_pk):
+    project = Project.objects.get(id=project_pk)
+    _check_project_admin(project, request.user)
+
+    if request.method == 'POST':
+        full_action_str = request.POST.get('action')
+        action, service_id = full_action_str.split(":", 1)
+        if action == "remove":
+            MessagingServiceConfig.objects.filter(project=project_pk, id=service_id).delete()
+        elif action == "test":
+            service = MessagingServiceConfig.objects.get(project=project_pk, id=service_id)
+            service_backend = service.get_backend()
+            service_backend.send_test_message()
+            messages.success(
+                request, "Test message sent; check the configured service to see if it arrived.")
+
+    return render(request, 'projects/project_alerts_setup.html', {
+        'project': project,
+        'service_configs': project.service_configs.all(),
+    })
+
+
+@atomic_for_request_method
+def project_messaging_service_add(request, project_pk):
+    project = Project.objects.get(id=project_pk)
+    _check_project_admin(project, request.user)
+
+    if request.method == 'POST':
+        form = MessagingServiceConfigForm(project, request.POST)
+        config_form = SlackConfigForm(data=request.POST)
+
+        if form.is_valid() and config_form.is_valid():
+            service = form.save(commit=False)
+            service.config = json.dumps(config_form.get_config())
+            service.save()
+
+            messages.success(request, "Messaging service added successfully.")
+            return redirect('project_alerts_setup', project_pk=project_pk)
+
+    else:
+        form = MessagingServiceConfigForm(project)
+        config_form = SlackConfigForm()
+
+    return render(request, 'projects/project_messaging_service_edit.html', {
+        'project': project,
+        'form': form,
+        'config_form': config_form,
+    })
+
+
+@atomic_for_request_method
+def project_messaging_service_edit(request, project_pk, service_pk):
+    project = Project.objects.get(id=project_pk)
+    _check_project_admin(project, request.user)
+
+    instance = project.service_configs.get(id=service_pk)
+
+    if request.method == 'POST':
+        form = MessagingServiceConfigForm(project, request.POST, instance=instance)
+        config_form = SlackConfigForm(data=request.POST)
+
+        if form.is_valid() and config_form.is_valid():
+            service = form.save(commit=False)
+            service.config = json.dumps(config_form.get_config())
+            service.save()
+
+            messages.success(request, "Messaging service updated successfully.")
+            return redirect('project_alerts_setup', project_pk=project_pk)
+
+    else:
+        form = MessagingServiceConfigForm(project, instance=instance)
+        config_form = SlackConfigForm(config=json.loads(instance.config))
+
+    return render(request, 'projects/project_messaging_service_edit.html', {
+        'project': project,
+        'form': form,
+        'config_form': config_form,
     })
