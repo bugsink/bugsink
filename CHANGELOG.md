@@ -1,5 +1,9 @@
 # Changes
 
+## 1.6.1 (11 June 2025)
+
+Remove hard-coded slack `webhook_url` from the "test this connector" loop.
+
 ## 1.6.0 (10 June 2025)
 
 ### Slack Alerts

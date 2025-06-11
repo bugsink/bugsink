@@ -68,7 +68,7 @@ def slack_backend_send_test_message(webhook_url, project_name, display_name):
             ]}
 
     result = requests.post(
-        "https://hooks.slack.com/services/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",
+        webhook_url,
         data=json.dumps(data),
         headers={"Content-Type": "application/json"},
     )
