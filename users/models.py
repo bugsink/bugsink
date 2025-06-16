@@ -17,6 +17,18 @@ class User(AbstractUser):
 
     send_email_alerts = models.BooleanField(default=True, blank=True)
 
+    THEME_CHOICES = [
+        ("system", "System Default"),
+        ("light", "Light"),
+        ("dark", "Dark"),
+    ]
+    theme_preference = models.CharField(
+        max_length=10,
+        choices=THEME_CHOICES,
+        default="system",
+        blank=False,
+    )
+
     class Meta:
         db_table = 'auth_user'
 

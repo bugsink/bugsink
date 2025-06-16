@@ -2,17 +2,17 @@
 <div class="text-lg mb-6 md:mb-8">
 
     {% if not implicit %}
-        <div class="text-slate-800 font-bold">{{ formfield.label }}:</div>
+        <div class="text-slate-800 dark:text-slate-100 font-bold">{{ formfield.label }}:</div>
     {% endif %}
 
     {{ formfield }}
 
     {% if formfield.errors %}
     {% for error in formfield.errors %}
-        <div class="text-red-500 pt-1 px-2 text-sm">{{ error }}</div>
+        <div class="text-red-500 dark:text-red-400 pt-1 px-2 text-sm">{{ error }}</div>
     {% endfor %}
     {% elif formfield.help_text %}
-        <div class="text-gray-500 pt-1 px-2 text-sm">{{ formfield.help_text|safe }}</div>
+        <div class="text-gray-500 dark:text-gray-400 pt-1 px-2 text-sm">{{ formfield.help_text|safe }}</div>
     {% endif %}
 </div>
 {% endif %}

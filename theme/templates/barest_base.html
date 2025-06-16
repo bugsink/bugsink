@@ -1,15 +1,29 @@
 {% load static tailwind_tags %}<!DOCTYPE html>{# copy of bare_base.html, but without even a menu bar #}
-<html lang="en">
+<html lang="en" data-theme="{% if user.is_authenticated %}{{ user.theme_preference }}{% else %}system{% endif %}">
 	<head>
     <title>{% block title %}Bugsink{% endblock %}</title>
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-        
+
         {% tailwind_preload_css %}
 		{% tailwind_css %}
+    <script>
+      // System theme detection and switching
+      (function() {
+        const html = document.documentElement;
+        function applySystemTheme() {
+          if (document.documentElement.getAttribute('data-theme') === 'system') {
+            const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            html.setAttribute('data-theme', isDark ? 'dark' : 'light');
+          }
+        }
+        applySystemTheme();
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applySystemTheme);
+      })();
+    </script>
 	</head>
 
-	<body>
+	<body class="dark:bg-slate-700 dark:text-slate-100">
         <div id="content">
             <div>
                 {% block content %}{% endblock %}

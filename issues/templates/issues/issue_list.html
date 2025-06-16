@@ -18,17 +18,17 @@
 </div>
 {% endif %}
 
-<div class="flex bg-slate-50 border-b-2 mt-4 items-end">
+<div class="flex bg-slate-50 dark:bg-slate-800 border-b-2 mt-4 items-end">
     <div class="flex">
-    <a href="{% url "issue_list_open" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 {% if state_filter == "open" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">Open</div></a>
-    <a href="{% url "issue_list_unresolved" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 {% if state_filter == "unresolved" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">Unresolved</div></a>
-    <a href="{% url "issue_list_muted" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 {% if state_filter == "muted" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 hover:border-slate-400 hover:border-b-4{% endif %}">Muted</div></a>
-    <a href="{% url "issue_list_resolved" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 {% if state_filter == "resolved" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-slate-400 hover:border-b-4{% endif %}">Resolved</div></a>
-    <a href="{% url "issue_list_all" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 {% if state_filter == "all" %}text-cyan-500 border-cyan-500 border-b-4{% else %}text-slate-500 hover:border-slate-400 hover:border-b-4{% endif %}">All</div></a>
+    <a href="{% url "issue_list_open" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "open" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">Open</div></a>
+    <a href="{% url "issue_list_unresolved" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "unresolved" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">Unresolved</div></a>
+    <a href="{% url "issue_list_muted" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "muted" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">Muted</div></a>
+    <a href="{% url "issue_list_resolved" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "resolved" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">Resolved</div></a>
+    <a href="{% url "issue_list_all" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "all" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">All</div></a>
     </div>
     <div class="ml-auto p-2">
         <form action="." method="get">
-        <input type="text" name="q" value="{{ q }}" placeholder="search issues..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md"/>
+        <input type="text" name="q" value="{{ q }}" placeholder="search issues..." class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md"/>
         </form>
     </div>
 </div>
@@ -41,12 +41,12 @@
       <table class="w-full">
       <thead> {# I briefly considered hiding this thead if there are no items but it actually looks worse; instead, we just hide that one checkbox #}
 
-            <tr class="bg-white border-slate-300 border-l-2 border-r-2">
+            <tr class="bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 border-l-2 border-r-2">
             <td>
-                <div class="m-1 rounded-full hover:bg-slate-100 cursor-pointer" onclick="toggleContainedCheckbox(this); matchIssueCheckboxesStateToMain(this)">
+                <div class="m-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer" onclick="toggleContainedCheckbox(this); matchIssueCheckboxesStateToMain(this)">
 
                     {# the below sounds expensive, but this list is cached #}
-                    {% if page_obj.object_list|length > 0 %}<input type="checkbox" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4 cursor-pointer js-main-checkbox" onclick="event.stopPropagation(); matchIssueCheckboxesStateToMain(this.parentNode)"/>{% endif %}
+                    {% if page_obj.object_list|length > 0 %}<input type="checkbox" class="bg-white dark:bg-slate-900 border-cyan-800 dark:border-cyan-400 text-cyan-500 dark:text-cyan-300 focus:ring-cyan-200 dark:focus:ring-cyan-700 m-4 cursor-pointer js-main-checkbox" onclick="event.stopPropagation(); matchIssueCheckboxesStateToMain(this.parentNode)"/>{% endif %}
                 </div>
             </td>
             <td class="w-full ml-0 pb-4 pt-4 pr-4 flex">
@@ -54,16 +54,16 @@
 
                 {% if disable_resolve_buttons %}
                     {# see issues/tests.py for why this is turned off ATM #}
-                    {# <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" name="action" value="reopen">Reopen</button> #}
+                    {# <button class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md" name="action" value="reopen">Reopen</button> #}
 
                     {% spaceless %}{# needed to avoid whitespace between the looks-like-one-buttons #}
                     {% if project.has_releases %}
-                        <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-s-md" name="action" value="resolved_next">Resolved in next release</button>
+                        <button disabled class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-s-md" name="action" value="resolved_next">Resolved in next release</button>
 
-                        <button disabled class="font-bold text-slate-300 fill-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 rounded-e-md"><svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
+                        <button disabled class="font-bold text-slate-300 dark:text-slate-600 fill-slate-300 dark:fill-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 rounded-e-md"><svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
                         {# we just hide the whole dropdown; this is the easiest implementation of not-showing the dropdown #}
                     {% else %}
-                        <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-md" name="action" value="resolved">Resolve</button>
+                        <button disabled class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-md" name="action" value="resolved">Resolve</button>
                     {% endif %}
                     {% endspaceless %}
 
@@ -71,24 +71,24 @@
                     {% spaceless %}{# needed to avoid whitespace between the looks-like-one-buttons #}
 
                     {% if project.has_releases %}
-                        {# 'by next' is shown even if 'by current' is also shown: just because you haven't seen 'by current' doesn't mean it's actually already solved; and in fact we show this option first precisely because we can always show it #} 
-                        <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-s-md" name="action" value="resolved_next">Resolved in next release</button>
+                        {# 'by next' is shown even if 'by current' is also shown: just because you haven't seen 'by current' doesn't mean it's actually already solved; and in fact we show this option first precisely because we can always show it #}
+                        <button class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-s-md" name="action" value="resolved_next">Resolved in next release</button>
 
                         <div class="dropdown">
-                            <button disabled {# disabled b/c clicking the dropdown does nothing - we have hover for that #} class="font-bold text-slate-800 fill-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 hover:bg-slate-200 active:ring rounded-e-md"><svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
+                            <button disabled {# disabled b/c clicking the dropdown does nothing - we have hover for that #} class="font-bold text-slate-800 dark:text-slate-100 fill-slate-800 dark:fill-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-e-md"><svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
 
                             {# note that we can depend on get_latest_release being available, because we're in the 'project.has_releases' branch #}
                             <div class="dropdown-content-right flex-col pl-2">
 
-                                {# note that an if-statement ("issue.occurs_in_last_release") is missing here, because we're not on the level of a single issue #} 
+                                {# note that an if-statement ("issue.occurs_in_last_release") is missing here, because we're not on the level of a single issue #}
                                 {# handling of that question (but per-issue, and after-click) is done in views.py, _q_for_invalid_for_action()  #}
-                                <button name="action" value="resolved_release:{{ project.get_latest_release.version }}" class="block self-stretch font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white hover:bg-slate-200 active:ring text-left whitespace-nowrap">Resolved in latest ({{ project.get_latest_release.get_short_version }})</button>
+                                <button name="action" value="resolved_release:{{ project.get_latest_release.version }}" class="block self-stretch font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring text-left whitespace-nowrap">Resolved in latest ({{ project.get_latest_release.get_short_version }})</button>
                             </div>
-                        </div> 
+                        </div>
 
 
                     {% else %}
-                        <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" name="action" value="resolve">Resolve</button>
+                        <button class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md" name="action" value="resolve">Resolve</button>
                     {% endif %}
 
                     {% endspaceless %}
@@ -96,36 +96,36 @@
 
                 {% spaceless %}{# needed to avoid whitespace between the looks-like-one-buttons #}
                 {% if not disable_mute_buttons %}
-                <button name="action" value="mute" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-s-md">Mute</button>
+                <button name="action" value="mute" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-s-md">Mute</button>
                 {% else %}
-                <button disabled name="action" value="mute" class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-s-md">Mute</button>
+                <button disabled name="action" value="mute" class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-s-md">Mute</button>
                 {% endif %}
 
                 <div class="dropdown">
                     {% if not disable_mute_buttons %}
-                        <button disabled {# disabled b/c clicking the dropdown does nothing - we have hover for that #} class="font-bold text-slate-500 fill-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 active:ring">Mute for/until&nbsp;&nbsp;<svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
+                        <button disabled {# disabled b/c clicking the dropdown does nothing - we have hover for that #} class="font-bold text-slate-500 dark:text-slate-300 fill-slate-500 dark:fill-slate-500 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring">Mute for/until&nbsp;&nbsp;<svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
 
                         <div class="dropdown-content-right flex-col">
                             {% for mute_option in mute_options %}
-                                <button name="action" value="mute_{{ mute_option.for_or_until }}:{{ mute_option.period_name }},{{ mute_option.nr_of_periods }},{{ mute_option.gte_threshold }}" class="block self-stretch font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white hover:bg-slate-200 active:ring text-left whitespace-nowrap">{% if mute_option.for_or_until == "for" %}{{ mute_option.nr_of_periods }} {{ mute_option.period_name }}{% if mute_option.nr_of_periods != 1 %}s{% endif %}{% else %}{{ mute_option.gte_threshold }} events per {% if mute_option.nr_of_periods != 1%} {{ mute_option.nr_of_periods }} {{ mute_option.period_name }}s{% else %} {{ mute_option.period_name }}{% endif %}{% endif %}</button>
+                                <button name="action" value="mute_{{ mute_option.for_or_until }}:{{ mute_option.period_name }},{{ mute_option.nr_of_periods }},{{ mute_option.gte_threshold }}" class="block self-stretch font-bold text-slate-500 dark:text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring text-left whitespace-nowrap">{% if mute_option.for_or_until == "for" %}{{ mute_option.nr_of_periods }} {{ mute_option.period_name }}{% if mute_option.nr_of_periods != 1 %}s{% endif %}{% else %}{{ mute_option.gte_threshold }} events per {% if mute_option.nr_of_periods != 1%} {{ mute_option.nr_of_periods }} {{ mute_option.period_name }}s{% else %} {{ mute_option.period_name }}{% endif %}{% endif %}</button>
                             {% endfor %}
                         </div>
                     {% else %}
-                        <button disabled class="font-bold text-slate-300 fill-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2">Mute for/until&nbsp;&nbsp;<svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
+                        <button disabled class="font-bold text-slate-300 dark:text-slate-600 fill-slate-300 dark:fill-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2">Mute for/until&nbsp;&nbsp;<svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
                         {# we just hide the whole dropdown; this is the easiest implementation of not-showing the dropdown when the issue is already muted #}
                     {% endif %}
-                </div> 
+                </div>
 
                 {% if not disable_unmute_buttons %}
-                    <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 active:ring rounded-e-md" name="action" value="unmute">Unmute</button>
+                    <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-e-md" name="action" value="unmute">Unmute</button>
                 {% else %}
-                    <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 rounded-e-md" name="action" value="unmute">Unmute</button>
+                    <button disabled class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 rounded-e-md" name="action" value="unmute">Unmute</button>
                 {% endif %}
 
                 {% endspaceless %}
 
                 {# NOTE: "reopen" is not available in the UI as per the notes in issue_detail #}
-                {# only for resolved/muted items <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Reopen</button> #}
+                {# only for resolved/muted items <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">Reopen</button> #}
 
             </div>
             </td>
@@ -134,15 +134,15 @@
       </thead>
       <tbody>
             {% for issue in page_obj %}
-            <tr class="bg-slate-50 border-slate-300 border-2 ">
+            <tr class="bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600 border-2 ">
             <td>
-                <div class="m-1 rounded-full hover:bg-slate-100 cursor-pointer" onclick="toggleContainedCheckbox(this); matchMainCheckboxStateToIssueCheckboxes()">
-                    <input type="checkbox" {% if issue.id in unapplied_issue_ids %}checked{% endif %} name="issue_ids[]" value="{{ issue.id }}" class="bg-white border-cyan-800 text-cyan-500 focus:ring-cyan-200 m-4 cursor-pointer js-issue-checkbox" onclick="event.stopPropagation(); {# prevent the container's handler from undoing the default action #} matchMainCheckboxStateToIssueCheckboxes()"/>
+                <div class="m-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer" onclick="toggleContainedCheckbox(this); matchMainCheckboxStateToIssueCheckboxes()">
+                    <input type="checkbox" {% if issue.id in unapplied_issue_ids %}checked{% endif %} name="issue_ids[]" value="{{ issue.id }}" class="bg-white dark:bg-slate-900 border-cyan-800 dark:border-cyan-400 text-cyan-500 dark:text-cyan-300 focus:ring-cyan-200 dark:focus:ring-cyan-700 m-4 cursor-pointer js-issue-checkbox" onclick="event.stopPropagation(); {# prevent the container's handler from undoing the default action #} matchMainCheckboxStateToIssueCheckboxes()"/>
                 </div>
             </td>
             <td class="w-full ml-0 pb-4 pt-4 pr-4">
                 <div>
-                    <a href="/issues/issue/{{ issue.id }}/event/last/{% current_qs %}" class="text-cyan-500 fill-cyan-500 font-bold {% if issue.is_resolved %}italic{% endif %}">{% if issue.is_resolved %}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6 inline"><path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+                    <a href="/issues/issue/{{ issue.id }}/event/last/{% current_qs %}" class="text-cyan-500 dark:text-cyan-300 fill-cyan-500 font-bold {% if issue.is_resolved %}italic{% endif %}">{% if issue.is_resolved %}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6 inline"><path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
 </svg>{% endif %}{% if issue.is_muted %}<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 inline">
   <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 9.75 19.5 12m0 0 2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6 4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" />
 </svg>&nbsp;&nbsp;{% endif %}{{ issue.title|truncatechars:100 }}</a>
@@ -158,19 +158,19 @@
 
             </tr>
             {% empty %}
-            <tr class="bg-slate-50 border-slate-300 border-2 ">
+            <tr class="bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600 border-2 ">
             <td>
             </td>
 
             <td class="w-full ml-0 pb-4 pt-4 pr-4 text-center">
-                <div class="p-4 text-xl font-bold text-slate-800">
+                <div class="p-4 text-xl font-bold text-slate-800 dark:text-slate-100">
                 {% if q %}{# a single text is the catch-all for searching w/o results; 'seems enough' because one would generally only search after already having seen some issues (or not), i.e. having seen the relevant message as per below #}
                     No {{ state_filter }} issues found for "{{ q }}"
                 {% else %}
                     {% if state_filter == "open" %}
                         Congratulations! You have no open issues.
                         {% if project.digested_event_count == 0 %}
-                            This might mean you have not yet <a class="text-cyan-500 font-bold" href="{% url "project_sdk_setup" project_pk=project.id %}">set up your SDK</a>.
+                            This might mean you have not yet <a class="text-cyan-500 dark:text-cyan-300 font-bold" href="{% url "project_sdk_setup" project_pk=project.id %}">set up your SDK</a>.
                         {% endif %}
                     {% else %}
                         No {{ state_filter }} issues found.
@@ -224,7 +224,7 @@
         <div class="flex ml-auto justify-end">{# the div with a few project-related icons (pjt-members, pjt-settings, my settings, dsn) on the lower RHS #}
 
         {% if not app_settings.SINGLE_USER %}{% if member.is_admin or request.user.is_superuser %}
-        <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer text-slate-700" onclick="followContainedLink(this);" title="Project members">
+        <div class="rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 p-2 cursor-pointer text-slate-700" onclick="followContainedLink(this);" title="Project members">
             <a href="{% url 'project_members' project_pk=project.id %}">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8">
 <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
@@ -234,7 +234,7 @@
         {% endif %}{% endif %}
 
         {% if member.is_admin or request.user.is_superuser %}
-        <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer text-slate-700" onclick="followContainedLink(this);" title="Project settings">
+        <div class="rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 p-2 cursor-pointer text-slate-700" onclick="followContainedLink(this);" title="Project settings">
             <a href="{% url 'project_edit' project_pk=project.id %}">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
@@ -245,7 +245,7 @@
         {% endif %}
 
         {# member-existance is implied if you can see this page #}
-        <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer text-slate-700" onclick="followContainedLink(this);" title="Project membership (notification settings){# verbose! #}">
+        <div class="rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 p-2 cursor-pointer text-slate-700" onclick="followContainedLink(this);" title="Project membership (notification settings){# verbose! #}">
             <a href="{% url 'project_member_settings' project_pk=project.id user_pk=request.user.id %}">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8">
       <path stroke-linecap="round" stroke-linejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 1 1 0-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 0 1-1.44-4.282m3.102.069a18.03 18.03 0 0 1-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 0 1 8.835 2.535M10.34 6.66a23.847 23.847 0 0 0 8.835-2.535m0 0A23.74 23.74 0 0 0 18.795 3m.38 1.125a23.91 23.91 0 0 1 1.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 0 0 1.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 0 1 0 3.46" />
@@ -254,7 +254,7 @@
         </div>
 
         {# member-existance is implied if you can see this page #}
-        <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer text-slate-700" onclick="followContainedLink(this);" title="SDK Setup (connect app)">
+        <div class="rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 p-2 cursor-pointer text-slate-700" onclick="followContainedLink(this);" title="SDK Setup (connect app)">
             <a href="{% url 'project_sdk_setup' project_pk=project.id %}">
                 <svg fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="size-8">
                     <path d="M202.7,259.7l-31.5,31.5c-5.6,5.6-8.6,13-8.6,20.9c0,7.9,3.1,15.3,8.6,20.9l6.1,6.1l-3.7,3.7c-11.1,11.1-29.2,11.1-40.4,0

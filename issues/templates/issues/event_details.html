@@ -24,21 +24,21 @@
 
 <div class="mb-6">
     {% for key, value in key_info %}
-        <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-            <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-            <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value|linebreaks }}</div>
+        <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+            <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+            <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
         </div>
     {% endfor %}
 </div>
 
 {% if logentry_info %}
     <h1 id="logentry" class="text-2xl font-bold mt-4">Log Entry</h1>
-            
+
     <div class="mb-6">
         {% for key, value in logentry_info %}
-            <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value|linebreaks }}</div>
+            <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
             </div>
         {% endfor %}
     </div>
@@ -47,12 +47,12 @@
 
 {% if deployment_info %}
     <h1 id="deployment" class="text-2xl font-bold mt-4">Deployment</h1>
-            
+
     <div class="mb-6">
         {% for key, value in deployment_info %}
-            <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value|linebreaks }}</div>
+            <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
             </div>
         {% endfor %}
     </div>
@@ -60,12 +60,12 @@
 
 {% if event.get_tags %}
     <h1 id="tags" class="text-2xl font-bold mt-4">Tags</h1>
-            
+
     <div class="mb-6">
         {% for tag in event.get_tags %}
-            <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ tag.value.key.key }}</div>
-                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ tag.value.value|linebreaks }}</div>
+            <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ tag.value.key.key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ tag.value.value|linebreaks }}</div>
             </div>
         {% endfor %}
     </div>
@@ -75,12 +75,12 @@
     {# note: in the (September 2024) sentry.io interface, user info is displayed under 'contexts', but in the data it simply lives top-level as #}
     {# is implied by parsed_data.user -- I checked in a recent (September 2024) event.schema.json #}
     <h1 id="user" class="text-2xl font-bold mt-4">User</h1>
-            
+
     <div class="mb-6">
         {% for key, value in parsed_data.user|items %}
-            <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value|linebreaks }}</div>
+            <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
             </div>
         {% endfor %}
     </div>
@@ -89,13 +89,13 @@
 {% if parsed_data.request %}
     <h1 id="request" class="text-2xl font-bold mt-4">Request</h1>
     <div class="mb-6">
-            
+
     <div>
         {% for key, value in parsed_data.request|items %}
             {% if key != "headers" and key != "env" %}{# we deal with these below #}
-                <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-                    <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-                    <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value|linebreaks }}</div>{# forloop.last doesn't work given the if-statement; we can fix that by pre-processing in the view #}
+                <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                    <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+                    <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>{# forloop.last doesn't work given the if-statement; we can fix that by pre-processing in the view #}
                 </div>
             {% endif %}
         {% endfor %}
@@ -105,9 +105,9 @@
     <h3 class="font-bold mt-2">REQUEST HEADERS</h3>
     <div>
     {% for key, value in parsed_data.request.headers.items %}
-    <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %} border-dotted">
-        <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-        <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value|linebreaks }}</div>
+    <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %} border-dotted">
+        <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+        <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
     </div>
     {% endfor %}
     </div>
@@ -118,9 +118,9 @@
     <div>
 
     {% for key, value in parsed_data.request.env.items %}
-    <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %} border-dotted">
-        <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-        <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value|linebreaks }}</div>
+    <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %} border-dotted">
+        <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+        <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
     </div>
     {% endfor %}
 
@@ -133,14 +133,14 @@
 
 {% if contexts %}
     <h1 id="runtime" class="text-2xl font-bold mt-4">Contexts</h1>
-            
+
     <div class="mb-6">
         {% for context_key, context in contexts|items %}
             <h3 class="font-bold mt-2">{{ context_key|upper }}</h3>
             {% for key, value in context|items %}
-                <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-                    <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-                    <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value|linebreaks }}</div>
+                <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                    <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+                    <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
                 </div>
             {% endfor %}
         {% endfor %}
@@ -150,7 +150,7 @@
 {% comment %}
 earlier I said about "tracing": I don't believe much in this whole business of tracing, so I'm not going to display the associated data either
 
-now that we "just display all contexts" this is no longer true... some of the feeling persists, but I don't think 
+now that we "just display all contexts" this is no longer true... some of the feeling persists, but I don't think
 that I'm so much anti-tracing that I want specifically exclude it from a generic loop. The data's there, let's just
 show it (in a non-special way)
 {% endcomment %}
@@ -163,12 +163,12 @@ the fact that we commented-out rather than clobbered reveals a small amount of d
 {% if parsed_data.contexts.runtime %}
     {# sentry gives this prime location (even a picture)... but why... it's kinda obvious what you're working in right? Maybe I could put it at the top of the modules list instead. And check if there's any other relevant info in that runtime context (RTFM) #}
     <h1 id="runtime" class="text-2xl font-bold mt-4">Runtime</h1>
-            
+
     <div class="mb-6">
         {% for key, value in parsed_data.contexts.runtime|items %}
-            <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value|linebreaks }}</div>
+            <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
             </div>
         {% endfor %}
     </div>
@@ -177,14 +177,14 @@ the fact that we commented-out rather than clobbered reveals a small amount of d
 
 {% if parsed_data.modules %}
     <h1 id="modules" class="text-2xl font-bold mt-4">Modules</h1>
-            
+
     <div class="mb-6">
         {# we have observed that (emperically) the keys in most of the above are sorted in some kind of meaningful way from important to non-important #}
         {# however, for modules I'd rather just have an alphabetical list. #}
         {% for key, value in parsed_data.modules|sorted_items %}
-            <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value|linebreaks }}</div>
+            <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
             </div>
         {% endfor %}
     </div>
@@ -192,12 +192,12 @@ the fact that we commented-out rather than clobbered reveals a small amount of d
 
 {% if parsed_data.sdk %}
     <h1 id="sdk" class="text-2xl font-bold mt-4">SDK</h1>
-            
+
     <div class="mb-6">
         {% for key, value in parsed_data.sdk|items %}
-            <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value|linebreaks }}</div> {# the actual value may be a dict/list, but we'll just print it as a string; this is plenty of space for something as (hopefully) irrelevant as the SDK #}
+            <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div> {# the actual value may be a dict/list, but we'll just print it as a string; this is plenty of space for something as (hopefully) irrelevant as the SDK #}
             </div>
         {% endfor %}
     </div>
@@ -205,12 +205,12 @@ the fact that we commented-out rather than clobbered reveals a small amount of d
 
 {% if parsed_data.extra %}
     <h1 id="extra" class="text-2xl font-bold mt-4">Extra</h1>
-            
+
     <div class="mb-6">
         {% for key, value in parsed_data.extra|items %}
-            <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value|linebreaks }}</div> {# the actual value may be a dict/list, but we'll just print it as a string; this is plenty of space for something as (hopefully) irrelevant #}
+            <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div> {# the actual value may be a dict/list, but we'll just print it as a string; this is plenty of space for something as (hopefully) irrelevant #}
             </div>
         {% endfor %}
     </div>
