@@ -1,5 +1,9 @@
 # Changes
 
+## 1.6.2 (19 June 2025)
+
+* Too many quotes in local-vars display (Fix #119)
+
 ## 1.6.1 (11 June 2025)
 
 Remove hard-coded slack `webhook_url` from the "test this connector" loop.
