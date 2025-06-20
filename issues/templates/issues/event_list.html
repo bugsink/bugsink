@@ -9,7 +9,7 @@
 <div class="flex">
     <div class="overflow-hidden">
         <div class="italic">
-            Showing {{ page_obj.start_index|intcomma }} - {{ page_obj.end_index|intcomma }} of 
+            Showing {{ page_obj.start_index|intcomma }} - {{ page_obj.end_index|intcomma }} of
             {% if page_obj.paginator.count == issue.stored_event_count and issue.stored_event_count == issue.digested_event_count %} {# all equal #}
                 {{ page_obj.paginator.count|intcomma }} total events.
             {% elif page_obj.paginator.count == issue.stored_event_count and issue.stored_event_count != issue.digested_event_count %} {# evictions applied #}
@@ -27,44 +27,44 @@
         {# adapted copy/pasta from _event_nav #}
         <div class="flex place-content-end">
                 <form action="." method="get">
-                <input type="text" name="q" value="{{ q }}" placeholder="search..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md mr-2"/>
+                <input type="text" name="q" value="{{ q }}" placeholder="search..." class="focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md mr-2"/>
                 </form>
 
                 {% if page_obj.has_previous %} {# no need for 'is_first': if you can go to the left, you can go all the way to the left too #}
-                <a href="?{% add_to_qs page=1 %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="First page">
+                <a href="?{% add_to_qs page=1 %}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring inline-flex items-center justify-center" title="First page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M3.22 7.595a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 0 0 1.06-1.06l-2.72-2.72 2.72-2.72a.75.75 0 0 0-1.06-1.06l-3.25 3.25Zm8.25-3.25-3.25 3.25a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 1 0 1.06-1.06l-2.72-2.72 2.72-2.72a.75.75 0 0 0-1.06-1.06Z" clip-rule="evenodd" /></svg></a>
                 {% else %}
-                <div class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md inline-flex items-center justify-center" title="First page">
+                <div class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md inline-flex items-center justify-center" title="First page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M3.22 7.595a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 0 0 1.06-1.06l-2.72-2.72 2.72-2.72a.75.75 0 0 0-1.06-1.06l-3.25 3.25Zm8.25-3.25-3.25 3.25a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 1 0 1.06-1.06l-2.72-2.72 2.72-2.72a.75.75 0 0 0-1.06-1.06Z" clip-rule="evenodd" /></svg>
                 </div>
                 {% endif %}
 
                 {% if page_obj.has_previous %}
-                <a href="?{% add_to_qs page=page_obj.previous_page_number %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="Previous page">
+                <a href="?{% add_to_qs page=page_obj.previous_page_number %}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring inline-flex items-center justify-center" title="Previous page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M9.78 4.22a.75.75 0 0 1 0 1.06L7.06 8l2.72 2.72a.75.75 0 1 1-1.06 1.06L5.47 8.53a.75.75 0 0 1 0-1.06l3.25-3.25a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}
-                <div class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md inline-flex items-center justify-center" title="Previous page">
+                <div class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md inline-flex items-center justify-center" title="Previous page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M9.78 4.22a.75.75 0 0 1 0 1.06L7.06 8l2.72 2.72a.75.75 0 1 1-1.06 1.06L5.47 8.53a.75.75 0 0 1 0-1.06l3.25-3.25a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" /></svg>
                 </div>
                 {% endif %}
 
                 {% if page_obj.has_next %}
-                <a href="?{% add_to_qs page=page_obj.next_page_number %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="Next page">
+                <a href="?{% add_to_qs page=page_obj.next_page_number %}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring inline-flex items-center justify-center" title="Next page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M6.22 4.22a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06L8.94 8 6.22 5.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}
-                <div class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md inline-flex items-center justify-center" title="Next page">
+                <div class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md inline-flex items-center justify-center" title="Next page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M6.22 4.22a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06L8.94 8 6.22 5.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>
                 </div>
                 {% endif %}
 
                 {% if page_obj.has_next %}
-                <a href="?{% add_to_qs page=page_obj.paginator.num_pages %}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring inline-flex items-center justify-center" title="Last page">
+                <a href="?{% add_to_qs page=page_obj.paginator.num_pages %}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring inline-flex items-center justify-center" title="Last page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M12.78 7.595a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06l2.72-2.72-2.72-2.72a.75.75 0 0 1 1.06-1.06l3.25 3.25Zm-8.25-3.25 3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06l2.72-2.72-2.72-2.72a.75.75 0 0 1 1.06-1.06Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}
-                <div class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md inline-flex items-center justify-center" title="Last page">
+                <div class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md inline-flex items-center justify-center" title="Last page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M12.78 7.595a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06l2.72-2.72-2.72-2.72a.75.75 0 0 1 1.06-1.06l3.25 3.25Zm-8.25-3.25 3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06l2.72-2.72-2.72-2.72a.75.75 0 0 1 1.06-1.06Z" clip-rule="evenodd" /></svg>
 
                 </div>
@@ -79,27 +79,27 @@
 <thead>
 
     <tr>
-    <td class="p-4 align-top text-slate-800 font-bold">
+    <td class="p-4 align-top text-slate-800 dark:text-slate-100 font-bold">
         #
     </td>
 
-    <td class="p-4 align-top text-slate-800 font-bold">
+    <td class="p-4 align-top text-slate-800 dark:text-slate-100 font-bold">
         ID
     </td>
 
-    <td class="p-4 align-top text-slate-800 font-bold">
+    <td class="p-4 align-top text-slate-800 dark:text-slate-100 font-bold">
         Timestamp
     </td>
 
-    <td class="p-4 w-full align-top text-slate-800 font-bold">
+    <td class="p-4 w-full align-top text-slate-800 dark:text-slate-100 font-bold">
         Title
     </td>
 
-    <td class="p-4 align-top text-slate-800 font-bold">
+    <td class="p-4 align-top text-slate-800 dark:text-slate-100 font-bold">
         Release
     </td>
 
-    <td class="p-4 align-top text-slate-800 font-bold">
+    <td class="p-4 align-top text-slate-800 dark:text-slate-100 font-bold">
         Environment
     </td>
     </tr>
@@ -116,13 +116,13 @@ TODO
 {% endcomment %}
 
 {% for event in page_obj %}
-    <tr class="border-slate-200 border-2 ">
+    <tr class="border-slate-200 dark:border-slate-700 border-2 ">
 
-        <td class="p-4 font-bold text-slate-500 align-top">
+        <td class="p-4 font-bold text-slate-500 dark:text-slate-300 align-top">
             <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/{% current_qs %}">{{ event.digest_order }}</a>
         </td>
 
-        <td class="p-4 font-bold text-slate-500 align-top"> {# how useful is this really? #}
+        <td class="p-4 font-bold text-slate-500 dark:text-slate-300 align-top"> {# how useful is this really? #}
             <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/{% current_qs %}">{{ event.id|truncatechars:9 }}</a>
         </td>
 
@@ -152,7 +152,7 @@ TODO
     </tr>
 {% empty %}
     <tr>
-        <td colspan="6" class="p-4 text-slate-800 italic">
+        <td colspan="6" class="p-4 text-slate-800 dark:text-slate-100 italic">
             No events found{% if q %} for "{{ q }}"{% endif %}.
         </td>
     </tr>

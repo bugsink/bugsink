@@ -37,4 +37,4 @@ class CodeNode(template.Node):
 
         lexer = get_lexer_by_name(lang, stripall=True)
 
-        return highlight(code, lexer, formatter).replace("highlight", "p-4 mt-4 bg-slate-50 syntax-coloring")
+        return highlight(code, lexer, formatter).replace("highlight", "p-4 mt-4 bg-slate-50 dark:bg-slate-800 syntax-coloring")

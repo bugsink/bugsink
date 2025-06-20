@@ -5,16 +5,16 @@
 
 {% block content %}
 
-<div class="bg-cyan-100 h-screen overflow-y-scroll flex items-center justify-center"> {# the cyan background #}
-    <div class="bg-white lg:w-5/12 md:6/12 w-10/12">  {# the centered box #}
-        <div class="bg-slate-200 absolute left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-full p-4 md:p-8">  {# the logo #}
+<div class="bg-cyan-100 dark:bg-cyan-900 h-screen overflow-y-scroll flex items-center justify-center"> {# the cyan background #}
+    <div class="bg-white dark:bg-slate-900 lg:w-5/12 md:6/12 w-10/12">  {# the centered box #}
+        <div class="bg-slate-200 dark:bg-slate-800 absolute left-1/2 transform -translate-x-1/2 -translate-y-1/2 rounded-full p-4 md:p-8">  {# the logo #}
                 <a href="/"><img src="{% static 'images/bugsink-logo.png' %}" class="h-8 w-8 md:h-16 md:w-16" alt="Bugsink logo"></a>
         </div>
 
         <div class="p-12 md:pt-24 md:pl-24 md:pr-24 md:pb-16">
 
             {% if form.errors %}
-            <div class="mb-8 text-red-500">Your username and password didn't match. Please try again.</div>
+            <div class="mb-8 text-red-500 dark:text-red-400">Your username and password didn't match. Please try again.</div>
 
             {% elif next %}
                 {% if user.is_authenticated %}
@@ -30,13 +30,13 @@
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="absolute ml-3" width="24">
                         <path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clip-rule="evenodd" />
                     </svg>
-                    <input name="username" type="text" class="bg-slate-200 pl-12 py-2 md:py-4 focus:outline-none w-full" {% if form.username.value %}value="{{ form.username.value }}"{% endif %}  placeholder="Username" />
+                    <input name="username" type="text" class="bg-slate-200 dark:bg-slate-800 pl-12 py-2 md:py-4 focus:outline-none w-full" {% if form.username.value %}value="{{ form.username.value }}"{% endif %}  placeholder="Username" />
                 </div>
                 <div class="flex items-center text-lg mb-6 md:mb-8">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="absolute ml-3" width="24">
                         <path fill-rule="evenodd" d="M12 1.5a5.25 5.25 0 0 0-5.25 5.25v3a3 3 0 0 0-3 3v6.75a3 3 0 0 0 3 3h10.5a3 3 0 0 0 3-3v-6.75a3 3 0 0 0-3-3v-3c0-2.9-2.35-5.25-5.25-5.25Zm3.75 8.25v-3a3.75 3.75 0 1 0-7.5 0v3h7.5Z" clip-rule="evenodd" />
                     </svg>
-                    <input name="password" type="password"  class="bg-slate-200 pl-12 py-2 md:py-4 focus:outline-none w-full" {% if form.password.value %}value="{{ form.password.value }}"{% endif %} placeholder="Password" />
+                    <input name="password" type="password"  class="bg-slate-200 dark:bg-slate-800 pl-12 py-2 md:py-4 focus:outline-none w-full" {% if form.password.value %}value="{{ form.password.value }}"{% endif %} placeholder="Password" />
                 </div>
                 <input type="hidden" name="next" value="{{ next }}">
                 <button class="bg-slate-800 font-medium p-2 md:p-4 text-white uppercase w-full">Login</button>
@@ -44,8 +44,8 @@
             </form>
 
             <div class="mt-4">
-                <a href="{% url 'request_reset_password' %}" class="text-slate-800">Forgot password?</a>
-                {% if registration_enabled %}<a href="{% url 'signup' %}" class="float-right text-slate-800">Create an account</a>{% endif %}
+                <a href="{% url 'request_reset_password' %}" class="text-slate-800 dark:text-slate-100">Forgot password?</a>
+                {% if registration_enabled %}<a href="{% url 'signup' %}" class="float-right text-slate-800 dark:text-slate-100">Create an account</a>{% endif %}
             </div>
         </div>
 

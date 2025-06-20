@@ -13,8 +13,8 @@
 
         <div class="mt-4">
             Connect your PHP application to Bugsink to start tracking errors.
-            Bugsink is compatible with the <a class="text-cyan-500 font-bold" href="https://docs.sentry.io/platforms/php/">Sentry SDK</a>.
-            Note that the instructions for <a class="text-cyan-500 font-bold" href="https://docs.sentry.io/platforms/php/guides/laravel/">Laravel</a> and <a class="text-cyan-500 font-bold" href="https://docs.sentry.io/platforms/php/guides/symfony/">Symfony</a> are quite different from plain PHP.
+            Bugsink is compatible with the <a class="text-cyan-500 dark:text-cyan-300 font-bold" href="https://docs.sentry.io/platforms/php/">Sentry SDK</a>.
+            Note that the instructions for <a class="text-cyan-500 dark:text-cyan-300 font-bold" href="https://docs.sentry.io/platforms/php/guides/laravel/">Laravel</a> and <a class="text-cyan-500 dark:text-cyan-300 font-bold" href="https://docs.sentry.io/platforms/php/guides/symfony/">Symfony</a> are quite different from plain PHP.
             In the below we provide an overview, zoom in on the differences between Bugsink and Sentry, and provide a snippet with the correct DSN set.
         </div>
 
@@ -64,16 +64,16 @@ try {
 }
 ?>{% endcode %}
 
-        <div class="mt-4"> 
-            Your event should now appear in the <a href="{% url "issue_list_open" project_pk=project.pk %}" class="text-cyan-500 font-bold">list of open issues</a>.
+        <div class="mt-4">
+            Your event should now appear in the <a href="{% url "issue_list_open" project_pk=project.pk %}" class="text-cyan-500 dark:text-cyan-300 font-bold">list of open issues</a>.
         </div>
 
         <h2 class="mt-6 text-2xl font-bold">Further reading</h2>
 
-        <div class="mt-4"> 
-            For more information on how to use the SDK, check the <a href="https://www.bugsink.com/docs/sdk-recommendations/" class="text-cyan-500 font-bold">Bugsink-specific SDK recommendations</a>.
+        <div class="mt-4">
+            For more information on how to use the SDK, check the <a href="https://www.bugsink.com/docs/sdk-recommendations/" class="text-cyan-500 dark:text-cyan-300 font-bold">Bugsink-specific SDK recommendations</a>.
         </div>
-        
+
 
     </div>
 </div>

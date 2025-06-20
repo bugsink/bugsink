@@ -24,11 +24,11 @@ SystemWarning = namedtuple('SystemWarning', ['message', 'ignore_url'])
 FREE_VERSION_WARNING = mark_safe(
     """This is the free version of Bugsink; usage is limited to a single user for local development only.
     Using this software in production requires a
-    <a href="https://www.bugsink.com/#pricing" target="_blank" class="font-bold text-slate-800">paid licence</a>.""")
+    <a href="https://www.bugsink.com/#pricing" target="_blank" class="font-bold text-slate-800 dark:text-slate-100">paid licence</a>.""")
 
 EMAIL_BACKEND_WARNING = mark_safe(
     """Email is not set up, emails won't be sent. To get the most out of Bugsink, please
-    <a href="https://www.bugsink.com/docs/settings/#email" target="_blank" class="font-bold text-slate-800">set up
+    <a href="https://www.bugsink.com/docs/settings/#email" target="_blank" class="font-bold text-slate-800 dark:text-slate-100">set up
     email</a>.""")
 
 

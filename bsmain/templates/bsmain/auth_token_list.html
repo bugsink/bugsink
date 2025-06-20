@@ -13,7 +13,7 @@
         <ul class="mb-4">
             {% for message in messages %}
                 {# if we introduce different levels we can use{% message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %} #}
-                <li class="bg-cyan-50 border-2 border-cyan-800 p-4 rounded-lg">{{ message }}</li>
+                <li class="bg-cyan-50 dark:bg-cyan-900 border-2 border-cyan-800 dark:border-cyan-400 p-4 rounded-lg">{{ message }}</li>
             {% endfor %}
         </ul>
         {% endif %}
@@ -24,9 +24,9 @@
             <div class="ml-auto mt-6">
                 <form action="{% url "auth_token_create" %}" method="post">
                 {% csrf_token %} {# margins display slightly different from the <a href version that I have for e.g. project memembers, but I don't care _that_ much #}
-                    <button class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md">Add Token</button>
+                    <button class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md">Add Token</button>
                 </form>
-            </div> 
+            </div>
         </div>
 
         <div>
@@ -36,12 +36,12 @@
           <table class="w-full mt-8">
           <tbody>
                 <thead>
-                <tr class="bg-slate-200">
+                <tr class="bg-slate-200 dark:bg-slate-800">
                     <th class="w-full p-4 text-left text-xl" colspan="2">Auth Tokens</th>
                 </tr>
 
                 {% for auth_token in auth_tokens %}
-                <tr class="bg-white border-slate-200 border-b-2">
+                <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
                 <td class="w-full p-4">
                     <div>
                         {{ auth_token.token }}
@@ -50,13 +50,13 @@
 
                 <td class="p-4">
                     <div class="flex justify-end">
-                        <button name="action" value="delete:{{ auth_token.id }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 active:ring rounded-md">Delete</button>
-                    </div> 
+                        <button name="action" value="delete:{{ auth_token.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">Delete</button>
+                    </div>
                 </td>
 
                 </tr>
                 {% empty %}
-                <tr class="bg-white border-slate-200 border-b-2">
+                <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
                 <td class="w-full p-4">
                     <div>
                         No Auth Tokens.
