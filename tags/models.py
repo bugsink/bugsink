@@ -75,7 +75,7 @@ class EventTag(models.Model):
     value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.CASCADE)
 
     # issue is a denormalization that allows for a single-table-index for efficient search.
-    # SET_NULL: Issue deletion is not actually possible yet, so this is moot (for now).
+    # SET_NULL: Issue deletion is not actually possible yet (in the regular UI), so this is somewhat moot (for now).
     issue = models.ForeignKey(
         'issues.Issue', blank=False, null=True, on_delete=models.SET_NULL, related_name="event_tags")
 

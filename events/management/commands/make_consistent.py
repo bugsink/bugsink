@@ -23,7 +23,7 @@ def _delete_for_missing_fk(clazz, field_name):
 
     ## Dangling FKs:
     Non-existing objects may come into being when people muddle in the database directly with foreign key checks turned
-    off (note that fk checks are turned off by default in SQLite for backwards compatibility reasons).
+    off (note that fk checks are turned off by default in sqlite's CLI for backwards compatibility reasons).
 
     In the future it's further possible that there will be pieces the actual Bugsink code where FK-checks are turned off
     temporarily (e.g. when deleting a project with very many related objects). (In March 2025 there was no such code
@@ -75,6 +75,8 @@ def make_consistent():
     _delete_for_missing_fk(TurningPoint, 'issue')
 
     _delete_for_missing_fk(Release, 'project')
+
+    _delete_for_missing_fk(EventTag, 'issue')  # See #132 for the ordering of this statement
 
     _delete_for_missing_fk(Event, 'project')
     _delete_for_missing_fk(Event, 'issue')
