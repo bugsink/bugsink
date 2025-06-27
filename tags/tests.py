@@ -17,7 +17,6 @@ class DeduceTagsTestCase(RegularTestCase):
         self.assertEqual(deduce_tags({}), {})
         self.assertEqual(deduce_tags({"tags": {"foo": "bar"}}), {"foo": "bar"})
 
-        # finally, a more complex example (more or less real-world)
         event_data = {
             "server_name": "server",
             "release": "1.0",
