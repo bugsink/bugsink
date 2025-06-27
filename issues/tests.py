@@ -13,6 +13,7 @@ from django.test import TestCase as DjangoTestCase
 from django.contrib.auth import get_user_model
 from django.test import tag
 from django.conf import settings
+from django.apps import apps
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project, ProjectMembership
@@ -23,8 +24,9 @@ from compat.dsn import get_header_value
 from events.models import Event
 from ingest.views import BaseIngestAPIView
 from issues.factories import get_or_create_issue
+from tags.models import store_tags
 
-from .models import Issue, IssueStateManager
+from .models import Issue, IssueStateManager, TurningPoint, TurningPointKind
 from .regressions import is_regression, is_regression_2, issue_is_regression
 from .factories import denormalized_issue_fields
 from .utils import get_issue_grouper_for_data
@@ -665,3 +667,37 @@ class GroupingUtilsTestCase(DjangoTestCase):
     def test_fingerprint_with_default(self):
         self.assertEqual("Log Message: <no log message> ⋄ <no transaction> ⋄ fixed string",
                          get_issue_grouper_for_data({"fingerprint": ["{{ default }}", "fixed string"]}))
+
+
+class IssueDeletionTestCase(TransactionTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.project = Project.objects.create(name="Test Project")
+        self.issue, _ = get_or_create_issue(self.project)
+        self.event = create_event(self.project, issue=self.issue)
+
+        TurningPoint.objects.create(
+            issue=self.issue, triggering_event=self.event, timestamp=self.event.ingested_at,
+            kind=TurningPointKind.FIRST_SEEN)
+
+        self.event.never_evict = True
+        self.event.save()
+
+        store_tags(self.event, self.issue, {"foo": "bar"})
+
+    def test_delete_issue(self):
+        models = [apps.get_model(app_label=s.split('.')[0], model_name=s.split('.')[1].lower()) for s in [
+            'events.Event', 'issues.TurningPoint', 'tags.EventTag', 'issues.Grouping', 'issues.TurningPoint',
+            'events.Event', 'tags.EventTag'
+        ]]
+
+        for model in models:
+            # test-the-test: make sure some instances of the models actually exist after setup
+            self.assertTrue(model.objects.exists(), f"Some {model.__name__} should exist")
+
+        self.issue.delete_deferred()
+
+        # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly
+        for model in models:
+            self.assertFalse(model.objects.exists(), f"No {model.__name__}s should exist after issue deletion")
