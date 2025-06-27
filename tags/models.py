@@ -75,7 +75,7 @@ class EventTag(models.Model):
     value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.CASCADE)
 
     # issue is a denormalization that allows for a single-table-index for efficient search.
-    # SET_NULL: Issue deletion is not actually possible yet (in the regular UI), so this is somewhat moot (for now).
+    # SET_NULL: to be re-evaulated in the context of Issue.delete_deferred
     issue = models.ForeignKey(
         'issues.Issue', blank=False, null=True, on_delete=models.SET_NULL, related_name="event_tags")
 
@@ -84,7 +84,7 @@ class EventTag(models.Model):
 
     # DO_NOTHING: we manually implement CASCADE (i.e. when an event is cleaned up, clean up associated tags) in the
     # eviction process.  Why CASCADE? [1] you'll have to do it "at some point", so you might as well do it right when
-    # evicting (async in the 'most resilient setup' anyway, b/c that happens when ingesting) [2] the order of magnitude
+    # evicting (async in the 'most resilient setup' anyway, b/c that happens when digesting) [2] the order of magnitude
     # is "tens of deletions per event", so that's no reason to postpone. "Why manually" is explained in events/retention
     event = models.ForeignKey('events.Event', blank=False, null=False, on_delete=models.DO_NOTHING, related_name='tags')
 
@@ -115,7 +115,7 @@ class IssueTag(models.Model):
     # value already implies key in our current setup.
     value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.CASCADE)
 
-    # SET_NULL: Issue deletion is not actually possible yet, so this is moot (for now).
+    # SET_NULL: to be re-evaulated in the context of Issue.delete_deferred
     issue = models.ForeignKey('issues.Issue', blank=False, null=True, on_delete=models.SET_NULL, related_name='tags')
 
     # 1. As it stands, there is only a single counter per issue-tagvalue combination. In principle/theory this type of

@@ -1,7 +1,10 @@
+from collections import defaultdict
 from urllib.parse import urlparse
 
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import get_template
+from django.apps import apps
+from django.db.models import ForeignKey
 
 from .version import version
 
@@ -161,3 +164,67 @@ def eat_your_own_dogfood(sentry_dsn, **kwargs):
     sentry_sdk.init(
         **default_kwargs,
     )
+
+
+def get_model_topography():
+    """
+    Returns a dependency graph mapping:
+      referenced_model_key -> [
+          (referrer_model_class, fk_name),
+          ...
+      ]
+    """
+    dep_graph = defaultdict(list)
+    for model in apps.get_models():
+        for field in model._meta.get_fields(include_hidden=True):
+            if isinstance(field, ForeignKey):
+                referenced_model = field.related_model
+                referenced_key = f"{referenced_model._meta.app_label}.{referenced_model.__name__}"
+                dep_graph[referenced_key].append((model, field.name))
+    return dep_graph
+
+
+def delete_deps_with_budget(referring_model, fk_name, referred_ids, budget, dep_graph):
+    """
+    Deletes all objects of type referring_model that refer to any of the referred_ids via fk_name.
+    Returns the number of deleted objects.
+    And does this recursively (i.e. if there are further dependencies, it will delete those as well).
+    """
+    num_deleted = 0
+
+    # Fetch ids of referring objects and their referred ids
+    relevant_ids_here = list(
+        referring_model.objects.filter(**{f"{fk_name}__in": referred_ids}).order_by(f"{fk_name}_id", 'pk').values(
+            'pk', fk_name
+        )[:budget]
+    )
+
+    if not relevant_ids_here:
+        # we didn't find any referring objects. optimization: skip any recursion and referring_model.delete()
+        return 0
+
+    # The recursing bit:
+    for_recursion = dep_graph.get(f"{referring_model._meta.app_label}.{referring_model.__name__}", [])
+
+    for model_for_recursion, fk_name_for_recursion in for_recursion:
+        this_num_deleted = delete_deps_with_budget(
+            model_for_recursion,
+            fk_name_for_recursion,
+            [d["pk"] for d in relevant_ids_here],
+            budget - num_deleted,
+            dep_graph,
+        )
+
+        num_deleted += this_num_deleted
+
+        if num_deleted >= budget:
+            return num_deleted
+
+    # If this point is reached: we have deleted all referring objects that we could delete, and we still have budget
+    # left. We can now delete the referring objects themselves (limited by budget).
+    relevant_ids_after_rec = relevant_ids_here[:budget - num_deleted]
+
+    my_num_deleted, _ = referring_model.objects.filter(pk__in=[d['pk'] for d in relevant_ids_after_rec]).delete()
+    num_deleted += my_num_deleted
+
+    return num_deleted
