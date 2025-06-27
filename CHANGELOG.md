@@ -1,5 +1,10 @@
 # Changes
 
+## 1.6.3 (27 June 2025)
+
+* fix `make_consistent` on mysql (Fix #132)
+* Tags in `event_data` can be lists; deal with that (Fix #130)
+
 ## 1.6.2 (19 June 2025)
 
 * Too many quotes in local-vars display (Fix #119)
