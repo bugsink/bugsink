@@ -689,8 +689,7 @@ class IssueDeletionTestCase(TransactionTestCase):
 
     def test_delete_issue(self):
         models = [apps.get_model(app_label=s.split('.')[0], model_name=s.split('.')[1].lower()) for s in [
-            'events.Event', 'issues.TurningPoint', 'tags.EventTag', 'issues.Grouping', 'issues.TurningPoint',
-            'events.Event', 'tags.EventTag', 'issues.Issue',
+            'events.Event', 'issues.Grouping', 'issues.TurningPoint', 'tags.EventTag', 'issues.Issue', 'tags.IssueTag',
         ]]
 
         # 'vacuum' models are those that are not deleted when an issue is deleted, because they are exclusively owned
