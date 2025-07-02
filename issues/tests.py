@@ -25,6 +25,7 @@ from events.models import Event
 from ingest.views import BaseIngestAPIView
 from issues.factories import get_or_create_issue
 from tags.models import store_tags
+from tags.tasks import vacuum_tagvalues
 
 from .models import Issue, IssueStateManager, TurningPoint, TurningPointKind
 from .regressions import is_regression, is_regression_2, issue_is_regression
@@ -692,7 +693,12 @@ class IssueDeletionTestCase(TransactionTestCase):
             'events.Event', 'tags.EventTag', 'issues.Issue',
         ]]
 
-        for model in models:
+        # 'vacuum' models are those that are not deleted when an issue is deleted, because they are exclusively owned
+        # by any given issue.
+        vacuum_models = [apps.get_model(app_label=s.split('.')[0], model_name=s.split('.')[1].lower())
+                         for s in ['tags.TagKey', 'tags.TagValue']]
+
+        for model in models + vacuum_models:
             # test-the-test: make sure some instances of the models actually exist after setup
             self.assertTrue(model.objects.exists(), f"Some {model.__name__} should exist")
 
@@ -701,3 +707,14 @@ class IssueDeletionTestCase(TransactionTestCase):
         # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly
         for model in models:
             self.assertFalse(model.objects.exists(), f"No {model.__name__}s should exist after issue deletion")
+
+        for model in vacuum_models:
+            # 'should' in quotes because this isn't so because we believe it's better if they did, but because the
+            # code currently does not delete them.
+            self.assertTrue(model.objects.exists(), f"Some {model.__name__}s 'should' exist after issue deletion")
+
+        vacuum_tagvalues()
+        # tests run w/ TASK_ALWAYS_EAGER, so any "delayed" (recursive) calls can be expected to have run
+
+        for model in vacuum_models:
+            self.assertFalse(model.objects.exists(), f"No {model.__name__}s should exist after vacuuming")
