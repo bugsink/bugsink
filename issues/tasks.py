@@ -4,6 +4,45 @@ from bugsink.utils import get_model_topography, delete_deps_with_budget
 from bugsink.transaction import immediate_atomic, delay_on_commit
 
 
+def get_model_topography_with_issue_override():
+    """
+    Returns the model topography with ordering adjusted to prefer deletions via .issue, when available.
+
+    This assumes that Issue is not only the root of the dependency graph, but also that if a model has an .issue
+    ForeignKey, deleting it via that path is sufficient, meaning we can safely avoid visiting the same model again
+    through other ForeignKey routes (e.g. Event.grouping or TurningPoint.triggering_event).
+
+    The preference is encoded via an explicit list of models, which are visited early and only via their .issue path.
+    """
+    from issues.models import TurningPoint, Grouping
+    from events.models import Event
+    from tags.models import IssueTag, EventTag
+
+    preferred = [
+        TurningPoint,  # above Event, to avoid deletions via .triggering_event
+        EventTag,      # above Event, to avoid deletions via .event
+        Event,         # above Grouping, to avoid deletions via .grouping
+        Grouping,
+        IssueTag,
+    ]
+
+    def as_preferred(lst):
+        """
+        Sorts the list of (model, fk_name) tuples such that the models are in the preferred order as indicated above,
+        and models which occur with another fk_name are pruned
+        """
+        return sorted(
+            [(model, fk_name) for model, fk_name in lst if fk_name == "issue" or model not in preferred],
+            key=lambda x: preferred.index(x[0]) if x[0] in preferred else len(preferred),
+        )
+
+    topo = get_model_topography()
+    for k, lst in topo.items():
+        topo[k] = as_preferred(lst)
+
+    return topo
+
+
 @shared_task
 def delete_issue_deps(issue_id):
     from .models import Issue   # avoid circular import
@@ -11,7 +50,7 @@ def delete_issue_deps(issue_id):
         budget = 500
         num_deleted = 0
 
-        dep_graph = get_model_topography()
+        dep_graph = get_model_topography_with_issue_override()
 
         for model_for_recursion, fk_name_for_recursion in dep_graph["issues.Issue"]:
             this_num_deleted = delete_deps_with_budget(
