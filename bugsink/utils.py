@@ -193,13 +193,13 @@ def delete_deps_with_budget(referring_model, fk_name, referred_ids, budget, dep_
     num_deleted = 0
 
     # Fetch ids of referring objects and their referred ids
-    relevant_ids_here = list(
+    relevant_ids = list(
         referring_model.objects.filter(**{f"{fk_name}__in": referred_ids}).order_by(f"{fk_name}_id", 'pk').values(
             'pk', fk_name
         )[:budget]
     )
 
-    if not relevant_ids_here:
+    if not relevant_ids:
         # we didn't find any referring objects. optimization: skip any recursion and referring_model.delete()
         return 0
 
@@ -207,22 +207,20 @@ def delete_deps_with_budget(referring_model, fk_name, referred_ids, budget, dep_
     for_recursion = dep_graph.get(f"{referring_model._meta.app_label}.{referring_model.__name__}", [])
 
     for model_for_recursion, fk_name_for_recursion in for_recursion:
-        this_num_deleted = delete_deps_with_budget(
+        num_deleted += delete_deps_with_budget(
             model_for_recursion,
             fk_name_for_recursion,
-            [d["pk"] for d in relevant_ids_here],
+            [d["pk"] for d in relevant_ids],
             budget - num_deleted,
             dep_graph,
         )
-
-        num_deleted += this_num_deleted
 
         if num_deleted >= budget:
             return num_deleted
 
     # If this point is reached: we have deleted all referring objects that we could delete, and we still have budget
     # left. We can now delete the referring objects themselves (limited by budget).
-    relevant_ids_after_rec = relevant_ids_here[:budget - num_deleted]
+    relevant_ids_after_rec = relevant_ids[:budget - num_deleted]
 
     my_num_deleted, _ = referring_model.objects.filter(pk__in=[d['pk'] for d in relevant_ids_after_rec]).delete()
     num_deleted += my_num_deleted
