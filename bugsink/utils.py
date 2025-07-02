@@ -192,7 +192,9 @@ def delete_deps_with_budget(referring_model, fk_name, referred_ids, budget, dep_
     """
     num_deleted = 0
 
-    # Fetch ids of referring objects and their referred ids
+    # Fetch ids of referring objects and their referred ids. Note that an index of fk_name can be assumed to exist,
+    # because fk_name is a ForeignKey field, and Django automatically creates an index for ForeignKey fields unless
+    # instructed otherwise: https://github.com/django/django/blob/7feafd79a481/django/db/models/fields/related.py#L1025
     relevant_ids = list(
         referring_model.objects.filter(**{f"{fk_name}__in": referred_ids}).values_list('pk', flat=True)[:budget]
     )
