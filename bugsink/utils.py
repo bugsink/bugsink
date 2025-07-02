@@ -194,9 +194,7 @@ def delete_deps_with_budget(referring_model, fk_name, referred_ids, budget, dep_
 
     # Fetch ids of referring objects and their referred ids
     relevant_ids = list(
-        referring_model.objects.filter(**{f"{fk_name}__in": referred_ids}).order_by(f"{fk_name}_id", 'pk').values_list(
-            'pk', flat=True
-        )[:budget]
+        referring_model.objects.filter(**{f"{fk_name}__in": referred_ids}).values_list('pk', flat=True)[:budget]
     )
 
     if not relevant_ids:
