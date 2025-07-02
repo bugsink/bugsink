@@ -16,6 +16,7 @@ from django.conf import settings
 from django.apps import apps
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
+from bugsink.utils import get_model_topography
 from projects.models import Project, ProjectMembership
 from releases.models import create_release_if_needed
 from events.factories import create_event
@@ -31,6 +32,7 @@ from .models import Issue, IssueStateManager, TurningPoint, TurningPointKind
 from .regressions import is_regression, is_regression_2, issue_is_regression
 from .factories import denormalized_issue_fields
 from .utils import get_issue_grouper_for_data
+from .tasks import get_model_topography_with_issue_override
 
 User = get_user_model()
 
@@ -717,3 +719,39 @@ class IssueDeletionTestCase(TransactionTestCase):
 
         for model in vacuum_models:
             self.assertFalse(model.objects.exists(), f"No {model.__name__}s should exist after vacuuming")
+
+    def test_dependency_graphs(self):
+        # tests for an implementation detail of defered deletion, namely 1 test that asserts what the actual
+        # model-topography is, and one test that shows how we manually override it; this is to trigger a failure when
+        # the topology changes (and forces us to double-check that the override is still correct).
+
+        orig = get_model_topography()
+        override = get_model_topography_with_issue_override()
+
+        def walk(topo, model_name):
+            results = []
+            for model, fk_name in topo[model_name]:
+                results.append((model, fk_name))
+                results.extend(walk(topo, model._meta.label))
+            return results
+
+        self.assertEqual(walk(orig, 'issues.Issue'), [
+            (apps.get_model('issues', 'Grouping'), 'issue'),
+            (apps.get_model('events', 'Event'), 'grouping'),
+            (apps.get_model('issues', 'TurningPoint'), 'triggering_event'),
+            (apps.get_model('tags', 'EventTag'), 'event'),
+            (apps.get_model('issues', 'TurningPoint'), 'issue'),
+            (apps.get_model('events', 'Event'), 'issue'),
+            (apps.get_model('issues', 'TurningPoint'), 'triggering_event'),
+            (apps.get_model('tags', 'EventTag'), 'event'),
+            (apps.get_model('tags', 'EventTag'), 'issue'),
+            (apps.get_model('tags', 'IssueTag'), 'issue'),
+        ])
+
+        self.assertEqual(walk(override, 'issues.Issue'), [
+            (apps.get_model('issues', 'TurningPoint'), 'issue'),
+            (apps.get_model('tags', 'EventTag'), 'issue'),
+            (apps.get_model('events', 'Event'), 'issue'),
+            (apps.get_model('issues', 'Grouping'), 'issue'),
+            (apps.get_model('tags', 'IssueTag'), 'issue'),
+        ])
