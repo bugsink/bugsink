@@ -75,9 +75,8 @@ class EventTag(models.Model):
     value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.DO_NOTHING)
 
     # issue is a denormalization that allows for a single-table-index for efficient search.
-    # SET_NULL: to be re-evaulated in the context of Issue.delete_deferred
     issue = models.ForeignKey(
-        'issues.Issue', blank=False, null=True, on_delete=models.SET_NULL, related_name="event_tags")
+        'issues.Issue', blank=False, null=False, on_delete=models.DO_NOTHING, related_name="event_tags")
 
     # digest_order is a denormalization that allows for a single-table-index for efficient search.
     digest_order = models.PositiveIntegerField(blank=False, null=False)
@@ -115,8 +114,7 @@ class IssueTag(models.Model):
     # value already implies key in our current setup.
     value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.DO_NOTHING)
 
-    # SET_NULL: to be re-evaulated in the context of Issue.delete_deferred
-    issue = models.ForeignKey('issues.Issue', blank=False, null=True, on_delete=models.SET_NULL, related_name='tags')
+    issue = models.ForeignKey('issues.Issue', blank=False, null=False, on_delete=models.DO_NOTHING, related_name='tags')
 
     # 1. As it stands, there is only a single counter per issue-tagvalue combination. In principle/theory this type of
     # denormalization will break down when you want to show this kind of information filtered by some other dimension,

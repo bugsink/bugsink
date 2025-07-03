@@ -705,7 +705,7 @@ class IssueDeletionTestCase(TransactionTestCase):
 
         # assertNumQueries() is brittle and opaque. But at least the brittle part is quick to fix (a single number) and
         # provides a canary for performance regressions.
-        with self.assertNumQueries(25):
+        with self.assertNumQueries(17):
             self.issue.delete_deferred()
 
         # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly

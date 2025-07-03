@@ -220,7 +220,7 @@ class Grouping(models.Model):
     # we hash the key to make it indexable on MySQL, see https://code.djangoproject.com/ticket/2495
     grouping_key_hash = models.CharField(max_length=64, blank=False, null=True)
 
-    issue = models.ForeignKey("Issue", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+    issue = models.ForeignKey("Issue", blank=False, null=False, on_delete=models.DO_NOTHING)
 
     def __str__(self):
         return self.grouping_key
@@ -491,7 +491,7 @@ class TurningPoint(models.Model):
     # basically: an Event, but that name was already taken in our system :-) alternative names I considered:
     # "milestone", "state_change", "transition", "annotation", "episode"
 
-    issue = models.ForeignKey("Issue", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+    issue = models.ForeignKey("Issue", blank=False, null=False, on_delete=models.DO_NOTHING)
     triggering_event = models.ForeignKey("events.Event", blank=True, null=True, on_delete=models.DO_NOTHING)
 
     # null: the system-user
