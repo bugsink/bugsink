@@ -9,8 +9,7 @@ from django.utils import timezone
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project, ProjectMembership
-from issues.models import Issue
-from issues.factories import denormalized_issue_fields
+from issues.factories import get_or_create_issue
 
 from .factories import create_event
 from .retention import (
@@ -28,7 +27,7 @@ class ViewTests(TransactionTestCase):
         self.user = User.objects.create_user(username='test', password='test')
         self.project = Project.objects.create()
         ProjectMembership.objects.create(project=self.project, user=self.user)
-        self.issue = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        self.issue, _ = get_or_create_issue(project=self.project)
         self.event = create_event(self.project, self.issue)
         self.client.force_login(self.user)
 
@@ -154,7 +153,7 @@ class RetentionTestCase(DjangoTestCase):
         digested_at = timezone.now()
 
         self.project = Project.objects.create(retention_max_event_count=5)
-        self.issue = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        self.issue, _ = get_or_create_issue(project=self.project)
 
         for digest_order in range(1, 7):
             project_stored_event_count += 1  # +1 pre-create, as in the ingestion view
@@ -180,7 +179,7 @@ class RetentionTestCase(DjangoTestCase):
         project_stored_event_count = 0
 
         self.project = Project.objects.create(retention_max_event_count=999)
-        self.issue = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        self.issue, _ = get_or_create_issue(project=self.project)
 
         current_timestamp = datetime.datetime(2022, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
 

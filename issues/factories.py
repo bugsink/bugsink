@@ -12,6 +12,7 @@ def get_or_create_issue(project=None, event_data=None):
     if event_data is None:
         from events.factories import create_event_data
         event_data = create_event_data()
+
     if project is None:
         project = Project.objects.create(name="Test project")
 

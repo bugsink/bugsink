@@ -356,12 +356,11 @@ class MuteUnmuteTestCase(TransactionTestCase):
     def test_unmute_simple_case(self, send_unmute_alert):
         project = Project.objects.create()
 
-        issue = Issue.objects.create(
-            project=project,
-            unmute_on_volume_based_conditions='[{"period": "day", "nr_of_periods": 1, "volume": 1}]',
-            is_muted=True,
-            **denormalized_issue_fields(),
-        )
+        issue, _ = get_or_create_issue(project)
+
+        issue.unmute_on_volume_based_conditions = '[{"period": "day", "nr_of_periods": 1, "volume": 1}]'
+        issue.is_muted = True
+        issue.save()
 
         event = create_event(project, issue)
         BaseIngestAPIView.count_issue_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
@@ -376,15 +375,14 @@ class MuteUnmuteTestCase(TransactionTestCase):
     def test_unmute_two_simultaneously_should_lead_to_one_alert(self, send_unmute_alert):
         project = Project.objects.create()
 
-        issue = Issue.objects.create(
-            project=project,
-            unmute_on_volume_based_conditions='''[
+        issue, _ = get_or_create_issue(project)
+
+        issue. unmute_on_volume_based_conditions = '''[
     {"period": "day", "nr_of_periods": 1, "volume": 1},
     {"period": "month", "nr_of_periods": 1, "volume": 1}
-]''',
-            is_muted=True,
-            **denormalized_issue_fields(),
-        )
+]'''
+        issue.is_muted = True
+        issue.save()
 
         event = create_event(project, issue)
         BaseIngestAPIView.count_issue_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
