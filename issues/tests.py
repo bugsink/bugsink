@@ -692,12 +692,12 @@ class IssueDeletionTestCase(TransactionTestCase):
     def test_delete_issue(self):
         models = [apps.get_model(app_label=s.split('.')[0], model_name=s.split('.')[1].lower()) for s in [
             'events.Event', 'issues.Grouping', 'issues.TurningPoint', 'tags.EventTag', 'issues.Issue', 'tags.IssueTag',
+            'tags.TagValue',  # TagValue 'feels like' a vacuum_model (FKs reversed) but is cleaned up in `prune_orphans`
         ]]
 
-        # 'vacuum' models are those that are not deleted when an issue is deleted, because they are exclusively owned
-        # by any given issue.
+        # see the note in `prune_orphans` about TagKey to understand why it's special.
         vacuum_models = [apps.get_model(app_label=s.split('.')[0], model_name=s.split('.')[1].lower())
-                         for s in ['tags.TagKey', 'tags.TagValue']]
+                         for s in ['tags.TagKey',]]
 
         for model in models + vacuum_models:
             # test-the-test: make sure some instances of the models actually exist after setup
