@@ -72,11 +72,8 @@ class Event(models.Model):
     ingested_at = models.DateTimeField(blank=False, null=False)
     digested_at = models.DateTimeField(db_index=True, blank=False, null=False)
 
-    # not actually expected to be null, but we want to be able to delete issues without deleting events (cleanup later)
-    issue = models.ForeignKey("issues.Issue", blank=False, null=True, on_delete=models.SET_NULL)
-
-    # not actually expected to be null
-    grouping = models.ForeignKey("issues.Grouping", blank=False, null=True, on_delete=models.SET_NULL)
+    issue = models.ForeignKey("issues.Issue", blank=False, null=False, on_delete=models.DO_NOTHING)
+    grouping = models.ForeignKey("issues.Grouping", blank=False, null=False, on_delete=models.DO_NOTHING)
 
     # The docs say:
     # > Required. Hexadecimal string representing a uuid4 value. The length is exactly 32 characters. Dashes are not

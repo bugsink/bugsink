@@ -3,7 +3,7 @@ from django.test import TestCase as DjangoTestCase
 
 from projects.models import Project
 from issues.factories import get_or_create_issue, denormalized_issue_fields
-from events.factories import create_event
+from events.factories import create_event, create_event_data
 from issues.models import Issue
 
 from .models import store_tags, EventTag
@@ -17,7 +17,6 @@ class DeduceTagsTestCase(RegularTestCase):
         self.assertEqual(deduce_tags({}), {})
         self.assertEqual(deduce_tags({"tags": {"foo": "bar"}}), {"foo": "bar"})
 
-        # finally, a more complex example (more or less real-world)
         event_data = {
             "server_name": "server",
             "release": "1.0",
@@ -179,12 +178,12 @@ class SearchTestCase(DjangoTestCase):
         # scenario (in which there would be some relation between the tags of issues and events), but it allows us to
         # test event_search more easily (if each event is tied to a different issue, searching for tags is meaningless,
         # since you always search within the context of an issue).
-        self.global_issue = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        self.global_issue, _ = get_or_create_issue(project=self.project, event_data=create_event_data("global"))
 
-        issue_with_tags_and_text = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        issue_with_tags_and_text, _ = get_or_create_issue(project=self.project, event_data=create_event_data("tag_txt"))
         event_with_tags_and_text = create_event(self.project, issue=self.global_issue)
 
-        issue_with_tags_no_text = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        issue_with_tags_no_text, _ = get_or_create_issue(project=self.project, event_data=create_event_data("no_text"))
         event_with_tags_no_text = create_event(self.project, issue=self.global_issue)
 
         store_tags(event_with_tags_and_text, issue_with_tags_and_text, {f"k-{i}": f"v-{i}" for i in range(5)})
@@ -192,7 +191,7 @@ class SearchTestCase(DjangoTestCase):
         # fix the EventTag objects' issue, which is broken per the non-real-world setup (see above)
         EventTag.objects.all().update(issue=self.global_issue)
 
-        issue_without_tags = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        issue_without_tags, _ = get_or_create_issue(project=self.project, event_data=create_event_data("no_tags"))
         event_without_tags = create_event(self.project, issue=self.global_issue)
 
         for obj in [issue_with_tags_and_text, event_with_tags_and_text, issue_without_tags, event_without_tags]:
@@ -200,7 +199,7 @@ class SearchTestCase(DjangoTestCase):
             obj.calculated_value = "findable value"
             obj.save()
 
-        Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        get_or_create_issue(project=self.project, event_data=create_event_data("no_text"))
         create_event(self.project, issue=self.global_issue)
 
     def _test_search(self, search_x):

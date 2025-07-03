@@ -13,8 +13,10 @@ from django.test import TestCase as DjangoTestCase
 from django.contrib.auth import get_user_model
 from django.test import tag
 from django.conf import settings
+from django.apps import apps
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
+from bugsink.utils import get_model_topography
 from projects.models import Project, ProjectMembership
 from releases.models import create_release_if_needed
 from events.factories import create_event
@@ -23,11 +25,14 @@ from compat.dsn import get_header_value
 from events.models import Event
 from ingest.views import BaseIngestAPIView
 from issues.factories import get_or_create_issue
+from tags.models import store_tags
+from tags.tasks import vacuum_tagvalues
 
-from .models import Issue, IssueStateManager
+from .models import Issue, IssueStateManager, TurningPoint, TurningPointKind
 from .regressions import is_regression, is_regression_2, issue_is_regression
 from .factories import denormalized_issue_fields
 from .utils import get_issue_grouper_for_data
+from .tasks import get_model_topography_with_issue_override
 
 User = get_user_model()
 
@@ -351,12 +356,11 @@ class MuteUnmuteTestCase(TransactionTestCase):
     def test_unmute_simple_case(self, send_unmute_alert):
         project = Project.objects.create()
 
-        issue = Issue.objects.create(
-            project=project,
-            unmute_on_volume_based_conditions='[{"period": "day", "nr_of_periods": 1, "volume": 1}]',
-            is_muted=True,
-            **denormalized_issue_fields(),
-        )
+        issue, _ = get_or_create_issue(project)
+
+        issue.unmute_on_volume_based_conditions = '[{"period": "day", "nr_of_periods": 1, "volume": 1}]'
+        issue.is_muted = True
+        issue.save()
 
         event = create_event(project, issue)
         BaseIngestAPIView.count_issue_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
@@ -371,15 +375,14 @@ class MuteUnmuteTestCase(TransactionTestCase):
     def test_unmute_two_simultaneously_should_lead_to_one_alert(self, send_unmute_alert):
         project = Project.objects.create()
 
-        issue = Issue.objects.create(
-            project=project,
-            unmute_on_volume_based_conditions='''[
+        issue, _ = get_or_create_issue(project)
+
+        issue. unmute_on_volume_based_conditions = '''[
     {"period": "day", "nr_of_periods": 1, "volume": 1},
     {"period": "month", "nr_of_periods": 1, "volume": 1}
-]''',
-            is_muted=True,
-            **denormalized_issue_fields(),
-        )
+]'''
+        issue.is_muted = True
+        issue.save()
 
         event = create_event(project, issue)
         BaseIngestAPIView.count_issue_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
@@ -665,3 +668,97 @@ class GroupingUtilsTestCase(DjangoTestCase):
     def test_fingerprint_with_default(self):
         self.assertEqual("Log Message: <no log message> ⋄ <no transaction> ⋄ fixed string",
                          get_issue_grouper_for_data({"fingerprint": ["{{ default }}", "fixed string"]}))
+
+
+class IssueDeletionTestCase(TransactionTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.project = Project.objects.create(name="Test Project", stored_event_count=1)  # 1, in prep. of the below
+        self.issue, _ = get_or_create_issue(self.project)
+        self.event = create_event(self.project, issue=self.issue)
+
+        TurningPoint.objects.create(
+            issue=self.issue, triggering_event=self.event, timestamp=self.event.ingested_at,
+            kind=TurningPointKind.FIRST_SEEN)
+
+        self.event.never_evict = True
+        self.event.save()
+
+        store_tags(self.event, self.issue, {"foo": "bar"})
+
+    def test_delete_issue(self):
+        models = [apps.get_model(app_label=s.split('.')[0], model_name=s.split('.')[1].lower()) for s in [
+            'events.Event', 'issues.Grouping', 'issues.TurningPoint', 'tags.EventTag', 'issues.Issue', 'tags.IssueTag',
+            'tags.TagValue',  # TagValue 'feels like' a vacuum_model (FKs reversed) but is cleaned up in `prune_orphans`
+        ]]
+
+        # see the note in `prune_orphans` about TagKey to understand why it's special.
+        vacuum_models = [apps.get_model(app_label=s.split('.')[0], model_name=s.split('.')[1].lower())
+                         for s in ['tags.TagKey',]]
+
+        for model in models + vacuum_models:
+            # test-the-test: make sure some instances of the models actually exist after setup
+            self.assertTrue(model.objects.exists(), f"Some {model.__name__} should exist")
+
+        # assertNumQueries() is brittle and opaque. But at least the brittle part is quick to fix (a single number) and
+        # provides a canary for performance regressions.
+
+        # correct for bugsink/transaction.py's select_for_update for non-sqlite databases
+        correct_for_select_for_update = 1 if 'sqlite' not in settings.DATABASES['default']['ENGINE'] else 0
+
+        with self.assertNumQueries(19 + correct_for_select_for_update):
+            self.issue.delete_deferred()
+
+        # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly
+        for model in models:
+            self.assertFalse(model.objects.exists(), f"No {model.__name__}s should exist after issue deletion")
+
+        for model in vacuum_models:
+            # 'should' in quotes because this isn't so because we believe it's better if they did, but because the
+            # code currently does not delete them.
+            self.assertTrue(model.objects.exists(), f"Some {model.__name__}s 'should' exist after issue deletion")
+
+        self.assertEqual(0, Project.objects.get().stored_event_count)
+
+        vacuum_tagvalues()
+        # tests run w/ TASK_ALWAYS_EAGER, so any "delayed" (recursive) calls can be expected to have run
+
+        for model in vacuum_models:
+            self.assertFalse(model.objects.exists(), f"No {model.__name__}s should exist after vacuuming")
+
+    def test_dependency_graphs(self):
+        # tests for an implementation detail of defered deletion, namely 1 test that asserts what the actual
+        # model-topography is, and one test that shows how we manually override it; this is to trigger a failure when
+        # the topology changes (and forces us to double-check that the override is still correct).
+
+        orig = get_model_topography()
+        override = get_model_topography_with_issue_override()
+
+        def walk(topo, model_name):
+            results = []
+            for model, fk_name in topo[model_name]:
+                results.append((model, fk_name))
+                results.extend(walk(topo, model._meta.label))
+            return results
+
+        self.assertEqual(walk(orig, 'issues.Issue'), [
+            (apps.get_model('issues', 'Grouping'), 'issue'),
+            (apps.get_model('events', 'Event'), 'grouping'),
+            (apps.get_model('issues', 'TurningPoint'), 'triggering_event'),
+            (apps.get_model('tags', 'EventTag'), 'event'),
+            (apps.get_model('issues', 'TurningPoint'), 'issue'),
+            (apps.get_model('events', 'Event'), 'issue'),
+            (apps.get_model('issues', 'TurningPoint'), 'triggering_event'),
+            (apps.get_model('tags', 'EventTag'), 'event'),
+            (apps.get_model('tags', 'EventTag'), 'issue'),
+            (apps.get_model('tags', 'IssueTag'), 'issue'),
+        ])
+
+        self.assertEqual(walk(override, 'issues.Issue'), [
+            (apps.get_model('issues', 'TurningPoint'), 'issue'),
+            (apps.get_model('tags', 'EventTag'), 'issue'),
+            (apps.get_model('events', 'Event'), 'issue'),
+            (apps.get_model('issues', 'Grouping'), 'issue'),
+            (apps.get_model('tags', 'IssueTag'), 'issue'),
+        ])

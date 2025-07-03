@@ -55,7 +55,7 @@ class TagKey(models.Model):
 
 class TagValue(models.Model):
     project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
-    key = models.ForeignKey(TagKey, blank=False, null=False, on_delete=models.CASCADE)
+    key = models.ForeignKey(TagKey, blank=False, null=False, on_delete=models.DO_NOTHING)
     value = models.CharField(max_length=200, blank=False, null=False, db_index=True)
 
     class Meta:
@@ -72,19 +72,18 @@ class EventTag(models.Model):
     project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
 
     # value already implies key in our current setup.
-    value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.CASCADE)
+    value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.DO_NOTHING)
 
     # issue is a denormalization that allows for a single-table-index for efficient search.
-    # SET_NULL: Issue deletion is not actually possible yet (in the regular UI), so this is somewhat moot (for now).
     issue = models.ForeignKey(
-        'issues.Issue', blank=False, null=True, on_delete=models.SET_NULL, related_name="event_tags")
+        'issues.Issue', blank=False, null=False, on_delete=models.DO_NOTHING, related_name="event_tags")
 
     # digest_order is a denormalization that allows for a single-table-index for efficient search.
     digest_order = models.PositiveIntegerField(blank=False, null=False)
 
     # DO_NOTHING: we manually implement CASCADE (i.e. when an event is cleaned up, clean up associated tags) in the
     # eviction process.  Why CASCADE? [1] you'll have to do it "at some point", so you might as well do it right when
-    # evicting (async in the 'most resilient setup' anyway, b/c that happens when ingesting) [2] the order of magnitude
+    # evicting (async in the 'most resilient setup' anyway, b/c that happens when digesting) [2] the order of magnitude
     # is "tens of deletions per event", so that's no reason to postpone. "Why manually" is explained in events/retention
     event = models.ForeignKey('events.Event', blank=False, null=False, on_delete=models.DO_NOTHING, related_name='tags')
 
@@ -110,13 +109,12 @@ class IssueTag(models.Model):
     project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
 
     # denormalization that allows for a single-table-index for efficient search.
-    key = models.ForeignKey(TagKey, blank=False, null=False, on_delete=models.CASCADE)
+    key = models.ForeignKey(TagKey, blank=False, null=False, on_delete=models.DO_NOTHING)
 
     # value already implies key in our current setup.
-    value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.CASCADE)
+    value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.DO_NOTHING)
 
-    # SET_NULL: Issue deletion is not actually possible yet, so this is moot (for now).
-    issue = models.ForeignKey('issues.Issue', blank=False, null=True, on_delete=models.SET_NULL, related_name='tags')
+    issue = models.ForeignKey('issues.Issue', blank=False, null=False, on_delete=models.DO_NOTHING, related_name='tags')
 
     # 1. As it stands, there is only a single counter per issue-tagvalue combination. In principle/theory this type of
     # denormalization will break down when you want to show this kind of information filtered by some other dimension,
