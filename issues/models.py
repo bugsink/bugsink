@@ -90,7 +90,7 @@ class Issue(models.Model):
         # picked up as part of the delete_issue_deps task.
         self.grouping_set.all().update(grouping_key_hash=None)
 
-        delay_on_commit(delete_issue_deps, str(self.id))
+        delay_on_commit(delete_issue_deps, str(self.project_id), str(self.id))
 
     def friendly_id(self):
         return f"{ self.project.slug.upper() }-{ self.digest_order }"

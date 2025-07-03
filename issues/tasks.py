@@ -44,7 +44,7 @@ def get_model_topography_with_issue_override():
 
 
 @shared_task
-def delete_issue_deps(issue_id):
+def delete_issue_deps(project_id, issue_id):
     from .models import Issue   # avoid circular import
     with immediate_atomic():
         budget = 500
@@ -54,6 +54,7 @@ def delete_issue_deps(issue_id):
 
         for model_for_recursion, fk_name_for_recursion in dep_graph["issues.Issue"]:
             this_num_deleted = delete_deps_with_budget(
+                project_id,
                 model_for_recursion,
                 fk_name_for_recursion,
                 [issue_id],

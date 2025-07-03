@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import get_template
 from django.apps import apps
-from django.db.models import ForeignKey
+from django.db.models import ForeignKey, F
 
 from .version import version
 
@@ -231,7 +231,26 @@ def prune_orphans(model, d_ids_to_check):
     # vacuuming once in a while" is a much better fit for that.
 
 
-def delete_deps_with_budget(referring_model, fk_name, referred_ids, budget, dep_graph):
+def do_pre_delete(project_id, model, pks_to_delete):
+    "More model-specific cleanup, if needed; only for Event model at the moment."
+
+    if model.__name__ != "Event":
+        return  # we only do more cleanup for Event
+
+    from projects.models import Project
+    from events.models import Event
+    from events.retention import cleanup_events_on_storage
+
+    cleanup_events_on_storage(
+        Event.objects.filter(pk__in=pks_to_delete).exclude(storage_backend=None)
+        .values_list("id", "storage_backend")
+    )
+
+    # note: don't bother to do the same thing for Issue.stored_event_count, since we're in the process of deleting Issue
+    Project.objects.filter(id=project_id).update(stored_event_count=F('stored_event_count') - len(pks_to_delete))
+
+
+def delete_deps_with_budget(project_id, referring_model, fk_name, referred_ids, budget, dep_graph):
     r"""
     Deletes all objects of type referring_model that refer to any of the referred_ids via fk_name.
     Returns the number of deleted objects.
@@ -266,6 +285,7 @@ def delete_deps_with_budget(referring_model, fk_name, referred_ids, budget, dep_
 
     for model_for_recursion, fk_name_for_recursion in for_recursion:
         num_deleted += delete_deps_with_budget(
+            project_id,
             model_for_recursion,
             fk_name_for_recursion,
             [d["pk"] for d in relevant_ids],
@@ -279,6 +299,8 @@ def delete_deps_with_budget(referring_model, fk_name, referred_ids, budget, dep_
     # If this point is reached: we have deleted all referring objects that we could delete, and we still have budget
     # left. We can now delete the referring objects themselves (limited by budget).
     relevant_ids_after_rec = relevant_ids[:budget - num_deleted]
+
+    do_pre_delete(project_id, referring_model, [d['pk'] for d in relevant_ids_after_rec])
 
     my_num_deleted, _ = referring_model.objects.filter(pk__in=[d['pk'] for d in relevant_ids_after_rec]).delete()
     num_deleted += my_num_deleted

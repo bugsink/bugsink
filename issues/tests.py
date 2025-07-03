@@ -674,7 +674,7 @@ class IssueDeletionTestCase(TransactionTestCase):
 
     def setUp(self):
         super().setUp()
-        self.project = Project.objects.create(name="Test Project")
+        self.project = Project.objects.create(name="Test Project", stored_event_count=1)  # 1, in prep. of the below
         self.issue, _ = get_or_create_issue(self.project)
         self.event = create_event(self.project, issue=self.issue)
 
@@ -703,7 +703,7 @@ class IssueDeletionTestCase(TransactionTestCase):
 
         # assertNumQueries() is brittle and opaque. But at least the brittle part is quick to fix (a single number) and
         # provides a canary for performance regressions.
-        with self.assertNumQueries(17):
+        with self.assertNumQueries(19):
             self.issue.delete_deferred()
 
         # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly
@@ -714,6 +714,8 @@ class IssueDeletionTestCase(TransactionTestCase):
             # 'should' in quotes because this isn't so because we believe it's better if they did, but because the
             # code currently does not delete them.
             self.assertTrue(model.objects.exists(), f"Some {model.__name__}s 'should' exist after issue deletion")
+
+        self.assertEqual(0, Project.objects.get().stored_event_count)
 
         vacuum_tagvalues()
         # tests run w/ TASK_ALWAYS_EAGER, so any "delayed" (recursive) calls can be expected to have run
