@@ -47,6 +47,10 @@ def get_model_topography_with_issue_override():
 def delete_issue_deps(project_id, issue_id):
     from .models import Issue   # avoid circular import
     with immediate_atomic():
+        # matches what we do in events/retention.py (and for which argumentation exists); in practive I have seen _much_
+        # faster deletion times (in the order of .03s per task on my local laptop) when using a budget of 500, _but_
+        # it's not a given those were for "expensive objects" (e.g. events); and I'd rather err on the side of caution
+        # (worst case we have a bit of inefficiency; in any case this avoids hogging the global write lock / timeouts).
         budget = 500
         num_deleted = 0
 
