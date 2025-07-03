@@ -703,7 +703,10 @@ class IssueDeletionTestCase(TransactionTestCase):
             # test-the-test: make sure some instances of the models actually exist after setup
             self.assertTrue(model.objects.exists(), f"Some {model.__name__} should exist")
 
-        self.issue.delete_deferred()
+        # assertNumQueries() is brittle and opaque. But at least the brittle part is quick to fix (a single number) and
+        # provides a canary for performance regressions.
+        with self.assertNumQueries(25):
+            self.issue.delete_deferred()
 
         # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly
         for model in models:

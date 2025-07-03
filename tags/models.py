@@ -55,7 +55,7 @@ class TagKey(models.Model):
 
 class TagValue(models.Model):
     project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
-    key = models.ForeignKey(TagKey, blank=False, null=False, on_delete=models.CASCADE)
+    key = models.ForeignKey(TagKey, blank=False, null=False, on_delete=models.DO_NOTHING)
     value = models.CharField(max_length=200, blank=False, null=False, db_index=True)
 
     class Meta:
@@ -72,7 +72,7 @@ class EventTag(models.Model):
     project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
 
     # value already implies key in our current setup.
-    value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.CASCADE)
+    value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.DO_NOTHING)
 
     # issue is a denormalization that allows for a single-table-index for efficient search.
     # SET_NULL: to be re-evaulated in the context of Issue.delete_deferred
@@ -110,10 +110,10 @@ class IssueTag(models.Model):
     project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
 
     # denormalization that allows for a single-table-index for efficient search.
-    key = models.ForeignKey(TagKey, blank=False, null=False, on_delete=models.CASCADE)
+    key = models.ForeignKey(TagKey, blank=False, null=False, on_delete=models.DO_NOTHING)
 
     # value already implies key in our current setup.
-    value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.CASCADE)
+    value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.DO_NOTHING)
 
     # SET_NULL: to be re-evaulated in the context of Issue.delete_deferred
     issue = models.ForeignKey('issues.Issue', blank=False, null=True, on_delete=models.SET_NULL, related_name='tags')
