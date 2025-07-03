@@ -123,6 +123,7 @@ def delete_project_deps(project_id):
                 [project_id],
                 budget - num_deleted,
                 dep_graph,
+                is_for_project=True,
             )
 
             num_deleted += this_num_deleted

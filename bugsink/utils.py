@@ -231,7 +231,7 @@ def prune_orphans(model, d_ids_to_check):
     # vacuuming once in a while" is a much better fit for that.
 
 
-def do_pre_delete(project_id, model, pks_to_delete):
+def do_pre_delete(project_id, model, pks_to_delete, is_for_project):
     "More model-specific cleanup, if needed; only for Event model at the moment."
 
     if model.__name__ != "Event":
@@ -246,11 +246,15 @@ def do_pre_delete(project_id, model, pks_to_delete):
         .values_list("id", "storage_backend")
     )
 
+    if is_for_project:
+        # no need to update the stored_event_count for the project, because the project is being deleted
+        return
+
     # note: don't bother to do the same thing for Issue.stored_event_count, since we're in the process of deleting Issue
     Project.objects.filter(id=project_id).update(stored_event_count=F('stored_event_count') - len(pks_to_delete))
 
 
-def delete_deps_with_budget(project_id, referring_model, fk_name, referred_ids, budget, dep_graph):
+def delete_deps_with_budget(project_id, referring_model, fk_name, referred_ids, budget, dep_graph, is_for_project):
     r"""
     Deletes all objects of type referring_model that refer to any of the referred_ids via fk_name.
     Returns the number of deleted objects.
@@ -291,6 +295,7 @@ def delete_deps_with_budget(project_id, referring_model, fk_name, referred_ids, 
             [d["pk"] for d in relevant_ids],
             budget - num_deleted,
             dep_graph,
+            is_for_project,
         )
 
         if num_deleted >= budget:
@@ -300,11 +305,15 @@ def delete_deps_with_budget(project_id, referring_model, fk_name, referred_ids, 
     # left. We can now delete the referring objects themselves (limited by budget).
     relevant_ids_after_rec = relevant_ids[:budget - num_deleted]
 
-    do_pre_delete(project_id, referring_model, [d['pk'] for d in relevant_ids_after_rec])
+    do_pre_delete(project_id, referring_model, [d['pk'] for d in relevant_ids_after_rec], is_for_project)
 
     my_num_deleted, del_d = referring_model.objects.filter(pk__in=[d['pk'] for d in relevant_ids_after_rec]).delete()
     num_deleted += my_num_deleted
     assert set(del_d.keys()) == {referring_model._meta.label}  # assert no-cascading (we do that ourselves)
+
+    if is_for_project:
+        # short-circuit: project-deletion implies "no orphans" because the project kill everything with it.
+        return num_deleted
 
     # Note that prune_orphans doesn't respect the budget. Reason: it's not easy to do, b/c the order is reversed (we
     # would need to predict somehow at the previous step how much budget to leave unused) and we don't care _that much_
