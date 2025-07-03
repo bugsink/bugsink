@@ -302,8 +302,9 @@ def delete_deps_with_budget(project_id, referring_model, fk_name, referred_ids, 
 
     do_pre_delete(project_id, referring_model, [d['pk'] for d in relevant_ids_after_rec])
 
-    my_num_deleted, _ = referring_model.objects.filter(pk__in=[d['pk'] for d in relevant_ids_after_rec]).delete()
+    my_num_deleted, del_d = referring_model.objects.filter(pk__in=[d['pk'] for d in relevant_ids_after_rec]).delete()
     num_deleted += my_num_deleted
+    assert set(del_d.keys()) == {referring_model._meta.label}  # assert no-cascading (we do that ourselves)
 
     # Note that prune_orphans doesn't respect the budget. Reason: it's not easy to do, b/c the order is reversed (we
     # would need to predict somehow at the previous step how much budget to leave unused) and we don't care _that much_
