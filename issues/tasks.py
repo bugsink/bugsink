@@ -69,12 +69,12 @@ def delete_issue_deps(project_id, issue_id):
             num_deleted += this_num_deleted
 
             if num_deleted >= budget:
-                delay_on_commit(delete_issue_deps, issue_id)
+                delay_on_commit(delete_issue_deps, project_id, issue_id)
                 return
 
         if budget - num_deleted <= 0:
             # no more budget for the self-delete.
-            delay_on_commit(delete_issue_deps, issue_id)
+            delay_on_commit(delete_issue_deps, project_id, issue_id)
 
         else:
             # final step: delete the issue itself
