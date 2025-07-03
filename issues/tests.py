@@ -703,7 +703,11 @@ class IssueDeletionTestCase(TransactionTestCase):
 
         # assertNumQueries() is brittle and opaque. But at least the brittle part is quick to fix (a single number) and
         # provides a canary for performance regressions.
-        with self.assertNumQueries(19):
+
+        # correct for bugsink/transaction.py's select_for_update for non-sqlite databases
+        correct_for_select_for_update = 1 if 'sqlite' not in settings.DATABASES['default']['ENGINE'] else 0
+
+        with self.assertNumQueries(19 + correct_for_select_for_update):
             self.issue.delete_deferred()
 
         # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly
