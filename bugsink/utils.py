@@ -185,10 +185,19 @@ def get_model_topography():
 
 
 def delete_deps_with_budget(referring_model, fk_name, referred_ids, budget, dep_graph):
-    """
+    r"""
     Deletes all objects of type referring_model that refer to any of the referred_ids via fk_name.
     Returns the number of deleted objects.
     And does this recursively (i.e. if there are further dependencies, it will delete those as well).
+
+        Caller              This Func
+          |                     |
+          V                     V
+     <unspecified>        referring_model
+             ^                  /
+             \-------fk_name----
+
+        referred_ids        relevant_ids (deduced using a query)
     """
     num_deleted = 0
 
