@@ -5,10 +5,13 @@ from django.conf import settings
 from django.utils.text import slugify
 
 from bugsink.app_settings import get_settings
+from bugsink.transaction import delay_on_commit
 
 from compat.dsn import build_dsn
 
 from teams.models import TeamMembership
+
+from .tasks import delete_project_deps
 
 
 # ## Visibility/Access-design
@@ -74,6 +77,7 @@ class Project(models.Model):
 
     name = models.CharField(max_length=255, blank=False, null=False, unique=True)
     slug = models.SlugField(max_length=50, blank=False, null=False, unique=True)
+    is_deleted = models.BooleanField(default=False)
 
     # sentry_key mirrors the "public" part of the sentry DSN. As of late 2023 Sentry's docs say the this about DSNs:
     #
@@ -142,6 +146,13 @@ class Project(models.Model):
                 i += 1
 
         super().save(*args, **kwargs)
+
+    def delete_deferred(self):
+        """Marks the project as deleted, and schedules deletion of all related objects"""
+        self.is_deleted = True
+        self.save(update_fields=["is_deleted"])
+
+        delay_on_commit(delete_project_deps, str(self.id))
 
     def is_joinable(self, user=None):
         if user is not None:

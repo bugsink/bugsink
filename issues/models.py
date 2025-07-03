@@ -348,6 +348,7 @@ class IssueStateManager(object):
                 # path is never reached via UI-based paths (because those are by definition not event-triggered); thus
                 # the 2 ways of creating TurningPoints do not collide.
                 TurningPoint.objects.create(
+                    project_id=issue.project_id,
                     issue=issue, triggering_event=triggering_event, timestamp=triggering_event.ingested_at,
                     kind=TurningPointKind.UNMUTED, metadata=json.dumps(unmute_metadata))
                 triggering_event.never_evict = True  # .save() will be called by the caller of this function
@@ -491,6 +492,7 @@ class TurningPoint(models.Model):
     # basically: an Event, but that name was already taken in our system :-) alternative names I considered:
     # "milestone", "state_change", "transition", "annotation", "episode"
 
+    project = models.ForeignKey("projects.Project", blank=False, null=False, on_delete=models.DO_NOTHING)
     issue = models.ForeignKey("Issue", blank=False, null=False, on_delete=models.DO_NOTHING)
     triggering_event = models.ForeignKey("events.Event", blank=True, null=True, on_delete=models.DO_NOTHING)
 

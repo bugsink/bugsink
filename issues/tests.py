@@ -679,6 +679,7 @@ class IssueDeletionTestCase(TransactionTestCase):
         self.event = create_event(self.project, issue=self.issue)
 
         TurningPoint.objects.create(
+            project=self.project,
             issue=self.issue, triggering_event=self.event, timestamp=self.event.ingested_at,
             kind=TurningPointKind.FIRST_SEEN)
 
