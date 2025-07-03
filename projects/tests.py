@@ -66,7 +66,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
         # correct for bugsink/transaction.py's select_for_update for non-sqlite databases
         correct_for_select_for_update = 1 if 'sqlite' not in settings.DATABASES['default']['ENGINE'] else 0
 
-        with self.assertNumQueries(40 + correct_for_select_for_update):
+        with self.assertNumQueries(29 + correct_for_select_for_update):
             self.project.delete_deferred()
 
         # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly

@@ -175,7 +175,7 @@ class Project(models.Model):
 
 
 class ProjectMembership(models.Model):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    project = models.ForeignKey(Project, on_delete=models.DO_NOTHING)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
     send_email_alerts = models.BooleanField(default=None, null=True)

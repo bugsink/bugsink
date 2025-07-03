@@ -44,8 +44,7 @@ class Release(models.Model):
     # sentry does releases per-org; we don't follow that example. our belief is basically: [1] in reality releases are
     # per software package and a software package is basically a bugsink project and [2] any cross-project-per-org
     # analysis you might do is more likely to be in the realm of "transactions", something we don't want to support.
-    project = models.ForeignKey(
-        "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+    project = models.ForeignKey("projects.Project", blank=False, null=False, on_delete=models.DO_NOTHING)
 
     # full version as provided by either implicit (per-event) or explicit (some API) means, including package name
     # max_length matches Even.release (which is deduced from Sentry)

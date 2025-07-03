@@ -35,7 +35,7 @@ class Issue(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     project = models.ForeignKey(
-        "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+        "projects.Project", blank=False, null=False, on_delete=models.DO_NOTHING)
 
     is_deleted = models.BooleanField(default=False)
 
@@ -213,7 +213,7 @@ class Grouping(models.Model):
     into a single issue. (such manual merging is not yet implemented, but the data-model is already prepared for it)
     """
     project = models.ForeignKey(
-        "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+        "projects.Project", blank=False, null=False, on_delete=models.DO_NOTHING)
 
     grouping_key = models.TextField(blank=False, null=False)
 
