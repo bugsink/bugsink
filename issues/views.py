@@ -128,6 +128,10 @@ def _is_valid_action(action, issue):
     """We take the 'strict' approach of complaining even when the action is simply a no-op, because you're already in
     the desired state."""
 
+    if action == "delete":
+        # any type of issue can be deleted
+        return True
+
     if issue.is_resolved:
         # any action is illegal on resolved issues (as per our current UI)
         return False
@@ -153,6 +157,10 @@ def _is_valid_action(action, issue):
 def _q_for_invalid_for_action(action):
     """returns a Q obj of issues for which the action is not valid."""
 
+    if action == "delete":
+        # delete is always valid, so we don't want any issues to be returned, https://stackoverflow.com/a/39001190
+        return Q(pk__in=[])
+
     illegal_conditions = Q(is_resolved=True)  # any action is illegal on resolved issues (as per our current UI)
 
     if action.startswith("resolved_release:"):
@@ -169,7 +177,10 @@ def _q_for_invalid_for_action(action):
 
 
 def _make_history(issue_or_qs, action, user):
-    if action == "resolve":
+    if action == "delete":
+        return  # we're about to delete the issue, so no history is needed (nor possible)
+
+    elif action == "resolve":
         kind = TurningPointKind.RESOLVED
     elif action.startswith("resolved"):
         kind = TurningPointKind.RESOLVED
@@ -252,6 +263,8 @@ def _apply_action(manager, issue_or_qs, action, user):
         }]))
     elif action == "unmute":
         manager.unmute(issue_or_qs)
+    elif action == "delete":
+        manager.delete(issue_or_qs)
 
 
 def issue_list(request, project_pk, state_filter="open"):

@@ -354,6 +354,10 @@ class IssueStateManager(object):
                 triggering_event.never_evict = True  # .save() will be called by the caller of this function
 
     @staticmethod
+    def delete(issue):
+        issue.delete_deferred()
+
+    @staticmethod
     def get_unmute_thresholds(issue):
         unmute_vbcs = [
             VolumeBasedCondition.from_dict(vbc_s)
@@ -470,6 +474,11 @@ class IssueQuerysetStateManager(object):
         # (for this remark to be true triggering_event must be None, which is asserted for in the above)
         for issue in issue_qs:
             IssueStateManager.unmute(issue, triggering_event)
+
+    @staticmethod
+    def delete(issue_qs):
+        for issue in issue_qs:
+            issue.delete_deferred()
 
 
 class TurningPointKind(models.IntegerChoices):

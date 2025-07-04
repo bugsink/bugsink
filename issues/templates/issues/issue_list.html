@@ -7,6 +7,23 @@
 
 {% block content %}
 
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="hidden fixed inset-0 bg-slate-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+    <div class="relative p-6 border border-slate-300 w-96 shadow-lg rounded-md bg-white">
+        <div class="text-center m-4">
+            <h3 class="text-2xl font-semibold text-slate-800 mt-3 mb-4">Delete Issues</h3>
+            <div class="mt-4 mb-6">
+                <p class="text-slate-700">
+                    Deleting an Issue is a permanent action and cannot be undone. It's typically better to resolve or mute an issue instead of deleting it, as this allows you to keep track of past issues and their resolutions.
+                </p>
+            </div>
+            <div class="flex items-center justify-center space-x-4 mb-4">
+                <button id="cancelDelete" class="text-cyan-500 font-bold">Cancel</button>
+                <button id="confirmDelete" type="submit" class="font-bold py-2 px-4 rounded bg-red-500 text-white border-2 border-red-600 hover:bg-red-600 active:ring">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 
 <div class="m-4">
@@ -35,7 +52,7 @@
 
     <div>
 
-      <form action="." method="post">
+      <form action="." method="post" id="issueForm">
       {% csrf_token %}
 
       <table class="w-full">
@@ -122,7 +139,17 @@
                     <button disabled class="font-bold text-slate-300 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 rounded-e-md" name="action" value="unmute">Unmute</button>
                 {% endif %}
 
+                <div class="dropdown">
+                    <button disabled {# disabled b/c clicking the dropdown does nothing - we have hover for that #} class="font-bold text-slate-500 fill-slate-500 border-slate-300 ml-2 pl-4 pr-4 pb-2 pt-2 border-2 hover:bg-slate-200 active:ring rounded-md">...</button>
+
+                    <div class="dropdown-content-right flex-col">
+                        <button type="button" onclick="showDeleteConfirmation()" class="block self-stretch font-bold text-red-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white hover:bg-red-50 active:ring text-left whitespace-nowrap">Delete</button>
+                    </div>
+                </div> 
+
                 {% endspaceless %}
+
+
 
                 {# NOTE: "reopen" is not available in the UI as per the notes in issue_detail #}
                 {# only for resolved/muted items <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Reopen</button> #}
@@ -281,5 +308,36 @@
 {% endblock %}
 
 {% block extra_js %}
+
+<script>
+    const deleteButton = document.getElementById('');
+    const confirmationBox = document.getElementById('deleteModal');
+    const confirmDelete = document.getElementById('confirmDelete');
+    const cancelDelete = document.getElementById('cancelDelete');
+    const form = document.getElementById('issueForm');
+
+    let actionInput = null;
+
+    function showDeleteConfirmation() {
+        confirmationBox.style.display = 'flex';
+    }
+
+    cancelDelete.addEventListener('click', () => {
+        confirmationBox.style.display = 'none';
+    });
+
+    confirmDelete.addEventListener('click', () => {
+        // Add hidden input only for this submission
+        if (!actionInput) {
+            actionInput = document.createElement('input');
+            actionInput.type = 'hidden';
+            actionInput.name = 'action';
+            actionInput.value = 'delete';
+            form.appendChild(actionInput);
+        }
+        form.submit();
+    });
+</script>
+
     <script src="{% static 'js/issue_list.js' %}"></script>
 {% endblock %}
