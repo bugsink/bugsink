@@ -8,11 +8,14 @@ from django.utils.functional import cached_property
 
 from projects.models import Project
 from compat.timestamp import parse_timestamp
+from bugsink.transaction import delay_on_commit
 
 from issues.utils import get_title_for_exception_type_and_value
 
 from .retention import get_random_irrelevance
 from .storage_registry import get_write_storage, get_storage
+
+from .tasks import delete_event_deps
 
 
 class Platform(models.TextChoices):
@@ -282,3 +285,13 @@ class Event(models.Model):
         return list(
             self.tags.all().select_related("value", "value__key").order_by("value__key__key")
         )
+
+    def delete_deferred(self):
+        """Schedules deletion of all related objects"""
+        # NOTE: for such a small closure, I couldn't be bothered to have an .is_deleted field and deal with it. (the
+        # idea being that the deletion will be relatively quick anyway). We still need "something" though, since we've
+        # set DO_NOTHING everywhere. An alternative would be the "full inline", i.e. delete everything right in the
+        # request w/o any delay. That diverges even more from the approach for Issue/Project, making such things a
+        # "design decision needed". Maybe if we get more `delete_deferred` impls. we'll have a bit more info to figure
+        # out if we can harmonize on (e.g.) 2 approaches.
+        delay_on_commit(delete_event_deps, str(self.project_id), str(self.id))
