@@ -210,10 +210,13 @@ def _make_history(issue_or_qs, action, user):
     now = timezone.now()
     if isinstance(issue_or_qs, Issue):
         TurningPoint.objects.create(
+            project=issue_or_qs.project,
             issue=issue_or_qs, kind=kind, user=user, metadata=json.dumps(metadata), timestamp=now)
     else:
         TurningPoint.objects.bulk_create([
-            TurningPoint(issue=issue, kind=kind, user=user, metadata=json.dumps(metadata), timestamp=now)
+            TurningPoint(
+                project_id=issue.project_id, issue=issue, kind=kind, user=user, metadata=json.dumps(metadata),
+                timestamp=now)
             for issue in issue_or_qs
         ])
 
@@ -767,6 +770,7 @@ def history_comment_new(request, issue):
             # think that's amount of magic to have: it still allows one to erase comments (possibly for non-manual
             # kinds) but it saves you from what is obviously a mistake (without complaining with a red box or something)
             TurningPoint.objects.create(
+                project=issue.project,
                 issue=issue, kind=TurningPointKind.MANUAL_ANNOTATION, user=request.user,
                 comment=form.cleaned_data["comment"],
                 timestamp=timezone.now())

@@ -82,7 +82,7 @@ class Event(models.Model):
     # uuid4 clientside". In any case, we just rely on the envelope's event_id (required per the envelope spec).
     # Not a primary key: events may be duplicated across projects
     event_id = models.UUIDField(primary_key=False, null=False, editable=False, help_text="As per the sent data")
-    project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+    project = models.ForeignKey(Project, blank=False, null=False, on_delete=models.DO_NOTHING)
 
     data = models.TextField(blank=False, null=False)
 

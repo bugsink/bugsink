@@ -36,7 +36,7 @@ from tags.utils import deduce_tags, is_mostly_unique
 
 
 class TagKey(models.Model):
-    project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+    project = models.ForeignKey(Project, blank=False, null=False, on_delete=models.DO_NOTHING)
     key = models.CharField(max_length=32, blank=False, null=False)
 
     # Tags that are "mostly unique" are not displayed in the issue tag counts, because the distribution of values is
@@ -54,7 +54,7 @@ class TagKey(models.Model):
 
 
 class TagValue(models.Model):
-    project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+    project = models.ForeignKey(Project, blank=False, null=False, on_delete=models.DO_NOTHING)
     key = models.ForeignKey(TagKey, blank=False, null=False, on_delete=models.DO_NOTHING)
     value = models.CharField(max_length=200, blank=False, null=False, db_index=True)
 
@@ -69,7 +69,7 @@ class TagValue(models.Model):
 
 
 class EventTag(models.Model):
-    project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+    project = models.ForeignKey(Project, blank=False, null=False, on_delete=models.DO_NOTHING)
 
     # value already implies key in our current setup.
     value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.DO_NOTHING)
@@ -106,7 +106,7 @@ class EventTag(models.Model):
 
 
 class IssueTag(models.Model):
-    project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+    project = models.ForeignKey(Project, blank=False, null=False, on_delete=models.DO_NOTHING)
 
     # denormalization that allows for a single-table-index for efficient search.
     key = models.ForeignKey(TagKey, blank=False, null=False, on_delete=models.DO_NOTHING)

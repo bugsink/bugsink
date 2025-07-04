@@ -252,6 +252,8 @@ class BaseIngestAPIView(View):
         digested_at = datetime.now(timezone.utc) if digested_at is None else digested_at  # explicit passing: test only
 
         project = Project.objects.get(pk=event_metadata["project_id"])
+        if project.is_deleted:
+            return  # don't process events for deleted projects
 
         if not cls.count_project_periods_and_act_on_it(project, digested_at):
             return  # if over-quota: just return (any cleanup is done calling-side)
@@ -360,6 +362,7 @@ class BaseIngestAPIView(View):
 
         if issue_created:
             TurningPoint.objects.create(
+                project=project,
                 issue=issue, triggering_event=event, timestamp=ingested_at,
                 kind=TurningPointKind.FIRST_SEEN)
             event.never_evict = True
@@ -371,6 +374,7 @@ class BaseIngestAPIView(View):
             # new issues cannot be regressions by definition, hence this is in the 'else' branch
             if issue_is_regression(issue, event.release):
                 TurningPoint.objects.create(
+                    project=project,
                     issue=issue, triggering_event=event, timestamp=ingested_at,
                     kind=TurningPointKind.REGRESSED)
                 event.never_evict = True

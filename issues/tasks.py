@@ -64,6 +64,7 @@ def delete_issue_deps(project_id, issue_id):
                 [issue_id],
                 budget - num_deleted,
                 dep_graph,
+                is_for_project=False,
             )
 
             num_deleted += this_num_deleted
