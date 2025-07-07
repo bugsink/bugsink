@@ -11,6 +11,9 @@ from bugsink.transaction import immediate_atomic
 from bugsink.timed_sqlite_backend.base import allow_long_running_queries
 from bugsink.moreiterutils import batched
 
+from projects.tasks import delete_project_deps
+from issues.tasks import delete_issue_deps
+
 
 class DryRunException(Exception):
     # transaction.rollback doesn't work in atomic blocks; a poor man's substitute is to just raise something specific.
@@ -140,7 +143,7 @@ class Command(BaseCommand):
 
     # In theory, this command should not be required, because Bugsink _should_ leave itself in a consistent state after
     # every operation. However, in practice Bugsink may not always do as promised, people reach into the database for
-    # whatever reason, or things go out of whack during development.
+    # whatever reason, things go out of whack during development, or a crash of snappea leaves half-finished work.
 
     def add_arguments(self, parser):
         parser.add_argument('--dry-run', action='store_true', help="Roll back all changes after making them.")
@@ -153,5 +156,32 @@ class Command(BaseCommand):
                 make_consistent()
                 if options['dry_run']:
                     raise DryRunException("Dry run requested; rolling back changes.")
+
+            if not options['dry_run']:
+                # for is_deleted objects, we enqueue deletion.
+                #
+                # such objects may remain dangling forever because the "enqueue if work remains" is not robust for
+                # snappea-shutdown (snappea will not detect remaining work on-restartup).
+                #
+                # doing this as an "enqueue work in snappea" solution is somewhat unsatisfying, because:
+                # * it means more stuff will happen _after_ make_consistent is done running;
+                # * it means that inconstencies created during the deferred process are not made consistent
+                # * because we cannot detect what snappea is currently doing (at least not without hacks) we might
+                #   doubly-enqueue (it will still work, but one process will have a NoSuchObjectError at the end)
+                #
+                # I still picked this, because the alternative of doing it inline has its own problems:
+                # * we may easily exhaust the stack when calling this on lots of objects; bigger batches isn't a
+                #   solution for this because it has its own problems (we don't have batches for nothing).
+                # * our tasks have "immediate atomic" on the inside, not a happy marriage with the approach here
+                #   (including dry-run)
+
+                for obj in Project.objects.filter(is_deleted=True):
+                    print("Enqueuing deletion of project dependencies for %s" % obj)
+                    delete_project_deps.delay(str(obj.pk))
+
+                for obj in Issue.objects.filter(is_deleted=True):
+                    print("Enqueuing deletion of issue dependencies for %s" % obj)
+                    delete_issue_deps.delay(str(obj.project_id), str(obj.pk))
+
         except DryRunException:
             print("Changes have been rolled back (dry-run)")
