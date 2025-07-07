@@ -250,6 +250,8 @@ def do_pre_delete(project_id, model, pks_to_delete, is_for_project):
         # no need to update the stored_event_count for the project, because the project is being deleted
         return
 
+    # Update project stored_event_count to reflect the deletion of the events. note: alternatively, we could do this
+    # on issue-delete (issue.stored_event_count is known too); potato, potato though.
     # note: don't bother to do the same thing for Issue.stored_event_count, since we're in the process of deleting Issue
     Project.objects.filter(id=project_id).update(stored_event_count=F('stored_event_count') - len(pks_to_delete))
 
