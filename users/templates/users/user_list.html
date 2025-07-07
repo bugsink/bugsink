@@ -6,21 +6,21 @@
 {% block content %}
 
 <!-- Delete Confirmation Modal -->
-<div id="deleteModal" class="hidden fixed inset-0 bg-slate-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
-    <div class="relative p-6 border border-slate-300 w-96 shadow-lg rounded-md bg-white">
+<div id="deleteModal" class="hidden fixed inset-0 bg-slate-600 dark:bg-slate-900 bg-opacity-50 dark:bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+    <div class="relative p-6 border border-slate-300 dark:border-slate-600 w-96 shadow-lg rounded-md bg-white dark:bg-slate-900">
         <div class="text-center m-4">
-            <h3 class="text-2xl font-semibold text-slate-800 mt-3 mb-4">Delete User</h3>
+            <h3 class="text-2xl font-semibold text-slate-800 dark:text-slate-100 mt-3 mb-4">Delete User</h3>
             <div class="mt-4 mb-6">
-                <p class="text-slate-700">
+                <p class="text-slate-700 dark:text-slate-300">
                     Are you sure you want to delete this user? This action cannot be undone.
                 </p>
             </div>
             <div class="flex items-center justify-center space-x-4 mb-4">
-                <button id="cancelDelete" class="text-cyan-500 font-bold">Cancel</button>
+                <button id="cancelDelete" class="text-cyan-500 dark:text-cyan-300 font-bold">Cancel</button>
                 <form method="post" action="." id="deleteForm">
                     {% csrf_token %}
                     <input type="hidden" name="action" id="deleteAction" value="">
-                    <button type="submit" class="font-bold py-2 px-4 rounded bg-red-500 text-white border-2 border-red-600 hover:bg-red-600 active:ring">Confirm</button>
+                    <button type="submit" class="font-bold py-2 px-4 rounded bg-red-500 dark:bg-red-700 text-white border-2 border-red-600 dark:border-red-400 hover:bg-red-600 dark:hover:bg-red-800 active:ring">Confirm</button>
                 </form>
             </div>
         </div>
@@ -35,18 +35,17 @@
         <ul class="mb-4">
             {% for message in messages %}
                 {# if we introduce different levels we can use{% message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %} #}
-                <li class="bg-cyan-50 border-2 border-cyan-800 p-4 rounded-lg">{{ message }}</li>
+                <li class="bg-cyan-50 dark:bg-cyan-900 border-2 border-cyan-800 dark:border-cyan-400 p-4 rounded-lg">{{ message }}</li>
             {% endfor %}
         </ul>
         {% endif %}
 
         <div class="flex">
             <h1 class="text-4xl mt-4 font-bold">Users</h1>
-
             {% comment %}
             Our current invite-system is tied to either a team or a project; no "global" invites (yet).
             <div class="ml-auto mt-6">
-                <a class="font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" href="{% url "team_members_invite" team_pk=team.pk %}">Invite Member</a>
+                <a class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md" href="{% url "team_members_invite" team_pk=team.pk %}">Invite Member</a>
             </div>
             {% endcomment %}
         </div>
@@ -58,18 +57,17 @@
           <table class="w-full mt-8">
           <tbody>
                 <thead>
-                <tr class="bg-slate-200">
+                <tr class="bg-slate-200 dark:bg-slate-800">
                     <th class="w-full p-4 text-left text-xl" colspan="2">Users</th>
                 </tr>
 
                 {% for user in users %}
-                <tr class="bg-white border-slate-200 border-b-2">
+                <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
                 <td class="w-full p-4">
                     <div>
-                        <a href="{% url "user_edit" user_pk=user.pk %}" class="text-xl text-cyan-500 font-bold">{{ user.username }}</a>  {# "best name" perhaps later? #}
-                        {# <span class="bg-slate-100 rounded-2xl px-4 py-2 ml-2 text-sm">Invitation pending</span> #}  {# perhaps useful for "not active"? #}
+                        <a href="{% url "user_edit" user_pk=user.pk %}" class="text-xl text-cyan-500 dark:text-cyan-300 font-bold">{{ user.username }}</a>
                         {% if member.is_superuser %}
-                        <span class="bg-cyan-100 rounded-2xl px-4 py-2 ml-2 text-sm">Superuser</span>
+                        <span class="bg-cyan-100 dark:bg-cyan-900 rounded-2xl px-4 py-2 ml-2 text-sm">Superuser</span>
                         {% endif %}
                     </div>
                 </td>
@@ -78,10 +76,10 @@
                     <div class="flex justify-end">
                         {% if not request.user == user %}
                             {% if user.is_active %}
-                                <button name="action" value="deactivate:{{ user.id }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 active:ring rounded-md">Deactivate</button>
+                                <button name="action" value="deactivate:{{ user.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">Deactivate</button>
                             {% else %}
-                                <button name="action" value="activate:{{ user.id }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 active:ring rounded-md">Activate</button>
-                                <button type="button" class="delete-button font-bold py-2 px-4 rounded bg-red-500 text-white border-2 border-red-600 hover:bg-red-600 active:ring ml-4" data-user-id="{{ user.id }}">Delete</button>
+                                <button name="action" value="activate:{{ user.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">Activate</button>
+                                <button type="button" class="delete-button font-bold py-2 px-4 rounded bg-red-500 dark:bg-red-700 text-white border-2 border-red-600 dark:border-red-400 hover:bg-red-600 dark:hover:bg-red-800 active:ring ml-4" data-user-id="{{ user.id }}">Delete</button>
                             {% endif %}
                         {% endif %}
                     </div>
@@ -90,7 +88,6 @@
                 </tr>
                 {% endfor %}
 
-                {#% empty %} not needed, a site without users cannot be visited by a user #}
             </tbody>
             </table>
 
@@ -100,7 +97,7 @@
     {% comment %}
     <div class="flex flex-direction-row">
         <div class="ml-auto py-8 pr-4">
-            <a href="{% url "..." %}" class="text-cyan-500 font-bold">Back to Xxxx</a>  {# perhaps once this is part of some other flow #}
+            <a href="{% url "..." %}" class="text-cyan-500 dark:text-cyan-300 font-bold">Back to Xxxx</a>  {# perhaps once this is part of some other flow #}
         </div>
     </div>
     {% endcomment %}

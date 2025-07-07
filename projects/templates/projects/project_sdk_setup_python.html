@@ -13,7 +13,7 @@
 
         <div class="mt-4">
             Connect your Python application to Bugsink to start tracking errors.
-            Bugsink is compatible with the Sentry SDK. A basic setup is the following: 
+            Bugsink is compatible with the Sentry SDK. A basic setup is the following:
         </div>
 
         <h2 class="mt-8 text-2xl font-bold">Step 1: Install the SDK</h2>
@@ -63,16 +63,16 @@ sentry_sdk.init(
 raise Exception("Raised Exception on purpose to send it to Bugsink")
 {% endcode %}
 
-        <div class="mt-4"> 
-            Your event should now appear in the <a href="{% url "issue_list_open" project_pk=project.pk %}" class="text-cyan-500 font-bold">list of open issues</a>.
+        <div class="mt-4">
+            Your event should now appear in the <a href="{% url "issue_list_open" project_pk=project.pk %}" class="text-cyan-500 dark:text-cyan-300 font-bold">list of open issues</a>.
         </div>
 
         <h2 class="mt-6 text-2xl font-bold">Further reading</h2>
 
-        <div class="mt-4"> 
-            For more information on how to use the SDK, check the <a href="https://www.bugsink.com/docs/sdk-recommendations/" class="text-cyan-500 font-bold">Bugsink-specific SDK recommendations</a>.
+        <div class="mt-4">
+            For more information on how to use the SDK, check the <a href="https://www.bugsink.com/docs/sdk-recommendations/" class="text-cyan-500 dark:text-cyan-300 font-bold">Bugsink-specific SDK recommendations</a>.
         </div>
-        
+
 
     </div>
 </div>

@@ -1,17 +1,31 @@
 {% load static tailwind_tags %}<!DOCTYPE html>{# copy of base.html, but without variables (and hence no menu), for use in contextless templates (e.g. 500.html) #}
-<html lang="en">
+<html lang="en" data-theme="{% if user.is_authenticated %}{{ user.theme_preference }}{% else %}system{% endif %}">
 	<head>
     <title>{% block title %}Bugsink{% endblock %}</title>
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-        
+
         {% tailwind_preload_css %}
 		{% tailwind_css %}
+    <script>
+      // System theme detection and switching
+      (function() {
+        const html = document.documentElement;
+        function applySystemTheme() {
+          if (document.documentElement.getAttribute('data-theme') === 'system') {
+            const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            html.setAttribute('data-theme', isDark ? 'dark' : 'light');
+          }
+        }
+        applySystemTheme();
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applySystemTheme);
+      })();
+    </script>
 	</head>
 
-	<body>
+	<body class="dark:bg-slate-700 dark:text-slate-100">
         <div id="content">
-            <div class="flex pl-4 bg-slate-200">
+            <div class="flex pl-4 bg-slate-200 dark:bg-slate-800">
                 <a href="/"><img src="{% static 'images/bugsink-logo.png' %}" class="p-2 h-12 w-12" alt="Bugsink logo"></a>
                 <a href="/"><div class="pt-4 pb-4 pl-2 pr-2 font-bold">Bugsink</div></a>
             </div>

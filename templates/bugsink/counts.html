@@ -18,11 +18,11 @@
 
     <div class="mb-6">
         {% for key, annotated_count in model_counts|items %}
-            <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-                <div class="w-1/6 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-                <div class="w-1/6 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} text-right">{{ annotated_count.count|intcomma }}</div>
-                <div class="w-1/6 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} pl-4 text-slate-500">{% if annotated_count.timestamp %}cached {{ annotated_count.timestamp|date:"G:i T" }}{% else %}&nbsp;{% endif %}</div>
-                <div class="w-1/2 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %}">&nbsp;</div>
+            <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                <div class="w-1/6 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+                <div class="w-1/6 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} text-right">{{ annotated_count.count|intcomma }}</div>
+                <div class="w-1/6 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} pl-4 text-slate-500 dark:text-slate-300">{% if annotated_count.timestamp %}cached {{ annotated_count.timestamp|date:"G:i T" }}{% else %}&nbsp;{% endif %}</div>
+                <div class="w-1/2 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">&nbsp;</div>
 
             </div>
         {% endfor %}

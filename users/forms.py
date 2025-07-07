@@ -140,7 +140,13 @@ class PreferencesForm(ModelForm):
     # I haven't gotten a decent display for checkboxes in forms yet; the quickest hack around this is a ChoiceField
     send_email_alerts = forms.ChoiceField(
         label=_("Send email alerts"), choices=TRUE_FALSE_CHOICES, required=False, widget=forms.Select())
+    theme_preference = forms.ChoiceField(
+        label=_("Theme preference"),
+        choices=User.THEME_CHOICES,
+        required=True,
+        widget=forms.Select(),
+    )
 
     class Meta:
         model = User
-        fields = ("send_email_alerts",)
+        fields = ("send_email_alerts", "theme_preference",)

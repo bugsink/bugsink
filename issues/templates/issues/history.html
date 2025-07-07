@@ -11,15 +11,15 @@
     <div class="flex"><!-- single turningpoint (for 'your comments')-->
         <div class="flex-none">
             <div class="pt-8 pr-2">
-                <img class="w-12 h-12 rounded-full border-2 border-slate-300" src="https://gravatar.com/avatar/{{ request.user|gravatar_sha }}?s=48&d=robohash" alt="{{ request.user|best_displayname }}">
+                <img class="w-12 h-12 rounded-full border-2 border-slate-300 dark:border-slate-600" src="https://gravatar.com/avatar/{{ request.user|gravatar_sha }}?s=48&d=robohash" alt="{{ request.user|best_displayname }}">
             </div>
         </div>
-        <div class="border-slate-300 border-2 rounded-md mt-6 flex-auto"><!-- the "your comments balloon" -->
+        <div class="border-slate-300 dark:border-slate-600 border-2 rounded-md mt-6 flex-auto"><!-- the "your comments balloon" -->
             <div class="pl-4 flex triangle-left"><!-- 'header' row -->
                 <div class="mt-4 mb-4">
-                    <span class="font-bold text-slate-800 italic">Add comment as manual annotation</span>
+                    <span class="font-bold text-slate-800 dark:text-slate-100 italic">Add comment as manual annotation</span>
                 </div>
-            
+
                 <div class="ml-auto flex"> <!-- 'header' row right side -->
                     <div class="p-4">
                         Now
@@ -27,12 +27,12 @@
                 </div>
             </div>
 
-            <div class="border-t-2 pl-4 pr-4 pb-4 border-slate-300">{# 'body' part of the balloon (separated by a line) #}
+            <div class="border-t-2 pl-4 pr-4 pb-4 border-slate-300 dark:border-slate-600">{# 'body' part of the balloon (separated by a line) #}
                     <div class="mt-4">
                     <form action="{% url "history_comment_new" issue_pk=issue.id %}" method="post">
                     {% csrf_token %}
-                    <textarea name="comment" placeholder="comments..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md w-full h-32" onkeypress="submitOnCtrlEnter(event)"></textarea>
-                    <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 active:ring">Post comment</button>
+                    <textarea name="comment" placeholder="comments..." class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md w-full h-32" onkeypress="submitOnCtrlEnter(event)"></textarea>
+                    <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring">Post comment</button>
                     </form>
                     </div>
                 </div>{# 'body' part of the balloon #}
@@ -45,39 +45,39 @@
         <div class="flex-none">
             <div class="pt-8 pr-2">
                 {% if turningpoint.user_id %}
-                <img class="w-12 h-12 rounded-full border-2 border-slate-300" src="https://gravatar.com/avatar/{{ turningpoint.user|gravatar_sha }}?s=48&d=robohash" alt="{{ turningpoint.user|best_displayname }}">
+                <img class="w-12 h-12 rounded-full border-2 border-slate-300 dark:border-slate-600" src="https://gravatar.com/avatar/{{ turningpoint.user|gravatar_sha }}?s=48&d=robohash" alt="{{ turningpoint.user|best_displayname }}">
                 {% else %}
-                <img class="w-12 h-12 rounded-full border-2 border-slate-300" src="{% static 'images/bugsink-logo.png' %}" alt="Bugsink">
+                <img class="w-12 h-12 rounded-full border-2 border-slate-300 dark:border-slate-600" src="{% static 'images/bugsink-logo.png' %}" alt="Bugsink">
                 {% endif %}
             </div>
         </div>
 
-        <div class="border-slate-300 border-2 rounded-md mt-6 flex-auto js-balloon"><!-- the "balloon" -->
+        <div class="border-slate-300 dark:border-slate-600 border-2 rounded-md mt-6 flex-auto js-balloon"><!-- the "balloon" -->
             <div class="pl-4 flex triangle-left"><!-- 'header' row -->
                 <div class="mt-4 mb-4">
-                    <span class="font-bold text-slate-800">{{ turningpoint.get_kind_display }}</span> by
-                    <span class="font-bold text-slate-800">{% if turningpoint.user_id %}{{ turningpoint.user|best_displayname }}{% else %}Bugsink{% endif %}</span>
+                    <span class="font-bold text-slate-800 dark:text-slate-100">{{ turningpoint.get_kind_display }}</span> by
+                    <span class="font-bold text-slate-800 dark:text-slate-100">{% if turningpoint.user_id %}{{ turningpoint.user|best_displayname }}{% else %}Bugsink{% endif %}</span>
 
                     {% if turningpoint.user_id == request.user.id %}
-                    <span class="text-slate-500 pl-1" onclick="toggleCommentEditable(this)" title="Edit comment">
+                    <span class="text-slate-500 dark:text-slate-300 pl-1" onclick="toggleCommentEditable(this)" title="Edit comment">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-4 h-4 inline">
   <path fill-rule="evenodd" d="M11.013 2.513a1.75 1.75 0 0 1 2.475 2.474L6.226 12.25a2.751 2.751 0 0 1-.892.596l-2.047.848a.75.75 0 0 1-.98-.98l.848-2.047a2.75 2.75 0 0 1 .596-.892l7.262-7.261Z" clip-rule="evenodd" />
 </svg>
 
                     </span>
                     {% if turningpoint.kind == 100 %}
-                    <span class="text-slate-500 pl-1" onclick="deleteComment('{% url "history_comment_delete" issue_pk=issue.id comment_pk=turningpoint.pk %}')" title="Delete comment">
+                    <span class="text-slate-500 dark:text-slate-300 pl-1" onclick="deleteComment('{% url "history_comment_delete" issue_pk=issue.id comment_pk=turningpoint.pk %}')" title="Delete comment">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-4 h-4 inline">
   <path fill-rule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clip-rule="evenodd" />
 </svg>
-                    
+
 
                     </span>
                     {% endif %}
                     {% endif %}
 
                 </div>
-            
+
                 <div class="ml-auto flex"> <!-- 'header' row right side -->
 
                     <div class="p-4 text-right">
@@ -87,7 +87,7 @@
             </div>
 
             {% if turningpoint.parsed_metadata or turningpoint.triggering_event_id or turningpoint.comment or turningpoint.user_id == request.user.id %}  {# the last clause means: editable, hence space must be reserved #}
-            <div class="border-t-2 pl-4 pr-4 pb-4 border-slate-300">{# 'body' part of the balloon (separated by a line) #}
+            <div class="border-t-2 pl-4 pr-4 pb-4 border-slate-300 dark:border-slate-600">{# 'body' part of the balloon (separated by a line) #}
                     <div class="mt-4">
                         <div class="js-comment-plain">
                         {{ turningpoint.comment|linebreaksbr }}
@@ -97,8 +97,8 @@
                         <div class="js-comment-editable hidden">
                             <form action="{% url "history_comment_edit" issue_pk=issue.id comment_pk=turningpoint.pk %}" method="post">
                             {% csrf_token %}
-                            <textarea name="comment" placeholder="comments..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md w-full h-32" onkeypress="submitOnCtrlEnter(event)">{{ turningpoint.comment }}</textarea>{# note: we don't actually use {{ form.comments }} here; this means the show-red-on-invalid loop won't work but since everything is valid and we haven't implemented the other parts of that loop that's fine #}
-                            <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 active:ring">Update comment</button>
+                            <textarea name="comment" placeholder="comments..." class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md w-full h-32" onkeypress="submitOnCtrlEnter(event)">{{ turningpoint.comment }}</textarea>{# note: we don't actually use {{ form.comments }} here; this means the show-red-on-invalid loop won't work but since everything is valid and we haven't implemented the other parts of that loop that's fine #}
+                            <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring">Update comment</button>
                             </form>
                         </div>
                         {% endif %}
@@ -150,7 +150,7 @@
 
                 {% if turningpoint.triggering_event_id %}
                 <div class="mt-4">
-                    <a href="{% url "event_by_internal_id" event_pk=turningpoint.triggering_event_id %}" class="underline decoration-dotted font-bold text-slate-500">Triggering event</a>
+                    <a href="{% url "event_by_internal_id" event_pk=turningpoint.triggering_event_id %}" class="underline decoration-dotted font-bold text-slate-500 dark:text-slate-300">Triggering event</a>
                 </div>
                 {% endif %}
 

@@ -8,6 +8,7 @@
 const defaultTheme = require("tailwindcss/defaultTheme");
 
 module.exports = {
+    darkMode: ['selector', '[data-theme="dark"]'],
     content: [
         /**
          * HTML. Paths to Django template files that will contain Tailwind CSS classes.
@@ -44,6 +45,7 @@ module.exports = {
         // '../../**/*.py'
         "../../issues/views.py",
         "../../theme/templatetags/code.py",
+        "../../theme/templatetags/tailwind_forms.py",
     ],
     theme: {
       extend: {

@@ -32,14 +32,14 @@
 <tbody>
 
 {% for breadcrumb in breadcrumbs %}
-    <tr class="border-slate-200 border-2 ">
+    <tr class="border-slate-200 dark:border-slate-700 border-2 ">
 
-    <td class="p-4 font-bold text-slate-500 align-top">
+    <td class="p-4 font-bold text-slate-500 dark:text-slate-300 align-top">
         {{ breadcrumb.category }}
     </td>
 
     {% comment %}
-    {# not _that_ useful 
+    {# not _that_ useful
     <td class="ml-0 pb-4 pt-4 pr-4">
         {{ breadcrumb.type }}
     </td>
@@ -48,7 +48,7 @@
     <td class="w-full p-4 font-mono">
         {{ breadcrumb.message }}
     </td>
-    <td class="p-4 font-bold text-slate-500 align-top">
+    <td class="p-4 font-bold text-slate-500 dark:text-slate-300 align-top">
         {{ breadcrumb.timestamp }}
         {# {{ breadcrumb.timestamp|date:"G:i T" and milis  }} #}
     </td>

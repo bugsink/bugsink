@@ -17,40 +17,40 @@
 
     <div class="mb-6">
         {% for key, value in bugsink_settings|items %}
-            <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+            <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value }}</div>
             </div>
         {% endfor %}
     </div>
 
     <h1 class="text-2xl font-bold mt-4">Snappea</h1>
-            
+
     <div class="mb-6">
         {% for key, value in snappea_settings|items %}
-            <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+            <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value }}</div>
             </div>
         {% endfor %}
     </div>
 
 
     <h1 class="text-2xl font-bold mt-4">Misc</h1>
-            
+
     <div class="mb-6">
         {% for key, value in misc_settings|items %}
-            <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ key }}</div>
-                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ value }}</div>
+            <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value }}</div>
             </div>
         {% endfor %}
     </div>
 
     <h1 class="text-2xl font-bold mt-4">System info</h1>
-            
+
     <div class="mb-6">
-        <div class="flex border-slate-300 border-t-2">
+        <div class="flex border-slate-300 dark:border-slate-600 border-t-2">
             <div class="w-1/4">Version</div>
             <div class="w-3/4">{{ version }}</div>
         </div>

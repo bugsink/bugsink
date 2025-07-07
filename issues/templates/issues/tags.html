@@ -8,11 +8,11 @@
         <h1 id="{{ issuetags.0.key.key }}" class="text-2xl font-bold mt-4">{{ issuetags.0.key.key }}:</h1>
 
         <div class="mb-6">
-            {% for issuetag in issuetags %} 
-                <div class="flex {% if forloop.first %}border-slate-300 border-t-2{% endif %}">
-                    <div class="w-2/3 {% if not forloop.last %}border-b-2 border-dotted border-slate-300{% endif %}">{{ issuetag.value.value }}</div>
-                    <div class="w-1/6 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ issuetag.pct }}%</div>
-                    <div class="w-1/6 {% if not forloop.last %} border-b-2 border-dotted border-slate-300{% endif %} font-mono">{{ issuetag.count }} events</div>
+            {% for issuetag in issuetags %}
+                <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                    <div class="w-2/3 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ issuetag.value.value }}</div>
+                    <div class="w-1/6 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ issuetag.pct }}%</div>
+                    <div class="w-1/6 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ issuetag.count }} events</div>
                 </div>
             {% endfor %}
         </div>
