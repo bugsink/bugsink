@@ -1,5 +1,5 @@
 {% load static tailwind_tags %}<!DOCTYPE html>{# copy of bare_base.html, but without even a menu bar #}
-<html lang="en" data-theme="{% if user.is_authenticated %}{{ user.theme_preference }}{% else %}system{% endif %}">
+<html lang="en" data-theme="system">
 	<head>
     <title>{% block title %}Bugsink{% endblock %}</title>
 		<meta charset="UTF-8">
