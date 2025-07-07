@@ -7,21 +7,21 @@
 {% block content %}
 
 <!-- Delete Confirmation Modal -->
-<div id="deleteModal" class="hidden fixed inset-0 bg-slate-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
-    <div class="relative p-6 border border-slate-300 w-96 shadow-lg rounded-md bg-white">
+<div id="deleteModal" class="hidden fixed inset-0 bg-slate-600 dark:bg-slate-900 bg-opacity-50 dark:bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+    <div class="relative p-6 border border-slate-300 dark:border-slate-600 w-96 shadow-lg rounded-md bg-white dark:bg-slate-900">
         <div class="text-center m-4">
-            <h3 class="text-2xl font-semibold text-slate-800 mt-3 mb-4">Delete Project</h3>
+            <h3 class="text-2xl font-semibold text-slate-800 dark:text-slate-100 mt-3 mb-4">Delete Project</h3>
             <div class="mt-4 mb-6">
-                <p class="text-slate-700">
+                <p class="text-slate-700 dark:text-slate-300">
                     Are you sure you want to delete this project? This action cannot be undone and will delete all associated data.
                 </p>
             </div>
             <div class="flex items-center justify-center space-x-4 mb-4">
-                <button id="cancelDelete" class="text-cyan-500 font-bold">Cancel</button>
+                <button id="cancelDelete" class="text-cyan-500 dark:text-cyan-300 font-bold">Cancel</button>
                 <form method="post" action="." id="deleteForm">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="delete">
-                    <button type="submit" class="font-bold py-2 px-4 rounded bg-red-500 text-white border-2 border-red-600 hover:bg-red-600 active:ring">Confirm</button>
+                    <button type="submit" class="font-bold py-2 px-4 rounded bg-red-500 dark:bg-red-700 text-white border-2 border-red-600 dark:border-red-400 hover:bg-red-600 dark:hover:bg-red-800 active:ring">Confirm</button>
                 </form>
             </div>
         </div>
@@ -49,7 +49,7 @@
         <div class="flex items-center mt-4">
             <button name="action" value="invite" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md">Save</button>
             <a href="{% url "project_list" %}" class="text-cyan-500 dark:text-cyan-300 font-bold ml-2">Cancel</a>          
-            <button type="button" id="deleteButton" class="font-bold py-2 px-4 rounded bg-red-500 text-white border-2 border-red-600 hover:bg-red-600 active:ring ml-auto">Delete Project</button>
+            <button type="button" id="deleteButton" class="font-bold py-2 px-4 rounded bg-red-500 dark:bg-red-700 text-white border-2 border-red-600 dark:border-red-400 hover:bg-red-600 dark:hover:bg-red-800 active:ring ml-4 ml-auto">Delete Project</button>
         </div>
         </form>
     </div>
