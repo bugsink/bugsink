@@ -99,33 +99,39 @@ def get_snappea_warnings():
 def useful_settings_processor(request):
     # name is misnomer, but "who cares".
 
-    installation = Installation.objects.get()
+    def get_system_warnings():
+        # implemented as an inner function to avoid calculating this when it's not actually needed. (i.e. anything
+        # except "the UI", e.g. ingest, API, admin, 404s). Actual 'cache' behavior is not needed, because this is called
+        # at most once per request (at the top of the template)
+        installation = Installation.objects.get()
 
-    system_warnings = []
+        system_warnings = []
 
-    # This list does not include e.g. the dummy.EmailBackend; intentional, because setting _that_ is always an
-    # indication of intentional "shut up I don't want to send emails" (and we don't want to warn about that). (as
-    # opposed to QuietConsoleEmailBackend, which is the default for the Docker "no EMAIL_HOST set" situation)
-    if settings.EMAIL_BACKEND in [
-            'bugsink.email_backends.QuietConsoleEmailBackend'] and not installation.silence_email_system_warning:
+        # This list does not include e.g. the dummy.EmailBackend; intentional, because setting _that_ is always an
+        # indication of intentional "shut up I don't want to send emails" (and we don't want to warn about that). (as
+        # opposed to QuietConsoleEmailBackend, which is the default for the Docker "no EMAIL_HOST set" situation)
+        if settings.EMAIL_BACKEND in [
+                'bugsink.email_backends.QuietConsoleEmailBackend'] and not installation.silence_email_system_warning:
 
-        if getattr(request, "user", AnonymousUser()).is_superuser:
-            ignore_url = reverse("silence_email_system_warning")
-        else:
-            # not a superuser, so can't silence the warning. I'm applying some heuristics here;
-            # * superusers (and only those) will be able to deal with this (have access to EMAIL_BACKEND)
-            # * better to still show (though not silencable) the message to non-superusers.
-            # this will not always be so, but it's a good start.
-            ignore_url = None
+            if getattr(request, "user", AnonymousUser()).is_superuser:
+                ignore_url = reverse("silence_email_system_warning")
+            else:
+                # not a superuser, so can't silence the warning. I'm applying some heuristics here;
+                # * superusers (and only those) will be able to deal with this (have access to EMAIL_BACKEND)
+                # * better to still show (though not silencable) the message to non-superusers.
+                # this will not always be so, but it's a good start.
+                ignore_url = None
 
-        system_warnings.append(SystemWarning(EMAIL_BACKEND_WARNING, ignore_url))
+            system_warnings.append(SystemWarning(EMAIL_BACKEND_WARNING, ignore_url))
+
+        return system_warnings + get_snappea_warnings()
 
     return {
         # Note: no way to actually set the license key yet, so nagging always happens for now.
         'site_title': get_settings().SITE_TITLE,
         'registration_enabled': get_settings().USER_REGISTRATION == CB_ANYBODY,
         'app_settings': get_settings(),
-        'system_warnings': system_warnings + get_snappea_warnings(),
+        'system_warnings': get_system_warnings,
     }
 
 
