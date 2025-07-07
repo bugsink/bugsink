@@ -308,7 +308,7 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
     }
 
     issue_list = d_state_filter[state_filter](
-        Issue.objects.filter(project=project)
+        Issue.objects.filter(project=project, is_deleted=False)
     ).order_by("-last_seen")
 
     if request.GET.get("q"):

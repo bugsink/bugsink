@@ -131,7 +131,7 @@ class BaseIngestAPIView(View):
     @classmethod
     def get_project(cls, project_pk, sentry_key):
         try:
-            return Project.objects.get(pk=project_pk, sentry_key=sentry_key)
+            return Project.objects.get(pk=project_pk, sentry_key=sentry_key, is_deleted=False)
         except Project.DoesNotExist:
             # We don't distinguish between "project not found" and "key incorrect"; there's no real value in that from
             # the user perspective (they deal in dsns). Additional advantage: no need to do constant-time-comp on
@@ -251,9 +251,12 @@ class BaseIngestAPIView(View):
         ingested_at = parse_timestamp(event_metadata["ingested_at"])
         digested_at = datetime.now(timezone.utc) if digested_at is None else digested_at  # explicit passing: test only
 
-        project = Project.objects.get(pk=event_metadata["project_id"])
-        if project.is_deleted:
-            return  # don't process events for deleted projects
+        try:
+            project = Project.objects.get(pk=event_metadata["project_id"], is_deleted=False)
+        except Project.DoesNotExist:
+            # we may get here if the project was deleted after the event was ingested, but before it was digested
+            # (covers both "deletion in progress (is_deleted=True)" and "fully deleted").
+            return
 
         if not cls.count_project_periods_and_act_on_it(project, digested_at):
             return  # if over-quota: just return (any cleanup is done calling-side)
