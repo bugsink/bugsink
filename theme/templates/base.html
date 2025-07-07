@@ -1,5 +1,5 @@
 {% load static tailwind_tags version add_to_qs %}<!DOCTYPE html>
-<html lang="en" data-theme="{% if user.is_authenticated %}{{ user.theme_preference }}{% else %}system{% endif %}">
+<html lang="en" data-theme="{% if user.is_authenticated %}{{ user.theme_preference }}{% else %}dark{% endif %}">
     <!-- version: {% version %} -->
 	<head>
     <title>{% block title %}{{ site_title }}{% endblock %}</title>
@@ -27,7 +27,7 @@
 	<body class="dark:bg-slate-700 dark:text-slate-100">
         <div id="content">
             <div class="flex pl-4 bg-slate-200 dark:bg-slate-800">
-                <a href="/"><img src="{% static 'images/bugsink-logo.png' %}" class="p-2 h-12 w-12" alt="Bugsink logo"></a>
+                <a href="/"><img src="{% static 'images/bugsink-logo.png' %}" class="p-2 h-12 w-12 dark:hidden block" alt="Bugsink logo"><img src="{% static 'images/bugsink-logo-dark.png' %}" class="p-2 h-12 w-12 hidden dark:block" alt="Bugsink logo"></a>
                 <a href="/"><div class="px-2 py-2 my-2 font-bold hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{{ site_title }}</div></a>
 
                 {% if not app_settings.SINGLE_TEAM %}
