@@ -126,6 +126,15 @@
     top: 20px;
 }
 
+/* Tailwind dark mode support */
+[data-theme="dark"] .triangle-left:before {
+    border-color: transparent rgb(71 85 105) transparent transparent;
+}
+
+[data-theme="dark"] .triangle-left:after {
+    border-color: transparent rgb(51 65 85) transparent transparent;
+}
+
 /*
 The below is the output of:
 
