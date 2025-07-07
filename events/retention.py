@@ -376,7 +376,7 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_eve
             Event.objects.filter(pk__in=pks_to_delete).exclude(storage_backend=None)
             .values_list("id", "storage_backend")
         )
-        issue_deletions = {
+        deletions_per_issue = {
             d['issue_id']: d['count'] for d in
             Event.objects.filter(pk__in=pks_to_delete).values("issue_id").annotate(count=Count("issue_id"))}
 
@@ -387,9 +387,9 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_eve
         nr_of_deletions = Event.objects.filter(pk__in=pks_to_delete).delete()[1].get("events.Event", 0)
     else:
         nr_of_deletions = 0
-        issue_deletions = {}
+        deletions_per_issue = {}
 
-    return EvictionCounts(nr_of_deletions, issue_deletions)
+    return EvictionCounts(nr_of_deletions, deletions_per_issue)
 
 
 def cleanup_events_on_storage(todos):

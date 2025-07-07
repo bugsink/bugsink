@@ -128,6 +128,10 @@ def _is_valid_action(action, issue):
     """We take the 'strict' approach of complaining even when the action is simply a no-op, because you're already in
     the desired state."""
 
+    if action == "delete":
+        # any type of issue can be deleted
+        return True
+
     if issue.is_resolved:
         # any action is illegal on resolved issues (as per our current UI)
         return False
@@ -153,6 +157,10 @@ def _is_valid_action(action, issue):
 def _q_for_invalid_for_action(action):
     """returns a Q obj of issues for which the action is not valid."""
 
+    if action == "delete":
+        # delete is always valid, so we don't want any issues to be returned, https://stackoverflow.com/a/39001190
+        return Q(pk__in=[])
+
     illegal_conditions = Q(is_resolved=True)  # any action is illegal on resolved issues (as per our current UI)
 
     if action.startswith("resolved_release:"):
@@ -169,7 +177,10 @@ def _q_for_invalid_for_action(action):
 
 
 def _make_history(issue_or_qs, action, user):
-    if action == "resolve":
+    if action == "delete":
+        return  # we're about to delete the issue, so no history is needed (nor possible)
+
+    elif action == "resolve":
         kind = TurningPointKind.RESOLVED
     elif action.startswith("resolved"):
         kind = TurningPointKind.RESOLVED
@@ -210,10 +221,13 @@ def _make_history(issue_or_qs, action, user):
     now = timezone.now()
     if isinstance(issue_or_qs, Issue):
         TurningPoint.objects.create(
+            project=issue_or_qs.project,
             issue=issue_or_qs, kind=kind, user=user, metadata=json.dumps(metadata), timestamp=now)
     else:
         TurningPoint.objects.bulk_create([
-            TurningPoint(issue=issue, kind=kind, user=user, metadata=json.dumps(metadata), timestamp=now)
+            TurningPoint(
+                project_id=issue.project_id, issue=issue, kind=kind, user=user, metadata=json.dumps(metadata),
+                timestamp=now)
             for issue in issue_or_qs
         ])
 
@@ -249,6 +263,8 @@ def _apply_action(manager, issue_or_qs, action, user):
         }]))
     elif action == "unmute":
         manager.unmute(issue_or_qs)
+    elif action == "delete":
+        manager.delete(issue_or_qs)
 
 
 def issue_list(request, project_pk, state_filter="open"):
@@ -292,7 +308,7 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
     }
 
     issue_list = d_state_filter[state_filter](
-        Issue.objects.filter(project=project)
+        Issue.objects.filter(project=project, is_deleted=False)
     ).order_by("-last_seen")
 
     if request.GET.get("q"):
@@ -767,6 +783,7 @@ def history_comment_new(request, issue):
             # think that's amount of magic to have: it still allows one to erase comments (possibly for non-manual
             # kinds) but it saves you from what is obviously a mistake (without complaining with a red box or something)
             TurningPoint.objects.create(
+                project=issue.project,
                 issue=issue, kind=TurningPointKind.MANUAL_ANNOTATION, user=request.user,
                 comment=form.cleaned_data["comment"],
                 timestamp=timezone.now())

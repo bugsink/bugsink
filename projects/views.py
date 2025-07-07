@@ -35,21 +35,24 @@ def project_list(request, ownership_filter=None):
     my_memberships = ProjectMembership.objects.filter(user=request.user)
     my_team_memberships = TeamMembership.objects.filter(user=request.user)
 
-    my_projects = Project.objects.filter(projectmembership__in=my_memberships).order_by('name').distinct()
+    my_projects = Project.objects.filter(
+        projectmembership__in=my_memberships, is_deleted=False).order_by('name').distinct()
     my_teams_projects = \
         Project.objects \
-        .filter(team__teammembership__in=my_team_memberships) \
+        .filter(team__teammembership__in=my_team_memberships, is_deleted=False) \
         .exclude(projectmembership__in=my_memberships) \
         .order_by('name').distinct()
 
     if request.user.is_superuser:
         # superusers can see all project, even hidden ones
         other_projects = Project.objects \
+            .filter(is_deleted=False) \
             .exclude(projectmembership__in=my_memberships) \
             .exclude(team__teammembership__in=my_team_memberships) \
             .order_by('name').distinct()
     else:
         other_projects = Project.objects \
+            .filter(is_deleted=False) \
             .exclude(projectmembership__in=my_memberships) \
             .exclude(team__teammembership__in=my_team_memberships) \
             .exclude(visibility=ProjectVisibility.TEAM_MEMBERS) \
@@ -158,13 +161,28 @@ def _check_project_admin(project, user):
 
 @atomic_for_request_method
 def project_edit(request, project_pk):
-    project = Project.objects.get(id=project_pk)
+    project = Project.objects.get(id=project_pk, is_deleted=False)
 
     _check_project_admin(project, request.user)
 
     if request.method == 'POST':
-        form = ProjectForm(request.POST, instance=project)
+        action = request.POST.get('action')
 
+        if action == 'delete':
+            # Double-check that the user is an admin or superuser
+            if (not request.user.is_superuser
+                and not ProjectMembership.objects.filter(
+                    project=project, user=request.user, role=ProjectRole.ADMIN, accepted=True).exists()
+                and not TeamMembership.objects.filter(
+                    team=project.team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists()):
+                raise PermissionDenied("Only project or team admins can delete projects")
+
+            # Delete the project
+            project.delete_deferred()
+            messages.success(request, f'Project "{project.name}" has been deleted successfully.')
+            return redirect('project_list')
+
+        form = ProjectForm(request.POST, instance=project)
         if form.is_valid():
             form.save()
             return redirect('project_members', project_pk=project.id)
@@ -180,7 +198,7 @@ def project_edit(request, project_pk):
 
 @atomic_for_request_method
 def project_members(request, project_pk):
-    project = Project.objects.get(id=project_pk)
+    project = Project.objects.get(id=project_pk, is_deleted=False)
     _check_project_admin(project, request.user)
 
     if request.method == 'POST':
@@ -215,7 +233,7 @@ def project_members_invite(request, project_pk):
     # NOTE: project-member invite is just that: a direct invite to a project. If you want to also/instead invite someone
     # to a team, you need to just do that instead.
 
-    project = Project.objects.get(id=project_pk)
+    project = Project.objects.get(id=project_pk, is_deleted=False)
 
     _check_project_admin(project, request.user)
 
@@ -277,7 +295,7 @@ def project_member_settings(request, project_pk, user_pk):
 
     this_is_you = str(user_pk) == str(request.user.id)
     if not this_is_you:
-        _check_project_admin(Project.objects.get(id=project_pk), request.user)
+        _check_project_admin(Project.objects.get(id=project_pk, is_deleted=False), request.user)
 
         membership = ProjectMembership.objects.get(project=project_pk, user=user_pk)
         create_form = lambda data: ProjectMembershipForm(data, instance=membership)  # noqa
@@ -302,7 +320,7 @@ def project_member_settings(request, project_pk, user_pk):
     return render(request, 'projects/project_member_settings.html', {
         'this_is_you': this_is_you,
         'user': User.objects.get(id=user_pk),
-        'project': Project.objects.get(id=project_pk),
+        'project': Project.objects.get(id=project_pk, is_deleted=False),
         'form': form,
     })
 
@@ -362,7 +380,7 @@ def project_members_accept(request, project_pk):
     # invited as user B. Security-wise this is fine, but UX-wise it could be confusing. However, I'm in the assumption
     # here that normal people (i.e. not me) don't have multiple accounts, so I'm not going to bother with this.
 
-    project = Project.objects.get(id=project_pk)
+    project = Project.objects.get(id=project_pk, is_deleted=False)
     membership = ProjectMembership.objects.get(project=project, user=request.user)
 
     if membership.accepted:
@@ -387,7 +405,7 @@ def project_members_accept(request, project_pk):
 
 @atomic_for_request_method
 def project_sdk_setup(request, project_pk, platform=""):
-    project = Project.objects.get(id=project_pk)
+    project = Project.objects.get(id=project_pk, is_deleted=False)
 
     if not request.user.is_superuser and not ProjectMembership.objects.filter(project=project, user=request.user,
                                                                               accepted=True).exists():
@@ -408,7 +426,7 @@ def project_sdk_setup(request, project_pk, platform=""):
 
 @atomic_for_request_method
 def project_alerts_setup(request, project_pk):
-    project = Project.objects.get(id=project_pk)
+    project = Project.objects.get(id=project_pk, is_deleted=False)
     _check_project_admin(project, request.user)
 
     if request.method == 'POST':
@@ -431,7 +449,7 @@ def project_alerts_setup(request, project_pk):
 
 @atomic_for_request_method
 def project_messaging_service_add(request, project_pk):
-    project = Project.objects.get(id=project_pk)
+    project = Project.objects.get(id=project_pk, is_deleted=False)
     _check_project_admin(project, request.user)
 
     if request.method == 'POST':
@@ -459,7 +477,7 @@ def project_messaging_service_add(request, project_pk):
 
 @atomic_for_request_method
 def project_messaging_service_edit(request, project_pk, service_pk):
-    project = Project.objects.get(id=project_pk)
+    project = Project.objects.get(id=project_pk, is_deleted=False)
     _check_project_admin(project, request.user)
 
     instance = project.service_configs.get(id=service_pk)

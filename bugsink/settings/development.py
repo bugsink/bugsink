@@ -91,15 +91,13 @@ SNAPPEA = {
     "NUM_WORKERS": 1,
 }
 
-POSTMARK_API_KEY = os.getenv('POSTMARK_API_KEY')
-
-EMAIL_HOST = 'smtp.postmarkapp.com'
-EMAIL_HOST_USER = POSTMARK_API_KEY
-EMAIL_HOST_PASSWORD = POSTMARK_API_KEY
+EMAIL_HOST = os.getenv("EMAIL_HOST")
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 
-SERVER_EMAIL = DEFAULT_FROM_EMAIL = 'Klaas van Schelven <klaas@vanschelven.com>'
+SERVER_EMAIL = DEFAULT_FROM_EMAIL = 'Klaas van Schelven <klaas@bugsink.com>'
 
 
 BUGSINK = {

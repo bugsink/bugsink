@@ -87,6 +87,9 @@ def deduce_tags(event_data):
     # we start with the explicitly provided tags
     tags = event_data.get('tags', {})
 
+    if isinstance(tags, list):
+        tags = {k: v for k, v in tags}
+
     for tag_key, lookup_path in EVENT_DATA_CONVERSION_TABLE.items():
         value = get_path(event_data, *lookup_path)
 

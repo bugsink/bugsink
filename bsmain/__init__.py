@@ -38,7 +38,7 @@ def check_event_storage_properly_configured(app_configs, **kwargs):
 @register("bsmain")
 def check_base_url_is_url(app_configs, **kwargs):
     try:
-        parts = urllib.parse.urlsplit(get_settings().BASE_URL)
+        parts = urllib.parse.urlsplit(str(get_settings().BASE_URL))
     except ValueError as e:
         return [Warning(
             str(e),
