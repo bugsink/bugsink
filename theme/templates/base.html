@@ -60,7 +60,7 @@
             </div>
 
             {% for system_warning in system_warnings %}
-            <div class="flex p-4 bg-yellow-100 dark:bg-yellow-900 border-b-2 border-yellow-200 dark:border-yellow-700">
+            <div class="flex p-4 bg-yellow-100 dark:bg-amber-800 border-b-2 border-yellow-200 dark:border-amber-900">
                 <div class="text-slate-800 dark:text-slate-100">
                     {{ system_warning.message }}
                 </div>
@@ -71,7 +71,7 @@
             {% endfor %}
 
             {% comment %} {# for use when we introduce a notification system #}
-            <div class="flex p-4 bg-yellow-100 dark:bg-yellow-900 border-b-2 border-yellow-200 dark:border-yellow-700">
+            <div class="flex p-4 bg-yellow-100 dark:bg-amber-800 border-b-2 border-yellow-200 dark:border-yellow-700">
                 <div>
                     Foo bar baz
                 </div>
