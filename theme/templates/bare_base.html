@@ -1,5 +1,5 @@
 {% load static tailwind_tags %}<!DOCTYPE html>{# copy of base.html, but without variables (and hence no menu), for use in contextless templates (e.g. 500.html) #}
-<html lang="en" data-theme="{% if user.is_authenticated %}{{ user.theme_preference }}{% else %}system{% endif %}">
+<html lang="en" data-theme="system">
 	<head>
     <title>{% block title %}Bugsink{% endblock %}</title>
 		<meta charset="UTF-8">
