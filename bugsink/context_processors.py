@@ -127,7 +127,6 @@ def useful_settings_processor(request):
         return system_warnings + get_snappea_warnings()
 
     return {
-        # Note: no way to actually set the license key yet, so nagging always happens for now.
         'site_title': get_settings().SITE_TITLE,
         'registration_enabled': get_settings().USER_REGISTRATION == CB_ANYBODY,
         'app_settings': get_settings(),
