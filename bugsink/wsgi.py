@@ -19,9 +19,10 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bugsink_conf')
 
 class CustomWSGIRequest(WSGIRequest):
     """
-    Custom WSQIRequest subclass with 2 fixes:
+    Custom WSQIRequest subclass with 3 fixes/changes:
 
     * Chunked Transfer Encoding (Django's behavior is broken)
+    * Skip ALLOWED_HOSTS validation for /health/ endpoints (see #140)
     * Better error message for disallowed hosts
 
     Note: used in all servers (in gunicorn through wsgi.py; in Django's runserver through WSGI_APPLICATION)
@@ -56,6 +57,10 @@ class CustomWSGIRequest(WSGIRequest):
         try:
             return super().get_host()
         except DisallowedHost as e:
+            if self.path.startswith == "/health/":
+                # For /health/ endpoints, we skip the ALLOWED_HOSTS validation (see #140).
+                return self._get_raw_host()
+
             message = str(e)
 
             if "ALLOWED_HOSTS" in message:
