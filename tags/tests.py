@@ -6,7 +6,7 @@ from issues.factories import get_or_create_issue, denormalized_issue_fields
 from events.factories import create_event, create_event_data
 from issues.models import Issue
 
-from .models import store_tags, EventTag
+from .models import store_tags, EventTag, IssueTag
 from .utils import deduce_tags
 from .search import search_events, search_issues, parse_query, search_events_optimized
 
