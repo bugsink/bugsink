@@ -4,7 +4,7 @@ from snappea.decorators import shared_task
 
 from bugsink.moreiterutils import batched
 from bugsink.transaction import immediate_atomic, delay_on_commit
-from tags.models import TagValue, TagKey, EventTag, IssueTag, _or_join
+from tags.models import TagValue, TagKey, EventTag, IssueTag, _or_join, prune_tagvalues
 
 BATCH_SIZE = 10_000
 
@@ -131,14 +131,18 @@ def vacuum_eventless_issuetags(min_id=0):
             else:
                 in_use_issue_value_pairs = set()
 
-            stale_issuetag_ids = [
-                it['id']
+            stale_issuetags = [
+                it
                 for it in issue_tag_infos_batch
                 if (it['issue_id'], it['value_id']) not in in_use_issue_value_pairs
             ]
 
-            if stale_issuetag_ids:
-                IssueTag.objects.filter(id__in=stale_issuetag_ids).delete()
+            if stale_issuetags:
+                IssueTag.objects.filter(id__in=[it['id'] for it in stale_issuetags]).delete()
+
+                # inline pruning of TagValue (as opposed to using "vacuum later") following the same reasoning as in
+                # prune_orphans.
+                prune_tagvalues([it['value_id'] for it in stale_issuetags])
 
     if not issue_tag_infos:
         # We don't have a continuation for the "done" case. One could argue: kick off vacuum_tagvalues there, but I'd

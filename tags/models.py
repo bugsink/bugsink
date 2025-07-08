@@ -247,3 +247,19 @@ def _store_tags(event, issue, tags):
     IssueTag.objects.filter(value__in=tag_value_objects, issue=issue).update(
         count=F('count') + 1
     )
+
+
+def prune_tagvalues(ids_to_check):
+    # used_in_event check is not needed, because non-existence of IssueTag always implies non-existince of EventTag,
+    # since [1] EventTag creation implies IssueTag creation and [2] in the cleanup code EventTag is deleted first.
+    used_in_issuetag = set(
+        IssueTag.objects.filter(value_id__in=ids_to_check).values_list('value_id', flat=True)
+    )
+    unused = [pk for pk in ids_to_check if pk not in used_in_issuetag]
+
+    if unused:
+        TagValue.objects.filter(id__in=unused).delete()
+
+    # The principled approach would be to clean up TagKeys as well at this point, but in practice there will be orders
+    # of magnitude fewer TagKey objects, and they are much less likely to become dangling, so the GC-like algo of "just
+    # vacuuming once in a while" is a much better fit for that.

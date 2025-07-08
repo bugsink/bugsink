@@ -206,29 +206,17 @@ def prune_orphans(model, d_ids_to_check):
 
     1. the inline version is easier to reason about, it "just happens ASAP", and in the context of a given issue;
        vacuum-based has to take into consideration the full DB including non-orphaned values.
-    2. repeated work is somewhat minimalized b/c of the IssueTag/EventTag relationship as described below.
+    2. repeated work is somewhat minimalized b/c of the IssueTag/EventTag relationship as described in prune_tagvalues.
     """
 
-    from tags.models import TagValue, IssueTag  # avoid circular import
+    from tags.models import prune_tagvalues  # avoid circular import
 
     if model.__name__ != "IssueTag":
         return  # we only prune IssueTag orphans
 
-    ids_to_check = [d["value_id"] for d in d_ids_to_check]
+    ids_to_check = [d["value_id"] for d in d_ids_to_check]  # d_ids_to_check: mirrors fields_for_prune_orphans(model)
 
-    # used_in_event check is not needed, because non-existence of IssueTag always implies non-existince of EventTag,
-    # since [1] EventTag creation implies IssueTag creation and [2] in the cleanup code EventTag is deleted first.
-    used_in_issue = set(
-        IssueTag.objects.filter(value_id__in=ids_to_check).values_list('value_id', flat=True)
-    )
-    unused = [pk for pk in ids_to_check if pk not in used_in_issue]
-
-    if unused:
-        TagValue.objects.filter(id__in=unused).delete()
-
-    # The principled approach would be to clean up TagKeys as well at this point, but in practice there will be orders
-    # of magnitude fewer TagKey objects, and they are much less likely to become dangling, so the GC-like algo of "just
-    # vacuuming once in a while" is a much better fit for that.
+    prune_tagvalues(ids_to_check)
 
 
 def do_pre_delete(project_id, model, pks_to_delete, is_for_project):

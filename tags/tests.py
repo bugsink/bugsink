@@ -7,7 +7,7 @@ from issues.factories import get_or_create_issue, denormalized_issue_fields
 from events.factories import create_event, create_event_data
 from issues.models import Issue
 
-from .models import store_tags, EventTag, IssueTag
+from .models import store_tags, EventTag, IssueTag, TagValue
 from .utils import deduce_tags
 from .search import search_events, search_issues, parse_query, search_events_optimized
 from .tasks import vacuum_eventless_issuetags
@@ -323,7 +323,7 @@ class VacuumEventlessIssueTagsTestCase(TransactionTestCase):
 
     def test_many_tags_spanning_chunks(self):
         event = create_event(self.project, issue=self.issue)
-        store_tags(event, self.issue, {f"key-{i}": f"value-{i}" for i in range(512) + 1})  # bigger than BATCH_SIZE
+        store_tags(event, self.issue, {f"key-{i}": f"value-{i}" for i in range(512 + 1)})  # bigger than BATCH_SIZE
 
         # check setup: all issue tags are there
         self.assertEqual(IssueTag.objects.filter(issue=self.issue).count(), 513)
@@ -333,3 +333,11 @@ class VacuumEventlessIssueTagsTestCase(TransactionTestCase):
 
         # all tags should be gone after vacuum
         self.assertEqual(IssueTag.objects.filter(issue=self.issue).count(), 0)
+
+    def test_tagvalue_is_pruned(self):
+        event = create_event(self.project, issue=self.issue)
+        store_tags(event, self.issue, {"foo": "bar"})
+        event.delete_deferred()
+
+        vacuum_eventless_issuetags()
+        self.assertEqual(TagValue.objects.all().count(), 0)
