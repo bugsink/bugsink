@@ -23,6 +23,7 @@ from django.db.models import Q, F
 
 from projects.models import Project
 from tags.utils import deduce_tags, is_mostly_unique
+from bugsink.moreiterutils import batched
 
 # Notes on .project as it lives on TagValue, IssueTag and EventTag:
 # In all cases, project could be derived through other means: for TagValue it's implied by TagKey.project; for IssueTag
@@ -52,6 +53,9 @@ class TagKey(models.Model):
         # the obvious constraint, which doubles as a lookup index for store_tags and search.
         unique_together = ('project', 'key')
 
+    def __str__(self):
+        return f"{self.key}"
+
 
 class TagValue(models.Model):
     project = models.ForeignKey(Project, blank=False, null=False, on_delete=models.DO_NOTHING)
@@ -74,7 +78,7 @@ class EventTag(models.Model):
     # value already implies key in our current setup.
     value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.DO_NOTHING)
 
-    # issue is a denormalization that allows for a single-table-index for efficient search.
+    # issue is a denormalization that allows for a single-table-index for efficient search/vacuum_eventless_issuetags.
     issue = models.ForeignKey(
         'issues.Issue', blank=False, null=False, on_delete=models.DO_NOTHING, related_name="event_tags")
 
@@ -97,6 +101,7 @@ class EventTag(models.Model):
             # for search, which filters a list of EventTag down to those matching certain values and a given issue.
             # (both orderings of the (value, issue) would work for the current search query; if we ever introduce
             # "search across issues" the below would work for that too (but the reverse wouldn't))
+            # also used by vacuum_eventless_issuetags (ORed Q(issue_id, value_id))
             models.Index(fields=['value', 'issue', 'digest_order']),
         ]
 
@@ -161,6 +166,17 @@ def digest_tags(event_data, event, issue):
 
 
 def store_tags(event, issue, tags):
+    # observed: a non-batched implementation of store_tags() would crash (e.g. in sqlite: Expression tree is too large
+    # (maximum depth 1000));
+
+    # The value of 64 was arrived at by trying all powers of 2 (locally, on sqlite), observing that 256 was the last
+    # non-failing one, and then taking a factor 4 safety-margin. Realistically, 64 tags _per event_ "should be enough
+    # for anyone".
+    for kv_batch in batched(tags.items(), 64):
+        _store_tags(event, issue, {k: v for k, v in kv_batch})
+
+
+def _store_tags(event, issue, tags):
     if not tags:
         return  # short-circuit; which is a performance optimization which also avoids some the need for further guards
 
@@ -231,3 +247,19 @@ def store_tags(event, issue, tags):
     IssueTag.objects.filter(value__in=tag_value_objects, issue=issue).update(
         count=F('count') + 1
     )
+
+
+def prune_tagvalues(ids_to_check):
+    # used_in_event check is not needed, because non-existence of IssueTag always implies non-existince of EventTag,
+    # since [1] EventTag creation implies IssueTag creation and [2] in the cleanup code EventTag is deleted first.
+    used_in_issuetag = set(
+        IssueTag.objects.filter(value_id__in=ids_to_check).values_list('value_id', flat=True)
+    )
+    unused = [pk for pk in ids_to_check if pk not in used_in_issuetag]
+
+    if unused:
+        TagValue.objects.filter(id__in=unused).delete()
+
+    # The principled approach would be to clean up TagKeys as well at this point, but in practice there will be orders
+    # of magnitude fewer TagKey objects, and they are much less likely to become dangling, so the GC-like algo of "just
+    # vacuuming once in a while" is a much better fit for that.
