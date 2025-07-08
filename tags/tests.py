@@ -119,6 +119,16 @@ class StoreTagsTestCase(DjangoTestCase):
         self.assertEqual(self.issue.tags.first().count, 2)
         self.assertEqual(self.issue.tags.first().value.key.key, "foo")
 
+    def test_store_same_tag_on_two_issues_creates_two_issuetags(self):
+        store_tags(self.event, self.issue, {"foo": "bar"})
+
+        other_issue, _ = get_or_create_issue(self.project, event_data=create_event_data("other_issue"))
+        other_event = create_event(self.project, issue=other_issue)
+        store_tags(other_event, other_issue, {"foo": "bar"})
+
+        self.assertEqual(IssueTag.objects.count(), 2)
+        self.assertEqual(2, IssueTag.objects.filter(value__key__key="foo").count())
+
 
 class SearchParserTestCase(RegularTestCase):
 
