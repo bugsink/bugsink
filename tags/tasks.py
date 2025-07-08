@@ -140,8 +140,10 @@ def vacuum_eventless_issuetags(min_id=0):
             if stale_issuetag_ids:
                 IssueTag.objects.filter(id__in=stale_issuetag_ids).delete()
 
-    # We don't have a continuation for the "done" case. One could argue: kick off vacuum_tagvalues there, but I'd rather
-    # rather build the toolbox of cleanup tasks first and see how they might fit together later. Because the downside of
-    # triggering the next vacuum command would be that "more things might happen too soon".
+    if not issue_tag_infos:
+        # We don't have a continuation for the "done" case. One could argue: kick off vacuum_tagvalues there, but I'd
+        # rather rather build the toolbox of cleanup tasks first and see how they might fit together later. Because the
+        # downside of triggering the next vacuum command would be that "more things might happen too soon".
+        return
 
     vacuum_eventless_issuetags.delay(issue_tag_infos[-1]['id'])
