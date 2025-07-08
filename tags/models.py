@@ -74,7 +74,7 @@ class EventTag(models.Model):
     # value already implies key in our current setup.
     value = models.ForeignKey(TagValue, blank=False, null=False, on_delete=models.DO_NOTHING)
 
-    # issue is a denormalization that allows for a single-table-index for efficient search.
+    # issue is a denormalization that allows for a single-table-index for efficient search/vacuum_eventless_issuetags.
     issue = models.ForeignKey(
         'issues.Issue', blank=False, null=False, on_delete=models.DO_NOTHING, related_name="event_tags")
 
@@ -97,6 +97,7 @@ class EventTag(models.Model):
             # for search, which filters a list of EventTag down to those matching certain values and a given issue.
             # (both orderings of the (value, issue) would work for the current search query; if we ever introduce
             # "search across issues" the below would work for that too (but the reverse wouldn't))
+            # also used by vacuum_eventless_issuetags (ORed Q(issue_id, value_id))
             models.Index(fields=['value', 'issue', 'digest_order']),
         ]
 
