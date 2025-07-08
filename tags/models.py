@@ -23,6 +23,7 @@ from django.db.models import Q, F
 
 from projects.models import Project
 from tags.utils import deduce_tags, is_mostly_unique
+from bugsink.moreiterutils import batched
 
 # Notes on .project as it lives on TagValue, IssueTag and EventTag:
 # In all cases, project could be derived through other means: for TagValue it's implied by TagKey.project; for IssueTag
@@ -165,6 +166,17 @@ def digest_tags(event_data, event, issue):
 
 
 def store_tags(event, issue, tags):
+    # observed: a non-batched implementation of store_tags() would crash (e.g. in sqlite: Expression tree is too large
+    # (maximum depth 1000));
+
+    # The value of 64 was arrived at by trying all powers of 2 (locally, on sqlite), observing that 256 was the last
+    # non-failing one, and then taking a factor 4 safety-margin. Realistically, 64 tags _per event_ "should be enough
+    # for anyone".
+    for kv_batch in batched(tags.items(), 64):
+        _store_tags(event, issue, {k: v for k, v in kv_batch})
+
+
+def _store_tags(event, issue, tags):
     if not tags:
         return  # short-circuit; which is a performance optimization which also avoids some the need for further guards
 

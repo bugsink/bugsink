@@ -129,6 +129,13 @@ class StoreTagsTestCase(DjangoTestCase):
         self.assertEqual(IssueTag.objects.count(), 2)
         self.assertEqual(2, IssueTag.objects.filter(value__key__key="foo").count())
 
+    def test_store_many_tags(self):
+        # observed: a non-batched implementation of store_tags() would crash (e.g. in sqlite: Expression tree is too
+        # large (maximum depth 1000)); if the below doesn't crash, we've got a batched implementation that works
+        event = create_event(self.project, issue=self.issue)
+        store_tags(event, self.issue, {f"key-{i}": f"value-{i}" for i in range(512)})
+        self.assertEqual(IssueTag.objects.filter(issue=self.issue).count(), 512)
+
 
 class SearchParserTestCase(RegularTestCase):
 
