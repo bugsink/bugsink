@@ -97,6 +97,12 @@ class Foreman:
 
         logger.info(" =========  SNAPPEA  =========")
 
+        if self.settings.TASK_ALWAYS_EAGER:
+            # Exiting _mostly_ because of a matter of intent: this combination of settings/actions makes so little sense
+            # that it can't really be intentional. It's also probably broken (or in any case: not tested to work)
+            logger.info("Startup: Can't run Foreman in TASK_ALWAYS_EAGER mode, EXIT")
+            sys.exit(1)
+
         # if the PID_FILE already exists, read it to see whether snappea is already running.
         # this implementation is not supposed to be bullet-proof for race conditions (nor is it cross-platform)... it's
         # just a small check to prevent the regularly occurring cases:
