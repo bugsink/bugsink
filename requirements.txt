@@ -1,6 +1,6 @@
 gunicorn==23.0.*
 Django==4.2.*
-sentry-sdk==2.29.*
+sentry-sdk==2.*
 django-tailwind==3.6.*
 jsonschema==4.24.*
 semver==3.0.*
