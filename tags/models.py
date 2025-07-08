@@ -52,6 +52,9 @@ class TagKey(models.Model):
         # the obvious constraint, which doubles as a lookup index for store_tags and search.
         unique_together = ('project', 'key')
 
+    def __str__(self):
+        return f"{self.key}"
+
 
 class TagValue(models.Model):
     project = models.ForeignKey(Project, blank=False, null=False, on_delete=models.DO_NOTHING)
