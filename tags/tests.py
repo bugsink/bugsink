@@ -323,10 +323,10 @@ class VacuumEventlessIssueTagsTestCase(TransactionTestCase):
 
     def test_many_tags_spanning_chunks(self):
         event = create_event(self.project, issue=self.issue)
-        store_tags(event, self.issue, {f"key-{i}": f"value-{i}" for i in range(512 + 1)})  # bigger than BATCH_SIZE
+        store_tags(event, self.issue, {f"key-{i}": f"value-{i}" for i in range(2048 + 1)})  # bigger than BATCH_SIZE
 
         # check setup: all issue tags are there
-        self.assertEqual(IssueTag.objects.filter(issue=self.issue).count(), 513)
+        self.assertEqual(IssueTag.objects.filter(issue=self.issue).count(), 2048 + 1)
 
         event.delete_deferred()
         vacuum_eventless_issuetags()

@@ -103,7 +103,11 @@ def vacuum_eventless_issuetags(min_id=0):
     #
     # This task aims to reconcile that, in a delayed and resumable fashion.
 
-    BATCH_SIZE = 512  # close to 500, and a multiple of 64
+    # Empirically determined: at this size, each batch is approx .3s (local dev, sqlite); Note that we're "nearer to the
+    # edge of the object-graph" than for e.g. even-retention, so we can both afford bigger batches (less cascading
+    # effects per item) as well as need bigger batches (because there are more expected items in a fanning-out
+    # object-graph).
+    BATCH_SIZE = 2048
 
     # Community wisdom (says ChatGPT, w/o source): queries with dozens of OR clauses can slow down significantly. 64 is
     # a safe, batch size that avoids planner overhead and keeps things fast across databases.
