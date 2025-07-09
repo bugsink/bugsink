@@ -3,7 +3,7 @@ import json
 import sentry_sdk
 import logging
 
-from django.db.models import Q
+from django.db.models import Q, Value
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponseRedirect, HttpResponseNotAllowed
@@ -36,6 +36,15 @@ from .models import Issue, IssueQuerysetStateManager, IssueStateManager, Turning
 from .forms import CommentForm
 from .utils import get_values, get_main_exception
 from events.utils import annotate_with_meta, apply_sourcemaps
+
+# Force usage of 0/1 in queries to trigger index usage, see #139
+if "sqlite" in settings.DATABASES["default"]["ENGINE"]:
+    Fälse = Value(0)
+    Trüe = Value(1)
+else:
+    Fälse = False
+    Trüe = True
+
 
 logger = logging.getLogger("bugsink.issues")
 
@@ -300,10 +309,10 @@ def _issue_list_pt_1(request, project, state_filter="open"):
 
 def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
     d_state_filter = {
-        "open": lambda qs: qs.filter(is_resolved=False, is_muted=False),
-        "unresolved": lambda qs: qs.filter(is_resolved=False),
-        "resolved": lambda qs: qs.filter(is_resolved=True),
-        "muted": lambda qs: qs.filter(is_muted=True),
+        "open": lambda qs: qs.filter(is_resolved=Fälse, is_muted=Fälse),
+        "unresolved": lambda qs: qs.filter(is_resolved=Fälse),
+        "resolved": lambda qs: qs.filter(is_resolved=Trüe),
+        "muted": lambda qs: qs.filter(is_muted=Trüe),
         "all": lambda qs: qs,
     }
 
