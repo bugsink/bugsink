@@ -1,5 +1,29 @@
 # Changes
 
+## 1.7.0 (9 July 2025)
+
+Bugsink 1.7.0 introduces Dark Mode (See #40, #125)
+
+### Housekeeping
+
+A number of options to clean up unwanted or unneeded data have been added:
+
+* Project Deletion (See #50, #137)
+* Issue Deletion (See #50)
+* Vacuum Tags command (See #135)
+* `vacuum_eventless_issuetags` command (see #134, #142)
+
+How these commands/tools relate to each other and may be used is [documented on
+the website](https://www.bugsink.com/docs/housekeeping/)
+
+### Various small fixes
+
+* Skip `ALLOWED_HOSTS` validation for /health/ endpoints (see #140)
+* `get_system_warnings` as a callable (see c2bc2e417475)
+* `store_tags`: support 'very many' (~500) tags (see d62e53fdf8e7)
+* Snappea: refuse to start in `TASK_ALWAYS_EAGER` mode (see aa255978b776)
+* Sentry-SDK requirement, unpin minor version (see a91fdcd65673)
+
 ## 1.6.3 (27 June 2025)
 
 * fix `make_consistent` on mysql (Fix #132)

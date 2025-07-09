@@ -92,7 +92,7 @@ def get_snappea_warnings():
 
 
 def useful_settings_processor(request):
-    # name is misnomer, but "who cares".
+    """Adds useful settings (and more) to the context."""
 
     def get_system_warnings():
         # implemented as an inner function to avoid calculating this when it's not actually needed. (i.e. anything
