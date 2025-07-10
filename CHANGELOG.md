@@ -1,5 +1,9 @@
 # Changes
 
+## 1.7.1 (10 July 2025)
+
+Fix: user-related forms broken by unclosed link
+
 ## 1.7.0 (9 July 2025)
 
 Bugsink 1.7.0 introduces Dark Mode (See #40, #125)
