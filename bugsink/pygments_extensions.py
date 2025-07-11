@@ -16,6 +16,7 @@ from os.path import basename
 from pygments.lexers import (
     ActionScript3Lexer, CLexer, ColdfusionHtmlLexer, CSharpLexer, HaskellLexer, GoLexer, GroovyLexer, JavaLexer,
     JavascriptLexer, ObjectiveCLexer, PerlLexer, PhpLexer, PythonLexer, RubyLexer, TextLexer, XmlPhpLexer,
+    PowerShellLexer,
 )
 
 _all_lexers = None
@@ -131,6 +132,7 @@ def lexer_for_platform(platform, **options):
         "other": TextLexer,  # "other" by definition implies that nothing is known.
         "perl": PerlLexer,  # or Perl6Lexer...
         "php": PhpLexer,
+        "powershell": PowerShellLexer,  # _not_ in the list of "acceptable platforms", but "seen in the wild" (#143)
         "python": PythonLexer,
         "ruby": RubyLexer,
     }[platform]
