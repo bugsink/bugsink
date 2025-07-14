@@ -22,9 +22,11 @@ class Command(BaseCommand):
         self.stopped = False
         signal.signal(signal.SIGINT, self.handle_sigint)
 
-        storage_names = ",".join(get_settings().EVENT_STORAGES.keys())
+        storage_names = get_settings().EVENT_STORAGES.keys()
+        available_storages = ",".join(storage_names)
+
         if options['storage_name'] not in storage_names:
-            print(f"Storage name {options['storage_name']} not found. Available storage names: {storage_names}")
+            print(f"Storage name {options['storage_name']} not found. Available storage names: {available_storages}")
             sys.exit(1)
         storage = get_storage(options['storage_name'])
 
