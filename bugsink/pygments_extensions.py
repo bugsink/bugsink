@@ -106,7 +106,7 @@ def guess_lexer_for_filename(_fn, platform, code=None, **options):
 
 def lexer_for_platform(platform, **options):
     # We can depend on platform having been set: it's a required attribute as per Sentry's docs.
-    # The LHS in the table below is a fixed list of available platforms, as per the Sentry docs.
+    # The LHS in the table below is a fixed list of available platforms, as per the Sentry docs. (but: #143, #145)
     # The RHS is my educated guess for what these platforms map to in Pygments.
 
     clz = {
@@ -136,7 +136,7 @@ def lexer_for_platform(platform, **options):
         "powershell": PowerShellLexer,  # _not_ in the list of "acceptable platforms", but "seen in the wild" (#143)
         "python": PythonLexer,
         "ruby": RubyLexer,
-    }[platform]
+    }.get(platform, TextLexer)  # default to TextLexer if not found; see #143 and #145 for why we fall back at all
     options = _custom_options(clz, options)
     return clz(**options)
 
