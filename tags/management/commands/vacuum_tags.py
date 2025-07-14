@@ -7,4 +7,4 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         vacuum_tagvalues.delay()
-        self.stdout.write("Started tag vacuum via task queue.")
+        self.stdout.write("Called vacuum_tagvalues.delay(); the task will run in the background (snapea).")
