@@ -185,7 +185,8 @@ def project_edit(request, project_pk):
         form = ProjectForm(request.POST, instance=project)
         if form.is_valid():
             form.save()
-            return redirect('project_members', project_pk=project.id)
+            messages.success(request, 'Project settings updated successfully.')
+            return redirect('project_list')
 
     else:
         form = ProjectForm(instance=project)
