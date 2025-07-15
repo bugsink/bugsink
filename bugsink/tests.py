@@ -7,6 +7,7 @@ from unittest import TestCase as RegularTestCase
 from django.test import TestCase as DjangoTestCase
 from django.test import override_settings
 from django.core.exceptions import SuspiciousOperation
+from .wsgi import allowed_hosts_error_message
 
 from .volume_based_condition import VolumeBasedCondition
 from .streams import (
@@ -376,3 +377,41 @@ class SetRemoteAddrMiddlewareTestCase(RegularTestCase):
 
         with self.assertRaises(SuspiciousOperation):
             SetRemoteAddrMiddleware.parse_x_forwarded_for("123.123.123.123,1.2.3.4")
+
+
+class AllowedHostsMsgTestCase(DjangoTestCase):
+
+    def test_allowed_hosts_error_message(self):
+        self.maxDiff = None
+
+        # NOTE: cases for ALLOWED_HOSTS=[] are redundant because Django will refuse to start in that case.
+
+        # proxy misconfig: proxy speaks to "localhost"
+        self.assertEqual(
+            "'Host: localhost' as sent by browser/proxy not in ALLOWED_HOSTS=['testserver']. "
+            "Fix the proxy's Host-header config or add the desired host to ALLOWED_HOSTS.",
+            allowed_hosts_error_message("localhost", ["testserver"]))
+
+        # proxy misconfig: proxy speaks (local) IP
+        self.assertEqual(
+            "'Host: 127.0.0.1' as sent by browser/proxy not in ALLOWED_HOSTS=['testserver']. "
+            "Fix the proxy's Host-header config or add the desired host to ALLOWED_HOSTS.",
+            allowed_hosts_error_message("127.0.0.1", ["testserver"]))
+
+        # proxy misconfig: proxy speaks (remote) IP
+        self.assertEqual(
+            "'Host: 123.123.123.123' as sent by browser/proxy not in ALLOWED_HOSTS=['testserver']. "
+            "Fix the proxy's Host-header config or add the desired host to ALLOWED_HOSTS.",
+            allowed_hosts_error_message("123.123.123.123", ["testserver"]))
+
+        # plain old typo ALLOWED_HOSTS-side
+        self.assertEqual(
+            "'Host: testserver' as sent by browser/proxy not in ALLOWED_HOSTS=['teeestserver']. "
+            "Add 'testserver' to ALLOWED_HOSTS or configure proxy to use 'Host: teeestserver'.",
+            allowed_hosts_error_message("testserver", ["teeestserver"]))
+
+        # plain old typo proxy-config-side
+        self.assertEqual(
+            "'Host: teeestserver' as sent by browser/proxy not in ALLOWED_HOSTS=['testserver']. "
+            "Add 'teeestserver' to ALLOWED_HOSTS or configure proxy to use 'Host: testserver'.",
+            allowed_hosts_error_message("teeestserver", ["testserver"]))
