@@ -32,12 +32,16 @@ def allowed_hosts_error_message(domain, allowed_hosts):
     # Start with the plain statement of fact: x not in y.
     msg = "'Host: %s' as sent by browser/proxy not in ALLOWED_HOSTS=%s. " % (domain, allowed_hosts)
 
+    suggestable_allowed_hosts = [host for host in allowed_hosts if host not in ["localhost", ".localhost", "127.0.0.1"]]
+    if len(suggestable_allowed_hosts) == 0:
+        proxy_suggestion = "your.host.example"
+    else:
+        proxy_suggestion = " | ".join(suggestable_allowed_hosts)
+
     if domain == "localhost" or is_ip_address(domain):
         # in these cases Proxy misconfig is the more likely culprit. Point to that _first_ and (while still mentioning
         # ALLOWED_HOSTS); don't mention the specific domain that was used as a likely "good value" for ALLLOWED_HOSTS.
-        return msg + "Fix the proxy's Host-header config or add the desired host to ALLOWED_HOSTS."
-
-    proxy_suggestion = allowed_hosts[0]
+        return msg + "Configure proxy to use 'Host: %s' or add the desired host to ALLOWED_HOSTS." % proxy_suggestion
 
     # the domain looks "pretty good"; be verbose/explicit about the 2 possible changes in config.
     return msg + "Add '%s' to ALLOWED_HOSTS or configure proxy to use 'Host: %s'." % (domain, proxy_suggestion)

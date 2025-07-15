@@ -384,24 +384,30 @@ class AllowedHostsMsgTestCase(DjangoTestCase):
     def test_allowed_hosts_error_message(self):
         self.maxDiff = None
 
-        # NOTE: cases for ALLOWED_HOSTS=[] are redundant because Django will refuse to start in that case.
+        # Note: cases for ALLOWED_HOSTS=[] are redundant because Django will refuse to start in that case.
+
+        # ALLOWED_HOST only contains non-production domains that we typically _do not_ want to suggest in the msg
+        self.assertEqual(
+            "'Host: foobar' as sent by browser/proxy not in ALLOWED_HOSTS=['localhost', '127.0.0.1']. "
+            "Add 'foobar' to ALLOWED_HOSTS or configure proxy to use 'Host: your.host.example'.",
+            allowed_hosts_error_message("foobar", ["localhost", "127.0.0.1"]))
 
         # proxy misconfig: proxy speaks to "localhost"
         self.assertEqual(
             "'Host: localhost' as sent by browser/proxy not in ALLOWED_HOSTS=['testserver']. "
-            "Fix the proxy's Host-header config or add the desired host to ALLOWED_HOSTS.",
+            "Configure proxy to use 'Host: testserver' or add the desired host to ALLOWED_HOSTS.",
             allowed_hosts_error_message("localhost", ["testserver"]))
 
         # proxy misconfig: proxy speaks (local) IP
         self.assertEqual(
             "'Host: 127.0.0.1' as sent by browser/proxy not in ALLOWED_HOSTS=['testserver']. "
-            "Fix the proxy's Host-header config or add the desired host to ALLOWED_HOSTS.",
+            "Configure proxy to use 'Host: testserver' or add the desired host to ALLOWED_HOSTS.",
             allowed_hosts_error_message("127.0.0.1", ["testserver"]))
 
         # proxy misconfig: proxy speaks (remote) IP
         self.assertEqual(
             "'Host: 123.123.123.123' as sent by browser/proxy not in ALLOWED_HOSTS=['testserver']. "
-            "Fix the proxy's Host-header config or add the desired host to ALLOWED_HOSTS.",
+            "Configure proxy to use 'Host: testserver' or add the desired host to ALLOWED_HOSTS.",
             allowed_hosts_error_message("123.123.123.123", ["testserver"]))
 
         # plain old typo ALLOWED_HOSTS-side
