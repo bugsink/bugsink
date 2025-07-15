@@ -63,7 +63,7 @@
 
             <div class="flex pl-4 pt-2 pb-2 border-b-2 {% if forloop.first %}border-t-2{% endif %} bg-slate-100 dark:bg-slate-700 border-slate-400 cursor-pointer" onclick="toggleFrameVisibility(this)"> {# per frame header div #}
 
-                <div> {# filename, function, lineno #}
+                <div class="text-ellipsis overflow-hidden"> {# filename, function, lineno #}
                     {% if frame.in_app %}
                         <span class="font-bold">{{ frame.filename }}</span>{% if frame.function %} in <span class="font-bold">{{ frame.function }}</span>{% endif %}{% if frame.lineno %} line <span class="font-bold">{{ frame.lineno }}</span>{% endif %}.
                     {% else %}
