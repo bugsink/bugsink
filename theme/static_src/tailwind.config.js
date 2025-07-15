@@ -49,6 +49,9 @@ module.exports = {
     ],
     theme: {
       extend: {
+        screens: {
+          '3xl': '1920px',
+        },
         spacing: {
           '128': '32rem',
         },
