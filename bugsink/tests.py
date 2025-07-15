@@ -7,6 +7,7 @@ from unittest import TestCase as RegularTestCase
 from django.test import TestCase as DjangoTestCase
 from django.test import override_settings
 from django.core.exceptions import SuspiciousOperation
+from .wsgi import allowed_hosts_fix_suggestions
 
 from .volume_based_condition import VolumeBasedCondition
 from .streams import (
@@ -376,3 +377,62 @@ class SetRemoteAddrMiddlewareTestCase(RegularTestCase):
 
         with self.assertRaises(SuspiciousOperation):
             SetRemoteAddrMiddleware.parse_x_forwarded_for("123.123.123.123,1.2.3.4")
+
+
+class AllowedHostsFixSuggestionsTestCase(RegularTestCase):
+
+    def test_allowed_hosts_fix_suggestions_allowed_hosts_unset(self):
+        self.assertEqual(
+            "Add 'testserver' to ALLOWED_HOSTS (currently empty).",
+            allowed_hosts_fix_suggestions("testserver", []))
+
+        # I _propably_ want to suggest another fix here.
+        # or nothing at all? Or just say "configure it"
+        '''
+        self.assertEqual(
+            "Add 'testserver' to ALLOWED_HOSTS (currently empty).",
+            allowed_hosts_fix_suggestions("localhost", []))
+        '''
+
+    def test_allowed_hosts_fix_suggestions_proxy_misconfiguration(self):
+        # Proxy misconfiguration: domain as per "typical server misconfiguration" with reasonable allowed_hosts set
+        # We first point to the proxy in this case, but still mention ALLOWED_HOSTS
+        self.assertEqual(
+            "Make sure your proxy (if any) forwards the 'Host: testserver' header or fix ALLOWED_HOSTS.",
+            allowed_hosts_fix_suggestions("localhost", ["testserver"]))
+
+        self.assertEqual(
+            "Make sure your proxy (if any) forwards the 'Host: testserver' header or fix ALLOWED_HOSTS.",
+            allowed_hosts_fix_suggestions("127.0.0.1", ["testserver"]))
+
+        self.assertEqual(
+            "Make sure your proxy (if any) forwards the 'Host: testserver' header or fix ALLOWED_HOSTS.",
+            allowed_hosts_fix_suggestions("123.123.123.123", ["testserver"]))
+
+
+    def test_allowed_hosts_fix_suggestions_allowed_hosts_simply_a_mismatch(self):
+        self.assertEqual(
+            "...",
+            allowed_hosts_fix_suggestions("testserver", ["teestserver"]))
+
+
+
+
+'''
+half-baked version:
+def allowed_hosts_fix_suggestions(domain, allowed_hosts):
+    if not allowed_hosts:
+        # If ALLOWED_HOSTS is not set at all (which takes quite some work in Bugsink, i.e. is unlikely) fix _that_
+        return "You may need to add %r to ALLOWED_HOSTS (currently empty)." % domain
+
+    # Candidate suggestions to add as 'Host' headers on a proxy; we generally don't want to suggest localhost-like
+    # values for this, and since there are various places where localhost-like values get added (`deduce_allowed_hosts`
+    # and `get_host`) they must be taken back out.
+    candidates = [host for host in allowed_hosts if host not in [".localhost", "localhost", "127.0.1", "[::1]"]]
+
+    if len(candidates) == 1:
+        single_candidate = candidates[0]
+        return "Make sure your proxy forwards the 'Host: %s' header." % single_candidate
+    message += " (currently set to %s), " % repr(allowed_hosts)
+
+'''
