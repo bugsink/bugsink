@@ -40,9 +40,6 @@ def get_chunk_upload_settings(request, organization_slug):
     # * https://github.com/getsentry/sentry/pull/29347
     url = get_settings().BASE_URL + "/api/0/organizations/" + organization_slug + "/chunk-upload/"
 
-    # Our "chunk_upload" is chunked in name only; i.e. we only "speak chunked" for the purpose of API-compatability with
-    # sentry-cli, but we provide params here such that that cli will only send a single chunk.
-
     return JsonResponse({
         "url": url,
 
