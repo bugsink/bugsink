@@ -19,6 +19,7 @@ from .tasks import assemble_artifact_bundle
 
 _KIBIBYTE = 1024
 _MEBIBYTE = 1024 * _KIBIBYTE
+_GIBIBYTE = 1024 * _MEBIBYTE
 
 
 class NamedBytesIO(BytesIO):
@@ -52,9 +53,9 @@ def get_chunk_upload_settings(request, organization_slug):
         "chunkSize": 16 * _MEBIBYTE,
         "maxRequestSize": 16 * _MEBIBYTE,
 
-        # I didn't check the supposed relationship between maxRequestSize and maxFileSize, but assume something similar
-        # to what happens w/ envelopes; hence harmonizing with MAX_ENVELOPE_SIZE (and rounding up to a power of 2) here
-        "maxFileSize": 128 * _MEBIBYTE,
+        # The limit here is _actually storing this_. For now "just picking a high limit" assuming that we'll have decent
+        # storage (#151) for the files eventually.
+        "maxFileSize": 2 * _GIBIBYTE,
 
         # force single-chunk by setting these to 1.
         "concurrency": 1,
