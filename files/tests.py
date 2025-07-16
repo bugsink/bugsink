@@ -1,3 +1,4 @@
+from hashlib import sha1
 from uuid import UUID
 import json
 import gzip
@@ -11,6 +12,7 @@ from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project, ProjectMembership
 from events.models import Event
 from bsmain.models import AuthToken
+from bugsink.moreiterutils import batched
 
 from .models import File, FileMetadata
 
@@ -165,3 +167,54 @@ class FilesTests(TransactionTestCase):
             except Exception as e:
                 # we want to know _which_ event failed, hence the raise-from-e here
                 raise AssertionError("Error rendering event %s" % event.event_id) from e
+
+    def test_assemble_artifact_bundle_small_chunks(self):
+        # Copy-paste of test_assemble_artifact_bundle, but checking _only_ that bundle assembly works with small chunks.
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
+
+        filename = SAMPLES_DIR + "/bugsink/artifact_bundles/51a5a327666cf1d11e23adfd55c3becad27ae769.zip"
+        with open(filename, 'rb') as f:
+            all_data = f.read()
+
+        seen_checksums = []
+        for data in batched(all_data, len(all_data) // 10):
+            data = bytes(data)
+            checksum = sha1(data).hexdigest()
+
+            gzipped_file = BytesIO(gzip.compress(data))
+            gzipped_file.name = checksum
+
+            # 1. chunk-upload
+            response = self.client.post(
+                "/api/0/organizations/anyorg/chunk-upload/",
+                data={"file_gzip": gzipped_file},
+                headers=self.token_headers,
+            )
+
+            self.assertEqual(
+                200, response.status_code, "Error in %s: %s" % (
+                    filename, response.content if response.status_code != 302 else response.url))
+
+            seen_checksums.append(checksum)
+
+        checksum = os.path.basename(filename).split(".")[0]
+
+        # 2. artifactbundle/assemble
+        data = {
+            "checksum": checksum,
+            "chunks": seen_checksums,
+            "projects": [
+                "unused_for_now"
+            ]
+        }
+
+        response = self.client.post(
+            "/api/0/organizations/anyorg/artifactbundle/assemble/",
+            json.dumps(data),
+            content_type="application/json",
+            headers=self.token_headers,
+        )
+
+        self.assertEqual(
+            200, response.status_code, "Error in %s: %s" % (
+                filename, response.content if response.status_code != 302 else response.url))
