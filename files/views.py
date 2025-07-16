@@ -2,10 +2,12 @@ import json
 from hashlib import sha1
 from gzip import GzipFile
 from io import BytesIO
+import logging
 
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import user_passes_test
+from django.http import Http404
 
 from sentry.assemble import ChunkFileState
 
@@ -15,6 +17,8 @@ from bsmain.models import AuthToken
 
 from .models import Chunk, File
 from .tasks import assemble_artifact_bundle
+
+logger = logging.getLogger("bugsink.api")
 
 
 _KIBIBYTE = 1024
@@ -200,3 +204,40 @@ def download_file(request, checksum):
     response = HttpResponse(file.data, content_type="application/octet-stream")
     response["Content-Disposition"] = f"attachment; filename={file.filename}"
     return response
+
+
+@csrf_exempt
+def api_catch_all(request, subpath):
+    if not get_settings().API_LOG_UNIMPLEMENTED_CALLS:
+        raise Http404("Unimplemented API endpoint: /api/" + subpath)
+
+    lines = [
+        "Unimplemented API usage:",
+        f"  Path:   /api/{subpath}",
+        f"  Method: {request.method}",
+    ]
+
+    if request.GET:
+        lines.append(f"  GET:    {request.GET.dict()}")
+
+    if request.POST:
+        lines.append(f"  POST:   {request.POST.dict()}")
+
+    body = request.body
+    if body:
+        try:
+            decoded = body.decode("utf-8", errors="replace").strip()
+            lines.append("  Body:")
+            lines.append(f"    {decoded[:500]}")
+            try:
+                parsed = json.loads(decoded)
+                pretty = json.dumps(parsed, indent=2)[:10_000]
+                lines.append("  JSON body:")
+                lines.extend(f"    {line}" for line in pretty.splitlines())
+            except json.JSONDecodeError:
+                pass
+        except Exception as e:
+            lines.append(f"  Body: <decode error: {e}>")
+
+    logger.info("\n".join(lines))
+    raise Http404("Unimplemented API endpoint: /api/" + subpath)
