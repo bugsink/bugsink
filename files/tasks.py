@@ -5,7 +5,9 @@ from io import BytesIO
 from os.path import basename
 
 from snappea.decorators import shared_task
+
 from bugsink.transaction import immediate_atomic
+from bugsink.app_settings import get_settings
 
 from .models import Chunk, File, FileMetadata
 
@@ -56,7 +58,9 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
                 }
             )
 
-        # NOTE we _could_ get rid of the file at this point (but we don't). Ties in to broader questions of retention.
+        if not get_settings().KEEP_ARTIFACT_BUNDLES:
+            # delete the bundle file after processing, since we don't need it anymore.
+            bundle_file.delete()
 
 
 def assemble_file(checksum, chunk_checksums, filename):
@@ -75,10 +79,16 @@ def assemble_file(checksum, chunk_checksums, filename):
     if sha1(data).hexdigest() != checksum:
         raise Exception("checksum mismatch")
 
-    return File.objects.get_or_create(
+    result = File.objects.get_or_create(
         checksum=checksum,
         defaults={
             "size": len(data),
             "data": data,
             "filename": filename,
         })
+
+    # the assumption here is: chunks are basically use-once, so we can delete them after use. "in theory" a chunk may
+    # be used in multiple files (which are still being assembled) but with chunksizes in the order of 1MiB, I'd say this
+    # is unlikely.
+    chunks.delete()
+    return result
