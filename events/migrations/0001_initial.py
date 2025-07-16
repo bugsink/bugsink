@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
                 ('event_id', models.UUIDField(editable=False, help_text='As per the sent data')),
                 ('data', models.TextField()),
                 ('timestamp', models.DateTimeField(db_index=True)),
-                ('platform', models.CharField(choices=[('as3', 'As3'), ('c', 'C'), ('cfml', 'Cfml'), ('cocoa', 'Cocoa'), ('csharp', 'Csharp'), ('elixir', 'Elixir'), ('haskell', 'Haskell'), ('go', 'Go'), ('groovy', 'Groovy'), ('java', 'Java'), ('javascript', 'Javascript'), ('native', 'Native'), ('node', 'Node'), ('objc', 'Objc'), ('other', 'Other'), ('perl', 'Perl'), ('php', 'Php'), ('python', 'Python'), ('ruby', 'Ruby')], max_length=64)),
+                ('platform', models.CharField(max_length=64)),
                 ('level', models.CharField(blank=True, choices=[('fatal', 'Fatal'), ('error', 'Error'), ('warning', 'Warning'), ('info', 'Info'), ('debug', 'Debug')], max_length=7)),
                 ('logger', models.CharField(blank=True, default='', max_length=64)),
                 ('transaction', models.CharField(blank=True, default='', max_length=200)),

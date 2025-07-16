@@ -18,28 +18,6 @@ from .storage_registry import get_write_storage, get_storage
 from .tasks import delete_event_deps
 
 
-class Platform(models.TextChoices):
-    AS3 = "as3"
-    C = "c"
-    CFML = "cfml"
-    COCOA = "cocoa"
-    CSHARP = "csharp"
-    ELIXIR = "elixir"
-    HASKELL = "haskell"
-    GO = "go"
-    GROOVY = "groovy"
-    JAVA = "java"
-    JAVASCRIPT = "javascript"
-    NATIVE = "native"
-    NODE = "node"
-    OBJC = "objc"
-    OTHER = "other"
-    PERL = "perl"
-    PHP = "php"
-    PYTHON = "python"
-    RUBY = "ruby"
-
-
 class Level(models.TextChoices):
     FATAL = "fatal"
     ERROR = "error"
@@ -93,8 +71,10 @@ class Event(models.Model):
     # > a numeric (integer or float) value representing the number of seconds that have elapsed since the Unix epoch.
     timestamp = models.DateTimeField(db_index=True, blank=False, null=False)
 
-    # > A string representing the platform the SDK is submitting from. [..] Acceptable values are [as defined below]
-    platform = models.CharField(max_length=64, blank=False, null=False, choices=Platform.choices)
+    # > A string representing the platform the SDK is submitting from. [..]
+    # (the list of supported platforms is ~700 items long, and since we don't actually depend on this value to be any
+    # item from that list, we don't force it to be one of them)
+    platform = models.CharField(max_length=64, blank=False, null=False)
 
     # > ### Optional Attributes
 
