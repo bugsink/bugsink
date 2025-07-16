@@ -46,12 +46,11 @@ def get_chunk_upload_settings(request, organization_slug):
         "url": url,
 
         # For now, staying close to the default MAX_ENVELOPE_COMPRESSED_SIZE, which is 20MiB;
-        # I _think_ I saw a note somewhere on (one of) these values having to be a power of 2; hence 32 here.
-        #
-        # When implementing uploading, it was done to support sourcemaps. It seems that over at Sentry, the reason they
-        # went so complicated in the first place was to enable DIF support (hunderds of MiB regularly).
-        "chunkSize": 32 * _MEBIBYTE,
-        "maxRequestSize": 32 * _MEBIBYTE,
+        # I _think_ I saw a note somewhere on (one of) these values having to be a power of 2; hence rounding down to
+        # 16 to stay under any proxy-side limits that might mirror the envelope's 20MiB.
+        # I haven't found a reason to distinguish between chunkSize and maxRequestSize yet.
+        "chunkSize": 16 * _MEBIBYTE,
+        "maxRequestSize": 16 * _MEBIBYTE,
 
         # I didn't check the supposed relationship between maxRequestSize and maxFileSize, but assume something similar
         # to what happens w/ envelopes; hence harmonizing with MAX_ENVELOPE_SIZE (and rounding up to a power of 2) here
