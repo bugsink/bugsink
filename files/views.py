@@ -49,7 +49,7 @@ def get_chunk_upload_settings(request, organization_slug):
         # For now, staying close to the default MAX_ENVELOPE_COMPRESSED_SIZE, which is 20MiB;
         # I _think_ I saw a note somewhere on (one of) these values having to be a power of 2; hence rounding down to
         # 16 to stay under any proxy-side limits that might mirror the envelope's 20MiB.
-        # I haven't found a reason to distinguish between chunkSize and maxRequestSize yet.
+        # chunkSize == maxRequestSize per the comments on `chunksPerRequest: 1`.
         "chunkSize": 16 * _MEBIBYTE,
         "maxRequestSize": 16 * _MEBIBYTE,
 
@@ -57,8 +57,17 @@ def get_chunk_upload_settings(request, organization_slug):
         # storage (#151) for the files eventually.
         "maxFileSize": 2 * _GIBIBYTE,
 
-        # force single-chunk by setting these to 1.
+        # In our current setup increasing concurrency doesn't help (single-writer architecture) while coming at the cost
+        # of potential reliability issues. Current codebase has works just fine with it _in principle_ (tested by
+        # setting concurrency=10, chunkSize=32, maxRequestSize=32 and adding a sleep(random(..)) in chunk_upload (right
+        # before return, and seeing that sentry-cli fires a bunch of things in parallel and artifact_bundle_assemble as
+        # a final step.
         "concurrency": 1,
+
+        # There _may_ be good reasons to support multiple chunks per request, but I haven't found a reason to
+        # distinguish between chunkSize and maxRequestSize yet, so I'd rather keep them synced for easier reasoning.
+        # Current codebase has been observed to work just fine with it though (tested w/ chunkSize=32 and
+        # chunksPerRequest=100 and seeing sentry-cli do a single request with many small chunks).
         "chunksPerRequest": 1,
 
         "hashAlgorithm": "sha1",
