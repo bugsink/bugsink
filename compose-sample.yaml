@@ -2,6 +2,8 @@ services:
   mysql:
     image: mysql:latest
     restart: unless-stopped
+    command : "--binlog_expire_logs_seconds=3600"
+
     environment:
       MYSQL_ROOT_PASSWORD: change_your_passwords_for_real_usage # TODO: Change this
       MYSQL_DATABASE: bugsink
