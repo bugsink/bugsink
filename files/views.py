@@ -43,12 +43,13 @@ def get_chunk_upload_settings(request, organization_slug):
     return JsonResponse({
         "url": url,
 
-        # For now, staying close to the default MAX_ENVELOPE_COMPRESSED_SIZE, which is 20MiB;
-        # I _think_ I saw a note somewhere on (one of) these values having to be a power of 2; hence rounding down to
-        # 16 to stay under any proxy-side limits that might mirror the envelope's 20MiB.
+        # We pick a "somewhat arbitrary" value between 1MiB and 16MiB to balance between "works reliably" and "lower
+        # overhead", erring on the "works reliably" side of that spectrum. There's really no lower bound technically,
+        # I've played with 32-byte requests.
+        # note: sentry-cli <= v2.39.1 requires a power of 2 here.
         # chunkSize == maxRequestSize per the comments on `chunksPerRequest: 1`.
-        "chunkSize": 16 * _MEBIBYTE,
-        "maxRequestSize": 16 * _MEBIBYTE,
+        "chunkSize": 2 * _MEBIBYTE,
+        "maxRequestSize": 2 * _MEBIBYTE,
 
         # The limit here is _actually storing this_. For now "just picking a high limit" assuming that we'll have decent
         # storage (#151) for the files eventually.
