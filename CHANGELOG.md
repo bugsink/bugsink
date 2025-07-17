@@ -1,5 +1,27 @@
 # Changes
 
+## 1.7.2 (17 July 2025)
+
+Various fixes:
+
+* Dark mode: use monokai style from pygments (Fix #152)
+* add `vacuum_files` command (Fix #129)
+* Artifact Bundle upload: clean up after extract (See #129)
+* Add API catch-all endpoint for logging (Fix #153)
+* File-upload: chunk-size of 2MiB (Fix #147)
+* Sourcemaps upload: max file size 2GiB (See #147)
+* Auto-clean binlogs on docker compose (sample) for mysql (See #149)
+* Remove platform 'choices' from Event.model (See 403e28adb410)
+* Better `ALLOWED_HOSTS` misconfig error-message (Fix #148)
+* As per the "little red box on" #120
+* Fix wasted space at certain width in stacktrace UI (See #120)
+* Fixed command's 'running in background' output (See 770ccb16225e)
+* Project-edit: redirect to list on-save (See 2b46bfe9a114)
+* `cleanup_eventstorage` command: be more clear when no `event_storage` is actually configured (See b2769d7202b6)
+* Don't crash on illegal values for platform (See #143, #145)
+* Support 'crystal' platform (Fix #145)
+* Support 'powershell' platform (Fix #143)
+
 ## 1.7.1 (10 July 2025)
 
 Fix: user-related forms broken by unclosed link
