@@ -1,9 +1,15 @@
+from datetime import datetime, timezone
 from uuid import UUID
 import json
 import sourcemap
 from issues.utils import get_values
 
+from bugsink.transaction import delay_on_commit
+
+from compat.timestamp import format_timestamp
+
 from files.models import FileMetadata
+from files.tasks import record_file_accesses
 
 
 # Dijkstra, Sourcemaps and Python lists start at 0, but editors and our UI show lines starting at 1.
@@ -115,6 +121,9 @@ def apply_sourcemaps(event_data):
         for metadata_obj in FileMetadata.objects.filter(
             debug_id__in=debug_id_for_filename.values(), file_type="source_map").select_related("file")
     }
+
+    metadata_ids = [metadata_obj.id for metadata_obj in metadata_obj_lookup.values()]
+    delay_on_commit(record_file_accesses, metadata_ids, format_timestamp(datetime.now(timezone.utc)))
 
     filenames_with_metas = [
         (filename, metadata_obj_lookup[debug_id])

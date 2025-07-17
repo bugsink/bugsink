@@ -7,14 +7,14 @@ from .models import Chunk, File, FileMetadata
 
 @admin.register(Chunk)
 class ChunkAdmin(admin.ModelAdmin):
-    list_display = ('checksum', 'size')
+    list_display = ('checksum', 'size', 'created_at')
     search_fields = ('checksum',)
     readonly_fields = ('data',)
 
 
 @admin.register(File)
 class FileAdmin(admin.ModelAdmin):
-    list_display = ('filename', 'checksum', 'size', 'download_link')
+    list_display = ('filename', 'checksum', 'size', 'download_link', 'created_at', 'accessed_at')
     search_fields = ('checksum',)
     readonly_fields = ('data', 'download_link')
 
@@ -27,5 +27,5 @@ class FileAdmin(admin.ModelAdmin):
 
 @admin.register(FileMetadata)
 class FileMetadataAdmin(admin.ModelAdmin):
-    list_display = ('debug_id', 'file_type', 'file')
+    list_display = ('debug_id', 'file_type', 'file', 'created_at')
     search_fields = ('file__checksum', 'debug_id', 'file_type')
