@@ -1,5 +1,9 @@
 # Changes
 
+## 1.7.3 (17 July 2025)
+
+Migration fix: delete TurningPoints w/ project=None (Fix #155)
+
 ## 1.7.2 (17 July 2025)
 
 Various fixes:
