@@ -73,7 +73,7 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
 
                 continue
 
-            FileMetadata.objects.get_or_create(
+            filemetadata, _ = FileMetadata.objects.get_or_create(
                 debug_id=debug_id,
                 file_type=file_type,
                 defaults={
@@ -81,6 +81,8 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
                     "data": json.dumps(manifest_entry),
                 }
             )
+
+            foo_synthetic(filemetadata)
 
             # the in-code regexes show up in the _minified_ source only (the sourcemap's original source code will not
             # have been "polluted" with it yet, since it's the original).
@@ -94,9 +96,59 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
                         ", ".join(sorted(mismatches)),
                     )
 
+                    # just create synthetic FileMetadata objects for the mismatches, so that we can match them later.
+                    # "be permissive in what you accept"... with the usual drawbacks; in particular: despite the stern
+                    # warning, people will come to depend on this.
+                    for mismatch in mismatches:
+                        FileMetadata.objects.get_or_create(
+                            synthetic=True,
+                            debug_id=mismatch,
+                            file_type="minified_source",  # AKA filemetadata.file_type
+                            defaults={
+                                "file_id": filemetadata.file_id,
+                                "data": json.dumps({}),
+                            }
+                        )
+
+                        # like foo_synthetic, but covering the case that the sourcemap was encountered first.
+                        for sourcemap_equivalent in FileMetadata.objects.filter(
+                                debug_id=debug_id, file_type="source_map"):
+
+                            # create the synthetic sourcemap for the minified source, too.
+                            FileMetadata.objects.get_or_create(
+                                synthetic=True,
+                                debug_id=mismatch,
+                                file_type="source_map",  # AKA sourcemap_equivalent.type
+                                defaults={
+                                    "file_id": sourcemap_equivalent.file_id,
+                                    "data": json.dumps({}),
+                                }
+                            )
+
         if not get_settings().KEEP_ARTIFACT_BUNDLES:
             # delete the bundle file after processing, since we don't need it anymore.
             bundle_file.delete()
+
+
+def foo_synthetic(filemetadata_obj):
+    if filemetadata_obj.file_type != "source_map":
+        # we only synthesize this stuff for sourcemaps, since that's the only place we'll actually be looking on-use
+        return
+
+    for other_metadata in FileMetadata.objects.filter(debug_id=filemetadata_obj.debug_id, file_type="minified_source"):
+        # other_metadata: the possible "original" for which at the time of uploading a non-unique Debug ID was found.
+        for synthetic_example in FileMetadata.objects.exclude(debug_id=other_metadata.debug_id).filter(
+                synthetic=True, file_id=other_metadata.file_id):
+
+            FileMetadata.objects.get_or_create(
+                synthetic=True,
+                debug_id=synthetic_example.debug_id,
+                file_type="source_map",  # AKA filemetadata_obj.file_type
+                defaults={
+                    "file_id": filemetadata_obj.file_id,
+                    "data": json.dumps({}),
+                }
+            )
 
 
 def assemble_file(checksum, chunk_checksums, filename):
