@@ -29,3 +29,4 @@ class FileAdmin(admin.ModelAdmin):
 class FileMetadataAdmin(admin.ModelAdmin):
     list_display = ('debug_id', 'file_type', 'file', 'created_at')
     search_fields = ('file__checksum', 'debug_id', 'file_type')
+    readonly_fields = ('file', 'debug_id', 'file_type', 'data', 'created_at')
