@@ -61,7 +61,16 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
             debug_id = manifest_entry.get("headers", {}).get("debug-id", None)
             file_type = manifest_entry.get("type", None)
             if debug_id is None or file_type is None:
-                # such records exist and we could store them, but we don't, since we don't have a purpose for them.
+                because = (
+                    "it has neither Debug ID nor file-type" if debug_id is None and file_type is None else
+                    "it has no Debug ID" if debug_id is None else "it has no file-type")
+
+                logger.warning(
+                    "Uploaded file %s will be ignored by Bugsink because %s.",
+                    filename,
+                    because,
+                )
+
                 continue
 
             FileMetadata.objects.get_or_create(
@@ -79,7 +88,7 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
                 mismatches = set(IN_CODE_DEBUG_ID_REGEX.findall(file_data.decode("utf-8"))) - {debug_id}
                 if mismatches:
                     logger.warning(
-                        "File %s contains multiple debug IDs. Uploaded as %s, but also found: %s.",
+                        "Uploaded file %s contains multiple Debug IDs. Uploaded as %s, but also found: %s.",
                         filename,
                         debug_id,
                         ", ".join(sorted(mismatches)),
