@@ -167,6 +167,12 @@ def apply_sourcemaps(event_data):
                     frame['function'] = token.name
                     # frame["colno"] = token.src_col + TO_DISPLAY  not actually used
 
+            elif frame.get("filename") in debug_id_for_filename:
+                # The event_data reports that a debug_id is available for this filename, but we don't have it; this
+                # could be because the sourcemap was not uploaded. We want to show the debug_id in the stacktrace as
+                # a hint to the user that they should upload the sourcemap.
+                frame["debug_id"] = str(debug_id_for_filename[frame["filename"]])
+
 
 def get_sourcemap_images(event_data):
     # NOTE: butchered copy/paste of apply_sourcemaps; refactoring for DRY is a TODO
