@@ -1,3 +1,4 @@
+from os.path import basename
 from datetime import datetime, timezone
 from uuid import UUID
 import json
@@ -165,3 +166,28 @@ def apply_sourcemaps(event_data):
                     frame['filename'] = token.src
                     frame['function'] = token.name
                     # frame["colno"] = token.src_col + TO_DISPLAY  not actually used
+
+
+def get_sourcemap_images(event_data):
+    # NOTE: butchered copy/paste of apply_sourcemaps; refactoring for DRY is a TODO
+    images = event_data.get("debug_meta", {}).get("images", [])
+    if not images:
+        return []
+
+    debug_id_for_filename = {
+        image["code_file"]: UUID(image["debug_id"])
+        for image in images
+        if "debug_id" in image and "code_file" in image and image["type"] == "sourcemap"
+    }
+
+    metadata_obj_lookup = {
+        metadata_obj.debug_id: metadata_obj
+        for metadata_obj in FileMetadata.objects.filter(
+            debug_id__in=debug_id_for_filename.values(), file_type="source_map").select_related("file")
+    }
+
+    return [
+        (basename(filename),
+         f"{debug_id} " + (" (uploaded)" if debug_id in metadata_obj_lookup else " (not uploaded)"))
+        for filename, debug_id in debug_id_for_filename.items()
+    ]

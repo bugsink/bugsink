@@ -35,7 +35,7 @@ from tags.search import search_issues, search_events, search_events_optimized
 from .models import Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind
 from .forms import CommentForm
 from .utils import get_values, get_main_exception
-from events.utils import annotate_with_meta, apply_sourcemaps
+from events.utils import annotate_with_meta, apply_sourcemaps, get_sourcemap_images
 
 logger = logging.getLogger("bugsink.issues")
 
@@ -658,6 +658,15 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
 
     contexts = get_contexts_enriched_with_ua(parsed_data)
 
+    try:
+        sourcemaps_images = get_sourcemap_images(parsed_data)
+    except Exception as e:
+        if settings.DEBUG or settings.I_AM_RUNNING == "TEST":
+            # when developing/testing, I _do_ want to get notified
+            raise
+        # sourcemaps are still experimental; we don't want to fail on them, so we just log the error and move on.
+        capture_or_log_exception(e, logger)
+
     return render(request, "issues/event_details.html", {
         "tab": "event-details",
         "this_view": "event_details",
@@ -671,6 +680,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         "logentry_info": logentry_info,
         "deployment_info": deployment_info,
         "contexts": contexts,
+        "sourcemaps_images": sourcemaps_images,
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
         # event_qs_count is not used when there is no q, so no need to calculate it in that case

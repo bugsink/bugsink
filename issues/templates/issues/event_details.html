@@ -203,6 +203,19 @@ the fact that we commented-out rather than clobbered reveals a small amount of d
     </div>
 {% endif %}
 
+{% if sourcemaps_images %}
+    <h1 id="sourcemaps_images" class="text-2xl font-bold mt-4">Sourcemap IDs</h1>
+
+    <div class="mb-6">
+        {% for key, value in sourcemaps_images %}
+            <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
 {% if parsed_data.extra %}
     <h1 id="extra" class="text-2xl font-bold mt-4">Extra</h1>
 
