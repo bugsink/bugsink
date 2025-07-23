@@ -1,3 +1,5 @@
+import re
+import logging
 from datetime import timedelta
 from zipfile import ZipFile
 import json
@@ -13,6 +15,16 @@ from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.app_settings import get_settings
 
 from .models import Chunk, File, FileMetadata
+
+logger = logging.getLogger("bugsink.api")
+
+
+# "In the wild", we have run into non-unique debug IDs (one in code, one in comment-at-bottom). This regex matches a
+# known pattern for "one in code", such that we can at least warn if it's not the same at the actually reported one.
+# See #157
+IN_CODE_DEBUG_ID_REGEX = re.compile(
+    r'e\._sentryDebugIds\[.*?\]\s*=\s*["\']([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})["\']'
+)
 
 
 @shared_task
@@ -60,6 +72,18 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
                     "data": json.dumps(manifest_entry),
                 }
             )
+
+            # the in-code regexes show up in the _minified_ source only (the sourcemap's original source code will not
+            # have been "polluted" with it yet, since it's the original).
+            if file_type == "minified_source":
+                mismatches = set(IN_CODE_DEBUG_ID_REGEX.findall(file_data.decode("utf-8"))) - {debug_id}
+                if mismatches:
+                    logger.warning(
+                        "File %s contains multiple debug IDs. Uploaded as %s, but also found: %s.",
+                        filename,
+                        debug_id,
+                        ", ".join(sorted(mismatches)),
+                    )
 
         if not get_settings().KEEP_ARTIFACT_BUNDLES:
             # delete the bundle file after processing, since we don't need it anymore.
