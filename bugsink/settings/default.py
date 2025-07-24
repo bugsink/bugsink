@@ -97,6 +97,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'verbose_csrf_middleware.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -240,6 +241,12 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Europe/Amsterdam'
 
 USE_I18N = True
+
+LOCALE_PATHS = [BASE_DIR / "locale"]
+LANGUAGES = (
+    ("zh-hans", "简体中文"),
+    ("en", "English"),
+)
 
 USE_TZ = True
 
