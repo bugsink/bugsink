@@ -1,6 +1,8 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django.template.defaultfilters import yesno
+from django.utils.translation import gettext_lazy as _
+from django.utils.translation import pgettext_lazy
 
 from bugsink.utils import assert_
 from .models import TeamRole, TeamMembership, Team
@@ -9,9 +11,9 @@ User = get_user_model()
 
 
 class TeamMemberInviteForm(forms.Form):
-    email = forms.EmailField(label='Email', required=True)
+    email = forms.EmailField(label=_('Email'), required=True)
     role = forms.ChoiceField(
-        label='Role', choices=TeamRole.choices, required=True, initial=TeamRole.MEMBER, widget=forms.RadioSelect)
+        label=_('Role'), choices=TeamRole.choices, required=True, initial=TeamRole.MEMBER, widget=forms.RadioSelect)
 
     def __init__(self, user_must_exist, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -37,14 +39,25 @@ class MyTeamMembershipForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         edit_role = kwargs.pop("edit_role")
+
         super().__init__(*args, **kwargs)
         assert_(self.instance is not None, "This form is only implemented for editing")
+
+        self.fields['role'].label = _("Role")
 
         if not edit_role:
             del self.fields['role']
 
         global_send_email_alerts = self.instance.user.send_email_alerts
-        empty_label = "User-default (%s)" % yesno(global_send_email_alerts).capitalize()
+        global_send_email_alerts = self.instance.user.send_email_alerts
+
+        if global_send_email_alerts:
+            global_send_email_alerts_text = _("Yes")
+        else:
+            global_send_email_alerts_text = _("No")
+
+        empty_label = _("User-default (%s)") % global_send_email_alerts
+        self.fields['send_email_alerts'].label = _("Send email alerts")
         self.fields['send_email_alerts'].empty_label = empty_label
         self.fields['send_email_alerts'].widget.choices[0] = ("unknown", empty_label)
 
@@ -61,3 +74,8 @@ class TeamForm(forms.ModelForm):
     class Meta:
         model = Team
         fields = ["name", "visibility"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['name'].label = pgettext_lazy("Team", "Name")
+        self.fields['visibility'].label = _("Visibility")

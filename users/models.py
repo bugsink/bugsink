@@ -3,7 +3,7 @@ import secrets
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
-
+from django.utils.translation import gettext_lazy as _
 
 class User(AbstractUser):
     # > If you’re starting a new project, it’s highly recommended to set up a custom user model, even if the default
@@ -18,14 +18,26 @@ class User(AbstractUser):
     send_email_alerts = models.BooleanField(default=True, blank=True)
 
     THEME_CHOICES = [
-        ("system", "System Default"),
-        ("light", "Light"),
-        ("dark", "Dark"),
+        ("system", _("System Default")),
+        ("light", _("Light")),
+        ("dark", _("Dark")),
     ]
     theme_preference = models.CharField(
         max_length=10,
         choices=THEME_CHOICES,
         default="system",
+        blank=False,
+    )
+
+    LANGUAGE_CHOICES = [
+        ("auto", _("Auto")),
+        ("en", _("English")),
+        ("zh-Hans", _("Simplified Chinese")),
+    ]
+    language = models.CharField(
+        max_length=10,
+        choices=LANGUAGE_CHOICES,
+        default="auto",
         blank=False,
     )
 

@@ -11,6 +11,7 @@ from django.contrib import messages
 from django.contrib.auth import logout
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from users.models import EmailVerification
 from teams.models import TeamMembership, Team, TeamRole
@@ -78,7 +79,7 @@ def project_list(request, ownership_filter=None):
             if not project.is_joinable(user=request.user) and not request.user.is_superuser:
                 raise PermissionDenied("This project is not joinable")
 
-            messages.success(request, 'You have joined the project "%s"' % project.name)
+            messages.success(request, _('You have joined the project "%s"') % project.name)
             ProjectMembership.objects.create(
                 project_id=project_pk, user_id=request.user.id, role=ProjectRole.MEMBER, accepted=True)
             return redirect('project_member_settings', project_pk=project_pk, user_pk=request.user.id)

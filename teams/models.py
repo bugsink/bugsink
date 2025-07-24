@@ -3,24 +3,24 @@ import uuid
 from django.db import models
 
 from django.conf import settings
-
+from django.utils.translation import gettext_lazy as _
 
 class TeamRole(models.IntegerChoices):
-    MEMBER = 0
-    ADMIN = 1
+    MEMBER = 0, _("Member")
+    ADMIN = 1, _("Admin")
 
 
 class TeamVisibility(models.IntegerChoices):
     # PUBLIC = 0  # anyone can see the team and its members  not sure if I want this or always want to require click-in
-    JOINABLE = 1  # anyone can join
+    JOINABLE = 1, _("Joinable")  # anyone can join
 
     # the team's existance is visible in lists, but there is no "Join" button. the idea would be that you can "request
     # to join" (which is currently not implemented as a button, but you could do it 'out of bands' i.e. via email or
     # chat).
-    DISCOVERABLE = 10
+    DISCOVERABLE = 10, _("Discoverable")
 
     # the team is not visible to non-members; you need to be invited
-    HIDDEN = 99
+    HIDDEN = 99, _("Hidden")
 
 
 class Team(models.Model):
@@ -30,7 +30,7 @@ class Team(models.Model):
 
     visibility = models.IntegerField(
         choices=TeamVisibility.choices, default=TeamVisibility.DISCOVERABLE,
-        help_text="Which users can see this team and its issues?")
+        help_text=_("Which users can see this team and its issues?"))
 
     def __str__(self):
         return self.name
