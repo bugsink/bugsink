@@ -3,7 +3,7 @@ import uuid
 from django.db import models
 
 from django.conf import settings
-
+from django.utils.translation import gettext_lazy as _
 
 class TeamRole(models.IntegerChoices):
     MEMBER = 0
@@ -30,7 +30,7 @@ class Team(models.Model):
 
     visibility = models.IntegerField(
         choices=TeamVisibility.choices, default=TeamVisibility.DISCOVERABLE,
-        help_text="Which users can see this team and its issues?")
+        help_text=_("Which users can see this team and its issues?"))
 
     def __str__(self):
         return self.name

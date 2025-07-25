@@ -86,7 +86,7 @@
     <div class="flex flex-direction-row">
         <div class="ml-auto py-8 pr-4">
             <a href="{% url "team_members" team_pk=project.team_id %}" class="text-cyan-500 dark:text-cyan-300 font-bold">{{ project.team.name }} Members</a>
-            <span class="font-bold text-slate-500 dark:text-slate-300">|</span> <a href="{% url "project_list" %}" class="text-cyan-500 dark:text-cyan-300 font-bold">Back to Projects</a>
+            <span class="font-bold text-slate-500 dark:text-slate-300">|</span> <a href="{% url "project_list" %}" class="text-cyan-500 dark:text-cyan-300 font-bold">{% translate "Back to Projects" %}</a>
         </div>
     </div>
 </div>

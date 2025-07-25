@@ -1,5 +1,6 @@
 {% extends "barest_base.html" %}
 {% load static %}
+{% load i18n %}
 
 {% block title %}Verification email sent · {{ site_title }}{% endblock %}
 
@@ -13,7 +14,7 @@
 
         <div class="p-12 md:pt-24 md:pl-24 md:pr-24 md:pb-16">
 
-            A verification email has been sent to your email address. Please verify your email address to complete the registration process.
+            {% translate "A verification email has been sent to your email address. Please verify your email address to complete the registration process." %}
 
         </div>
 

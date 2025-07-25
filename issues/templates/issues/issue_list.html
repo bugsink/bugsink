@@ -2,8 +2,9 @@
 {% load static add_to_qs %}
 {% load humanize %}
 {% load add_to_qs %}
+{% load i18n %}
 
-{% block title %}Issues · {{ project.name }} · {{ site_title }}{% endblock %}
+{% block title %}{% translate "Issues" %} · {{ project.name }} · {{ site_title }}{% endblock %}
 
 {% block content %}
 
@@ -11,15 +12,15 @@
 <div id="deleteModal" class="hidden fixed inset-0 bg-slate-600 dark:bg-slate-900 bg-opacity-50 dark:bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
     <div class="relative p-6 border border-slate-300 dark:border-slate-600 w-96 shadow-lg rounded-md bg-white dark:bg-slate-900">
         <div class="text-center m-4">
-            <h3 class="text-2xl font-semibold text-slate-800 dark:text-slate-100 mt-3 mb-4">Delete Issues</h3>
+            <h3 class="text-2xl font-semibold text-slate-800 dark:text-slate-100 mt-3 mb-4">{% translate "Delete Issues" %}</h3>
             <div class="mt-4 mb-6">
                 <p class="text-slate-700 dark:text-slate-300">
-                    Deleting an Issue is a permanent action and cannot be undone. It's typically better to resolve or mute an issue instead of deleting it, as this allows you to keep track of past issues and their resolutions.
+                    {% translate "Deleting an Issue is a permanent action and cannot be undone. It's typically better to resolve or mute an issue instead of deleting it, as this allows you to keep track of past issues and their resolutions." %}
                 </p>
             </div>
             <div class="flex items-center justify-center space-x-4 mb-4">
-                <button id="cancelDelete" class="text-cyan-500 dark:text-cyan-300 font-bold">Cancel</button>
-                <button id="confirmDelete" type="submit" class="font-bold py-2 px-4 rounded bg-red-500 dark:bg-red-700 text-white border-2 border-red-600 dark:border-red-400 hover:bg-red-600 dark:hover:bg-red-800 active:ring">Delete</button>
+                <button id="cancelDelete" class="text-cyan-500 dark:text-cyan-300 font-bold">{% translate "Cancel" %}</button>
+                <button id="confirmDelete" type="submit" class="font-bold py-2 px-4 rounded bg-red-500 dark:bg-red-700 text-white border-2 border-red-600 dark:border-red-400 hover:bg-red-600 dark:hover:bg-red-800 active:ring">{% translate "Delete" %}</button>
             </div>
         </div>
     </div>
@@ -27,25 +28,25 @@
 
 
 <div class="m-4">
-<h1 class="text-4xl mt-4 font-bold">{{ project.name }} - Issues</h1>
+<h1 class="text-4xl mt-4 font-bold">{{ project.name }} - {% translate "Issues" %}</h1>
 
 {% if unapplied_issue_ids %}
 <div class="bg-red-100 w-full mt-2 mb-2 p-4 border-red-800 border-2">
-    The chosen action is not applicable to all selected issues. Issues for which it has not been applied have been left with checkboxes checked so that you can try again with another action.
+    {% translate "The chosen action is not applicable to all selected issues. Issues for which it has not been applied have been left with checkboxes checked so that you can try again with another action." %}
 </div>
 {% endif %}
 
 <div class="flex bg-slate-50 dark:bg-slate-800 border-b-2 mt-4 items-end">
     <div class="flex">
-    <a href="{% url "issue_list_open" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "open" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">Open</div></a>
-    <a href="{% url "issue_list_unresolved" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "unresolved" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">Unresolved</div></a>
-    <a href="{% url "issue_list_muted" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "muted" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">Muted</div></a>
-    <a href="{% url "issue_list_resolved" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "resolved" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">Resolved</div></a>
-    <a href="{% url "issue_list_all" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "all" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">All</div></a>
+    <a href="{% url "issue_list_open" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "open" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">{% translate "Open" %}</div></a>
+    <a href="{% url "issue_list_unresolved" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "unresolved" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">{% translate "Unresolved" %}</div></a>
+    <a href="{% url "issue_list_muted" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "muted" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "Muted" %}</div></a>
+    <a href="{% url "issue_list_resolved" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "resolved" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "Resolved" %}</div></a>
+    <a href="{% url "issue_list_all" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "all" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "All" %}</div></a>
     </div>
     <div class="ml-auto p-2">
         <form action="." method="get">
-        <input type="text" name="q" value="{{ q }}" placeholder="search issues..." class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md"/>
+        <input type="text" name="q" value="{{ q }}" placeholder="{% translate 'Search issues...' %}" class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md"/>
         </form>
     </div>
 </div>
@@ -105,7 +106,7 @@
 
 
                     {% else %}
-                        <button class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md" name="action" value="resolve">Resolve</button>
+                        <button class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md" name="action" value="resolve">{% translate "Resolve" %}</button>
                     {% endif %}
 
                     {% endspaceless %}
@@ -113,9 +114,9 @@
 
                 {% spaceless %}{# needed to avoid whitespace between the looks-like-one-buttons #}
                 {% if not disable_mute_buttons %}
-                <button name="action" value="mute" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-s-md">Mute</button>
+                <button name="action" value="mute" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-s-md">{% translate "Mute" %}</button>
                 {% else %}
-                <button disabled name="action" value="mute" class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-s-md">Mute</button>
+                <button disabled name="action" value="mute" class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-s-md">{% translate "Mute" %}</button>
                 {% endif %}
 
                 <div class="dropdown">
@@ -134,9 +135,9 @@
                 </div>
 
                 {% if not disable_unmute_buttons %}
-                    <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-e-md" name="action" value="unmute">Unmute</button>
+                    <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-e-md" name="action" value="unmute">{% translate "Unmute" %}</button>
                 {% else %}
-                    <button disabled class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 rounded-e-md" name="action" value="unmute">Unmute</button>
+                    <button disabled class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-r-2 border-b-2 border-t-2 rounded-e-md" name="action" value="unmute">{% translate "Unmute" %}</button>
                 {% endif %}
 
                 <div class="dropdown">
@@ -152,7 +153,7 @@
 
 
                 {# NOTE: "reopen" is not available in the UI as per the notes in issue_detail #}
-                {# only for resolved/muted items <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">Reopen</button> #}
+                {# only for resolved/muted items <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">{% translate "Reopen" %}</button> #}
 
             </div>
             </td>
@@ -230,7 +231,7 @@
                 {% endif %}
 
                 {% if page_obj.object_list|length > 0 %}{# sounds expensive, but this list is cached #}
-                Issues {{ page_obj.start_index|intcomma }} – {{ page_obj.end_index|intcomma }}
+                {% translate "Issues" %} {{ page_obj.start_index|intcomma }} – {{ page_obj.end_index|intcomma }}
                 {% else %}
                     {% if page_obj.number > 1 %}
                     Less than {{ page_obj.start_index }} Issues  {# corresponds to the 1/250 case of having an exactly full page and navigating to an empty page after that #}

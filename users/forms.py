@@ -82,7 +82,7 @@ class UserEditForm(ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['username'].validators = [EmailValidator()]
-        self.fields['username'].label = "Email"
+        self.fields['username'].label = _("Email")
 
         self.fields['username'].help_text = None  # "Email" is descriptive enough
 
