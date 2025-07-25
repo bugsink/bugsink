@@ -1,3 +1,2 @@
 # testing/development only:
-django-debug-toolbar==5.2.*
 coverage
