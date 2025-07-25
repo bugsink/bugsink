@@ -49,6 +49,129 @@ class ViewTests(TransactionTestCase):
         self.assertEqual(response['Content-Type'], 'text/plain')
 
 
+class RemoteAddrTest(TransactionTestCase):
+    """Test that remote_addr is properly captured from ingest to digest."""
+    
+    databases = ['default', 'snappea']
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(username='test', password='test')
+        self.project = Project.objects.create()
+        ProjectMembership.objects.create(project=self.project, user=self.user)
+
+    def test_event_creation_with_remote_addr(self):
+        """Test that remote_addr from event metadata is saved to the Event model."""
+        from ingest.views import BaseIngestAPIView
+        from datetime import datetime, timezone
+        import uuid
+        
+        event_id = str(uuid.uuid4())
+        
+        # Mock event metadata with remote_addr
+        event_metadata = {
+            "event_id": event_id,
+            "project_id": self.project.id,
+            "ingested_at": datetime.now(timezone.utc).isoformat(),
+            "debug_info": "",
+            "remote_addr": "192.168.1.100"
+        }
+
+        # Mock event data
+        event_data = {
+            "event_id": event_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "platform": "python",
+            "level": "error"
+        }
+
+        # Call digest_event with the metadata containing remote_addr
+        BaseIngestAPIView.digest_event(event_metadata, event_data)
+
+        # Verify the event was created with the correct remote_addr
+        from events.models import Event
+        event = Event.objects.get(event_id=event_id, project=self.project)
+        self.assertEqual(event.remote_addr, "192.168.1.100")
+
+    def test_event_creation_without_remote_addr(self):
+        """Test that events work when remote_addr is None (backwards compatibility)."""
+        from ingest.views import BaseIngestAPIView
+        from datetime import datetime, timezone
+        import uuid
+        
+        event_id = str(uuid.uuid4())
+        
+        # Mock event metadata without remote_addr
+        event_metadata = {
+            "event_id": event_id,
+            "project_id": self.project.id,
+            "ingested_at": datetime.now(timezone.utc).isoformat(),
+            "debug_info": "",
+            "remote_addr": None
+        }
+
+        # Mock event data
+        event_data = {
+            "event_id": event_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "platform": "python",
+            "level": "error"
+        }
+
+        # Call digest_event with the metadata containing None remote_addr
+        BaseIngestAPIView.digest_event(event_metadata, event_data)
+
+        # Verify the event was created with None for remote_addr
+        from events.models import Event
+        event = Event.objects.get(event_id=event_id, project=self.project)
+        self.assertIsNone(event.remote_addr)
+
+    def test_get_event_meta_captures_remote_addr(self):
+        """Test that get_event_meta properly captures REMOTE_ADDR from request."""
+        from ingest.views import BaseIngestAPIView
+        from django.test import RequestFactory
+        from datetime import datetime, timezone
+        import uuid
+        
+        factory = RequestFactory()
+        request = factory.post('/api/envelope/')
+        
+        # Simulate the SetRemoteAddrMiddleware setting REMOTE_ADDR
+        request.META['REMOTE_ADDR'] = '203.0.113.42'
+        
+        event_id = str(uuid.uuid4())
+        ingested_at = datetime.now(timezone.utc)
+        
+        metadata = BaseIngestAPIView.get_event_meta(event_id, ingested_at, request, self.project)
+        
+        self.assertEqual(metadata['remote_addr'], '203.0.113.42')
+        self.assertEqual(metadata['event_id'], event_id)
+        self.assertEqual(metadata['project_id'], self.project.id)
+
+    def test_get_event_meta_handles_missing_remote_addr(self):
+        """Test that get_event_meta handles missing REMOTE_ADDR gracefully."""
+        from ingest.views import BaseIngestAPIView
+        from django.test import RequestFactory
+        from datetime import datetime, timezone
+        import uuid
+        
+        factory = RequestFactory()
+        request = factory.post('/api/envelope/')
+        
+        # Remove REMOTE_ADDR that RequestFactory sets by default
+        if 'REMOTE_ADDR' in request.META:
+            del request.META['REMOTE_ADDR']
+        
+        event_id = str(uuid.uuid4())
+        ingested_at = datetime.now(timezone.utc)
+        
+        metadata = BaseIngestAPIView.get_event_meta(event_id, ingested_at, request, self.project)
+        
+        self.assertIsNone(metadata['remote_addr'])
+        self.assertEqual(metadata['event_id'], event_id)
+        self.assertEqual(metadata['project_id'], self.project.id)
+
+
 class TimeZoneTestCase(DjangoTestCase):
     """This class contains some tests that formalize my understanding of how Django works; they are not strictly tests
     of bugsink code.

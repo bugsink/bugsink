@@ -124,6 +124,11 @@ class Event(models.Model):
     last_frame_module = models.CharField(max_length=255, blank=True, null=False, default="")
     last_frame_function = models.CharField(max_length=255, blank=True, null=False, default="")
 
+    # Client's IP address as determined at ingest time
+    # Uses the same mechanism as SetRemoteAddrMiddleware to ensure it works with proxies
+    # Can be None for backwards compatibility and misconfigured proxies
+    remote_addr = models.GenericIPAddressField(blank=True, null=True, default=None)
+
     # 1-based, because this is for human consumption only, and using 0-based internally when we don't actually do
     # anything with this value other than showing it to humans is super-confusing. Sorry Dijkstra!
     digest_order = models.PositiveIntegerField(blank=False, null=False)
@@ -236,6 +241,7 @@ class Event(models.Model):
                 sdk_version=maybe_empty(parsed_data.get("", {}).get("version", ""))[:255],
 
                 debug_info=event_metadata["debug_info"][:255],
+                remote_addr=event_metadata.get("remote_addr"),
 
                 digest_order=digest_order,
                 irrelevance_for_retention=irrelevance_for_retention,

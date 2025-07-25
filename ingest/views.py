@@ -171,11 +171,13 @@ class BaseIngestAPIView(View):
         # Meta means: not part of the event data. Basically: information that is available at the time of ingestion, and
         # that must be passed to digest() in a serializable form.
         debug_info = request.META.get("HTTP_X_BUGSINK_DEBUGINFO", "")
+        remote_addr = request.META.get("REMOTE_ADDR")
         return {
             "event_id": event_id,
             "project_id": project.id,
             "ingested_at": format_timestamp(ingested_at),
             "debug_info": debug_info,
+            "remote_addr": remote_addr,
         }
 
     @classmethod
