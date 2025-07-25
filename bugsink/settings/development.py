@@ -4,7 +4,6 @@ from .default import BASE_DIR, INSTALLED_APPS, MIDDLEWARE, LOGGING, DATABASES, I
 import os
 
 from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
-from debug_toolbar.middleware import show_toolbar
 
 from bugsink.utils import deduce_allowed_hosts, eat_your_own_dogfood
 
@@ -30,6 +29,9 @@ MIDDLEWARE = [
 
 
 def show_toolbar_for_queryparam(request):
+    # avoid "django.core.exceptions.AppRegistryNotReady: Apps aren't loaded yet."
+    from debug_toolbar.middleware import show_toolbar
+
     if "__debug__" not in request.path and not request.GET.get("debug", ""):
         return False
     return show_toolbar(request)
