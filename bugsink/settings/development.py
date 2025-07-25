@@ -23,23 +23,21 @@ if not I_AM_RUNNING == "TEST":
         "debug_toolbar",
     ]
 
-MIDDLEWARE = [
-    "debug_toolbar.middleware.DebugToolbarMiddleware",
-] + MIDDLEWARE
+    MIDDLEWARE = [
+        "debug_toolbar.middleware.DebugToolbarMiddleware",
+    ] + MIDDLEWARE
 
+    def show_toolbar_for_queryparam(request):
+        # avoid "django.core.exceptions.AppRegistryNotReady: Apps aren't loaded yet."
+        from debug_toolbar.middleware import show_toolbar
 
-def show_toolbar_for_queryparam(request):
-    # avoid "django.core.exceptions.AppRegistryNotReady: Apps aren't loaded yet."
-    from debug_toolbar.middleware import show_toolbar
+        if "__debug__" not in request.path and not request.GET.get("debug", ""):
+            return False
+        return show_toolbar(request)
 
-    if "__debug__" not in request.path and not request.GET.get("debug", ""):
-        return False
-    return show_toolbar(request)
-
-
-DEBUG_TOOLBAR_CONFIG = {
-    "SHOW_TOOLBAR_CALLBACK": show_toolbar_for_queryparam,
-}
+    DEBUG_TOOLBAR_CONFIG = {
+        "SHOW_TOOLBAR_CALLBACK": show_toolbar_for_queryparam,
+    }
 
 
 # this way of configuring (DB, DB_USER, DB_PASSWORD) is specific to the development environment
