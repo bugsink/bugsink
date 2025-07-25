@@ -30,13 +30,14 @@ class User(AbstractUser):
     )
 
     LANGUAGE_CHOICES = [
+        ("auto", _("Auto")),
         ("en", _("English")),
         ("zh-Hans", _("Simplified Chinese")),
     ]
     language = models.CharField(
         max_length=10,
         choices=LANGUAGE_CHOICES,
-        default="en",
+        default="auto",
         blank=False,
     )
 
