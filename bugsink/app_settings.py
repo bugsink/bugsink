@@ -97,6 +97,14 @@ def _sanitize(settings):
     if settings["BASE_URL"].endswith("/"):
         settings["BASE_URL"] = settings["BASE_URL"][:-1]
 
+    if settings["SINGLE_USER"]:
+        # this is implemented as a "hard imply". Pro: 'it just works' even when configurations are half-baked; con: may
+        # be confusing if you run into the "I thought I set that like so" case. On balance: I'd rather "just fix it"
+        # than raise some warning/error and have people deal with that.
+        settings["SINGLE_TEAM"] = True
+        settings["USER_REGISTRATION"] = CB_NOBODY
+        settings["TEAM_CREATION"] = CB_NOBODY
+
 
 def get_settings():
     global _settings
