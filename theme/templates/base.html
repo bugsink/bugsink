@@ -37,7 +37,7 @@
                 <a href="{% url "project_list" %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Projects" %}</div></a>
 
                 {% if project %}
-                <a href="{% url "issue_list_open" project_pk=project.pk %}{% current_qs %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">Issues ({{ project.name }})</div></a>
+                <a href="{% url "issue_list_open" project_pk=project.pk %}{% current_qs %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Issues" %} ({{ project.name }})</div></a>
                 {% endif %}
 
                 <div class="ml-auto flex">

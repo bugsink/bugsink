@@ -242,10 +242,12 @@ TIME_ZONE = 'Europe/Amsterdam'
 
 USE_I18N = True
 
+USE_L10N = True
+
 LOCALE_PATHS = [BASE_DIR / "locale"]
 LANGUAGES = (
-    ("zh-hans", "简体中文"),
     ("en", "English"),
+    ("zh-Hans", "简体中文"),
 )
 
 USE_TZ = True
