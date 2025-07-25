@@ -83,14 +83,6 @@ if settings.DEBUG:
         path('trigger-error/', trigger_error),
     ]
 
-    try:
-        import debug_toolbar  # noqa
-        urlpatterns = [
-            path('__debug__/', include('debug_toolbar.urls')),
-        ] + urlpatterns
-    except ImportError:
-        pass
-
 
 handler400 = "bugsink.views.bad_request"
 handler403 = "bugsink.views.permission_denied"
