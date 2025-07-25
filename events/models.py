@@ -52,6 +52,7 @@ class Event(models.Model):
 
     ingested_at = models.DateTimeField(blank=False, null=False)
     digested_at = models.DateTimeField(db_index=True, blank=False, null=False)
+    remote_addr = models.GenericIPAddressField(blank=True, null=True, default=None)
 
     issue = models.ForeignKey("issues.Issue", blank=False, null=False, on_delete=models.DO_NOTHING)
     grouping = models.ForeignKey("issues.Grouping", blank=False, null=False, on_delete=models.DO_NOTHING)
@@ -236,6 +237,11 @@ class Event(models.Model):
                 sdk_version=maybe_empty(parsed_data.get("", {}).get("version", ""))[:255],
 
                 debug_info=event_metadata["debug_info"][:255],
+
+                # just getting from the dict would be more precise, since we always add this info, but doing the .get()
+                # allows for backwards compatability (digesting events for which the info was not added on-ingest) so
+                # we'll take the defensive approach "for now" (until most everyone is on >= 1.7.4)
+                remote_addr=event_metadata.get("remote_addr"),
 
                 digest_order=digest_order,
                 irrelevance_for_retention=irrelevance_for_retention,

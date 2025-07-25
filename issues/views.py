@@ -608,6 +608,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         ("ingested at", _date_with_milis_html(event.ingested_at)),
         ("digested at", _date_with_milis_html(event.digested_at)),
         ("digest order", event.digest_order),
+        ("remote_addr", event.remote_addr),
     ]
 
     logentry_info = []
