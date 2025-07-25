@@ -28,7 +28,7 @@ class Command(BaseCommand):
         parser.add_argument("--fresh-trace", action="store_true")
         parser.add_argument("--tag", nargs="*", action="append")
         parser.add_argument("--compress", action="store", choices=["gzip", "deflate", "br"], default=None)
-        parser.add_argument("--use-envelope", action="store_true")
+        parser.add_argument("--use-store-api", action="store_true", help="Use (deprecated) /api/<id>/store/")
         parser.add_argument("--chunked-encoding", action="store_true")
         parser.add_argument(
             "--x-forwarded-for", action="store",
@@ -60,7 +60,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         compress = options['compress']
-        use_envelope = options['use_envelope']
+        use_envelope = not options['use_store_api']
         dsn = options['dsn']
 
         successfully_sent = []
