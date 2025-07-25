@@ -1,43 +1,15 @@
 from .default import *  # noqa
-from .default import BASE_DIR, INSTALLED_APPS, MIDDLEWARE, LOGGING, DATABASES, I_AM_RUNNING
+from .default import BASE_DIR, LOGGING, DATABASES, I_AM_RUNNING
 
 import os
 
 from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
-from debug_toolbar.middleware import show_toolbar
 
 from bugsink.utils import deduce_allowed_hosts, eat_your_own_dogfood
 
 
 SECRET_KEY = 'django-insecure-$@clhhieazwnxnha-_zah&(bieq%yux7#^07&xsvhn58t)8@xw'
 DEBUG = True
-
-
-# > The Debug Toolbar is shown only if your IP address is listed in Django’s INTERNAL_IPS setting. This means that for
-# > local development, you must add "127.0.0.1" to INTERNAL_IPS.
-INTERNAL_IPS = [
-    "127.0.0.1",
-]
-
-if not I_AM_RUNNING == "TEST":
-    INSTALLED_APPS += [
-        "debug_toolbar",
-    ]
-
-MIDDLEWARE = [
-    "debug_toolbar.middleware.DebugToolbarMiddleware",
-] + MIDDLEWARE
-
-
-def show_toolbar_for_queryparam(request):
-    if "__debug__" not in request.path and not request.GET.get("debug", ""):
-        return False
-    return show_toolbar(request)
-
-
-DEBUG_TOOLBAR_CONFIG = {
-    "SHOW_TOOLBAR_CALLBACK": show_toolbar_for_queryparam,
-}
 
 
 # this way of configuring (DB, DB_USER, DB_PASSWORD) is specific to the development environment
