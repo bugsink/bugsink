@@ -89,6 +89,11 @@ class SetRemoteAddrMiddleware:
 
     @staticmethod
     def parse_x_forwarded_for(header_value):
+        # NOTE: our method parsing _does not_ remove port numbers from the X-Forwarded-For header; such setups are rare
+        # (but legal according to the spec) but [1] we don't recommend them and [2] we recommend X-Real-IP over
+        # X-Forwarded-For anyway.
+        # https://serverfault.com/questions/753682/iis-server-farm-with-arr-why-does-http-x-forwarded-for-have-a-port-nu
+
         if header_value in [None, ""]:
             # The most typical misconfiguration is to forget to set the header at all, or to have it be empty. In that
             # case, we'll just set the IP to None, which will mean some data will be missing from your events (but
@@ -116,6 +121,7 @@ class SetRemoteAddrMiddleware:
 
     def __call__(self, request):
         if settings.USE_X_REAL_IP:
+            # NOTE: X-Real-IP never contains a port number AFAICT by searching online so the below is IP-only:
             request.META["REMOTE_ADDR"] = request.META.get("HTTP_X_REAL_IP", None)
 
         elif settings.USE_X_FORWARDED_FOR:  # elif: X-Real-IP / X-Forwarded-For are mutually exclusive
