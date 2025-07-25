@@ -182,7 +182,7 @@ class Event(models.Model):
             return json.load(f)
 
     def get_absolute_url(self):
-        return f"/issues/issue/{ self.issue_id }/event/{ self.id }/"
+        return f"/issues/issue/{self.issue_id}/event/{self.id}/"
 
     def get_raw_link(self):
         # for the admin

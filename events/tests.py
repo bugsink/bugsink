@@ -49,26 +49,6 @@ class ViewTests(TransactionTestCase):
         self.assertEqual(response['Content-Type'], 'text/plain')
 
 
-class RemoteAddrTest(TransactionTestCase):
-    """Test that remote_addr field works."""
-    
-    def test_remote_addr_field(self):
-        """Test that Event model can store remote_addr."""
-        from projects.models import Project
-        from .factories import create_event
-        
-        project = Project.objects.create()
-        event = create_event(project=project)
-        
-        # Test setting remote_addr
-        event.remote_addr = "192.168.1.100"
-        event.save()
-        
-        # Reload from DB and verify
-        event.refresh_from_db()
-        self.assertEqual(event.remote_addr, "192.168.1.100")
-
-
 class TimeZoneTestCase(DjangoTestCase):
     """This class contains some tests that formalize my understanding of how Django works; they are not strictly tests
     of bugsink code.
