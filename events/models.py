@@ -124,9 +124,6 @@ class Event(models.Model):
     last_frame_module = models.CharField(max_length=255, blank=True, null=False, default="")
     last_frame_function = models.CharField(max_length=255, blank=True, null=False, default="")
 
-    # Client's IP address as determined at ingest time
-    # Uses the same mechanism as SetRemoteAddrMiddleware to ensure it works with proxies
-    # Can be None for backwards compatibility and misconfigured proxies
     remote_addr = models.GenericIPAddressField(blank=True, null=True, default=None)
 
     # 1-based, because this is for human consumption only, and using 0-based internally when we don't actually do
