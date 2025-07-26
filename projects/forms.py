@@ -2,6 +2,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.template.defaultfilters import yesno
 from django.urls import reverse
+from django.utils.translation import gettext_lazy as _
 
 from teams.models import TeamMembership
 
@@ -11,9 +12,9 @@ User = get_user_model()
 
 
 class ProjectMemberInviteForm(forms.Form):
-    email = forms.EmailField(label='Email', required=True)
+    email = forms.EmailField(label=_('Email'), required=True)
     role = forms.ChoiceField(
-        label='Role', choices=ProjectRole.choices, required=True, initial=ProjectRole.MEMBER, widget=forms.RadioSelect)
+        label=_('Role'), choices=ProjectRole.choices, required=True, initial=ProjectRole.MEMBER, widget=forms.RadioSelect)
 
     def __init__(self, user_must_exist, *args, **kwargs):
         super().__init__(*args, **kwargs)

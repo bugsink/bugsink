@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% load tailwind_forms %}
+{% load i18n %}
 
 {% block title %}User Preferences · {{ site_title }}{% endblock %}
 
@@ -23,13 +24,14 @@
         {% endif %}
 
         <div>
-            <h1 class="text-4xl my-4 font-bold">User Preferences</h1>
+            <h1 class="text-4xl my-4 font-bold">{% translate "User Preferences" %}</h1>
         </div>
 
         {% tailwind_formfield form.send_email_alerts %}
         {% tailwind_formfield form.theme_preference %}
+        {% tailwind_formfield form.language %}
 
-        <button name="action" value="invite" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md">Save</button>
+        <button name="action" value="invite" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md">{% translate "Save" %}</button>
         </form>
 
     </div>

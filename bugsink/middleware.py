@@ -128,3 +128,32 @@ class SetRemoteAddrMiddleware:
             request.META["REMOTE_ADDR"] = self.parse_x_forwarded_for(request.META.get("HTTP_X_FORWARDED_FOR", None))
 
         return self.get_response(request)
+
+
+class UserLanguageMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        
+        if (request.user.is_authenticated and 
+            hasattr(request.user, 'language')):
+            
+            user_language = request.user.language
+            current_cookie = request.COOKIES.get('django_language')
+            
+            if user_language == 'auto':
+                if current_cookie is not None:
+                    response.delete_cookie('django_language')
+            else:
+                if current_cookie != user_language:
+                    response.set_cookie(
+                        'django_language',
+                        user_language,
+                        max_age=365 * 24 * 60 * 60,
+                        httponly=False,
+                        samesite='Lax'
+                    )
+        
+        return response
