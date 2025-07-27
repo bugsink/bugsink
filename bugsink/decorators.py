@@ -39,7 +39,7 @@ def issue_membership_required(function):
         if "issue_pk" not in kwargs:
             raise TypeError("issue_pk must be passed as a keyword argument")
         issue_pk = kwargs.pop("issue_pk")
-        issue = get_object_or_404(Issue, pk=issue_pk)
+        issue = get_object_or_404(Issue, pk=issue_pk, is_deleted=False)
         kwargs["issue"] = issue
         if request.user.is_superuser:
             return function(request, *args, **kwargs)

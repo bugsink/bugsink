@@ -13,15 +13,46 @@ import django
 
 from django.core.handlers.wsgi import WSGIHandler, WSGIRequest
 from django.core.exceptions import DisallowedHost
+from django.http.request import split_domain_port, validate_host
+from django.core.validators import validate_ipv46_address
+from django.core.exceptions import ValidationError
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bugsink_conf')
 
 
+def is_ip_address(value):
+    try:
+        validate_ipv46_address(value)
+        return True
+    except ValidationError:
+        return False
+
+
+def allowed_hosts_error_message(domain, allowed_hosts):
+    # Start with the plain statement of fact: x not in y.
+    msg = "'Host: %s' as sent by browser/proxy not in ALLOWED_HOSTS=%s. " % (domain, allowed_hosts)
+
+    suggestable_allowed_hosts = [host for host in allowed_hosts if host not in ["localhost", ".localhost", "127.0.0.1"]]
+    if len(suggestable_allowed_hosts) == 0:
+        proxy_suggestion = "your.host.example"
+    else:
+        proxy_suggestion = " | ".join(suggestable_allowed_hosts)
+
+    if domain == "localhost" or is_ip_address(domain):
+        # in these cases Proxy misconfig is the more likely culprit. Point to that _first_ and (while still mentioning
+        # ALLOWED_HOSTS); don't mention the specific domain that was used as a likely "good value" for ALLLOWED_HOSTS.
+        return msg + "Configure proxy to use 'Host: %s' or add the desired host to ALLOWED_HOSTS." % proxy_suggestion
+
+    # the domain looks "pretty good"; be verbose/explicit about the 2 possible changes in config.
+    return msg + "Add '%s' to ALLOWED_HOSTS or configure proxy to use 'Host: %s'." % (domain, proxy_suggestion)
+
+
 class CustomWSGIRequest(WSGIRequest):
     """
-    Custom WSQIRequest subclass with 2 fixes:
+    Custom WSQIRequest subclass with 3 fixes/changes:
 
     * Chunked Transfer Encoding (Django's behavior is broken)
+    * Skip ALLOWED_HOSTS validation for /health/ endpoints (see #140)
     * Better error message for disallowed hosts
 
     Note: used in all servers (in gunicorn through wsgi.py; in Django's runserver through WSGI_APPLICATION)
@@ -49,27 +80,33 @@ class CustomWSGIRequest(WSGIRequest):
         We're leaking a bit of information here, but I don't think it's too much TBH -- especially in the light of ssl
         certificates being specifically tied to the domain name.
         """
+        if self.path.startswith == "/health/":
+            # For /health/ endpoints, we skip the ALLOWED_HOSTS validation (see #140).
+            return self._get_raw_host()
 
-        # Import pushed down to make it absolutely clear we avoid circular importing/loading the wrong thing:
+        # copied from HttpRequest.get_host() in Django 4.2, with modifications.
+
+        host = self._get_raw_host()
+
+        # Allow variants of localhost if ALLOWED_HOSTS is empty and DEBUG=True.
         from django.conf import settings
+        allowed_hosts = settings.ALLOWED_HOSTS
+        if settings.DEBUG and not allowed_hosts:
+            allowed_hosts = [".localhost", "127.0.0.1", "[::1]"]
 
-        try:
-            return super().get_host()
-        except DisallowedHost as e:
-            message = str(e)
+        domain, port = split_domain_port(host)
+        if domain and validate_host(domain, allowed_hosts):
+            return host
+        else:
+            if domain:
+                msg = allowed_hosts_error_message(domain, allowed_hosts)
 
-            if "ALLOWED_HOSTS" in message:
-                # The following 3 lines are copied from HttpRequest.get_host() in Django 4.2
-                allowed_hosts = settings.ALLOWED_HOSTS
-                if settings.DEBUG and not allowed_hosts:
-                    allowed_hosts = [".localhost", "127.0.0.1", "[::1]"]
-
-                message = message[:-1 * len(".")]
-                message += ", which is currently set to %s." % repr(allowed_hosts)
-
-            # from None, because our DisallowedHost is so directly caused by super()'s DisallowedHost that cause and
-            # effect are the same, i.e. cause must be hidden from the stacktrace for the sake of clarity.
-            raise DisallowedHost(message) from None
+            else:
+                msg = "Invalid HTTP_HOST header: %r." % host
+                msg += (
+                    " The domain name provided is not valid according to RFC 1034/1035."
+                )
+            raise DisallowedHost(msg)
 
 
 class CustomWSGIHandler(WSGIHandler):

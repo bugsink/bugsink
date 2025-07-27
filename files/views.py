@@ -2,10 +2,12 @@ import json
 from hashlib import sha1
 from gzip import GzipFile
 from io import BytesIO
+import logging
 
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import user_passes_test
+from django.http import Http404
 
 from sentry.assemble import ChunkFileState
 
@@ -16,9 +18,12 @@ from bsmain.models import AuthToken
 from .models import Chunk, File
 from .tasks import assemble_artifact_bundle
 
+logger = logging.getLogger("bugsink.api")
+
 
 _KIBIBYTE = 1024
 _MEBIBYTE = 1024 * _KIBIBYTE
+_GIBIBYTE = 1024 * _MEBIBYTE
 
 
 class NamedBytesIO(BytesIO):
@@ -39,26 +44,32 @@ def get_chunk_upload_settings(request, organization_slug):
     # * https://github.com/getsentry/sentry/pull/29347
     url = get_settings().BASE_URL + "/api/0/organizations/" + organization_slug + "/chunk-upload/"
 
-    # Our "chunk_upload" is chunked in name only; i.e. we only "speak chunked" for the purpose of API-compatability with
-    # sentry-cli, but we provide params here such that that cli will only send a single chunk.
-
     return JsonResponse({
         "url": url,
 
-        # For now, staying close to the default MAX_ENVELOPE_COMPRESSED_SIZE, which is 20MiB;
-        # I _think_ I saw a note somewhere on (one of) these values having to be a power of 2; hence 32 here.
-        #
-        # When implementing uploading, it was done to support sourcemaps. It seems that over at Sentry, the reason they
-        # went so complicated in the first place was to enable DIF support (hunderds of MiB regularly).
-        "chunkSize": 32 * _MEBIBYTE,
-        "maxRequestSize": 32 * _MEBIBYTE,
+        # We pick a "somewhat arbitrary" value between 1MiB and 16MiB to balance between "works reliably" and "lower
+        # overhead", erring on the "works reliably" side of that spectrum. There's really no lower bound technically,
+        # I've played with 32-byte requests.
+        # note: sentry-cli <= v2.39.1 requires a power of 2 here.
+        # chunkSize == maxRequestSize per the comments on `chunksPerRequest: 1`.
+        "chunkSize": 2 * _MEBIBYTE,
+        "maxRequestSize": 2 * _MEBIBYTE,
 
-        # I didn't check the supposed relationship between maxRequestSize and maxFileSize, but assume something similar
-        # to what happens w/ envelopes; hence harmonizing with MAX_ENVELOPE_SIZE (and rounding up to a power of 2) here
-        "maxFileSize": 128 * _MEBIBYTE,
+        # The limit here is _actually storing this_. For now "just picking a high limit" assuming that we'll have decent
+        # storage (#151) for the files eventually.
+        "maxFileSize": 2 * _GIBIBYTE,
 
-        # force single-chunk by setting these to 1.
+        # In our current setup increasing concurrency doesn't help (single-writer architecture) while coming at the cost
+        # of potential reliability issues. Current codebase has works just fine with it _in principle_ (tested by
+        # setting concurrency=10, chunkSize=32, maxRequestSize=32 and adding a sleep(random(..)) in chunk_upload (right
+        # before return, and seeing that sentry-cli fires a bunch of things in parallel and artifact_bundle_assemble as
+        # a final step.
         "concurrency": 1,
+
+        # There _may_ be good reasons to support multiple chunks per request, but I haven't found a reason to
+        # distinguish between chunkSize and maxRequestSize yet, so I'd rather keep them synced for easier reasoning.
+        # Current codebase has been observed to work just fine with it though (tested w/ chunkSize=32 and
+        # chunksPerRequest=100 and seeing sentry-cli do a single request with many small chunks).
         "chunksPerRequest": 1,
 
         "hashAlgorithm": "sha1",
@@ -193,3 +204,40 @@ def download_file(request, checksum):
     response = HttpResponse(file.data, content_type="application/octet-stream")
     response["Content-Disposition"] = f"attachment; filename={file.filename}"
     return response
+
+
+@csrf_exempt
+def api_catch_all(request, subpath):
+    if not get_settings().API_LOG_UNIMPLEMENTED_CALLS:
+        raise Http404("Unimplemented API endpoint: /api/" + subpath)
+
+    lines = [
+        "Unimplemented API usage:",
+        f"  Path:   /api/{subpath}",
+        f"  Method: {request.method}",
+    ]
+
+    if request.GET:
+        lines.append(f"  GET:    {request.GET.dict()}")
+
+    if request.POST:
+        lines.append(f"  POST:   {request.POST.dict()}")
+
+    body = request.body
+    if body:
+        try:
+            decoded = body.decode("utf-8", errors="replace").strip()
+            lines.append("  Body:")
+            lines.append(f"    {decoded[:500]}")
+            try:
+                parsed = json.loads(decoded)
+                pretty = json.dumps(parsed, indent=2)[:10_000]
+                lines.append("  JSON body:")
+                lines.extend(f"    {line}" for line in pretty.splitlines())
+            except json.JSONDecodeError:
+                pass
+        except Exception as e:
+            lines.append(f"  Body: <decode error: {e}>")
+
+    logger.info("\n".join(lines))
+    raise Http404("Unimplemented API endpoint: /api/" + subpath)

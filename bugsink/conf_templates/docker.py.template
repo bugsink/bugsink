@@ -20,14 +20,17 @@ DEBUG_CSRF = "USE_DEBUG" if os.getenv("DEBUG_CSRF") == "USE_DEBUG" else os.geten
 SECRET_KEY = os.getenv("SECRET_KEY")
 
 
-if os.getenv("BEHIND_HTTPS_PROXY", "False").lower() in ("true", "1", "yes"):
-    # We hard-tie the ideas of "behind a proxy" and "use https" together: there is no reason to go through the trouble
-    # of setting up a proxy if you're not using https. We also hard-code some choices of proxy headers; which means you
-    # have to match those on the proxy side (but that's easy enough).
+BEHIND_HTTPS_PROXY = os.getenv("BEHIND_HTTPS_PROXY", "False").lower() in ("true", "1", "yes")
+BEHIND_PLAIN_HTTP_PROXY = os.getenv("BEHIND_PLAIN_HTTP_PROXY", "False").lower() in ("true", "1", "yes")
+
+if BEHIND_HTTPS_PROXY or BEHIND_PLAIN_HTTP_PROXY:
+    # We hard-code the choice of proxy headers; which means you have to match those on the proxy side (easy enough).
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Note: slightly redundant, Gunicorn also does this.
+    USE_X_REAL_IP = True
+
+if BEHIND_HTTPS_PROXY:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    USE_X_REAL_IP = True
 else:
     # We don't warn about SESSION_COOKIE_SECURE and CSRF_COOKIE_SECURE; we can't set them to True because some browsers
     # interpret that as "use https for cookies, even on localhost", and there is no https (BEHIND_HTTPS_PROXY is False).
@@ -36,6 +39,7 @@ else:
         "security.W012",  # SESSION_COOKIE_SECURE
         "security.W016",  # CSRF_COOKIE_SECURE
     ]
+
 
 
 # The time-zone here is the default for display purposes (when no project/user configuration is used).
@@ -159,6 +163,10 @@ BUGSINK = {
     # Settings that help with debugging and development ("why isn't Bugsink doing what I expect?")
     "VALIDATE_ON_DIGEST": os.getenv("VALIDATE_ON_DIGEST", "none").lower(),  # other legal values are "warn" and "strict"
     "KEEP_ENVELOPES": int(os.getenv("KEEP_ENVELOPES", 0)),  # keep this many in the database; 0 means "don't keep"
+
+    "API_LOG_UNIMPLEMENTED_CALLS": os.getenv("API_LOG_UNIMPLEMENTED_CALLS", "false").lower() in ("true", "1", "yes"),
+    "KEEP_ARTIFACT_BUNDLES": os.getenv("KEEP_ARTIFACT_BUNDLES", "false").lower() in ("true", "1", "yes"),
+
     "MINIMIZE_INFORMATION_EXPOSURE":
         os.getenv("MINIMIZE_INFORMATION_EXPOSURE", "false").lower() in ("true", "1", "yes"),
 

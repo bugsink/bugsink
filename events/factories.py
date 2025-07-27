@@ -43,11 +43,24 @@ def create_event(project=None, issue=None, timestamp=None, event_data=None):
     )
 
 
-def create_event_data():
+def create_event_data(exception_type=None):
     # create minimal event data that is valid as per from_json()
 
-    return {
+    result = {
         "event_id": uuid.uuid4().hex,
         "timestamp": timezone.now().isoformat(),
         "platform": "python",
     }
+
+    if exception_type is not None:
+        # allow for a specific exception type to get unique groupers/issues
+        result["exception"] = {
+            "values": [
+                {
+                    "type": exception_type,
+                    "value": "This is a test exception",
+                }
+            ]
+        }
+
+    return result

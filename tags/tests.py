@@ -1,14 +1,16 @@
 from unittest import TestCase as RegularTestCase
 from django.test import TestCase as DjangoTestCase
 
+from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project
 from issues.factories import get_or_create_issue, denormalized_issue_fields
-from events.factories import create_event
+from events.factories import create_event, create_event_data
 from issues.models import Issue
 
-from .models import store_tags, EventTag
+from .models import store_tags, EventTag, IssueTag, TagValue
 from .utils import deduce_tags
 from .search import search_events, search_issues, parse_query, search_events_optimized
+from .tasks import vacuum_eventless_issuetags
 
 
 class DeduceTagsTestCase(RegularTestCase):
@@ -17,7 +19,6 @@ class DeduceTagsTestCase(RegularTestCase):
         self.assertEqual(deduce_tags({}), {})
         self.assertEqual(deduce_tags({"tags": {"foo": "bar"}}), {"foo": "bar"})
 
-        # finally, a more complex example (more or less real-world)
         event_data = {
             "server_name": "server",
             "release": "1.0",
@@ -120,6 +121,23 @@ class StoreTagsTestCase(DjangoTestCase):
         self.assertEqual(self.issue.tags.first().count, 2)
         self.assertEqual(self.issue.tags.first().value.key.key, "foo")
 
+    def test_store_same_tag_on_two_issues_creates_two_issuetags(self):
+        store_tags(self.event, self.issue, {"foo": "bar"})
+
+        other_issue, _ = get_or_create_issue(self.project, event_data=create_event_data("other_issue"))
+        other_event = create_event(self.project, issue=other_issue)
+        store_tags(other_event, other_issue, {"foo": "bar"})
+
+        self.assertEqual(IssueTag.objects.count(), 2)
+        self.assertEqual(2, IssueTag.objects.filter(value__key__key="foo").count())
+
+    def test_store_many_tags(self):
+        # observed: a non-batched implementation of store_tags() would crash (e.g. in sqlite: Expression tree is too
+        # large (maximum depth 1000)); if the below doesn't crash, we've got a batched implementation that works
+        event = create_event(self.project, issue=self.issue)
+        store_tags(event, self.issue, {f"key-{i}": f"value-{i}" for i in range(512)})
+        self.assertEqual(IssueTag.objects.filter(issue=self.issue).count(), 512)
+
 
 class SearchParserTestCase(RegularTestCase):
 
@@ -179,12 +197,12 @@ class SearchTestCase(DjangoTestCase):
         # scenario (in which there would be some relation between the tags of issues and events), but it allows us to
         # test event_search more easily (if each event is tied to a different issue, searching for tags is meaningless,
         # since you always search within the context of an issue).
-        self.global_issue = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        self.global_issue, _ = get_or_create_issue(project=self.project, event_data=create_event_data("global"))
 
-        issue_with_tags_and_text = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        issue_with_tags_and_text, _ = get_or_create_issue(project=self.project, event_data=create_event_data("tag_txt"))
         event_with_tags_and_text = create_event(self.project, issue=self.global_issue)
 
-        issue_with_tags_no_text = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        issue_with_tags_no_text, _ = get_or_create_issue(project=self.project, event_data=create_event_data("no_text"))
         event_with_tags_no_text = create_event(self.project, issue=self.global_issue)
 
         store_tags(event_with_tags_and_text, issue_with_tags_and_text, {f"k-{i}": f"v-{i}" for i in range(5)})
@@ -192,7 +210,7 @@ class SearchTestCase(DjangoTestCase):
         # fix the EventTag objects' issue, which is broken per the non-real-world setup (see above)
         EventTag.objects.all().update(issue=self.global_issue)
 
-        issue_without_tags = Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        issue_without_tags, _ = get_or_create_issue(project=self.project, event_data=create_event_data("no_tags"))
         event_without_tags = create_event(self.project, issue=self.global_issue)
 
         for obj in [issue_with_tags_and_text, event_with_tags_and_text, issue_without_tags, event_without_tags]:
@@ -200,7 +218,7 @@ class SearchTestCase(DjangoTestCase):
             obj.calculated_value = "findable value"
             obj.save()
 
-        Issue.objects.create(project=self.project, **denormalized_issue_fields())
+        get_or_create_issue(project=self.project, event_data=create_event_data("no_text"))
         create_event(self.project, issue=self.global_issue)
 
     def _test_search(self, search_x):
@@ -248,3 +266,78 @@ class SearchTestCase(DjangoTestCase):
 
     def test_search_issues(self):
         self._test_search(lambda query: search_issues(self.project, Issue.objects.all(), query))
+
+
+class VacuumEventlessIssueTagsTestCase(TransactionTestCase):
+    # Note: this test depends on EAGER mode in both the setup (delete_derred to trigger cascading deletes) and the
+    # testing of the thing under test (vacuum_eventless_issuetags).
+
+    def setUp(self):
+        self.project = Project.objects.create(name="T")
+        self.issue, _ = get_or_create_issue(self.project)
+
+    def test_no_eventtags_means_vacuum(self):
+        event = create_event(self.project, issue=self.issue)
+        store_tags(event, self.issue, {"foo": "bar"})
+        event.delete_deferred()
+
+        self.assertEqual(IssueTag.objects.count(), 1)
+        vacuum_eventless_issuetags()
+        # in the above we deleted EventTag; implies 0 after-vacuum
+        self.assertEqual(IssueTag.objects.count(), 0)
+
+    def test_one_eventtag_preserves_issuetag(self):
+        event = create_event(self.project, issue=self.issue)
+        store_tags(event, self.issue, {"foo": "bar"})
+
+        self.assertEqual(IssueTag.objects.count(), 1)
+        vacuum_eventless_issuetags()
+        # in the above we did not delete EventTag; implies 1 after-vacuum
+        self.assertEqual(IssueTag.objects.count(), 1)
+
+    def test_other_event_same_tag_same_issue_preserves(self):
+        event1 = create_event(self.project, issue=self.issue)
+        event2 = create_event(self.project, issue=self.issue)
+        store_tags(event1, self.issue, {"foo": "bar"})
+        store_tags(event2, self.issue, {"foo": "bar"})
+        event1.delete_deferred()
+
+        self.assertEqual(IssueTag.objects.count(), 1)
+        vacuum_eventless_issuetags()
+        # we deleted the EventTag for event1, but since event2 has the same tag, it should be preserved on the Issue
+        self.assertEqual(IssueTag.objects.count(), 1)
+
+    def test_other_event_same_tag_other_issue_does_not_preserve(self):
+        event1 = create_event(self.project, issue=self.issue)
+        store_tags(event1, self.issue, {"foo": "bar"})
+
+        other_issue, _ = get_or_create_issue(self.project, event_data=create_event_data("other_issue"))
+        event2 = create_event(self.project, issue=other_issue)
+        store_tags(event2, other_issue, {"foo": "bar"})
+
+        event1.delete_deferred()
+
+        self.assertEqual(IssueTag.objects.filter(issue=self.issue).count(), 1)
+        vacuum_eventless_issuetags()
+        self.assertEqual(IssueTag.objects.filter(issue=self.issue).count(), 0)
+
+    def test_many_tags_spanning_chunks(self):
+        event = create_event(self.project, issue=self.issue)
+        store_tags(event, self.issue, {f"key-{i}": f"value-{i}" for i in range(2048 + 1)})  # bigger than BATCH_SIZE
+
+        # check setup: all issue tags are there
+        self.assertEqual(IssueTag.objects.filter(issue=self.issue).count(), 2048 + 1)
+
+        event.delete_deferred()
+        vacuum_eventless_issuetags()
+
+        # all tags should be gone after vacuum
+        self.assertEqual(IssueTag.objects.filter(issue=self.issue).count(), 0)
+
+    def test_tagvalue_is_pruned(self):
+        event = create_event(self.project, issue=self.issue)
+        store_tags(event, self.issue, {"foo": "bar"})
+        event.delete_deferred()
+
+        vacuum_eventless_issuetags()
+        self.assertEqual(TagValue.objects.all().count(), 0)

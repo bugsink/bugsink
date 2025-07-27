@@ -10,6 +10,7 @@ from django.conf import settings
 from django.utils.functional import cached_property
 
 from bugsink.volume_based_condition import VolumeBasedCondition
+from bugsink.transaction import delay_on_commit
 from alerts.tasks import send_unmute_alert
 from compat.timestamp import parse_timestamp, format_timestamp
 from tags.models import IssueTag, TagValue
@@ -17,6 +18,8 @@ from tags.models import IssueTag, TagValue
 from .utils import (
     parse_lines, serialize_lines, filter_qs_for_fixed_at, exclude_qs_for_fixed_at,
     get_title_for_exception_type_and_value)
+
+from .tasks import delete_issue_deps
 
 
 class IncongruentStateException(Exception):
@@ -32,7 +35,9 @@ class Issue(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     project = models.ForeignKey(
-        "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+        "projects.Project", blank=False, null=False, on_delete=models.DO_NOTHING)
+
+    is_deleted = models.BooleanField(default=False)
 
     # 1-based for the same reasons as Event.digest_order
     digest_order = models.PositiveIntegerField(blank=False, null=False)
@@ -71,6 +76,21 @@ class Issue(models.Model):
                 models.Max("digest_order"))["digest_order__max"]
             self.digest_order = max_current + 1 if max_current is not None else 1
         super().save(*args, **kwargs)
+
+    def delete_deferred(self):
+        """Marks the issue as deleted, and schedules deletion of all related objects"""
+        self.is_deleted = True
+        self.save(update_fields=["is_deleted"])
+
+        # we set grouping_key_hash to None to ensure that event digests that happen simultaneously with the delayed
+        # cleanup will get their own fresh Grouping and hence Issue. This matches with the behavior that would happen
+        # if Issue deletion would have been instantaneous (i.e. it's the least surprising behavior).
+        #
+        # `issue=None` is explicitly _not_ part of this update, such that the actual deletion of the Groupings will be
+        # picked up as part of the delete_issue_deps task.
+        self.grouping_set.all().update(grouping_key_hash=None)
+
+        delay_on_commit(delete_issue_deps, str(self.project_id), str(self.id))
 
     def friendly_id(self):
         return f"{ self.project.slug.upper() }-{ self.digest_order }"
@@ -176,13 +196,11 @@ class Issue(models.Model):
             ("project", "digest_order"),
         ]
         indexes = [
-            models.Index(fields=["first_seen"]),
-            models.Index(fields=["last_seen"]),
-
-            # 3 indexes for the list view (state_filter)
-            models.Index(fields=["is_resolved", "is_muted", "last_seen"]),  # filter on resolved/muted
-            models.Index(fields=["is_muted", "last_seen"]),  # filter on muted
-            models.Index(fields=["is_resolved", "last_seen"]),  # filter on resolved
+            # 4 indexes for the list view (state_filter)
+            models.Index(fields=["project", "is_resolved", "is_muted", "last_seen"], name="issue_list_open"),
+            models.Index(fields=["project", "is_muted", "last_seen"], name="issue_list_muted"),
+            models.Index(fields=["project", "is_resolved", "last_seen"], name="issue_list_resolved"),  # and unresolved
+            models.Index(fields=["project", "last_seen"], name="issue_list_all"),  # all
         ]
 
 
@@ -195,17 +213,24 @@ class Grouping(models.Model):
     into a single issue. (such manual merging is not yet implemented, but the data-model is already prepared for it)
     """
     project = models.ForeignKey(
-        "projects.Project", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+        "projects.Project", blank=False, null=False, on_delete=models.DO_NOTHING)
 
-    # NOTE: I don't want to have any principled maximum on the grouping key, nor do I want to prematurely optimize the
-    # lookup. If lookups are slow, we _could_ examine whether manually hashing these values and matching on the hash
-    # helps.
     grouping_key = models.TextField(blank=False, null=False)
 
-    issue = models.ForeignKey("Issue", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+    # we hash the key to make it indexable on MySQL, see https://code.djangoproject.com/ticket/2495
+    grouping_key_hash = models.CharField(max_length=64, blank=False, null=True)
+
+    issue = models.ForeignKey("Issue", blank=False, null=False, on_delete=models.DO_NOTHING)
 
     def __str__(self):
         return self.grouping_key
+
+    class Meta:
+        unique_together = [
+            # principled: grouping _key_ is a _key_ for a reason (within a project). This also implies the main way of
+            # looking up groupings has an appropriate index.
+            ("project", "grouping_key_hash"),
+        ]
 
 
 def format_unmute_reason(unmute_metadata):
@@ -323,9 +348,14 @@ class IssueStateManager(object):
                 # path is never reached via UI-based paths (because those are by definition not event-triggered); thus
                 # the 2 ways of creating TurningPoints do not collide.
                 TurningPoint.objects.create(
+                    project_id=issue.project_id,
                     issue=issue, triggering_event=triggering_event, timestamp=triggering_event.ingested_at,
                     kind=TurningPointKind.UNMUTED, metadata=json.dumps(unmute_metadata))
                 triggering_event.never_evict = True  # .save() will be called by the caller of this function
+
+    @staticmethod
+    def delete(issue):
+        issue.delete_deferred()
 
     @staticmethod
     def get_unmute_thresholds(issue):
@@ -445,6 +475,11 @@ class IssueQuerysetStateManager(object):
         for issue in issue_qs:
             IssueStateManager.unmute(issue, triggering_event)
 
+    @staticmethod
+    def delete(issue_qs):
+        for issue in issue_qs:
+            issue.delete_deferred()
+
 
 class TurningPointKind(models.IntegerChoices):
     # The language of the kinds reflects a historic view of the system, e.g. "first seen" as opposed to "new issue"; an
@@ -466,7 +501,8 @@ class TurningPoint(models.Model):
     # basically: an Event, but that name was already taken in our system :-) alternative names I considered:
     # "milestone", "state_change", "transition", "annotation", "episode"
 
-    issue = models.ForeignKey("Issue", blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+    project = models.ForeignKey("projects.Project", blank=False, null=False, on_delete=models.DO_NOTHING)
+    issue = models.ForeignKey("Issue", blank=False, null=False, on_delete=models.DO_NOTHING)
     triggering_event = models.ForeignKey("events.Event", blank=True, null=True, on_delete=models.DO_NOTHING)
 
     # null: the system-user

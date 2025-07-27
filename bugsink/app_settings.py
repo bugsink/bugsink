@@ -44,6 +44,8 @@ DEFAULTS = {
     "DIGEST_IMMEDIATELY": True,
     "VALIDATE_ON_DIGEST": "none",  # other legal values are "warn" and "strict"
     "KEEP_ENVELOPES": 0,  # set to a number to store that many; 0 means "store none". This is for debugging.
+    "API_LOG_UNIMPLEMENTED_CALLS": False,  # if True, log unimplemented API calls; see #153
+    "KEEP_ARTIFACT_BUNDLES": False,  # if True, artifact bundles are kept in the database on-upload (for debugging)
 
     # MAX* below mirror the (current) values for the Sentry Relay
     "MAX_EVENT_SIZE": _MEBIBYTE,
@@ -94,6 +96,14 @@ def _sanitize(settings):
 
     if settings["BASE_URL"].endswith("/"):
         settings["BASE_URL"] = settings["BASE_URL"][:-1]
+
+    if settings["SINGLE_USER"]:
+        # this is implemented as a "hard imply". Pro: 'it just works' even when configurations are half-baked; con: may
+        # be confusing if you run into the "I thought I set that like so" case. On balance: I'd rather "just fix it"
+        # than raise some warning/error and have people deal with that.
+        settings["SINGLE_TEAM"] = True
+        settings["USER_REGISTRATION"] = CB_NOBODY
+        settings["TEAM_CREATION"] = CB_NOBODY
 
 
 def get_settings():

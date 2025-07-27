@@ -17,7 +17,7 @@
     <div class="ml-auto"><!-- top, RHS (buttons) -->
         {% if can_create %}
         <div>
-            <a class="block font-bold text-slate-800 border-slate-500 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 hover:bg-cyan-400 active:ring rounded-md" href="{% url 'project_new' %}">New Project</a>
+            <a class="block font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md" href="{% url 'project_new' %}">New Project</a>
         </div>
         {% endif %}
     </div> {# top, RHS (buttons) #}
@@ -27,17 +27,26 @@
 
 <div class="m-4"><!-- main content -->
 
-<div class="flex bg-slate-50 mt-4 items-end">
+    {% if messages %}
+    <ul class="mb-4">
+        {% for message in messages %}
+            {# if we introduce different levels we can use{% message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %} #}
+            <li class="bg-cyan-50 dark:bg-cyan-900 border-2 border-cyan-800 dark:border-cyan-400 p-4 rounded-lg">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+<div class="flex bg-slate-50 dark:bg-slate-800 mt-4 items-end">
     <div class="flex">
-    <a href="{% url "project_list_mine" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 {% if ownership_filter == "mine" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">My Projects</div></a>
+    <a href="{% url "project_list_mine" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 dark:hover:bg-slate-800 {% if ownership_filter == "mine" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">My Projects</div></a>
     {% if not app_settings.SINGLE_USER %}
-    <a href="{% url "project_list_teams" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 {% if ownership_filter == "teams" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">Team Projects</div></a>
-    <a href="{% url "project_list_other" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 {% if ownership_filter == "other" %}text-cyan-500 border-cyan-500 border-b-4 {% else %}text-slate-500 hover:border-b-4 hover:border-slate-400{% endif %}">Other Projects</div></a>
+    <a href="{% url "project_list_teams" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 dark:hover:bg-slate-800 {% if ownership_filter == "teams" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">Team Projects</div></a>
+    <a href="{% url "project_list_other" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 dark:hover:bg-slate-800 {% if ownership_filter == "other" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">Other Projects</div></a>
     {% endif %}
     </div>
     {% comment %}
     <div class="ml-auto p-2">
-        <input type="text" name="search" placeholder="search projects..." class="focus:border-cyan-500 focus:ring-cyan-200 rounded-md"/>
+        <input type="text" name="search" placeholder="search projects..." class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md"/>
     </div>
     {% endcomment %}
 </div>
@@ -50,37 +59,37 @@
       <table class="w-full">
       <tbody>
             {% for project in project_list %}
-            <tr class="bg-white border-slate-200 border-b-2">
+            <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
             <td class="w-full p-4">
                 <div>
                     {% if project.member or request.user.is_superuser %}
-                    <a href="/issues/{{ project.id }}" class="text-xl text-cyan-500 font-bold">{{ project.name }}</a>
+                    <a href="/issues/{{ project.id }}" class="text-xl text-cyan-500 dark:text-cyan-300 font-bold">{{ project.name }}</a>
                     {% else %}
-                    <span class="text-xl text-slate-800 font-bold">{{ project.name }}</span>
+                    <span class="text-xl text-slate-800 dark:text-slate-100 font-bold">{{ project.name }}</span>
                     {% endif %}
                 </div>
                 <div>
                     {{ project.team.name }}
                     | {{ project.member_count }} members
-                    | {{ project.open_issue_count }} open issues
+                    {# | {{ project.open_issue_count }} open issues #}
                     {% if project.member %}
-                    | <a href="{% url 'project_member_settings' project_pk=project.id user_pk=request.user.id %}" class="font-bold text-cyan-500">my settings</a>
+                    | <a href="{% url 'project_member_settings' project_pk=project.id user_pk=request.user.id %}" class="font-bold text-cyan-500 dark:text-cyan-300">my settings</a>
                     {% endif %}
                 </div>
             </td>
             <td class="pr-2 text-center">
                 {% if project.member %}
                     {% if not project.member.accepted %}
-                    <span class="bg-slate-100 rounded-2xl px-4 py-2 ml-2 text-sm">You're&nbsp;invited!</span>
+                    <span class="bg-slate-100 dark:bg-slate-700 rounded-2xl px-4 py-2 ml-2 text-sm">You're&nbsp;invited!</span>
                     {% elif project.member.is_admin %} {# NOTE: we intentionally hide admin-ness for non-accepted users; #}
-                    <span class="bg-cyan-100 rounded-2xl px-4 py-2 ml-2 text-sm">Admin</span>
+                    <span class="bg-cyan-100 dark:bg-cyan-900 rounded-2xl px-4 py-2 ml-2 text-sm">Admin</span>
                     {% endif %}
                 {% endif %}
             </td>
 
             <td class="pr-2">
                 {% if not app_settings.SINGLE_USER %}{% if project.member.is_admin or request.user.is_superuser %}
-                <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer" onclick="followContainedLink(this);" title="Project members">
+                <div class="rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 p-2 cursor-pointer" onclick="followContainedLink(this);" title="Project members">
                     <a href="{% url 'project_members' project_pk=project.id %}">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8">
       <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
@@ -92,7 +101,7 @@
 
             <td class="pr-2">
                 {% if project.member.is_admin or request.user.is_superuser %}
-                <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer"onclick="followContainedLink(this);" title="Project settings">
+                <div class="rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 p-2 cursor-pointer"onclick="followContainedLink(this);" title="Project settings">
                     <a href="{% url 'project_edit' project_pk=project.id %}">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8">
                           <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
@@ -105,7 +114,19 @@
 
             <td class="pr-2">
                 {% if project.member or request.user.is_superuser %}
-                <div class="rounded-full hover:bg-slate-100 p-2 cursor-pointer" onclick="followContainedLink(this);" title="SDK setup (connect app)">
+                <div class="rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 p-2 cursor-pointer" onclick="followContainedLink(this);" title="Alerting Settings">
+                    <a href="{% url 'project_alerts_setup' project_pk=project.id %}">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-8">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 1 1 0-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 0 1-1.44-4.282m3.102.069a18.03 18.03 0 0 1-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 0 1 8.835 2.535M10.34 6.66a23.847 23.847 0 0 0 8.835-2.535m0 0A23.74 23.74 0 0 0 18.795 3m.38 1.125a23.91 23.91 0 0 1 1.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 0 0 1.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 0 1 0 3.46" />
+                    </svg>
+                    </a>
+                </div>
+                {% endif %}
+            </td>
+
+            <td class="pr-2">
+                {% if project.member or request.user.is_superuser %}
+                <div class="rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 p-2 cursor-pointer" onclick="followContainedLink(this);" title="SDK setup (connect app)">
                     <a href="{% url 'project_sdk_setup' project_pk=project.id %}">
                         <svg fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="size-8">
                             <path d="M202.7,259.7l-31.5,31.5c-5.6,5.6-8.6,13-8.6,20.9c0,7.9,3.1,15.3,8.6,20.9l6.1,6.1l-3.7,3.7c-11.1,11.1-29.2,11.1-40.4,0
@@ -125,21 +146,21 @@
                 {% endif %}
             </td>
 
-            <td>
+            <td class="pr-2">
                 {% if project.member %}
                     {% if not project.member.accepted %}
                         <div>
-                            <a href="{% url 'project_members_accept' project_pk=project.id %}" class="font-bold text-cyan-500">Invitation</a>
-                        </div> 
+                            <a href="{% url 'project_members_accept' project_pk=project.id %}" class="font-bold text-cyan-500 dark:text-cyan-300">Invitation</a>
+                        </div>
                     {% else %}
                         <div>
-                            <button name="action" value="leave:{{ project.id }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Leave</button>
-                        </div> 
+                            <button name="action" value="leave:{{ project.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">Leave</button>
+                        </div>
                     {% endif %}
                 {% else %}
                     {% if ownership_filter == "teams" or project.is_joinable or request.user.is_superuser %}{# ownership_filter check: you can always join your own team's projects, so if you're looking at a list of them... #}
                         <div>
-                            <button name="action" value="join:{{ project.id }}" class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 active:ring rounded-md">Join</button>
+                            <button name="action" value="join:{{ project.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2  dark:hover:bg-slate-700 active:ring rounded-md">Join</button>
                         </div>
                     {% endif %}
                 {% endif %}
@@ -147,7 +168,7 @@
 
             </tr>
             {% empty %}
-            <tr class="bg-white border-slate-200 border-b-2">
+            <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
             <td class="w-full p-4">
                 No projects found.
             </td>

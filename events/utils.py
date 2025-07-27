@@ -1,8 +1,16 @@
+from os.path import basename
+from datetime import datetime, timezone
+from uuid import UUID
 import json
 import sourcemap
 from issues.utils import get_values
 
+from bugsink.transaction import delay_on_commit
+
+from compat.timestamp import format_timestamp
+
 from files.models import FileMetadata
+from files.tasks import record_file_accesses
 
 
 # Dijkstra, Sourcemaps and Python lists start at 0, but editors and our UI show lines starting at 1.
@@ -104,16 +112,19 @@ def apply_sourcemaps(event_data):
         return
 
     debug_id_for_filename = {
-        image["code_file"]: image["debug_id"]
+        image["code_file"]: UUID(image["debug_id"])
         for image in images
         if "debug_id" in image and "code_file" in image and image["type"] == "sourcemap"
     }
 
     metadata_obj_lookup = {
-        str(metadata_obj.debug_id): metadata_obj
+        metadata_obj.debug_id: metadata_obj
         for metadata_obj in FileMetadata.objects.filter(
             debug_id__in=debug_id_for_filename.values(), file_type="source_map").select_related("file")
     }
+
+    metadata_ids = [metadata_obj.id for metadata_obj in metadata_obj_lookup.values()]
+    delay_on_commit(record_file_accesses, metadata_ids, format_timestamp(datetime.now(timezone.utc)))
 
     filenames_with_metas = [
         (filename, metadata_obj_lookup[debug_id])
@@ -129,26 +140,60 @@ def apply_sourcemaps(event_data):
     source_for_filename = {}
     for filename, meta in filenames_with_metas:
         sm_data = json.loads(_postgres_fix(meta.file.data))
-        if "sourcesContent" not in sm_data or len(sm_data["sourcesContent"]) != 1:
-            # our assumption is: 1 sourcemap, 1 source. The fact that both "sources" (a list of filenames) and
-            # "sourcesContent" are lists seems to indicate that this assumption does not generally hold. But it not
-            # holding does not play well with the id of debug_id, I think?
-            continue
 
-        source_for_filename[filename] = sm_data["sourcesContent"][0].splitlines()
+        sources = sm_data.get("sources", [])
+        sources_content = sm_data.get("sourcesContent", [])
+
+        for (source_file_name, source_file) in zip(sources, sources_content):
+            source_for_filename[source_file_name] = source_file.splitlines()
 
     for exception in get_values(event_data.get("exception", {})):
         for frame in exception.get("stacktrace", {}).get("frames", []):
             # NOTE: try/except in the loop would allow us to selectively skip frames that we fail to process
 
-            if frame.get("filename") in sourcemap_for_filename and frame["filename"] in source_for_filename:
+            if frame.get("filename") in sourcemap_for_filename:
                 sm = sourcemap_for_filename[frame["filename"]]
-                lines = source_for_filename[frame["filename"]]
 
                 token = sm.lookup(frame["lineno"] + FROM_DISPLAY, frame["colno"])
 
-                frame["pre_context"] = lines[max(0, token.src_line - 5):token.src_line]
-                frame["context_line"] = lines[token.src_line]
-                frame["post_context"] = lines[token.src_line + 1:token.src_line + 5]
-                frame["lineno"] = token.src_line + TO_DISPLAY
-                # frame["colno"] = token.src_col + TO_DISPLAY  not actually used
+                if token.src in source_for_filename:
+                    lines = source_for_filename[token.src]
+
+                    frame["pre_context"] = lines[max(0, token.src_line - 5):token.src_line]
+                    frame["context_line"] = lines[token.src_line]
+                    frame["post_context"] = lines[token.src_line + 1:token.src_line + 5]
+                    frame["lineno"] = token.src_line + TO_DISPLAY
+                    frame['filename'] = token.src
+                    frame['function'] = token.name
+                    # frame["colno"] = token.src_col + TO_DISPLAY  not actually used
+
+            elif frame.get("filename") in debug_id_for_filename:
+                # The event_data reports that a debug_id is available for this filename, but we don't have it; this
+                # could be because the sourcemap was not uploaded. We want to show the debug_id in the stacktrace as
+                # a hint to the user that they should upload the sourcemap.
+                frame["debug_id"] = str(debug_id_for_filename[frame["filename"]])
+
+
+def get_sourcemap_images(event_data):
+    # NOTE: butchered copy/paste of apply_sourcemaps; refactoring for DRY is a TODO
+    images = event_data.get("debug_meta", {}).get("images", [])
+    if not images:
+        return []
+
+    debug_id_for_filename = {
+        image["code_file"]: UUID(image["debug_id"])
+        for image in images
+        if "debug_id" in image and "code_file" in image and image["type"] == "sourcemap"
+    }
+
+    metadata_obj_lookup = {
+        metadata_obj.debug_id: metadata_obj
+        for metadata_obj in FileMetadata.objects.filter(
+            debug_id__in=debug_id_for_filename.values(), file_type="source_map").select_related("file")
+    }
+
+    return [
+        (basename(filename),
+         f"{debug_id} " + (" (uploaded)" if debug_id in metadata_obj_lookup else " (not uploaded)"))
+        for filename, debug_id in debug_id_for_filename.items()
+    ]

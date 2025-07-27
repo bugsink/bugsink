@@ -54,7 +54,8 @@ urlpatterns = [
 
     path('issue/<uuid:issue_pk>/event/<first-last:nav>/', issue_event_stacktrace, name="event_stacktrace"),
     path('issue/<uuid:issue_pk>/event/<first-last:nav>/details/', issue_event_details, name="event_details"),
-    path('issue/<uuid:issue_pk>/event/<first-last:nav>/breadcrumbs/', issue_event_details, name="event_breadcrumbs"),
+    path(
+        'issue/<uuid:issue_pk>/event/<first-last:nav>/breadcrumbs/', issue_event_breadcrumbs, name="event_breadcrumbs"),
 
     path('issue/<uuid:issue_pk>/tags/', issue_tags),
     path('issue/<uuid:issue_pk>/history/', issue_history),

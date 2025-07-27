@@ -28,23 +28,25 @@
 
 {% for exception in exceptions %}
 
-    <div class="flex">
+    <div class="flex items-start flex-col-reverse lg:flex-row">
         <div class="overflow-hidden">
             {% if forloop.counter0 == 0 %}
-            <div class="italic">{{ event.ingested_at|date:"j M G:i T" }} (Event {{ event.digest_order|intcomma }} of {{ issue.digested_event_count|intcomma }} total{% if q %} — {{ event_qs_count|intcomma }} found by search{% endif %})</div>
+            <div class="italic text-ellipsis whitespace-nowrap overflow-hidden">{{ event.ingested_at|date:"j M G:i T" }} (Event {{ event.digest_order|intcomma }} of {{ issue.digested_event_count|intcomma }} total{% if q %} — {{ event_qs_count|intcomma }} found by search{% endif %})</div>
             {% endif %}
             <h1 class="text-2xl font-bold {% if forloop.counter0 > 0 %}mt-4{% endif %} text-ellipsis whitespace-nowrap overflow-hidden">{{ exception.type }}</h1>
             <div class="text-lg mb-4 text-ellipsis whitespace-nowrap overflow-hidden">{{ exception.value }}</div>
 
         </div>
         {% if forloop.counter0 == 0 %}
-        <div class="ml-auto flex-none">
-            <div class="flex place-content-end">
-                <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="showAllFrames()">Show all</button>
-                <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="showInAppFrames()">Show in-app</button>
-                <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="showRaisingFrame()">Show raise</button>
-                <button class="font-bold text-slate-500 border-slate-300 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 active:ring" onclick="hideAllFrames()">Collapse all</button>
+        <div class="ml-auto flex flex-none flex-col-reverse 3xl:flex-row"> {# container of 2 divs: one for buttons, one for event-nav; on smaller screens these are 2 rows; on bigger they are side-by-side  #}
+            <div class="flex place-content-end self-stretch pt-2 3xl:pt-0 {# <= to keep the buttons apart #} pb-4 lg:pb-0 {# <= to keep the buttons & h1-block apart #}">
+                <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring" onclick="showAllFrames()">Show all</button>
+                <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring" onclick="showInAppFrames()">Show in-app</button>
+                <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring" onclick="showRaisingFrame()">Show raise</button>
+                <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring" onclick="hideAllFrames()">Collapse all</button>
 
+            </div>
+            <div class="flex place-content-end">
                 {% include "issues/_event_nav.html" %}
             </div>
         </div>
@@ -53,15 +55,15 @@
 
     {% for frame in exception.stacktrace.frames %}
         {% with frame=frame|pygmentize:event.platform %}
-        
-        <div class="bg-white w-full font-mono"> {# per frame div #}
+
+        <div class="bg-white dark:bg-slate-700 w-full font-mono"> {# per frame div #}
             {% if frame.raise_point %}<span id="raise"></span>{% endif %}
             {% if frame.in_app %}<span id="in-app"></span>{% endif %}
             {% if forloop.first and forloop.parentloop.first %}<span id="first-frame"></span>{% endif %}
 
-            <div class="flex pl-4 pt-2 pb-2 border-b-2 {% if forloop.first %}border-t-2{% endif %} bg-slate-100 border-slate-400 cursor-pointer" onclick="toggleFrameVisibility(this)"> {# per frame header div #}
+            <div class="flex pl-4 pt-2 pb-2 border-b-2 {% if forloop.first %}border-t-2{% endif %} bg-slate-100 dark:bg-slate-700 border-slate-400 cursor-pointer" onclick="toggleFrameVisibility(this)"> {# per frame header div #}
 
-                <div> {# filename, function, lineno #}
+                <div class="text-ellipsis overflow-hidden"> {# filename, function, lineno #}
                     {% if frame.in_app %}
                         <span class="font-bold">{{ frame.filename }}</span>{% if frame.function %} in <span class="font-bold">{{ frame.function }}</span>{% endif %}{% if frame.lineno %} line <span class="font-bold">{{ frame.lineno }}</span>{% endif %}.
                     {% else %}
@@ -72,13 +74,13 @@
                 <div class="ml-auto pr-4">{# indicator for frame's position in stacktrace #}
                     {% if stack_of_plates and forloop.first or not stack_of_plates and forloop.last %}
                         {% if stack_of_plates and forloop.parentloop.first or not stack_of_plates and forloop.parentloop.last %}
-                            <span class="bg-slate-200 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">raise {{ exception.type }}</span>
+                            <span class="bg-slate-200 dark:bg-slate-800 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">raise {{ exception.type }}</span>
                         {% else %}
-                            <span class="bg-slate-200 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">raise {{ exception.type }} (handled)</span>
+                            <span class="bg-slate-200 dark:bg-slate-800 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">raise {{ exception.type }} (handled)</span>
                         {% endif %}
                     {% elif stack_of_plates and forloop.last or not stack_of_plates and forloop.first %} {# strictly speaking, not actually "else", but to avoid clutter we hide 'outermost' info when this is also the raise-point #}
                         {% if stack_of_plates and forloop.parentloop.first or not stack_of_plates and forloop.parentloop.last %}
-                            <span class="bg-slate-200 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">→ begin</span>
+                            <span class="bg-slate-200 dark:bg-slate-800 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">→ begin</span>
                         {% else %}
                             {% comment %}I find it (quite too) hard to come up with a good name for this type of frame that is both short and clear. Thoughts so fare were:
                             * try...
@@ -90,7 +92,7 @@
                             * "divergence w/ main exception"
                             * first unique frame
                             {% endcomment %}
-                            <span class="bg-slate-200 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">try…</span>
+                            <span class="bg-slate-200 dark:bg-slate-800 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">try…</span>
                         {% endif %}
 
                     {% endif %}
@@ -103,18 +105,18 @@
                 </div>
             </div> {# per frame header div #}
 
-            <div class="js-frame-details {% if frame.in_app %}js-in-app{% endif %} border-slate-400 overflow-hidden transition-all {% if stack_of_plates and forloop.parentloop.first and forloop.first or not stack_of_plates and forloop.parentloop.last and forloop.last %}js-raising-frame{% endif %}" 
+            <div class="js-frame-details {% if frame.in_app %}js-in-app{% endif %} border-slate-400 overflow-hidden transition-all {% if stack_of_plates and forloop.parentloop.first and forloop.first or not stack_of_plates and forloop.parentloop.last and forloop.last %}js-raising-frame{% endif %}"
                 {% if not frame.raise_point %}data-collapsed="true" style="height: 0px"{% endif %}> {# collapsable part #}
 
                 <div class="pl-6 pr-6 {% if not forloop.last %}border-b-2 border-slate-400{% endif %}">{# convience div for padding & border; the border is basically the top-border of the next header #}
                     {% if "context_line" in frame and frame.context_line is not None %}
-                    <div class="bg-slate-50 syntax-coloring mt-6 mb-6">{# code listing #}
+                    <div class="bg-slate-50 dark:bg-slate-800 syntax-coloring mt-6 mb-6">{# code listing #}
                         {# the spread-out pX-6 in this code is intentional to ensure the padding is visible when scrolling to the right, and not visible when scrolling is possible (i.e. the text is cut-off awkwardly to hint at scrolling #}
                         <ol class="list-decimal overflow-x-auto list-inside pt-6 pb-6 {% if frame|firstlineno is None %}list-none{% endif %}" start="{{ frame|firstlineno }}">
                         {% for line in frame.pre_context %}<li class="pl-6"><div class="whitespace-pre w-full inline pr-6">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
                         {# the gradient is a workaround, because I can't get a full-width elem going here inside the overflow #}
                         {# when some other line is overflowing. Using the gradient hides this fact (it happens to also look good) #}
-                        <li class="pl-6 bg-gradient-to-r from-slate-300 font-bold w-full"><div class="whitespace-pre w-full inline pr-6">{{ frame.context_line }} {# leave space to avoid collapse #}</div></li>
+                        <li class="pl-6 bg-gradient-to-r from-slate-300 dark:from-slate-950 font-bold w-full"><div class="whitespace-pre w-full inline pr-6">{{ frame.context_line }} {# leave space to avoid collapse #}</div></li>
                         {% for line in frame.post_context %}<li class="pl-6"><div class="whitespace-pre w-full inline pr-6">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
                         </ol>
                     </div>
@@ -123,13 +125,13 @@
                     {% if frame.vars %}
                     <div class="mt-4 mb-6">{# variables #}
                         <div class="flex">
-                            <div class="w-1/3 pt-2 font-bold border-b-2 border-slate-500 pl-4">Variable</div>
-                            <div class="w-2/3 pt-2 font-bold border-b-2 border-slate-500 pr-4">Value</div>
+                            <div class="w-1/3 pt-2 font-bold border-b-2 border-slate-500 dark:border-slate-400 pl-4">Variable</div>
+                            <div class="w-2/3 pt-2 font-bold border-b-2 border-slate-500 dark:border-slate-400 pr-4">Value</div>
                         </div>
                         {% for var, value in frame.vars|items %}
                         <div class="flex">
-                            <div class="w-1/3 pl-4 {% if not forloop.last or frame.vars|incomplete %}border-b-2 border-dotted border-slate-300{% endif %}">{{ var }}</div>
-                            <div class="w-2/3 pr-4 {% if not forloop.last or frame.vars|incomplete %} border-b-2 border-dotted border-slate-300{% endif %}">{{ value|format_var }}</div>
+                            <div class="w-1/3 pl-4 {% if not forloop.last or frame.vars|incomplete %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ var }}</div>
+                            <div class="w-2/3 pr-4 {% if not forloop.last or frame.vars|incomplete %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ value|format_var }}</div>
                         </div>
                         {% endfor %}
                         {% if frame.vars|incomplete %}
@@ -144,7 +146,11 @@
 
                     {% if "context_line" not in frame or frame.context_line is None %}{% if not frame.vars %}{# nested ifs as a subsitute for brackets-in-templates #}
                     <div class="mt-6 mb-6 italic">
-                        No code context or variables available for this frame.
+                        {% if frame.debug_id %}{# only in the no-vars-either case to avoid excessive if-nesting (at the cost of completeness, but "will yes-vars, broken debug_id even be a case? For now we hope not) #}
+                            No sourcemaps found for Debug ID {{ frame.debug_id }}
+                        {% else %}
+                            No code context or variables available for this frame.
+                        {% endif %}
                     </div>
                     {% endif %}{% endif %}
 

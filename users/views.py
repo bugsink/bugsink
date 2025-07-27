@@ -44,6 +44,16 @@ def user_list(request):
             messages.success(request, 'User %s activated' % user.username)
             return redirect('user_list')
 
+        if action == "delete":
+            user = User.objects.get(pk=user_pk)
+            if user.is_active:
+                messages.error(request, 'Cannot delete active user %s' % user.username)
+            else:
+                username = user.username
+                user.delete()
+                messages.success(request, 'User %s deleted' % username)
+            return redirect('user_list')
+
     return render(request, 'users/user_list.html', {
         'users': users,
     })

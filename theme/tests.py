@@ -80,6 +80,14 @@ class TestFormatVar(RegularTestCase):
         return format_var(var).replace("&#x27;", "'")
 
     def test_format_var_none(self):
+        # This is how we've actually observed None values in the SDKs, so we should also handle it
+        self.assertEqual(
+            "None",
+            self._format_var("None"),
+        )
+
+        # I _think_ SDKs generally don't send null (None) as a value, but if/when they do we should handle it
+        # gracefully. See #119
         self.assertEqual(
             "None",
             self._format_var(None),
@@ -92,11 +100,12 @@ class TestFormatVar(RegularTestCase):
             "c": {"d": 4},
             "d": [],
             "e": {},
-            "f": None,
+            "f": "None",
+            "g": "<python obj>",
         }
 
         self.assertEqual(
-            "{'a': 1, 'b': [2, 3], 'c': {'d': 4}, 'd': [], 'e': {}, 'f': None}",
+            "{'a': 1, 'b': [2, 3], 'c': {'d': 4}, 'd': [], 'e': {}, 'f': None, 'g': &lt;python obj&gt;}",
             self._format_var(var),
         )
 

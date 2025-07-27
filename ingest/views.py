@@ -1,3 +1,4 @@
+import hashlib
 import os
 import logging
 import io
@@ -130,7 +131,7 @@ class BaseIngestAPIView(View):
     @classmethod
     def get_project(cls, project_pk, sentry_key):
         try:
-            return Project.objects.get(pk=project_pk, sentry_key=sentry_key)
+            return Project.objects.get(pk=project_pk, sentry_key=sentry_key, is_deleted=False)
         except Project.DoesNotExist:
             # We don't distinguish between "project not found" and "key incorrect"; there's no real value in that from
             # the user perspective (they deal in dsns). Additional advantage: no need to do constant-time-comp on
@@ -170,11 +171,17 @@ class BaseIngestAPIView(View):
         # Meta means: not part of the event data. Basically: information that is available at the time of ingestion, and
         # that must be passed to digest() in a serializable form.
         debug_info = request.META.get("HTTP_X_BUGSINK_DEBUGINFO", "")
+
+        # .get(..) -- don't want to crash on this and it's non-trivial to find a source that tells me with certainty
+        # that the REMOTE_ADDR is always in request.META (it probably is in practice)
+        remote_addr = request.META.get("REMOTE_ADDR")
+
         return {
             "event_id": event_id,
             "project_id": project.id,
             "ingested_at": format_timestamp(ingested_at),
             "debug_info": debug_info,
+            "remote_addr": remote_addr,
         }
 
     @classmethod
@@ -250,7 +257,12 @@ class BaseIngestAPIView(View):
         ingested_at = parse_timestamp(event_metadata["ingested_at"])
         digested_at = datetime.now(timezone.utc) if digested_at is None else digested_at  # explicit passing: test only
 
-        project = Project.objects.get(pk=event_metadata["project_id"])
+        try:
+            project = Project.objects.get(pk=event_metadata["project_id"], is_deleted=False)
+        except Project.DoesNotExist:
+            # we may get here if the project was deleted after the event was ingested, but before it was digested
+            # (covers both "deletion in progress (is_deleted=True)" and "fully deleted").
+            return
 
         if not cls.count_project_periods_and_act_on_it(project, digested_at):
             return  # if over-quota: just return (any cleanup is done calling-side)
@@ -269,7 +281,19 @@ class BaseIngestAPIView(View):
 
         grouping_key = get_issue_grouper_for_data(event_data, calculated_type, calculated_value)
 
-        if not Grouping.objects.filter(project_id=event_metadata["project_id"], grouping_key=grouping_key).exists():
+        try:
+            grouping = Grouping.objects.get(
+                project_id=event_metadata["project_id"], grouping_key=grouping_key,
+                grouping_key_hash=hashlib.sha256(grouping_key.encode()).hexdigest())
+
+            issue = grouping.issue
+            issue_created = False
+
+            # update the denormalized fields
+            issue.last_seen = ingested_at
+            issue.digested_event_count += 1
+
+        except Grouping.DoesNotExist:
             # we don't have Project.issue_count here ('premature optimization') so we just do an aggregate instead.
             max_current = Issue.objects.filter(project_id=event_metadata["project_id"]).aggregate(
                 Max("digest_order"))["digest_order__max"]
@@ -291,17 +315,9 @@ class BaseIngestAPIView(View):
             grouping = Grouping.objects.create(
                 project_id=event_metadata["project_id"],
                 grouping_key=grouping_key,
+                grouping_key_hash=hashlib.sha256(grouping_key.encode()).hexdigest(),
                 issue=issue,
             )
-
-        else:
-            grouping = Grouping.objects.get(project_id=event_metadata["project_id"], grouping_key=grouping_key)
-            issue = grouping.issue
-            issue_created = False
-
-            # update the denormalized fields
-            issue.last_seen = ingested_at
-            issue.digested_event_count += 1
 
         # +1 because we're about to add one event.
         project_stored_event_count = project.stored_event_count + 1
@@ -355,6 +371,7 @@ class BaseIngestAPIView(View):
 
         if issue_created:
             TurningPoint.objects.create(
+                project=project,
                 issue=issue, triggering_event=event, timestamp=ingested_at,
                 kind=TurningPointKind.FIRST_SEEN)
             event.never_evict = True
@@ -366,6 +383,7 @@ class BaseIngestAPIView(View):
             # new issues cannot be regressions by definition, hence this is in the 'else' branch
             if issue_is_regression(issue, event.release):
                 TurningPoint.objects.create(
+                    project=project,
                     issue=issue, triggering_event=event, timestamp=ingested_at,
                     kind=TurningPointKind.REGRESSED)
                 event.never_evict = True

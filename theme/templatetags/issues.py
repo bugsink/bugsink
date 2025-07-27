@@ -152,7 +152,7 @@ def format_var(value):
         return get
 
     def gen_base(obj):
-        yield escape(repr(obj)), None
+        yield escape(str(obj)), None
 
     def bracket_wrap(gen, b_open, sep, b_close):
         yield b_open, None

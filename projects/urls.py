@@ -2,7 +2,8 @@ from django.urls import path
 
 from .views import (
     project_list, project_members, project_members_accept, project_member_settings, project_members_invite,
-    project_members_accept_new_user, project_new, project_edit, project_sdk_setup)
+    project_members_accept_new_user, project_new, project_edit, project_sdk_setup, project_alerts_setup,
+    project_messaging_service_add, project_messaging_service_edit)
 
 urlpatterns = [
     path('', project_list, name="project_list"),
@@ -21,4 +22,10 @@ urlpatterns = [
 
     path('<int:project_pk>/sdk-setup/', project_sdk_setup, name="project_sdk_setup"),
     path('<int:project_pk>/sdk-setup/<str:platform>/', project_sdk_setup, name="project_sdk_setup_platform"),
+
+    path('<int:project_pk>/alerts/', project_alerts_setup, name="project_alerts_setup"),
+    path('<int:project_pk>/alerts/service/add/', project_messaging_service_add, name="project_messaging_service_add"),
+    path(
+        '<int:project_pk>/alerts/service/<int:service_pk>/edit/', project_messaging_service_edit,
+        name="project_messaging_service_edit"),
 ]

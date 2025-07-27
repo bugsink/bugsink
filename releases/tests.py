@@ -1,13 +1,16 @@
 from django.test import TestCase as DjangoTestCase
 from datetime import timedelta
 
+from projects.models import Project
 from .models import Release, ordered_releases, RE_PACKAGE_VERSION
 
 
 class ReleaseTestCase(DjangoTestCase):
 
     def test_create_and_order(self):
-        r0 = Release.objects.create(version="e80f98923f7426a8087009f4c629d25a35565a6a")
+        project = Project.objects.create(name="Test Project")
+
+        r0 = Release.objects.create(project=project, version="e80f98923f7426a8087009f4c629d25a35565a6a")
         self.assertFalse(r0.is_semver)
         self.assertEqual(0, r0.sort_epoch)
 
@@ -17,6 +20,7 @@ class ReleaseTestCase(DjangoTestCase):
         #   real usage too)
         # * it ensures that dates are ignored when comparing r1 and r2 (r2 has a smaller date than r1, but comes later)
         r1 = Release.objects.create(
+            project=project,
             version="2a678dbbbecd2978ccaa76c326a0fb2e70073582",
             date_released=r0.date_released + timedelta(seconds=10),
         )
@@ -24,17 +28,17 @@ class ReleaseTestCase(DjangoTestCase):
         self.assertEqual(0, r1.sort_epoch)
 
         # switch to semver, epoch 1
-        r2 = Release.objects.create(version="1.0.0")
+        r2 = Release.objects.create(project=project, version="1.0.0")
         self.assertTrue(r2.is_semver)
         self.assertEqual(1, r2.sort_epoch)
 
         # stick with semver, but use a lower version
-        r3 = Release.objects.create(version="0.1.0")
+        r3 = Release.objects.create(project=project, version="0.1.0")
         self.assertTrue(r3.is_semver)
         self.assertEqual(1, r3.sort_epoch)
 
         # put in package name; this is basically ignored for ordering purposes
-        r4 = Release.objects.create(version="package@2.0.0")
+        r4 = Release.objects.create(project=project, version="package@2.0.0")
         self.assertTrue(r4.is_semver)
 
         self.assertEqual(ordered_releases(), [r0, r1, r3, r2, r4])

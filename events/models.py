@@ -8,33 +8,14 @@ from django.utils.functional import cached_property
 
 from projects.models import Project
 from compat.timestamp import parse_timestamp
+from bugsink.transaction import delay_on_commit
 
 from issues.utils import get_title_for_exception_type_and_value
 
 from .retention import get_random_irrelevance
 from .storage_registry import get_write_storage, get_storage
 
-
-class Platform(models.TextChoices):
-    AS3 = "as3"
-    C = "c"
-    CFML = "cfml"
-    COCOA = "cocoa"
-    CSHARP = "csharp"
-    ELIXIR = "elixir"
-    HASKELL = "haskell"
-    GO = "go"
-    GROOVY = "groovy"
-    JAVA = "java"
-    JAVASCRIPT = "javascript"
-    NATIVE = "native"
-    NODE = "node"
-    OBJC = "objc"
-    OTHER = "other"
-    PERL = "perl"
-    PHP = "php"
-    PYTHON = "python"
-    RUBY = "ruby"
+from .tasks import delete_event_deps
 
 
 class Level(models.TextChoices):
@@ -71,12 +52,10 @@ class Event(models.Model):
 
     ingested_at = models.DateTimeField(blank=False, null=False)
     digested_at = models.DateTimeField(db_index=True, blank=False, null=False)
+    remote_addr = models.GenericIPAddressField(blank=True, null=True, default=None)
 
-    # not actually expected to be null, but we want to be able to delete issues without deleting events (cleanup later)
-    issue = models.ForeignKey("issues.Issue", blank=False, null=True, on_delete=models.SET_NULL)
-
-    # not actually expected to be null
-    grouping = models.ForeignKey("issues.Grouping", blank=False, null=True, on_delete=models.SET_NULL)
+    issue = models.ForeignKey("issues.Issue", blank=False, null=False, on_delete=models.DO_NOTHING)
+    grouping = models.ForeignKey("issues.Grouping", blank=False, null=False, on_delete=models.DO_NOTHING)
 
     # The docs say:
     # > Required. Hexadecimal string representing a uuid4 value. The length is exactly 32 characters. Dashes are not
@@ -85,7 +64,7 @@ class Event(models.Model):
     # uuid4 clientside". In any case, we just rely on the envelope's event_id (required per the envelope spec).
     # Not a primary key: events may be duplicated across projects
     event_id = models.UUIDField(primary_key=False, null=False, editable=False, help_text="As per the sent data")
-    project = models.ForeignKey(Project, blank=False, null=True, on_delete=models.SET_NULL)  # SET_NULL: cleanup 'later'
+    project = models.ForeignKey(Project, blank=False, null=False, on_delete=models.DO_NOTHING)
 
     data = models.TextField(blank=False, null=False)
 
@@ -93,8 +72,10 @@ class Event(models.Model):
     # > a numeric (integer or float) value representing the number of seconds that have elapsed since the Unix epoch.
     timestamp = models.DateTimeField(db_index=True, blank=False, null=False)
 
-    # > A string representing the platform the SDK is submitting from. [..] Acceptable values are [as defined below]
-    platform = models.CharField(max_length=64, blank=False, null=False, choices=Platform.choices)
+    # > A string representing the platform the SDK is submitting from. [..]
+    # (the list of supported platforms is ~700 items long, and since we don't actually depend on this value to be any
+    # item from that list, we don't force it to be one of them)
+    platform = models.CharField(max_length=64, blank=False, null=False)
 
     # > ### Optional Attributes
 
@@ -257,6 +238,11 @@ class Event(models.Model):
 
                 debug_info=event_metadata["debug_info"][:255],
 
+                # just getting from the dict would be more precise, since we always add this info, but doing the .get()
+                # allows for backwards compatability (digesting events for which the info was not added on-ingest) so
+                # we'll take the defensive approach "for now" (until most everyone is on >= 1.7.4)
+                remote_addr=event_metadata.get("remote_addr"),
+
                 digest_order=digest_order,
                 irrelevance_for_retention=irrelevance_for_retention,
 
@@ -285,3 +271,13 @@ class Event(models.Model):
         return list(
             self.tags.all().select_related("value", "value__key").order_by("value__key__key")
         )
+
+    def delete_deferred(self):
+        """Schedules deletion of all related objects"""
+        # NOTE: for such a small closure, I couldn't be bothered to have an .is_deleted field and deal with it. (the
+        # idea being that the deletion will be relatively quick anyway). We still need "something" though, since we've
+        # set DO_NOTHING everywhere. An alternative would be the "full inline", i.e. delete everything right in the
+        # request w/o any delay. That diverges even more from the approach for Issue/Project, making such things a
+        # "design decision needed". Maybe if we get more `delete_deferred` impls. we'll have a bit more info to figure
+        # out if we can harmonize on (e.g.) 2 approaches.
+        delay_on_commit(delete_event_deps, str(self.project_id), str(self.id))

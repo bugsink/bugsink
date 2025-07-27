@@ -11,9 +11,9 @@ def tailwind_formfield(formfield, implicit=False):
         return {"formfield": None}
 
     if formfield.errors:
-        formfield.field.widget.attrs['class'] = "bg-red-50"
+        formfield.field.widget.attrs['class'] = "bg-red-50 dark:bg-red-900"
     else:
-        formfield.field.widget.attrs['class'] = "bg-slate-50"
+        formfield.field.widget.attrs['class'] = "bg-slate-50 dark:bg-slate-800"
     formfield.field.widget.attrs['class'] += " pl-4 py-2 md:py-4 focus:outline-none w-full"
 
     if implicit:

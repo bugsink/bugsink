@@ -1,5 +1,130 @@
 # Changes
 
+## 1.7.3 (17 July 2025)
+
+Migration fix: delete TurningPoints w/ project=None (Fix #155)
+
+## 1.7.2 (17 July 2025)
+
+Various fixes:
+
+* Dark mode: use monokai style from pygments (Fix #152)
+* add `vacuum_files` command (Fix #129)
+* Artifact Bundle upload: clean up after extract (See #129)
+* Add API catch-all endpoint for logging (Fix #153)
+* File-upload: chunk-size of 2MiB (Fix #147)
+* Sourcemaps upload: max file size 2GiB (See #147)
+* Auto-clean binlogs on docker compose (sample) for mysql (See #149)
+* Remove platform 'choices' from Event.model (See 403e28adb410)
+* Better `ALLOWED_HOSTS` misconfig error-message (Fix #148)
+* As per the "little red box on" #120
+* Fix wasted space at certain width in stacktrace UI (See #120)
+* Fixed command's 'running in background' output (See 770ccb16225e)
+* Project-edit: redirect to list on-save (See 2b46bfe9a114)
+* `cleanup_eventstorage` command: be more clear when no `event_storage` is actually configured (See b2769d7202b6)
+* Don't crash on illegal values for platform (See #143, #145)
+* Support 'crystal' platform (Fix #145)
+* Support 'powershell' platform (Fix #143)
+
+## 1.7.1 (10 July 2025)
+
+Fix: user-related forms broken by unclosed link
+
+## 1.7.0 (9 July 2025)
+
+Bugsink 1.7.0 introduces Dark Mode (See #40, #125)
+
+### Housekeeping
+
+A number of options to clean up unwanted or unneeded data have been added:
+
+* Project Deletion (See #50, #137)
+* Issue Deletion (See #50)
+* Vacuum Tags command (See #135)
+* `vacuum_eventless_issuetags` command (see #134, #142)
+
+How these commands/tools relate to each other and may be used is [documented on
+the website](https://www.bugsink.com/docs/housekeeping/)
+
+### Various small fixes
+
+* Skip `ALLOWED_HOSTS` validation for /health/ endpoints (see #140)
+* `get_system_warnings` as a callable (see c2bc2e417475)
+* `store_tags`: support 'very many' (~500) tags (see d62e53fdf8e7)
+* Snappea: refuse to start in `TASK_ALWAYS_EAGER` mode (see aa255978b776)
+* Sentry-SDK requirement, unpin minor version (see a91fdcd65673)
+
+## 1.6.3 (27 June 2025)
+
+* fix `make_consistent` on mysql (Fix #132)
+* Tags in `event_data` can be lists; deal with that (Fix #130)
+
+## 1.6.2 (19 June 2025)
+
+* Too many quotes in local-vars display (Fix #119)
+
+## 1.6.1 (11 June 2025)
+
+Remove hard-coded slack `webhook_url` from the "test this connector" loop.
+
+## 1.6.0 (10 June 2025)
+
+### Slack Alerts
+
+Bugsink 1.6.0 introduces Slack Alerts (through webhooks); see #3.
+
+### Backwards-incompatible changes
+
+* The default number of web processes (gunicorn server workers) in the
+  dockerized setup is now equal to `min(cpu_count, 4)`; (it used to be 10).
+
+  set `GUNICORN_CMD_ARGS="--workers=10"` to restore the previous behavior or
+  choose a custom number.
+
+### Various Features & Fixes
+
+* Display formatted log message when available (see #111)
+* Add 2 env variables to compose-sample.yaml (See #110)
+* Add delete functionality for users (See #108)
+* Multi-file sourcemaps (See #87)
+* Lookup by `debug_id` in dicts: use UUID (See #105)
+* Add robots.txt that disallows crawling
+* Add HEALTHCHECK command to Dockerfiles (See #98)
+* Fingerprint: convert to string before concatenating (See #102)
+* Add /health/ready endpoint (See #98)
+
+## 1.5.4 (12 May 2025)
+
+* Add bugsink-util script to allow settings-independent commands to be run
+* UX of the `stress_test` command (param cleanup)
+* checks on `settings.BASE_URL`
+* Show _all_ Request Headers in `CSRF_DEBUG` view (see #100)
+* Fix obj not found when visiting project as a non-member superuser
+
+## 1.5.3 (7 May 2025)
+
+* Performance fixes of the issue-list when there are many (millions) of _issues_ (rather than just events) in the
+  database; see aad0f624f904 & 0dfd01db9b38.
+
+* Fix: `different_runtime_limit` applying to the wrong DB alias, see 699f6e587d28
+
+* `CREATE_SUPERUSER` shortcut: robust for ':' in password, see 9b0f0e04f4e4
+
+## 1.5.2 (6 May 2025)
+
+Various performance fixes when there are many (millions) of _issues_
+(rather than just events) in the database:
+
+* Add index for `Grouping.grouping_key` (and project), see 392f5a30be18, 49e6700d4a81
+* Digest: check Grouping.exists only once (save a query)
+* Remove `open_issue_count` from homepage; it's too expensive
+* Issue Paginator: don't attempt to count the Issues, see 378366105496
+* Stress test command: more fat-tailed randomness (d5a449020d03)
+
+Compatibility fix:
+
+* `format_exception` in `capture_or_log_exception`: python 3.9 compatible
+
 ## 1.5.1 (24 April 2025)
 
 Various fixes and improvements:

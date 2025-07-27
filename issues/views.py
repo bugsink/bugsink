@@ -15,6 +15,7 @@ from django.http import Http404
 from django.core.paginator import Paginator, Page
 from django.db.utils import OperationalError
 from django.conf import settings
+from django.utils.functional import cached_property
 
 from sentry.utils.safe import get_path
 from sentry_sdk_extensions import capture_or_log_exception
@@ -34,7 +35,7 @@ from tags.search import search_issues, search_events, search_events_optimized
 from .models import Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind
 from .forms import CommentForm
 from .utils import get_values, get_main_exception
-from events.utils import annotate_with_meta, apply_sourcemaps
+from events.utils import annotate_with_meta, apply_sourcemaps, get_sourcemap_images
 
 logger = logging.getLogger("bugsink.issues")
 
@@ -87,6 +88,35 @@ class KnownCountPaginator(EagerPaginator):
         return self._count
 
 
+class UncountablePage(Page):
+    """The Page subclass to be used with UncountablePaginator."""
+
+    @cached_property
+    def has_next(self):
+        # hack that works 249/250 times: if the current page is full, we have a next page
+        return len(self.object_list) == self.paginator.per_page
+
+    @cached_property
+    def end_index(self):
+        return (self.paginator.per_page * (self.number - 1)) + len(self.object_list)
+
+
+class UncountablePaginator(EagerPaginator):
+    """optimization: counting is too expensive; to be used in a template w/o .count and .last"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def _get_page(self, *args, **kwargs):
+        object_list = args[0]
+        object_list = list(object_list)
+        return UncountablePage(object_list, *(args[1:]), **kwargs)
+
+    @property
+    def count(self):
+        return 1_000_000_000  # big enough to be bigger than what you can click through or store in the DB.
+
+
 def _request_repr(parsed_data):
     if "request" not in parsed_data:
         return ""
@@ -97,6 +127,10 @@ def _request_repr(parsed_data):
 def _is_valid_action(action, issue):
     """We take the 'strict' approach of complaining even when the action is simply a no-op, because you're already in
     the desired state."""
+
+    if action == "delete":
+        # any type of issue can be deleted
+        return True
 
     if issue.is_resolved:
         # any action is illegal on resolved issues (as per our current UI)
@@ -123,6 +157,10 @@ def _is_valid_action(action, issue):
 def _q_for_invalid_for_action(action):
     """returns a Q obj of issues for which the action is not valid."""
 
+    if action == "delete":
+        # delete is always valid, so we don't want any issues to be returned, https://stackoverflow.com/a/39001190
+        return Q(pk__in=[])
+
     illegal_conditions = Q(is_resolved=True)  # any action is illegal on resolved issues (as per our current UI)
 
     if action.startswith("resolved_release:"):
@@ -139,7 +177,10 @@ def _q_for_invalid_for_action(action):
 
 
 def _make_history(issue_or_qs, action, user):
-    if action == "resolve":
+    if action == "delete":
+        return  # we're about to delete the issue, so no history is needed (nor possible)
+
+    elif action == "resolve":
         kind = TurningPointKind.RESOLVED
     elif action.startswith("resolved"):
         kind = TurningPointKind.RESOLVED
@@ -180,10 +221,13 @@ def _make_history(issue_or_qs, action, user):
     now = timezone.now()
     if isinstance(issue_or_qs, Issue):
         TurningPoint.objects.create(
+            project=issue_or_qs.project,
             issue=issue_or_qs, kind=kind, user=user, metadata=json.dumps(metadata), timestamp=now)
     else:
         TurningPoint.objects.bulk_create([
-            TurningPoint(issue=issue, kind=kind, user=user, metadata=json.dumps(metadata), timestamp=now)
+            TurningPoint(
+                project_id=issue.project_id, issue=issue, kind=kind, user=user, metadata=json.dumps(metadata),
+                timestamp=now)
             for issue in issue_or_qs
         ])
 
@@ -219,6 +263,8 @@ def _apply_action(manager, issue_or_qs, action, user):
         }]))
     elif action == "unmute":
         manager.unmute(issue_or_qs)
+    elif action == "delete":
+        manager.delete(issue_or_qs)
 
 
 def issue_list(request, project_pk, state_filter="open"):
@@ -262,20 +308,24 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
     }
 
     issue_list = d_state_filter[state_filter](
-        Issue.objects.filter(project=project)
+        Issue.objects.filter(project=project, is_deleted=False)
     ).order_by("-last_seen")
 
     if request.GET.get("q"):
         issue_list = search_issues(project, issue_list, request.GET["q"])
 
-    paginator = EagerPaginator(issue_list, 250)
+    paginator = UncountablePaginator(issue_list, 250)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
+    try:
+        member = ProjectMembership.objects.get(project=project, user=request.user)
+    except ProjectMembership.DoesNotExist:
+        member = None  # this can happen if the user is superuser (as per `project_membership_required` decorator)
+
     return render(request, "issues/issue_list.html", {
         "project": project,
-        "member": ProjectMembership.objects.get(project=project, user=request.user),
-        "issue_list": issue_list,
+        "member": member,
         "state_filter": state_filter,
         "mute_options": GLOBAL_MUTE_OPTIONS,
 
@@ -558,6 +608,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         ("ingested at", _date_with_milis_html(event.ingested_at)),
         ("digested at", _date_with_milis_html(event.digested_at)),
         ("digest order", event.digest_order),
+        ("remote_addr", event.remote_addr),
     ]
 
     logentry_info = []
@@ -578,6 +629,11 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         logentry_key = "logentry" if "logentry" in parsed_data else "message"
 
         if isinstance(parsed_data.get(logentry_key), dict):
+            # NOTE: event.schema.json says "If `message` and `params` are given, Sentry will attempt to backfill
+            # `formatted` if empty." but we don't do that yet.
+            if parsed_data.get(logentry_key, {}).get("formatted"):
+                logentry_info.append(("formatted", parsed_data[logentry_key]["formatted"]))
+
             if parsed_data.get(logentry_key, {}).get("message"):
                 logentry_info.append(("message", parsed_data[logentry_key]["message"]))
 
@@ -589,7 +645,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
                 for param_k, param_v in params.items():
                     logentry_info.append((param_k, param_v))
 
-        elif isinstance(parsed_data.get(logentry_key), str):
+        elif isinstance(parsed_data.get(logentry_key), str):  # robust for top-level as str (see #55)
             logentry_info.append(("message", parsed_data[logentry_key]))
 
     key_info += [
@@ -602,6 +658,15 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         ([("server_name", parsed_data["server_name"])] if "server_name" in parsed_data else [])
 
     contexts = get_contexts_enriched_with_ua(parsed_data)
+
+    try:
+        sourcemaps_images = get_sourcemap_images(parsed_data)
+    except Exception as e:
+        if settings.DEBUG or settings.I_AM_RUNNING == "TEST":
+            # when developing/testing, I _do_ want to get notified
+            raise
+        # sourcemaps are still experimental; we don't want to fail on them, so we just log the error and move on.
+        capture_or_log_exception(e, logger)
 
     return render(request, "issues/event_details.html", {
         "tab": "event-details",
@@ -616,6 +681,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         "logentry_info": logentry_info,
         "deployment_info": deployment_info,
         "contexts": contexts,
+        "sourcemaps_images": sourcemaps_images,
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
         # event_qs_count is not used when there is no q, so no need to calculate it in that case
@@ -728,6 +794,7 @@ def history_comment_new(request, issue):
             # think that's amount of magic to have: it still allows one to erase comments (possibly for non-manual
             # kinds) but it saves you from what is obviously a mistake (without complaining with a red box or something)
             TurningPoint.objects.create(
+                project=issue.project,
                 issue=issue, kind=TurningPointKind.MANUAL_ANNOTATION, user=request.user,
                 comment=form.cleaned_data["comment"],
                 timestamp=timezone.now())

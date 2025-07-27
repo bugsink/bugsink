@@ -3,7 +3,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 from django.contrib.auth import views as auth_views
-from django.views.generic import RedirectView
+from django.views.generic import RedirectView, TemplateView
 
 from alerts.views import debug_email as debug_alerts_email
 from users.views import debug_email as debug_users_email
@@ -11,9 +11,10 @@ from teams.views import debug_email as debug_teams_email
 from bugsink.app_settings import get_settings
 from users.views import signup, confirm_email, resend_confirmation, request_reset_password, reset_password, preferences
 from ingest.views import download_envelope
-from files.views import chunk_upload, artifact_bundle_assemble
+from files.views import chunk_upload, artifact_bundle_assemble, api_catch_all
+from bugsink.decorators import login_exempt
 
-from .views import home, trigger_error, favicon, settings_view, silence_email_system_warning, counts
+from .views import home, trigger_error, favicon, settings_view, silence_email_system_warning, counts, health_check_ready
 from .debug_views import csrf_debug
 
 
@@ -24,6 +25,8 @@ admin.site.index_title = "Admin"  # everyone calls this the "admin" anyway. Let'
 
 urlpatterns = [
     path('', home, name='home'),
+
+    path("health/ready", health_check_ready, name="health_check_ready"),
 
     path("accounts/signup/", signup, name="signup"),
     path("accounts/resend-confirmation/", resend_confirmation, name="resend_confirmation"),
@@ -49,6 +52,8 @@ urlpatterns = [
 
     path('api/', include('ingest.urls')),
 
+    path('api/<path:subpath>', api_catch_all, name='api_catch_all'),
+
     # not in /api/ because it's not part of the ingest API, but still part of the ingest app
     path('ingest/envelope/<str:envelope_id>/', download_envelope, name='download_envelope'),
 
@@ -73,6 +78,7 @@ urlpatterns = [
     path('debug/csrf/', csrf_debug, name='csrf_debug'),
 
     path("favicon.ico", favicon),
+    path("robots.txt", login_exempt(TemplateView.as_view(template_name="robots.txt", content_type="text/plain"))),
 ]
 
 if settings.DEBUG:
@@ -82,14 +88,6 @@ if settings.DEBUG:
         path('debug-teams-email/<str:template_name>/', debug_teams_email),
         path('trigger-error/', trigger_error),
     ]
-
-    try:
-        import debug_toolbar  # noqa
-        urlpatterns = [
-            path('__debug__/', include('debug_toolbar.urls')),
-        ] + urlpatterns
-    except ImportError:
-        pass
 
 
 handler400 = "bugsink.views.bad_request"

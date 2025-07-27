@@ -16,15 +16,31 @@ class Command(BaseCommand):
     # are practice and theory the same. In practice, they are not.
 
     def add_arguments(self, parser):
-        parser.add_argument('storage_name', type=str, help='The name of the storage to clean up')
+        storage_names = get_settings().EVENT_STORAGES.keys()
+        available_storages = ", ".join(storage_names)
+
+        if storage_names:
+            help_text = f'Name of the storage to clean up (one of: {available_storages})'
+        else:
+            help_text = 'Name of the storage to clean up. You have not configured any event storages, so storage ' \
+                        'cleanup is not possible.'
+
+        parser.add_argument('storage_name', type=str, help=help_text)
 
     def handle(self, *args, **options):
         self.stopped = False
         signal.signal(signal.SIGINT, self.handle_sigint)
 
-        storage_names = ",".join(get_settings().EVENT_STORAGES.keys())
+        storage_names = get_settings().EVENT_STORAGES.keys()
+        available_storages = ", ".join(storage_names)
+
         if options['storage_name'] not in storage_names:
-            print(f"Storage name {options['storage_name']} not found. Available storage names: {storage_names}")
+            if not storage_names:
+                print("Storage name {options['storage_name']} not found because you have not configured any event "
+                      "storage at all so cleanup of event-storage doesn't really make sense.")
+                sys.exit(1)
+
+            print(f"Storage name {options['storage_name']} not found. Available storage names: {available_storages}")
             sys.exit(1)
         storage = get_storage(options['storage_name'])
 

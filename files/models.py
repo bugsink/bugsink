@@ -5,6 +5,7 @@ class Chunk(models.Model):
     checksum = models.CharField(max_length=40, unique=True)  # unique implies index, which we also use for lookups
     size = models.PositiveIntegerField()
     data = models.BinaryField(null=False)  # as with Events, we can "eventually" move this out of the database
+    created_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
 
     def __str__(self):
         return self.checksum
@@ -23,6 +24,8 @@ class File(models.Model):
 
     size = models.PositiveIntegerField()
     data = models.BinaryField(null=False)  # as with Events, we can "eventually" move this out of the database
+    created_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
+    accessed_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
 
     def __str__(self):
         return self.filename
@@ -36,6 +39,7 @@ class FileMetadata(models.Model):
     debug_id = models.UUIDField(max_length=40, null=True, blank=True)
     file_type = models.CharField(max_length=255, null=True, blank=True)
     data = models.TextField()  # we just dump the rest in here; let's see how much we really need.
+    created_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
 
     def __str__(self):
         # somewhat useless when debug_id is None; but that's not the case we care about ATM

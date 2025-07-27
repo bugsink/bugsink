@@ -1,3 +1,4 @@
+import hashlib
 from django.utils import timezone
 
 from projects.models import Project
@@ -11,6 +12,7 @@ def get_or_create_issue(project=None, event_data=None):
     if event_data is None:
         from events.factories import create_event_data
         event_data = create_event_data()
+
     if project is None:
         project = Project.objects.create(name="Test project")
 
@@ -26,6 +28,7 @@ def get_or_create_issue(project=None, event_data=None):
         grouping = Grouping.objects.create(
             project=project,
             grouping_key=grouping_key,
+            grouping_key_hash=hashlib.sha256(grouping_key.encode()).hexdigest(),
             issue=issue,
         )
 

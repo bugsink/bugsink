@@ -1,3 +1,6 @@
+import os
+import urllib.parse
+
 from django.core.checks import Warning, register
 from django.conf import settings
 
@@ -31,3 +34,45 @@ def check_event_storage_properly_configured(app_configs, **kwargs):
             id="bsmain.W002",
             ))
     return errors
+
+
+@register("bsmain")
+def check_base_url_is_url(app_configs, **kwargs):
+    try:
+        parts = urllib.parse.urlsplit(str(get_settings().BASE_URL))
+    except ValueError as e:
+        return [Warning(
+            str(e),
+            id="bsmain.W003",
+        )]
+
+    if parts.scheme not in ["http", "https"]:
+        return [Warning(
+            "The BASE_URL setting must be a valid URL (starting with http or https).",
+            id="bsmain.W003",
+        )]
+
+    if not parts.hostname:
+        return [Warning(
+            "The BASE_URL setting must be a valid URL. The hostname must be set.",
+            id="bsmain.W003",
+        )]
+
+    return []
+
+
+@register("bsmain")
+def check_proxy_env_vars_consistency(app_configs, **kwargs):
+    # in this check we straight-up check the os.environ: we can't rely on settings.BEHIND_HTTPS_PROXY to have been set
+    # since it's Docker-only.
+
+    if (
+        os.getenv("BEHIND_HTTPS_PROXY", "False").lower() in ("true", "1", "yes") and
+        os.getenv("BEHIND_PLAIN_HTTP_PROXY", "False").lower() in ("true", "1", "yes")
+            ):
+        return [Warning(
+            "BEHIND_HTTPS_PROXY and BEHIND_PLAIN_HTTP_PROXY are mutually exclusive.",
+            id="bsmain.W004",
+        )]
+
+    return []

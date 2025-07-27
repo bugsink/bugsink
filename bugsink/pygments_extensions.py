@@ -16,6 +16,7 @@ from os.path import basename
 from pygments.lexers import (
     ActionScript3Lexer, CLexer, ColdfusionHtmlLexer, CSharpLexer, HaskellLexer, GoLexer, GroovyLexer, JavaLexer,
     JavascriptLexer, ObjectiveCLexer, PerlLexer, PhpLexer, PythonLexer, RubyLexer, TextLexer, XmlPhpLexer,
+    PowerShellLexer, CrystalLexer
 )
 
 _all_lexers = None
@@ -105,7 +106,7 @@ def guess_lexer_for_filename(_fn, platform, code=None, **options):
 
 def lexer_for_platform(platform, **options):
     # We can depend on platform having been set: it's a required attribute as per Sentry's docs.
-    # The LHS in the table below is a fixed list of available platforms, as per the Sentry docs.
+    # The LHS in the table below is a fixed list of available platforms, as per the Sentry docs. (but: #143, #145)
     # The RHS is my educated guess for what these platforms map to in Pygments.
 
     clz = {
@@ -114,6 +115,7 @@ def lexer_for_platform(platform, **options):
         "cfml": ColdfusionHtmlLexer,
         "cocoa": TextLexer,  # I couldn't find the Cocoa lexer in Pygments, this will do for now.
         "csharp": CSharpLexer,
+        "crystal": CrystalLexer,  # _not_ in the list of "acceptable platforms", but "seen in the wild" (#145)
         "elixir": TextLexer,  # I couldn't find the Elixir lexer in Pygments, this will do for now.
         "haskell": HaskellLexer,
         "go": GoLexer,
@@ -131,9 +133,10 @@ def lexer_for_platform(platform, **options):
         "other": TextLexer,  # "other" by definition implies that nothing is known.
         "perl": PerlLexer,  # or Perl6Lexer...
         "php": PhpLexer,
+        "powershell": PowerShellLexer,  # _not_ in the list of "acceptable platforms", but "seen in the wild" (#143)
         "python": PythonLexer,
         "ruby": RubyLexer,
-    }[platform]
+    }.get(platform, TextLexer)  # default to TextLexer if not found; see #143 and #145 for why we fall back at all
     options = _custom_options(clz, options)
     return clz(**options)
 
