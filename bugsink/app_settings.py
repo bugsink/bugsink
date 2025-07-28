@@ -59,6 +59,8 @@ DEFAULTS = {
     "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": 1_000,
     "MAX_EVENTS_PER_PROJECT_PER_HOUR": 5_000,
 
+    "MAX_EMAILS_PER_MONTH": None,  # None means "no limit"; for non-None values, the quota is per calendar month
+
     # I don't think Sentry specifies this one, but we do: given the spec 8KiB should be enough by an order of magnitude.
     "MAX_HEADER_SIZE": 8 * _KIBIBYTE,
 

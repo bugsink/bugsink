@@ -7,12 +7,19 @@ from unittest import TestCase as RegularTestCase
 from django.test import TestCase as DjangoTestCase
 from django.test import override_settings
 from django.core.exceptions import SuspiciousOperation
+from django.contrib.auth import get_user_model
+from django.test.utils import CaptureQueriesContext
+from django.db import connection
 from .wsgi import allowed_hosts_error_message
 
+from .test_utils import TransactionTestCase25251 as TransactionTestCase
+from .transaction import immediate_atomic
 from .volume_based_condition import VolumeBasedCondition
 from .streams import (
     compress_with_zlib, GeneratorReader, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE, MaxDataReader,
     MaxDataWriter, zlib_generator, brotli_generator)
+
+User = get_user_model()
 
 
 def apply_n(f, n, v):
@@ -421,3 +428,25 @@ class AllowedHostsMsgTestCase(DjangoTestCase):
             "'Host: teeestserver' as sent by browser/proxy not in ALLOWED_HOSTS=['testserver']. "
             "Add 'teeestserver' to ALLOWED_HOSTS or configure proxy to use 'Host: testserver'.",
             allowed_hosts_error_message("teeestserver", ["testserver"]))
+
+
+class TestAtomicTransactions(TransactionTestCase):
+
+    def test_only_if_needed(self):
+        with CaptureQueriesContext(connection) as queries_context:
+            with immediate_atomic(only_if_needed=True):
+                User.objects.create(username="testuser", password="testpass")
+
+        self.assertTrue(User.objects.filter(username="testuser").exists())
+        self.assertEquals([1], [1 for q in queries_context.captured_queries if q['sql'].startswith("BEGIN")])
+        self.assertEquals([1], [1 for q in queries_context.captured_queries if q['sql'].startswith("COMMIT")])
+
+        with CaptureQueriesContext(connection) as queries_context:
+            with immediate_atomic(only_if_needed=True):
+                with immediate_atomic(only_if_needed=True):
+                    with immediate_atomic(only_if_needed=True):
+                        User.objects.create(username="testuser2", password="testpass2")
+
+        self.assertTrue(User.objects.filter(username="testuser2").exists())
+        self.assertEquals([1], [1 for q in queries_context.captured_queries if q['sql'].startswith("BEGIN")])
+        self.assertEquals([1], [1 for q in queries_context.captured_queries if q['sql'].startswith("COMMIT")])

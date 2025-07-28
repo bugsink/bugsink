@@ -1,8 +1,9 @@
+import json
 from datetime import timedelta
 from collections import namedtuple
 
-from django.conf import settings
 from django.utils import timezone
+from django.conf import settings
 from django.utils.safestring import mark_safe
 from django.urls import reverse
 from django.contrib.auth.models import AnonymousUser
@@ -118,6 +119,14 @@ def useful_settings_processor(request):
                 ignore_url = None
 
             system_warnings.append(SystemWarning(EMAIL_BACKEND_WARNING, ignore_url))
+
+        if get_settings().MAX_EMAILS_PER_MONTH is not None:
+            email_quota_usage = json.loads(installation.email_quota_usage)
+            this_month_usage = email_quota_usage.get("per_month", {}).get(timezone.now().strftime("%Y-%m"), 0)
+            if this_month_usage >= get_settings().MAX_EMAILS_PER_MONTH:
+                system_warnings.append(SystemWarning(
+                    f"Bugsink has sent {this_month_usage} emails this month, which is the maximum. "
+                    "No more emails will be sent until the 1st of next month.", None))
 
         return system_warnings + get_snappea_warnings()
 

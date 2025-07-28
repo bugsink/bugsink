@@ -1,6 +1,8 @@
+import logging
 from collections import defaultdict
 from urllib.parse import urlparse
 
+from django.utils import timezone
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import get_template
 from django.apps import apps
@@ -8,8 +10,20 @@ from django.db.models import ForeignKey, F
 
 from .version import version
 
+logger = logging.getLogger("bugsink.email")
+
 
 def send_rendered_email(subject, base_template_name, recipient_list, context=None):
+    from phonehome.models import Installation
+
+    if not Installation.check_and_inc_email_quota(timezone.now()):
+        logger.warning(
+            "Email quota exceeded; not sending email with subject '%s' to %s",
+            subject,
+            recipient_list,
+        )
+        return
+
     if context is None:
         context = {}
 
