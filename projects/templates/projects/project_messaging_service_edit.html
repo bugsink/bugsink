@@ -25,6 +25,33 @@
             <h1 class="text-4xl my-4 font-bold">Messaging Service | {{ project.name }}</h1>
         </div>
 
+        {% if service_config.has_recent_failure %}
+        <div id="failure-details" class="bg-red-50 dark:bg-red-900 border-2 border-red-200 dark:border-red-700 p-4 rounded-lg mb-6">
+            <h2 class="text-xl font-bold text-red-800 dark:text-red-200 mb-2 flex items-center">
+                {# Nudge the icon down by 1px to align visually with the text baseline (it's heavy in the bottom, light on top) #}
+                <svg class="w-5 h-5 mr-2 relative top-[2px] align-middle" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                </svg>
+                Most Recent Message has Failed
+            </h2>
+
+            <div class="text-red-700 dark:text-red-300">
+                <p><strong>Last failure:</strong> {{ service_config.last_failure_timestamp|date:"F j, Y, g:i A" }}</p>
+                <p><strong>Error type:</strong> {{ service_config.last_failure_error_type }}</p>
+                {% if service_config.last_failure_status_code %}
+                    <p><strong>HTTP Status:</strong> {{ service_config.last_failure_status_code }}</p>
+                {% endif %}
+                <p><strong>Error message:</strong> {{ service_config.last_failure_error_message }}</p>
+                {% if service_config.last_failure_response_text %}
+                    <div class="mt-2">
+                        <p><strong>Response{% if service_config.last_failure_is_json %} (JSON){% endif %}:</strong></p>
+                        <pre class="p-2 rounded text-sm mt-1 overflow-x-auto">{{ service_config.last_failure_response_text }}</pre>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
         {% for field in form %}
             {% tailwind_formfield field %}
         {% endfor %}
