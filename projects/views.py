@@ -501,6 +501,7 @@ def project_messaging_service_edit(request, project_pk, service_pk):
 
     return render(request, 'projects/project_messaging_service_edit.html', {
         'project': project,
+        'service_config': instance,
         'form': form,
         'config_form': config_form,
     })

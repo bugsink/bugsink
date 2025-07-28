@@ -42,8 +42,22 @@
                 {% for service_config in service_configs %}
                 <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
                 <td class="w-full p-4">
-                    <div>
-                        <a href="{% url "project_messaging_service_edit" project_pk=project.pk service_pk=service_config.pk %}" class="text-xl text-cyan-500 dark:text-cyan-300 font-bold">{{ service_config.display_name }}</a>
+                    <div class="flex items-center">
+                        <div class="flex-grow">
+                            <a href="{% url "project_messaging_service_edit" project_pk=project.pk service_pk=service_config.pk %}" class="text-xl text-cyan-500 dark:text-cyan-300 font-bold">{{ service_config.display_name }}</a>
+                            {% if service_config.has_recent_failure %}
+                                <div class="text-sm text-red-600 dark:text-red-400 mt-1">
+                                    <span class="inline-flex items-center">
+                                        <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        Last alert failed ({{ service_config.last_failure_timestamp|date:"M j, H:i" }})
+                                    </span>
+                                    <a href="{% url "project_messaging_service_edit" project_pk=project.pk service_pk=service_config.pk %}#failure-details" 
+                                       class="text-red-700 dark:text-red-300 underline ml-2">View details</a>
+                                </div>
+                            {% endif %}
+                        </div>
                     </div>
                 </td>
 
