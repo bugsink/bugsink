@@ -126,21 +126,14 @@ def slack_backend_send_test_message(webhook_url, project_name, display_name, ser
         )
 
         result.raise_for_status()
-        
-        # Success - clear any previous failure status
+
         _store_success_info(service_config_id)
-        
     except requests.RequestException as e:
-        # Store failure information for requests-related errors
-        # For HTTPError from raise_for_status(), the response is in the exception
         response = getattr(e, 'response', None)
-        if response is None and 'result' in locals():
-            # Fallback: if no response in exception, try to get it from the result
-            response = result
         _store_failure_info(service_config_id, e, response)
         raise
+
     except Exception as e:
-        # Store failure information for other errors
         _store_failure_info(service_config_id, e)
         raise
 
@@ -213,21 +206,14 @@ def slack_backend_send_alert(
         )
 
         result.raise_for_status()
-        
-        # Success - clear any previous failure status
+
         _store_success_info(service_config_id)
-        
     except requests.RequestException as e:
-        # Store failure information for requests-related errors
-        # For HTTPError from raise_for_status(), the response is in the exception
         response = getattr(e, 'response', None)
-        if response is None and 'result' in locals():
-            # Fallback: if no response in exception, try to get it from the result
-            response = result
         _store_failure_info(service_config_id, e, response)
         raise
+
     except Exception as e:
-        # Store failure information for other errors
         _store_failure_info(service_config_id, e)
         raise
 
