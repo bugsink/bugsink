@@ -61,6 +61,7 @@ if not I_AM_RUNNING == "TEST":
 SNAPPEA = {
     "TASK_ALWAYS_EAGER": True,  # at least for (unit) tests, this is a requirement
     "NUM_WORKERS": 1,
+    "PID_FILE": "/tmp/snappea.pid",  # for development: a thing to 'tune' to None to test the no-pid-check branches.
 }
 
 EMAIL_HOST = os.getenv("EMAIL_HOST")

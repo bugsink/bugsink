@@ -43,7 +43,11 @@ SNAPPEA = {
     "TASK_ALWAYS_EAGER": False,
     "NUM_WORKERS": 4,
 
-    "PID_FILE": "{{ base_dir }}/snappea/snappea.pid",
+    "PID_FILE": None,
+    # alternatively (if you don't trust systemd to get at most one snappea foreman running; or if you don't use systemd
+    # at all), use the below:
+    # "PID_FILE": "{{ base_dir }}/snappea/snappea.pid",
+
     "WAKEUP_CALLS_DIR": "{{ base_dir }}/snappea/wakeup",
     "STATS_RETENTION_MINUTES": 60 * 24 * 7,
 }
