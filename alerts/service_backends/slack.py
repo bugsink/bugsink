@@ -1,11 +1,13 @@
 import json
 import requests
+from django.utils import timezone
 
 from django import forms
 from django.template.defaultfilters import truncatechars
 
 from snappea.decorators import shared_task
 from bugsink.app_settings import get_settings
+from bugsink.transaction import immediate_atomic
 
 from issues.models import Issue
 
@@ -32,8 +34,57 @@ def _safe_markdown(text):
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("*", "\\*").replace("_", "\\_")
 
 
+def _store_failure_info(service_config_id, exception, response=None):
+    """Store failure information in the MessagingServiceConfig with immediate_atomic"""
+    from alerts.models import MessagingServiceConfig
+    
+    with immediate_atomic(only_if_needed=True):
+        try:
+            config = MessagingServiceConfig.objects.get(id=service_config_id)
+            
+            config.last_failure_timestamp = timezone.now()
+            config.last_failure_error_type = type(exception).__name__
+            config.last_failure_error_message = str(exception)
+            
+            # Handle requests-specific errors
+            if response is not None:
+                config.last_failure_status_code = response.status_code
+                config.last_failure_response_text = response.text[:2000]  # Limit response text size
+                
+                # Check if response is JSON
+                try:
+                    json.loads(response.text)
+                    config.last_failure_is_json = True
+                except (json.JSONDecodeError, ValueError):
+                    config.last_failure_is_json = False
+            else:
+                # Non-HTTP errors
+                config.last_failure_status_code = None
+                config.last_failure_response_text = None
+                config.last_failure_is_json = None
+            
+            config.save()
+        except MessagingServiceConfig.DoesNotExist:
+            # Config was deleted while task was running
+            pass
+
+
+def _store_success_info(service_config_id):
+    """Clear failure information on successful operation"""
+    from alerts.models import MessagingServiceConfig
+    
+    with immediate_atomic(only_if_needed=True):
+        try:
+            config = MessagingServiceConfig.objects.get(id=service_config_id)
+            config.clear_failure_status()
+            config.save()
+        except MessagingServiceConfig.DoesNotExist:
+            # Config was deleted while task was running
+            pass
+
+
 @shared_task
-def slack_backend_send_test_message(webhook_url, project_name, display_name):
+def slack_backend_send_test_message(webhook_url, project_name, display_name, service_config_id):
     # See Slack's Block Kit Builder
 
     data = {"blocks": [
@@ -67,17 +118,35 @@ def slack_backend_send_test_message(webhook_url, project_name, display_name):
 
             ]}
 
-    result = requests.post(
-        webhook_url,
-        data=json.dumps(data),
-        headers={"Content-Type": "application/json"},
-    )
+    try:
+        result = requests.post(
+            webhook_url,
+            data=json.dumps(data),
+            headers={"Content-Type": "application/json"},
+        )
 
-    result.raise_for_status()
+        result.raise_for_status()
+        
+        # Success - clear any previous failure status
+        _store_success_info(service_config_id)
+        
+    except requests.RequestException as e:
+        # Store failure information for requests-related errors
+        # For HTTPError from raise_for_status(), the response is in the exception
+        response = getattr(e, 'response', None)
+        if response is None and 'result' in locals():
+            # Fallback: if no response in exception, try to get it from the result
+            response = result
+        _store_failure_info(service_config_id, e, response)
+        raise
+    except Exception as e:
+        # Store failure information for other errors
+        _store_failure_info(service_config_id, e)
+        raise
 
 
 @shared_task
-def slack_backend_send_alert(webhook_url, issue_id, state_description, alert_article, alert_reason, unmute_reason=None):
+def slack_backend_send_alert(webhook_url, issue_id, state_description, alert_article, alert_reason, service_config_id, unmute_reason=None):
     issue = Issue.objects.get(id=issue_id)
 
     issue_url = get_settings().BASE_URL + issue.get_absolute_url()
@@ -134,13 +203,31 @@ def slack_backend_send_alert(webhook_url, issue_id, state_description, alert_art
                 },
             ]}
 
-    result = requests.post(
-        webhook_url,
-        data=json.dumps(data),
-        headers={"Content-Type": "application/json"},
-    )
+    try:
+        result = requests.post(
+            webhook_url,
+            data=json.dumps(data),
+            headers={"Content-Type": "application/json"},
+        )
 
-    result.raise_for_status()
+        result.raise_for_status()
+        
+        # Success - clear any previous failure status
+        _store_success_info(service_config_id)
+        
+    except requests.RequestException as e:
+        # Store failure information for requests-related errors
+        # For HTTPError from raise_for_status(), the response is in the exception
+        response = getattr(e, 'response', None)
+        if response is None and 'result' in locals():
+            # Fallback: if no response in exception, try to get it from the result
+            response = result
+        _store_failure_info(service_config_id, e, response)
+        raise
+    except Exception as e:
+        # Store failure information for other errors
+        _store_failure_info(service_config_id, e)
+        raise
 
 
 class SlackBackend:
@@ -156,9 +243,10 @@ class SlackBackend:
             json.loads(self.service_config.config)["webhook_url"],
             self.service_config.project.name,
             self.service_config.display_name,
+            self.service_config.id,
         )
 
     def send_alert(self, issue_id, state_description, alert_article, alert_reason, **kwargs):
         slack_backend_send_alert.delay(
             json.loads(self.service_config.config)["webhook_url"],
-            issue_id, state_description, alert_article, alert_reason, **kwargs)
+            issue_id, state_description, alert_article, alert_reason, self.service_config.id, **kwargs)
