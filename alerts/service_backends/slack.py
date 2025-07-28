@@ -131,11 +131,9 @@ def slack_backend_send_test_message(webhook_url, project_name, display_name, ser
     except requests.RequestException as e:
         response = getattr(e, 'response', None)
         _store_failure_info(service_config_id, e, response)
-        raise
 
     except Exception as e:
         _store_failure_info(service_config_id, e)
-        raise
 
 
 @shared_task
@@ -211,11 +209,9 @@ def slack_backend_send_alert(
     except requests.RequestException as e:
         response = getattr(e, 'response', None)
         _store_failure_info(service_config_id, e, response)
-        raise
 
     except Exception as e:
         _store_failure_info(service_config_id, e)
-        raise
 
 
 class SlackBackend:

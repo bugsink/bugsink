@@ -192,14 +192,13 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
 
         mock_post.return_value = mock_response
 
-        # Send test message and expect it to raise
-        with self.assertRaises(requests.HTTPError):
-            slack_backend_send_test_message(
-                "https://hooks.slack.com/test",
-                "Test project",
-                "Test Slack",
-                self.config.id
-            )
+        # Send test message
+        slack_backend_send_test_message(
+            "https://hooks.slack.com/test",
+            "Test project",
+            "Test Slack",
+            self.config.id
+        )
 
         # Verify failure status was stored
         self.config.refresh_from_db()
@@ -224,13 +223,12 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
         mock_post.return_value = mock_response
 
         # Send test message and expect it to raise
-        with self.assertRaises(requests.HTTPError):
-            slack_backend_send_test_message(
-                "https://hooks.slack.com/test",
-                "Test project",
-                "Test Slack",
-                self.config.id
-            )
+        slack_backend_send_test_message(
+            "https://hooks.slack.com/test",
+            "Test project",
+            "Test Slack",
+            self.config.id
+        )
 
         # Verify failure status was stored
         self.config.refresh_from_db()
@@ -244,14 +242,13 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
         # Mock connection error
         mock_post.side_effect = requests.ConnectionError("Connection failed")
 
-        # Send test message and expect it to raise
-        with self.assertRaises(requests.ConnectionError):
-            slack_backend_send_test_message(
-                "https://hooks.slack.com/test",
-                "Test project",
-                "Test Slack",
-                self.config.id
-            )
+        # Send test message
+        slack_backend_send_test_message(
+            "https://hooks.slack.com/test",
+            "Test project",
+            "Test Slack",
+            self.config.id
+        )
 
         # Verify failure status was stored
         self.config.refresh_from_db()
