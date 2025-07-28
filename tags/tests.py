@@ -7,7 +7,7 @@ from issues.factories import get_or_create_issue, denormalized_issue_fields
 from events.factories import create_event, create_event_data
 from issues.models import Issue
 
-from .models import store_tags, EventTag, IssueTag, TagValue
+from .models import store_tags, EventTag, IssueTag, TagValue, digest_tags
 from .utils import deduce_tags
 from .search import search_events, search_issues, parse_query, search_events_optimized
 from .tasks import vacuum_eventless_issuetags
@@ -137,6 +137,24 @@ class StoreTagsTestCase(DjangoTestCase):
         event = create_event(self.project, issue=self.issue)
         store_tags(event, self.issue, {f"key-{i}": f"value-{i}" for i in range(512)})
         self.assertEqual(IssueTag.objects.filter(issue=self.issue).count(), 512)
+
+
+class DigestTagsTestCase(DjangoTestCase):
+    def test_auto_ip_address(self):
+        project = Project.objects.create(name="Test Project")
+        issue, _ = get_or_create_issue(project)
+        event = create_event(project, issue=issue)
+
+        event_data = {
+            "user": {
+                "ip_address": "{{auto}}",
+            },
+        }
+        event.remote_addr = "123.123.123.123"
+        event.save()
+        digest_tags(event_data, event, issue)
+
+        self.assertEqual(["123.123.123.123", "123.123.123.123"], [e.value.value for e in event.get_tags])
 
 
 class SearchParserTestCase(RegularTestCase):
