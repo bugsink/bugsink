@@ -7,8 +7,6 @@ from django.db.models import Q
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponseRedirect, HttpResponseNotAllowed
-from django.utils.safestring import mark_safe
-from django.template.defaultfilters import date
 from django.urls import reverse
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
@@ -31,6 +29,7 @@ from events.ua_stuff import get_contexts_enriched_with_ua
 from compat.timestamp import format_timestamp
 from projects.models import ProjectMembership
 from tags.search import search_issues, search_events, search_events_optimized
+from theme.templatetags.issues import timestamp_with_millis
 
 from .models import Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind
 from .forms import CommentForm
@@ -555,12 +554,6 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
     })
 
 
-def _date_with_milis_html(timestamp):
-    return mark_safe(
-        date(timestamp, "j M G:i:s") + "." +
-        '<span class="text-xs">' + date(timestamp, "u")[:3] + '</span>')
-
-
 def _first_last(qs_with_digest_order):
     # this was once implemented with Min/Max, but just doing 2 queries is (on sqlite at least) much faster.
     first = qs_with_digest_order.order_by("digest_order").values_list("digest_order", flat=True).first()
@@ -604,9 +597,9 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         ("mechanism", get_path(get_main_exception(parsed_data), "mechanism", "type")),
 
         ("issue_id", issue.id),
-        ("timestamp", _date_with_milis_html(event.timestamp)),
-        ("ingested at", _date_with_milis_html(event.ingested_at)),
-        ("digested at", _date_with_milis_html(event.digested_at)),
+        ("timestamp", timestamp_with_millis(event.timestamp)),
+        ("ingested at", timestamp_with_millis(event.ingested_at)),
+        ("digested at", timestamp_with_millis(event.digested_at)),
         ("digest order", event.digest_order),
         ("remote_addr", event.remote_addr),
     ]

@@ -49,8 +49,7 @@
         {{ breadcrumb.message }}
     </td>
     <td class="p-4 font-bold text-slate-500 dark:text-slate-300 align-top">
-        {{ breadcrumb.timestamp }}
-        {# {{ breadcrumb.timestamp|date:"G:i T" and milis  }} #}
+        {{ breadcrumb.timestamp|timestamp_with_millis }}
     </td>
 
     </tr>

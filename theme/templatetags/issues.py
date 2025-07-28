@@ -1,3 +1,4 @@
+from datetime import datetime
 import re
 from django import template
 from pygments import highlight
@@ -5,6 +6,9 @@ from pygments.formatters import HtmlFormatter
 
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
+from django.template.defaultfilters import date
+
+from compat.timestamp import parse_timestamp
 
 
 from bugsink.pygments_extensions import guess_lexer_for_filename, lexer_for_platform
@@ -235,3 +239,31 @@ def format_var(value):
 def incomplete(value):
     # needed to disinguish between 'has an incomplete' attr (set by us) and 'contains an incomplete key' (event-data)
     return hasattr(value, "incomplete")
+
+
+def _date_with_milis_html(timestamp):
+    return mark_safe(
+        '<span class="whitespace-nowrap">' +
+        date(timestamp, "j M G:i:s") + "." +
+        '<span class="text-xs">' + date(timestamp, "u")[:3] + '</span></span>')
+
+
+@register.filter
+def timestamp_with_millis(value):
+    """
+    Timestamp formatting with milliseconds; robust for datetime.datetime, as well as the strings/floats/ints that may
+    show up in the event data.
+    """
+    if isinstance(value, datetime):
+        dt = value
+
+    else:
+        try:
+            dt = parse_timestamp(value)
+        except Exception:
+            return value
+
+    if dt is None:
+        return value
+
+    return _date_with_milis_html(dt)
