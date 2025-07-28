@@ -4,10 +4,12 @@ abstract generality. Python 3.12 is the standard environment.
 ## Coding Guidance
 
 * Keep it clear and simple.
-* Avoid overly clever or verbose code — this isn't Java.
-* Use Django idioms: models, views, middleware, etc.
-* Follow PEP8 and ensure `flake8` passes (CI ignores E127, E741, E501, E731).
 * Use descriptive names, short functions, minimal boilerplate.
+* Avoid overly clever or verbose code -- this isn't Java.
+* Avoid overcommenting: only comment to explain unusual or complex logic or
+  design decisions
+* Follow PEP8 and ensure `flake8` passes (CI ignores E741, E731). width: 120 columns.
+* Use Django idioms: models, views, middleware, etc.
 
 ## Tests
 
