@@ -37,20 +37,20 @@ def _safe_markdown(text):
 def _store_failure_info(service_config_id, exception, response=None):
     """Store failure information in the MessagingServiceConfig with immediate_atomic"""
     from alerts.models import MessagingServiceConfig
-    
+
     with immediate_atomic(only_if_needed=True):
         try:
             config = MessagingServiceConfig.objects.get(id=service_config_id)
-            
+
             config.last_failure_timestamp = timezone.now()
             config.last_failure_error_type = type(exception).__name__
             config.last_failure_error_message = str(exception)
-            
+
             # Handle requests-specific errors
             if response is not None:
                 config.last_failure_status_code = response.status_code
                 config.last_failure_response_text = response.text[:2000]  # Limit response text size
-                
+
                 # Check if response is JSON
                 try:
                     json.loads(response.text)
@@ -62,7 +62,7 @@ def _store_failure_info(service_config_id, exception, response=None):
                 config.last_failure_status_code = None
                 config.last_failure_response_text = None
                 config.last_failure_is_json = None
-            
+
             config.save()
         except MessagingServiceConfig.DoesNotExist:
             # Config was deleted while task was running
@@ -72,7 +72,7 @@ def _store_failure_info(service_config_id, exception, response=None):
 def _store_success_info(service_config_id):
     """Clear failure information on successful operation"""
     from alerts.models import MessagingServiceConfig
-    
+
     with immediate_atomic(only_if_needed=True):
         try:
             config = MessagingServiceConfig.objects.get(id=service_config_id)
@@ -146,7 +146,9 @@ def slack_backend_send_test_message(webhook_url, project_name, display_name, ser
 
 
 @shared_task
-def slack_backend_send_alert(webhook_url, issue_id, state_description, alert_article, alert_reason, service_config_id, unmute_reason=None):
+def slack_backend_send_alert(
+        webhook_url, issue_id, state_description, alert_article, alert_reason, service_config_id, unmute_reason=None):
+
     issue = Issue.objects.get(id=issue_id)
 
     issue_url = get_settings().BASE_URL + issue.get_absolute_url()

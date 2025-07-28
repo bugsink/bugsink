@@ -166,9 +166,9 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
 
         # Send test message
         slack_backend_send_test_message(
-            "https://hooks.slack.com/test", 
-            "Test project", 
-            "Test Slack", 
+            "https://hooks.slack.com/test",
+            "Test project",
+            "Test Slack",
             self.config.id
         )
 
@@ -184,7 +184,7 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
         mock_response = Mock()
         mock_response.status_code = 404
         mock_response.text = '{"error": "webhook_not_found"}'
-        
+
         # Create the HTTPError with response attached
         http_error = requests.HTTPError()
         http_error.response = mock_response
@@ -195,9 +195,9 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
         # Send test message and expect it to raise
         with self.assertRaises(requests.HTTPError):
             slack_backend_send_test_message(
-                "https://hooks.slack.com/test", 
-                "Test project", 
-                "Test Slack", 
+                "https://hooks.slack.com/test",
+                "Test project",
+                "Test Slack",
                 self.config.id
             )
 
@@ -215,7 +215,7 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
         mock_response = Mock()
         mock_response.status_code = 500
         mock_response.text = 'Internal Server Error'
-        
+
         # Create the HTTPError with response attached
         http_error = requests.HTTPError()
         http_error.response = mock_response
@@ -226,9 +226,9 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
         # Send test message and expect it to raise
         with self.assertRaises(requests.HTTPError):
             slack_backend_send_test_message(
-                "https://hooks.slack.com/test", 
-                "Test project", 
-                "Test Slack", 
+                "https://hooks.slack.com/test",
+                "Test project",
+                "Test Slack",
                 self.config.id
             )
 
@@ -247,9 +247,9 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
         # Send test message and expect it to raise
         with self.assertRaises(requests.ConnectionError):
             slack_backend_send_test_message(
-                "https://hooks.slack.com/test", 
-                "Test project", 
-                "Test Slack", 
+                "https://hooks.slack.com/test",
+                "Test project",
+                "Test Slack",
                 self.config.id
             )
 
