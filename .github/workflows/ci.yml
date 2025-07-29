@@ -10,6 +10,12 @@ on:
     branches: [ "main", "1.4.x", "1.5.x", "1.6.x", "1.7.x", "1.8.x", "1.9.x", "1.10.x", "1.11.x" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:  # Enables manual invocation via "Run workflow" button in the Actions UI
+    inputs:
+      target_branch:
+        description: 'Branch to run workflow on'
+        required: false
+        default: 'main'
 
 env:
   DJANGO_SETTINGS_MODULE: "bugsink.settings.development"
