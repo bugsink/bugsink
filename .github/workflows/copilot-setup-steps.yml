@@ -17,9 +17,6 @@ jobs:
     env:
       DJANGO_SETTINGS_MODULE: bugsink.settings.development
       SAMPLES_DIR: ${{ github.workspace }}/event-samples
-      DJANGO_SUPERUSER_USERNAME: admin
-      DJANGO_SUPERUSER_EMAIL: admin@example.com
-      DJANGO_SUPERUSER_PASSWORD: admin
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -49,10 +46,12 @@ jobs:
         # Ensures the SQLite database is initialized.
 
       - name: Create superuser
+        env:
+          DJANGO_SUPERUSER_USERNAME: admin@example.com
+          DJANGO_SUPERUSER_EMAIL: admin@example.com
+          DJANGO_SUPERUSER_PASSWORD: admin
         run: |
-          python manage.py createsuperuser --noinput || true
-        # Creates a default admin user so Copilot can log in if needed.
-        # `|| true` prevents failure if the user already exists.
+          python manage.py createsuperuser --noinput
 
       - name: Check out event-samples outside workspace
         # by using a plain-old `git-clone` we are able to "ecape from the working dir"

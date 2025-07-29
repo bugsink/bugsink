@@ -43,7 +43,7 @@ Test the frontend by running the server like so and checking in a browser:
 
 `python manage.py runserver` (uses `bugsink.settings.development`)
 
-(an admin/admin user is available in your environment)
+(an admin user is available in your environment. login with admin@example.org/admin)
 
 ### Before committing
 
