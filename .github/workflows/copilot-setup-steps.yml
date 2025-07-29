@@ -54,8 +54,7 @@ jobs:
         # Creates a default admin user so Copilot can log in if needed.
         # `|| true` prevents failure if the user already exists.
 
-      - name: Fetch event-samples data
-        uses: actions/checkout@v4
-        with:
-          repository: bugsink/event-samples
-          path: event-samples
+      - name: Check out event-samples outside workspace
+        # by using a plain-old `git-clone` we are able to "ecape from the working dir"
+        run: |
+          git clone https://github.com/bugsink/event-samples.git ../event-samples
