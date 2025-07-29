@@ -1,5 +1,10 @@
 # Changes
 
+## 1.7.4, 1.6.4, 1.5.5, 1.4.3 (29 July 2025)
+
+Security release. Upgrading is highly recommended. See [this
+notice](https://github.com/bugsink/bugsink/security/advisories/GHSA-q78p-g86f-jg6q)
+
 ## 1.7.3 (17 July 2025)
 
 Migration fix: delete TurningPoints w/ project=None (Fix #155)
