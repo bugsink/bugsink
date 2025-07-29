@@ -1,3 +1,4 @@
+import uuid
 import hashlib
 import os
 import logging
@@ -624,6 +625,13 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
                 # payload's event_id), so we can rely on it having been set.
                 if "event_id" not in envelope_headers:
                     raise ParseError("event_id not found in envelope headers")
+
+                try:
+                    # validate that the event_id is a valid UUID as per the spec (validate at the edge)
+                    uuid.UUID(envelope_headers["event_id"])
+                except ValueError:
+                    raise ParseError("event_id in envelope headers is not a valid UUID")
+
                 filename = get_filename_for_event_id(envelope_headers["event_id"])
                 os.makedirs(os.path.dirname(filename), exist_ok=True)
                 return MaxDataWriter("MAX_EVENT_SIZE", open(filename, 'wb'))
