@@ -1,5 +1,6 @@
 import uuid
-import os
+
+from django.utils._os import safe_join
 from bugsink.app_settings import get_settings
 
 
@@ -10,8 +11,8 @@ def get_filename_for_event_id(event_id):
 
     # ensure that event_id is a uuid, and remove dashes if present; also doubles as a security-check (event_id is
     # user-provided (but at this point already validated to be a valid UUID), but b/c of the below the
-    # security-implications of os.path.join can be understood right here in the code without needing to inspect all
-    # call-sites).
+    # security-implications of path-joining (even though we use safe_join) can be understood right here in the code
+    # without needing to inspect all call-sites)
     event_id_normalized = uuid.UUID(event_id).hex
 
-    return os.path.join(get_settings().INGEST_STORE_BASE_DIR, event_id_normalized)
+    return safe_join(get_settings().INGEST_STORE_BASE_DIR, event_id_normalized)
