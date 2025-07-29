@@ -3,9 +3,8 @@ import io
 
 from bugsink.streams import MaxDataWriter
 
-
-class ParseError(Exception):
-    pass
+from .exceptions import ParseError
+from .header_validators import validate_envelope_headers, validate_item_headers
 
 
 class NewlineFinder:
@@ -150,6 +149,7 @@ class StreamingEnvelopeParser:
         if self.envelope_headers is None:
             # see test_eof_after_envelope_headers for why we don't error on EOF-after-header here
             self.envelope_headers = self._parse_headers(empty_is_error=True, eof_after_header_is_error=False)
+            validate_envelope_headers(self.envelope_headers)
 
         return self.envelope_headers
 
@@ -161,9 +161,12 @@ class StreamingEnvelopeParser:
 
         while not self.at_eof:
             item_headers = self._parse_headers(empty_is_error=False, eof_after_header_is_error=True)
+
             if item_headers is None:
                 self.at_eof = True
                 break
+
+            validate_item_headers(item_headers)
 
             if "length" in item_headers:
                 length = item_headers["length"]
