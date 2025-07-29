@@ -15,6 +15,8 @@ from django.test import tag
 from django.utils import timezone
 from django.test.client import RequestFactory
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
+from django.core.management.base import CommandError
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project
@@ -884,3 +886,158 @@ class TestParser(RegularTestCase):
 
         with self.assertRaises(StopIteration):
             header, item = next(items)
+
+
+class VacuumIngestDirTestCase(TransactionTestCase):
+    """Tests for the vacuum_ingest_dir management command"""
+
+    def setUp(self):
+        # Create a temporary directory for testing
+        self.test_dir = tempfile.mkdtemp()
+        self.addCleanup(lambda: self._cleanup_test_dir())
+
+    def _cleanup_test_dir(self):
+        import shutil
+        if os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir)
+
+    def _create_test_file(self, filename, age_days=0):
+        """Create a test file with specified age"""
+        filepath = os.path.join(self.test_dir, filename)
+        with open(filepath, 'w') as f:
+            f.write("test data")
+
+        if age_days > 0:
+            # Set file modification time to age_days ago
+            old_time = time.time() - (age_days * 24 * 60 * 60)
+            os.utime(filepath, (old_time, old_time))
+
+        return filepath
+
+    def test_nonexistent_directory(self):
+        """Test command behavior when ingest directory doesn't exist"""
+        nonexistent_dir = "/tmp/nonexistent_ingest_dir"
+        with override_settings(INGEST_STORE_BASE_DIR=nonexistent_dir):
+            out = io.StringIO()
+            call_command('vacuum_ingest_dir', stdout=out)
+            output = out.getvalue()
+            self.assertIn("does not exist", output)
+
+    def test_dry_run_mode(self):
+        """Test dry-run mode doesn't actually remove files"""
+        # Create test files
+        valid_old = "abcdef1234567890abcdef1234567890"
+        valid_new = "1234567890abcdef1234567890abcdef"
+        invalid_file = "invalid.txt"
+
+        self._create_test_file(valid_old, age_days=8)
+        self._create_test_file(valid_new, age_days=1)
+        self._create_test_file(invalid_file, age_days=8)
+
+        with override_settings(INGEST_STORE_BASE_DIR=self.test_dir):
+            out = io.StringIO()
+            call_command('vacuum_ingest_dir', '--dry-run', stdout=out)
+
+            # All files should still exist
+            self.assertTrue(os.path.exists(os.path.join(self.test_dir, valid_old)))
+            self.assertTrue(os.path.exists(os.path.join(self.test_dir, valid_new)))
+            self.assertTrue(os.path.exists(os.path.join(self.test_dir, invalid_file)))
+
+            # Output should mention what would be removed
+            output = out.getvalue()
+            self.assertIn("Would remove", output)
+            self.assertIn("Dry run completed", output)
+
+    def test_removes_old_valid_files(self):
+        """Test that old files with valid event ID format are removed"""
+        # Create test files
+        valid_old = "abcdef1234567890abcdef1234567890"
+        valid_new = "1234567890abcdef1234567890abcdef"
+
+        self._create_test_file(valid_old, age_days=8)
+        self._create_test_file(valid_new, age_days=1)
+
+        with override_settings(INGEST_STORE_BASE_DIR=self.test_dir):
+            out = io.StringIO()
+            call_command('vacuum_ingest_dir', stdout=out)
+
+            # Old file should be removed, new file should remain
+            self.assertFalse(os.path.exists(os.path.join(self.test_dir, valid_old)))
+            self.assertTrue(os.path.exists(os.path.join(self.test_dir, valid_new)))
+
+            # Output should confirm removal
+            output = out.getvalue()
+            self.assertIn("Removed:", output)
+            self.assertIn("Files removed: 1", output)
+
+    def test_skips_invalid_filenames(self):
+        """Test that files with invalid names are not removed"""
+        # Create files with invalid names
+        invalid_files = ["invalid.txt", "short123", "toolong123456789012345678901234567890", "UPPERCASE"]
+        old_valid = "abcdef1234567890abcdef1234567890"
+
+        for filename in invalid_files:
+            self._create_test_file(filename, age_days=8)
+        self._create_test_file(old_valid, age_days=8)
+
+        with override_settings(INGEST_STORE_BASE_DIR=self.test_dir):
+            out = io.StringIO()
+            call_command('vacuum_ingest_dir', stdout=out)
+
+            # Invalid files should still exist
+            for filename in invalid_files:
+                self.assertTrue(os.path.exists(os.path.join(self.test_dir, filename)))
+
+            # Valid old file should be removed
+            self.assertFalse(os.path.exists(os.path.join(self.test_dir, old_valid)))
+
+            # Output should mention unexpected files
+            output = out.getvalue()
+            self.assertIn("Unexpected files found", output)
+            self.assertIn("Files removed: 1", output)
+
+    def test_custom_days_threshold(self):
+        """Test custom days threshold"""
+        # Create files with different ages
+        file_5_days = "abcdef1234567890abcdef1234567890"
+        file_10_days = "1234567890abcdef1234567890abcdef"
+
+        self._create_test_file(file_5_days, age_days=5)
+        self._create_test_file(file_10_days, age_days=10)
+
+        with override_settings(INGEST_STORE_BASE_DIR=self.test_dir):
+            out = io.StringIO()
+            call_command('vacuum_ingest_dir', '--days', '8', stdout=out)
+
+            # 5-day file should remain, 10-day file should be removed
+            self.assertTrue(os.path.exists(os.path.join(self.test_dir, file_5_days)))
+            self.assertFalse(os.path.exists(os.path.join(self.test_dir, file_10_days)))
+
+    def test_negative_days_error(self):
+        """Test that negative days value raises an error"""
+        with override_settings(INGEST_STORE_BASE_DIR=self.test_dir):
+            with self.assertRaises(CommandError):
+                call_command('vacuum_ingest_dir', '--days', '-1')
+
+    def test_valid_event_id_format(self):
+        """Test that various valid event ID formats are recognized"""
+        valid_files = [
+            "0123456789abcdef0123456789abcdef",  # mixed numbers and lowercase hex
+            "fedcba9876543210fedcba9876543210",  # all hex letters
+            "0000000000000000000000000000000a",  # mostly zeros
+        ]
+
+        for filename in valid_files:
+            self._create_test_file(filename, age_days=8)
+
+        with override_settings(INGEST_STORE_BASE_DIR=self.test_dir):
+            out = io.StringIO()
+            call_command('vacuum_ingest_dir', stdout=out)
+
+            # All valid files should be removed
+            for filename in valid_files:
+                self.assertFalse(os.path.exists(os.path.join(self.test_dir, filename)))
+
+            output = out.getvalue()
+            self.assertIn("Files removed: 3", output)
+            self.assertNotIn("Unexpected files", output)
