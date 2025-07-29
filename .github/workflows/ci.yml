@@ -91,6 +91,7 @@ jobs:
       with:
         repository: bugsink/event-samples
         path: "event-samples"
+        ref: 1.5.x
     - name: Create separate dir to avoid accidentally using non-packaged code
       run: |
         mkdir separate_dir
