@@ -32,6 +32,7 @@ abstract generality. Python 3.12 is the standard environment.
 * Bugsink uses Tailwind via `django-tailwind`
 * Before committing, build the CSS and add it:
   `python manage.py tailwind build && git add theme/static/css/dist/styles.css`
+  (this is done automatically if you use the pre-commit hook from the repo root)
 
 ##### Other
 

@@ -24,6 +24,10 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
+      - name: Install project `pre-commit` hook
+        run: |
+          cp pre-commit .git/hooks/pre-commit
+
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
