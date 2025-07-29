@@ -3,7 +3,7 @@
 function toggleFoo(element) {
     element.classList.toggle("rotate-180");
 }
-    
+
 function distanceToWindowBottom() {
     // https://stackoverflow.com/a/2800676/339144
     let scrollPosition = window.pageYOffset;
@@ -74,7 +74,7 @@ function expandSection(element) {
   const onTransitioned = function(e) {
     // remove this event listener so it only gets triggered once
     element.removeEventListener('transitionend', onTransitioned);
-    
+
     // remove "height" from the element's inline styles, so it can return to its initial value
     if (element.style.height == explicitlySetValue) {
         element.style.removeProperty("height");
