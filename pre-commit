@@ -2,8 +2,8 @@
 
 # this script must be placed in .git/hooks/pre-commit for it to run automatically
 # it is put here in the repo so that it can be used by anyone who clones the repo
-
-. bin/activate
+# it assumes the environment to run `python manage.py tailwind build` is already set up
+# and activated
 
 should_run=$(git diff --cached --name-only -z | python tools/is_tracked_by_tailwind.py)
 
