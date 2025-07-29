@@ -1,8 +1,16 @@
 #!/bin/sh
 
-files=`git diff --cached --name-status`
+# this script must be placed in .git/hooks/pre-commit for it to run automatically
+# it is put here in the repo so that it can be used by anyone who clones the repo
 
 . bin/activate
-python manage.py tailwind build
 
-git add theme/static/css/dist/styles.css
+should_run=$(git diff --cached --name-only -z | python tools/is_tracked_by_tailwind.py)
+
+if [ "$should_run" = "yes" ]; then
+    echo "Building Tailwind CSS..."
+    python manage.py tailwind build
+    git add theme/static/css/dist/styles.css
+else
+    echo "No relevant changes; skipping Tailwind build."
+fi
