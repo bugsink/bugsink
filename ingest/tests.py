@@ -884,3 +884,161 @@ class TestParser(RegularTestCase):
 
         with self.assertRaises(StopIteration):
             header, item = next(items)
+
+
+class VacuumIngestDirTestCase(RegularTestCase):
+    """Tests for the vacuum_ingest_dir management command."""
+    
+    def setUp(self):
+        # Create a unique temporary directory for each test
+        import tempfile
+        self.temp_dir = tempfile.mkdtemp(prefix='vacuum_test_')
+        self.addCleanup(lambda: __import__('shutil').rmtree(self.temp_dir, ignore_errors=True))
+    
+    def _create_test_file(self, filename, age_days=0):
+        """Create a test file with specified age."""
+        filepath = os.path.join(self.temp_dir, filename)
+        with open(filepath, 'w') as f:
+            f.write('test content')
+        
+        if age_days > 0:
+            # Set file modification time to simulate age
+            past_time = time.time() - (age_days * 24 * 60 * 60)
+            os.utime(filepath, (past_time, past_time))
+        
+        return filepath
+
+    def _run_command(self, *args, **kwargs):
+        """Helper to run the vacuum_ingest_dir command."""
+        from ingest.management.commands.vacuum_ingest_dir import Command
+        from io import StringIO
+        
+        command = Command()
+        command.stdout = StringIO()
+        command.stderr = StringIO()
+        
+        # Set defaults
+        options = {'dry_run': False, 'days': 7}
+        
+        # Parse args
+        i = 0
+        while i < len(args):
+            if args[i] == '--dry-run':
+                options['dry_run'] = True
+                i += 1
+            elif args[i] == '--days':
+                if i + 1 < len(args):
+                    options['days'] = int(args[i + 1])
+                    i += 2
+                else:
+                    i += 1
+            else:
+                i += 1
+        
+        # Override with kwargs
+        options.update(kwargs)
+        
+        command.handle(**options)
+        return command.stdout.getvalue()
+
+    @patch('ingest.management.commands.vacuum_ingest_dir.get_settings')
+    def test_vacuum_removes_old_uuid_files(self, mock_get_settings):
+        """Test that old files with UUID format are removed."""
+        # Mock the ingest directory setting
+        mock_settings = type('', (), {'INGEST_STORE_BASE_DIR': self.temp_dir})()
+        mock_get_settings.return_value = mock_settings
+        
+        # Create test files
+        old_uuid = uuid.uuid4().hex
+        new_uuid = uuid.uuid4().hex
+        
+        self._create_test_file(old_uuid, age_days=10)  # Old file
+        self._create_test_file(new_uuid, age_days=0)   # New file
+        
+        # Run command with default 7 days
+        output = self._run_command()
+        
+        # Check results
+        self.assertNotIn(old_uuid, os.listdir(self.temp_dir))  # Old file removed
+        self.assertIn(new_uuid, os.listdir(self.temp_dir))     # New file kept
+        self.assertIn('Removed:', output)
+        self.assertIn('Successfully removed 1 files', output)
+
+    @patch('ingest.management.commands.vacuum_ingest_dir.get_settings')
+    def test_vacuum_dry_run(self, mock_get_settings):
+        """Test dry run mode doesn't actually remove files."""
+        mock_settings = type('', (), {'INGEST_STORE_BASE_DIR': self.temp_dir})()
+        mock_get_settings.return_value = mock_settings
+        
+        old_uuid = uuid.uuid4().hex
+        self._create_test_file(old_uuid, age_days=10)
+        
+        # Run in dry run mode
+        output = self._run_command(dry_run=True)
+        
+        # File should still exist
+        self.assertIn(old_uuid, os.listdir(self.temp_dir))
+        self.assertIn('Would remove:', output)
+        self.assertIn('DRY RUN: Would have removed 1 files', output)
+
+    @patch('ingest.management.commands.vacuum_ingest_dir.get_settings')
+    def test_vacuum_respects_custom_days(self, mock_get_settings):
+        """Test custom days parameter."""
+        mock_settings = type('', (), {'INGEST_STORE_BASE_DIR': self.temp_dir})()
+        mock_get_settings.return_value = mock_settings
+        
+        uuid_5_days = uuid.uuid4().hex
+        uuid_10_days = uuid.uuid4().hex
+        
+        self._create_test_file(uuid_5_days, age_days=5)
+        self._create_test_file(uuid_10_days, age_days=10)
+        
+        # Run with 7 days threshold
+        output = self._run_command(days=7)
+        
+        # Only 10-day old file should be removed
+        self.assertIn(uuid_5_days, os.listdir(self.temp_dir))
+        self.assertNotIn(uuid_10_days, os.listdir(self.temp_dir))
+        self.assertIn('Successfully removed 1 files', output)
+
+    @patch('ingest.management.commands.vacuum_ingest_dir.get_settings') 
+    def test_vacuum_skips_non_uuid_files(self, mock_get_settings):
+        """Test that non-UUID files are not removed and are reported."""
+        mock_settings = type('', (), {'INGEST_STORE_BASE_DIR': self.temp_dir})()
+        mock_get_settings.return_value = mock_settings
+        
+        # Create UUID and non-UUID files
+        old_uuid = uuid.uuid4().hex
+        self._create_test_file(old_uuid, age_days=10)
+        self._create_test_file('not-a-uuid.txt', age_days=10)
+        self._create_test_file('12345', age_days=10)  # Wrong length
+        
+        output = self._run_command()
+        
+        # UUID file removed, others kept
+        self.assertNotIn(old_uuid, os.listdir(self.temp_dir))
+        self.assertIn('not-a-uuid.txt', os.listdir(self.temp_dir))
+        self.assertIn('12345', os.listdir(self.temp_dir))
+        
+        # Check warning about unexpected files
+        self.assertIn('Found 2 unexpected files', output)
+        self.assertIn('not-a-uuid.txt', output)
+        self.assertIn('These files were NOT removed', output)
+
+    @patch('ingest.management.commands.vacuum_ingest_dir.get_settings')
+    def test_vacuum_nonexistent_directory(self, mock_get_settings):
+        """Test handling of nonexistent ingest directory."""
+        mock_settings = type('', (), {'INGEST_STORE_BASE_DIR': '/nonexistent/dir'})()
+        mock_get_settings.return_value = mock_settings
+        
+        output = self._run_command()
+        self.assertIn('Ingest directory does not exist', output)
+
+    def test_vacuum_invalid_days_parameter(self):
+        """Test error handling for invalid days parameter."""
+        from django.core.management.base import CommandError
+        from ingest.management.commands.vacuum_ingest_dir import Command
+        
+        command = Command()
+        with self.assertRaises(CommandError):
+            command.handle(days=0, dry_run=False)
