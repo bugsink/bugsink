@@ -1,11 +1,13 @@
 from unittest import TestCase as RegularTestCase
 
 from django.utils.safestring import SafeString
+from django.utils.html import conditional_escape
 from bugsink.pygments_extensions import choose_lexer_for_pattern, get_all_lexers
 
 from events.utils import IncompleteList, IncompleteDict
 
-from .templatetags.issues import _pygmentize_lines as actual_pygmentize_lines, format_var, pygmentize
+from .templatetags.issues import (
+    _pygmentize_lines as actual_pygmentize_lines, format_var, pygmentize, timestamp_with_millis)
 
 
 def _pygmentize_lines(lines):
@@ -173,3 +175,24 @@ class TestPygmentizeEscapeMarkSafe(RegularTestCase):
             # pygmentize does" is not very useful, as it may change in the future.
             self.assertFalse("<script>" in line)
             self.assertFalse("</script>" in line)
+
+
+class TimestampWithMillisTagTest(RegularTestCase):
+    def test_float_input_produces_expected_safe_string(self):
+        ts = 1620130245.1234
+
+        self.assertEqual(
+            '<span class="whitespace-nowrap">4 May 12:10:45.<span class="text-xs">123</span></span>',
+            timestamp_with_millis(ts))
+
+        self.assertTrue(isinstance(timestamp_with_millis(ts), SafeString))
+
+    def test_timestamp_with_milis_is_not_a_target_for_html_injection(self):
+        # even though the string input is returned as-is for this case, the tag will not mark it as safe in the process.
+        ts = "<script>alert('hello');</script>"
+
+        self.assertEqual(
+            '&lt;script&gt;alert(&#x27;hello&#x27;);&lt;/script&gt;',
+            conditional_escape(timestamp_with_millis(ts)))
+
+        self.assertFalse(isinstance(timestamp_with_millis(ts), SafeString))
