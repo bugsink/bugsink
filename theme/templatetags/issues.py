@@ -256,7 +256,7 @@ def incomplete(value):
 
 
 def _date_with_milis_html(timestamp):
-    # no_bandit_expl: constant string w/ substitution of an int (asserted)
+    # no_bandit_expl: constant string w/ substitution of dates/milis (escaped even)
     return (
         mark_safe('<span class="whitespace-nowrap">') +  # nosec
         escape(date(timestamp, "j M G:i:s")) + mark_safe(".") +  # nosec
