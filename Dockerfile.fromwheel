@@ -70,8 +70,8 @@ COPY dist/$WHEEL_FILE /wheels/
 RUN --mount=type=cache,target=/var/cache/buildkit/pip \
     pip install /wheels/$WHEEL_FILE
 
-COPY bugsink/conf_templates/docker.py.template bugsink_conf.py
-COPY gunicorn.docker.conf.py /app/
+RUN cp /usr/local/lib/python3.12/site-packages/bugsink/conf_templates/docker.py.template /app/bugsink_conf.py && \
+    cp /usr/local/lib/python3.12/site-packages/bugsink/gunicorn.docker.conf.py /app/gunicorn.docker.conf.py
 
 RUN ["bugsink-manage", "migrate", "snappea", "--database=snappea"]
 
