@@ -1,6 +1,7 @@
 import os
 
 from django.db import models
+from django.utils._os import safe_join
 
 from .settings import get_settings
 from . import thread_uuid
@@ -44,7 +45,7 @@ class Stat(models.Model):
 
 
 def wakeup_server():
-    wakeup_file = os.path.join(get_settings().WAKEUP_CALLS_DIR, thread_uuid)
+    wakeup_file = safe_join(get_settings().WAKEUP_CALLS_DIR, thread_uuid)
 
     if not os.path.exists(get_settings().WAKEUP_CALLS_DIR):
         os.makedirs(get_settings().WAKEUP_CALLS_DIR, exist_ok=True)

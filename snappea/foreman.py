@@ -14,6 +14,7 @@ import sentry_sdk
 
 from django.conf import settings
 from django.db import connections
+from django.utils._os import safe_join
 
 from sentry_sdk_extensions import capture_or_log_exception
 from performance.context_managers import time_to_logger
@@ -247,7 +248,7 @@ class Foreman:
         # Ensure that anything we might be waiting for is unblocked. A single notification file and .release call is
         # enough because after every wakeup_calls.read() /  acquire call in our codebase the first thing we do is
         # check_for_stopping(), so the release cannot be inadvertently be "used up" by something else.
-        with open(os.path.join(self.settings.WAKEUP_CALLS_DIR, str(uuid.uuid4())), "w"):
+        with open(safe_join(self.settings.WAKEUP_CALLS_DIR, str(uuid.uuid4())), "w"):
             pass
         self.worker_semaphore.release()
 
@@ -266,7 +267,7 @@ class Foreman:
             raise
 
     def _run_forever(self):
-        pre_existing_wakeup_notifications = glob.glob(os.path.join(self.settings.WAKEUP_CALLS_DIR, "*"))
+        pre_existing_wakeup_notifications = glob.glob(safe_join(self.settings.WAKEUP_CALLS_DIR, "*"))
         if len(pre_existing_wakeup_notifications) > 0:
             # We clear the wakeup_calls_dir on startup. Not strictly necessary because such files would be cleared by in
             # the loop anyway, but it's more efficient to do it first.
@@ -304,7 +305,7 @@ class Foreman:
                 # such that dogfood Bugsink will pick up on it. But in the end it's not really that relevant (despite
                 # being interesting) so I just catch the error.
                 with contextlib.suppress(FileNotFoundError):
-                    os.unlink(os.path.join(self.settings.WAKEUP_CALLS_DIR, event.name))
+                    os.unlink(safe_join(self.settings.WAKEUP_CALLS_DIR, event.name))
 
             self.check_for_stopping()  # check after .read() - it may have unblocked via handle_signal()
             while self.create_workers() == self.settings.TASK_QS_LIMIT:
