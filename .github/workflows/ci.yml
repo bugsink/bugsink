@@ -62,6 +62,9 @@ jobs:
           # set +o pipefail disables GH's default "fail the whole pipeline if any stage fails"
           set +e +o pipefail
 
+          # Note: .py files only; at the time of writing I checked the conf_templates/*.template
+          # also; but they had 2 False positives only (SECRET_KEY lives there by design) and I
+          # don't want to pollute templates that other people deal with with "nosec".
           bandit_json_output=$( \
             git ls-files \
               | grep '\.py$' \
