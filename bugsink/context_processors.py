@@ -22,10 +22,11 @@ from phonehome.models import Installation
 SystemWarning = namedtuple('SystemWarning', ['message', 'ignore_url'])
 
 
+# no_bandit_expl: literally a constant string so safe by defenition
 EMAIL_BACKEND_WARNING = mark_safe(
     """Email is not set up, emails won't be sent. To get the most out of Bugsink, please
     <a href="https://www.bugsink.com/docs/settings/#email" target="_blank" class="font-bold text-slate-800
-    dark:text-slate-100">set up email</a>.""")
+    dark:text-slate-100">set up email</a>.""")  # nosec
 
 
 def get_snappea_warnings():

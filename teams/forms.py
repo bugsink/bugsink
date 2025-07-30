@@ -2,6 +2,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.template.defaultfilters import yesno
 
+from bugsink.utils import assert_
 from .models import TeamRole, TeamMembership, Team
 
 User = get_user_model()
@@ -37,7 +38,7 @@ class MyTeamMembershipForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         edit_role = kwargs.pop("edit_role")
         super().__init__(*args, **kwargs)
-        assert self.instance is not None, "This form is only implemented for editing"
+        assert_(self.instance is not None, "This form is only implemented for editing")
 
         if not edit_role:
             del self.fields['role']

@@ -5,6 +5,7 @@ import os
 from contextlib import contextmanager
 
 from django.conf import settings
+from bugsink.utils import assert_
 
 
 _KIBIBYTE = 1024
@@ -127,7 +128,7 @@ def override_settings(**new_settings):
     _settings = AttrLikeDict()
     _settings.update(old_settings)
     for k in new_settings:
-        assert k in old_settings, "Unknown setting (likely error in tests): %s" % k
+        assert_(k in old_settings, "Unknown setting (likely error in tests): %s" % k)
     _settings.update(new_settings)
     yield
     _settings = old_settings

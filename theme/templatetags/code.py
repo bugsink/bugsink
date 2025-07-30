@@ -1,6 +1,7 @@
 from pygments import highlight
 from pygments.lexers import get_lexer_by_name
 from pygments.formatters import HtmlFormatter
+from bugsink.utils import assert_
 
 from django import template
 
@@ -28,8 +29,8 @@ class CodeNode(template.Node):
         content = "\n".join([line.rstrip() for line in content.split("\n")])
 
         lang_identifier, code = content.split("\n", 1)
-        assert lang_identifier.startswith(":::") or lang_identifier.startswith("#!"), \
-            "Expected code block identifier ':::' or '#!' not " + lang_identifier
+        assert_(lang_identifier.startswith(":::") or lang_identifier.startswith("#!"),
+                "Expected code block identifier ':::' or '#!' not " + lang_identifier)
 
         lang = lang_identifier[3:].strip() if lang_identifier.startswith(":::") else lang_identifier[2:].strip()
         is_shebang = lang_identifier.startswith("#!")
@@ -37,4 +38,5 @@ class CodeNode(template.Node):
 
         lexer = get_lexer_by_name(lang, stripall=True)
 
-        return highlight(code, lexer, formatter).replace("highlight", "p-4 mt-4 bg-slate-50 dark:bg-slate-800 syntax-coloring")
+        return highlight(code, lexer, formatter).replace(
+            "highlight", "p-4 mt-4 bg-slate-50 dark:bg-slate-800 syntax-coloring")

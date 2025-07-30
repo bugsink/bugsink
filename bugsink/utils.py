@@ -1,3 +1,4 @@
+import random
 import logging
 from collections import defaultdict
 from urllib.parse import urlparse
@@ -9,6 +10,11 @@ from django.apps import apps
 from django.db.models import ForeignKey, F
 
 from .version import version
+
+# alias for the random module that is explicitly used in "non-cryptographic" contexts; this is a utility to avoid false
+# positives in (bandit) security scans that complain about the use of `random`; by flagging a use as "non-cryptographic"
+# we avoid sprinkling `nosec` (and their explanations) all over the codebase.
+nc_rnd = random
 
 logger = logging.getLogger("bugsink.email")
 
@@ -313,7 +319,7 @@ def delete_deps_with_budget(project_id, referring_model, fk_name, referred_ids, 
 
     my_num_deleted, del_d = referring_model.objects.filter(pk__in=[d['pk'] for d in relevant_ids_after_rec]).delete()
     num_deleted += my_num_deleted
-    assert set(del_d.keys()) == {referring_model._meta.label}  # assert no-cascading (we do that ourselves)
+    assert_(set(del_d.keys()) == {referring_model._meta.label})  # assert no-cascading (we do that ourselves)
 
     if is_for_project:
         # short-circuit: project-deletion implies "no orphans" because the project kill everything with it.
@@ -325,3 +331,11 @@ def delete_deps_with_budget(project_id, referring_model, fk_name, referred_ids, 
     prune_orphans(referring_model, relevant_ids_after_rec)
 
     return num_deleted
+
+
+def assert_(condition, message=None):
+    """Replacement for the `assert` statement as a function. Avoids the (possibly optimized-out) assert statement."""
+    if not condition:
+        if message is None:
+            raise AssertionError()
+        raise AssertionError(message)

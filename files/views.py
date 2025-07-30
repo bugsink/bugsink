@@ -162,7 +162,8 @@ def chunk_upload(request, organization_slug):
     for chunk in chunks:
         data = chunk.getvalue()
 
-        if sha1(data).hexdigest() != chunk.name:
+        # usedforsecurity=False: sha1 is not used cryptographically, and it's part of the protocol, so we use it as is.
+        if sha1(data, usedforsecurity=False).hexdigest() != chunk.name:
             raise Exception("checksum mismatch")
 
         with immediate_atomic():  # a snug fit around the only DB-writing thing we do here to ensure minimal blocking

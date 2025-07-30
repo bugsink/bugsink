@@ -22,6 +22,7 @@ from bugsink.decorators import project_membership_required, issue_membership_req
 from bugsink.transaction import durable_atomic
 from bugsink.period_utils import add_periods_to_datetime
 from bugsink.timed_sqlite_backend.base import different_runtime_limit
+from bugsink.utils import assert_
 
 from events.models import Event
 from events.ua_stuff import get_contexts_enriched_with_ua
@@ -780,7 +781,7 @@ def history_comment_new(request, issue):
 
     if request.method == "POST":
         form = CommentForm(request.POST)
-        assert form.is_valid()  # we have only a textfield with no validation properties; also: no html-side handling
+        assert_(form.is_valid())  # we have only a textfield with no validation properties; also: no html-side handling
 
         if form.cleaned_data["comment"] != "":
             # one special case: we simply ignore newly created comments without any contents as a (presumed) mistake. I
@@ -807,7 +808,7 @@ def history_comment_edit(request, issue, comment_pk):
 
     if request.method == "POST":
         form = CommentForm(request.POST, instance=comment)
-        assert form.is_valid()
+        assert_(form.is_valid())
         form.save()
         return redirect(reverse(issue_history, kwargs={'issue_pk': issue.pk}) + f"#comment-{ comment_pk }")
 

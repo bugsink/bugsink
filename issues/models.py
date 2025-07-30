@@ -9,6 +9,7 @@ from django.template.defaultfilters import date as default_date_filter
 from django.conf import settings
 from django.utils.functional import cached_property
 
+from bugsink.utils import assert_
 from bugsink.volume_based_condition import VolumeBasedCondition
 from bugsink.transaction import delay_on_commit
 from alerts.tasks import send_unmute_alert
@@ -468,7 +469,7 @@ class IssueQuerysetStateManager(object):
             unmute_after=None,
         )
 
-        assert triggering_event is None, "this method can only be called from the UI, i.e. user-not-event-triggered"
+        assert_(triggering_event is None, "this method can only be called from the UI, i.e. user-not-event-triggered")
         # for the rest of this method there's no fancy queryset based stuff (we don't actually do updates on the DB)
         # we resist the temptation to add filter(is_muted=True) in the below because that would actually add a query
         # (for this remark to be true triggering_event must be None, which is asserted for in the above)

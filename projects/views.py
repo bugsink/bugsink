@@ -17,6 +17,7 @@ from teams.models import TeamMembership, Team, TeamRole
 
 from bugsink.app_settings import get_settings, CB_ANYBODY, CB_MEMBERS, CB_ADMINS
 from bugsink.decorators import login_exempt, atomic_for_request_method
+from bugsink.utils import assert_
 
 from alerts.models import MessagingServiceConfig
 from alerts.forms import MessagingServiceConfigForm
@@ -415,7 +416,7 @@ def project_sdk_setup(request, project_pk, platform=""):
     # NOTE about lexers:: I have bugsink/pyments_extensions; but the platforms mentioned there don't necessarily map to
     # what I will make selectable here. "We'll see" whether yet another lookup dict will be needed.
 
-    assert platform in ["", "python", "javascript", "php"]
+    assert_(platform in ["", "python", "javascript", "php"])
 
     template_name = "projects/project_sdk_setup%s.html" % ("_" + platform if platform else "")
 

@@ -1,4 +1,5 @@
 import urllib.parse
+from bugsink.utils import assert_
 
 
 def _colon_port(port):
@@ -8,8 +9,9 @@ def _colon_port(port):
 def build_dsn(base_url, project_id, public_key):
     parts = urllib.parse.urlsplit(base_url)
 
-    assert parts.scheme in ("http", "https"), "The BASE_URL setting must be a valid URL (starting with http or https)."
-    assert parts.hostname, "The BASE_URL setting must be a valid URL. The hostname must be set."
+    assert_(
+        parts.scheme in ("http", "https"), "The BASE_URL setting must be a valid URL (starting with http or https).")
+    assert_(parts.hostname, "The BASE_URL setting must be a valid URL. The hostname must be set.")
 
     return (f"{ parts.scheme }://{ public_key }@{ parts.hostname }{ _colon_port(parts.port) }" +
             f"{ parts.path }/{ project_id }")

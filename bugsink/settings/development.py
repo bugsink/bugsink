@@ -8,7 +8,9 @@ from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
 from bugsink.utils import deduce_allowed_hosts, eat_your_own_dogfood
 
 
-SECRET_KEY = 'django-insecure-$@clhhieazwnxnha-_zah&(bieq%yux7#^07&xsvhn58t)8@xw'
+# no_bandit_expl: _development_ settings, we know that this is insecure; would fail to deploy in prod if (as configured)
+# the django checks (with --check --deploy) are run.
+SECRET_KEY = 'django-insecure-$@clhhieazwnxnha-_zah&(bieq%yux7#^07&xsvhn58t)8@xw'  # nosec B105
 DEBUG = True
 
 

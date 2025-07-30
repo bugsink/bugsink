@@ -1,7 +1,7 @@
 import time
-import random
 import logging
 
+from bugsink.utils import nc_rnd
 from .decorators import shared_task
 
 # for the example tasks, we pick a non-snappea logger on purpose, to check that non-snappea logs are written in the
@@ -12,7 +12,7 @@ logger = logging.getLogger("bugsink")
 @shared_task
 def random_duration():
     logger.info("Starting something of a random duration")
-    time.sleep(random.random() * 10)
+    time.sleep(nc_rnd.random() * 10)
 
 
 @shared_task

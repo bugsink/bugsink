@@ -1,10 +1,11 @@
 from unittest import TestCase as RegularTestCase
 
+from django.utils.safestring import SafeString
 from bugsink.pygments_extensions import choose_lexer_for_pattern, get_all_lexers
 
 from events.utils import IncompleteList, IncompleteDict
 
-from .templatetags.issues import _pygmentize_lines as actual_pygmentize_lines, format_var
+from .templatetags.issues import _pygmentize_lines as actual_pygmentize_lines, format_var, pygmentize
 
 
 def _pygmentize_lines(lines):
@@ -109,6 +110,18 @@ class TestFormatVar(RegularTestCase):
             self._format_var(var),
         )
 
+    def test_format_var_nested_escaping(self):
+        # like format_nested, but with the focus on "does escaping happen correctly?"
+        var = {
+            "hacker": ["<script>"],
+        }
+
+        self.assertEqual(
+            '{&#x27;hacker&#x27;: [&lt;script&gt;]}',
+            format_var(var),
+        )
+        self.assertTrue(isinstance(format_var(var), SafeString))
+
     def test_format_var_deep(self):
         def _deep(level):
             result = None
@@ -138,3 +151,25 @@ class TestFormatVar(RegularTestCase):
             "{'a': 1, 'b': 2, 'c': 3, <i>&lt;9 items trimmed…&gt;</i>}",
             self._format_var(var),
         )
+
+
+class TestPygmentizeEscapeMarkSafe(RegularTestCase):
+
+    def test_escapes_html_in_all_contexts(self):
+        out = pygmentize(
+            {
+                'filename':     'test.py',
+                'pre_context':  ['<script>pre script</script>'],
+                'context_line': '<script>my script</script>',
+                'post_context': ['<script>post script</script>'],
+            },
+            platform='python',
+        )
+
+        for line in out['pre_context'] + [out['context_line']] + out['post_context']:
+            self.assertIsInstance(line, SafeString)
+
+            # we just check for the non-existance of <script> and </script> here because asserting against "whatever
+            # pygmentize does" is not very useful, as it may change in the future.
+            self.assertFalse("<script>" in line)
+            self.assertFalse("</script>" in line)

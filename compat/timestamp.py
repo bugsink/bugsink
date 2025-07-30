@@ -1,6 +1,7 @@
 import datetime
 
 from django.utils.dateparse import parse_datetime
+from bugsink.utils import assert_
 
 
 def parse_timestamp(value):
@@ -25,7 +26,7 @@ def parse_timestamp(value):
 def format_timestamp(value):
     """the reverse of parse_timestamp"""
 
-    assert isinstance(value, datetime.datetime)
-    assert value.tzinfo == datetime.timezone.utc
+    assert_(isinstance(value, datetime.datetime))
+    assert_(value.tzinfo == datetime.timezone.utc)
 
     return value.isoformat()

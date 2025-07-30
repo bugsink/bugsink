@@ -3,6 +3,7 @@ from datetime import timezone, datetime
 from django.db.models import Min
 
 from bugsink.period_utils import add_periods_to_datetime, sub_periods_from_datetime
+from bugsink.utils import assert_
 
 
 def _filter_for_periods(qs, period_name, nr_of_periods, now):
@@ -28,7 +29,7 @@ def check_for_thresholds(qs, now, thresholds, add_for_current=0):
     # The only relevant cost that this mechanism thus adds is the per-project counting of digested events.
 
     # we only allow UTC, and we generally use Django model fields, which are UTC, so this should be good:
-    assert now.tzinfo == timezone.utc
+    assert_(now.tzinfo == timezone.utc)
 
     states = []
 

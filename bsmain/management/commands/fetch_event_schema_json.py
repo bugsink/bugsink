@@ -1,7 +1,9 @@
 import json
 import requests
 import fastjsonschema
-from subprocess import run, PIPE
+
+# no_bandit_expl: subprocess.run is used to call black in an interal utility script; it's just fine.
+from subprocess import run, PIPE  # nosec B404
 
 from django.conf import settings
 
@@ -28,7 +30,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # Fetch the event schema JSON from the API and save it to disk
         json_result = requests.get(
-            "https://raw.githubusercontent.com/getsentry/sentry-data-schemas/main/relay/event.schema.json")
+            "https://raw.githubusercontent.com/getsentry/sentry-data-schemas/main/relay/event.schema.json",
+            timeout=10)
         json_result.raise_for_status()
 
         with open(settings.BASE_DIR / "api/event.schema.json", "w") as f:
@@ -36,7 +39,7 @@ class Command(BaseCommand):
 
         # Fetch the license from GitHub and save it to disk (with annotation about the source)
         license_url = "https://raw.githubusercontent.com/getsentry/sentry-data-schemas/main/LICENSE"
-        license_result = requests.get(license_url)
+        license_result = requests.get(license_url, timeout=10)
         license_result.raise_for_status()
 
         with open(settings.BASE_DIR / "api/LICENSE", "w") as f:
@@ -67,4 +70,5 @@ The source of this file is: %s
 
         # put it through 'black' to make it fit on screen at least, and perhaps to get useable diffs too.
         # (we don't bother putting it in requirements.txt, since it's used so rarely)
-        run(["black", settings.BASE_DIR / "bugsink/event_schema.py"], stdout=PIPE, stderr=PIPE)
+        # no_bandit_expl: subprocess.run is used to call black in an interal utility script; it's just fine.
+        run(["black", settings.BASE_DIR / "bugsink/event_schema.py"], stdout=PIPE, stderr=PIPE)  # nosec

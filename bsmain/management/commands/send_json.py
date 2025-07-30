@@ -1,7 +1,6 @@
 import io
 import uuid
 import brotli
-import random
 
 import time
 import json
@@ -13,6 +12,7 @@ from django.conf import settings
 
 from compat.dsn import get_store_url, get_envelope_url, get_header_value
 from bugsink.streams import compress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE
+from bugsink.utils import nc_rnd
 
 from projects.models import Project
 
@@ -123,9 +123,9 @@ class Command(BaseCommand):
 
             # https://develop.sentry.dev/sdk/data-model/event-payloads/span/#attributes
             # > A random hex string with a length of 16 characters. [which is 8 bytes]
-            data["contexts"]["trace"]["span_id"] = random.getrandbits(64).to_bytes(8, byteorder='big').hex()
+            data["contexts"]["trace"]["span_id"] = nc_rnd.getrandbits(64).to_bytes(8, byteorder='big').hex()
             # > A random hex string with a length of 32 characters. [which is 16 bytes]
-            data["contexts"]["trace"]["trace_id"] = random.getrandbits(128).to_bytes(16, byteorder='big').hex()
+            data["contexts"]["trace"]["trace_id"] = nc_rnd.getrandbits(128).to_bytes(16, byteorder='big').hex()
 
         if options["tag"]:
             if "tags" not in data:
@@ -176,6 +176,7 @@ class Command(BaseCommand):
                     get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
                     headers=headers,
                     data=compressed_data,
+                    timeout=10,
                 )
 
             elif compress == "br":
@@ -187,6 +188,7 @@ class Command(BaseCommand):
                     get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
                     headers=headers,
                     data=compressed_data,
+                    timeout=10,
                 )
 
             else:
@@ -197,6 +199,7 @@ class Command(BaseCommand):
                     get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
                     headers=headers,
                     data=data_bytes,
+                    timeout=10,
                 )
 
             response.raise_for_status()
