@@ -46,7 +46,11 @@ COPY bugsink/conf_templates/docker.py.template bugsink_conf.py
 # Git is needed by setuptools_scm to get the version from the git tag
 RUN apt update && apt install -y git
 RUN pip install -e .
-RUN groupadd -r bugsink && useradd  -r -g bugsink bugsink
+
+RUN groupadd -r bugsink \
+ && useradd  -r -g bugsink bugsink \
+ && mkdir -p /data \
+ && chown -R bugsink:bugsink /data
 
 USER bugsink
 

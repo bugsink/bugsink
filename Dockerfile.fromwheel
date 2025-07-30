@@ -73,7 +73,11 @@ RUN --mount=type=cache,target=/var/cache/buildkit/pip \
 COPY bugsink/conf_templates/docker.py.template bugsink_conf.py
 COPY gunicorn.docker.conf.py /app/
 
-RUN groupadd -r bugsink && useradd  -r -g bugsink bugsink
+RUN groupadd -r bugsink \
+ && useradd  -r -g bugsink bugsink \
+ && mkdir -p /data \
+ && chown -R bugsink:bugsink /data
+
 USER bugsink
 
 RUN ["bugsink-manage", "migrate", "snappea", "--database=snappea"]
