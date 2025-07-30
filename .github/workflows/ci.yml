@@ -41,6 +41,53 @@ jobs:
         # so we just specify it on the command line
         flake8 --extend-ignore=E127,E741,E501,E731 `git ls-files | grep py$`
 
+  bandit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+
+      - name: Install Bandit
+        run: |
+          pip install bandit
+
+      - name: Run Bandit and format results
+        shell: bash
+        run: |
+          # set +e disables "exit on any non-zero command" behavior
+          # set +o pipefail disables GH's default "fail the whole pipeline if any stage fails"
+          set +e +o pipefail
+
+          bandit_json_output=$( \
+            git ls-files \
+              | grep '\.py$' \
+              | xargs bandit -q -f json --ini .bandit \
+          )
+          bandit_exit_code=$?
+
+          echo "$bandit_json_output" \
+            | jq -r '
+                .results[]
+                | [ .filename
+                  , .line_number
+                  , .test_id
+                  , .issue_confidence
+                  , .issue_severity
+                  , .test_name
+                  ]
+                | @tsv
+              ' \
+            | column -t
+
+          if [[ $bandit_exit_code -ne 0 ]]; then
+            echo "Bandit found issues (exit code $bandit_exit_code)"
+            exit $bandit_exit_code
+          fi
+
   test:
     runs-on: ubuntu-latest
     strategy:
