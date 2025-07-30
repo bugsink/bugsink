@@ -51,9 +51,9 @@ jobs:
         with:
           python-version: 3.12
 
-      - name: Install Bandit
+      - name: Install Bandit and Plugins
         run: |
-          pip install bandit
+          pip install bandit spoils
 
       - name: Run Bandit and format results
         shell: bash

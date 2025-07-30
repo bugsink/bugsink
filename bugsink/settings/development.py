@@ -3,6 +3,7 @@ from .default import BASE_DIR, LOGGING, DATABASES, I_AM_RUNNING
 
 import os
 
+from django.utils._os import safe_join
 from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
 
 from bugsink.utils import deduce_allowed_hosts, eat_your_own_dogfood
@@ -112,7 +113,7 @@ if not I_AM_RUNNING == "TEST":
         "local_flat_files": {
             "STORAGE": "events.storage.FileEventStorage",
             "OPTIONS": {
-                "basepath": os.path.join(BASE_DIR, "filestorage"),
+                "basepath": safe_join(BASE_DIR, "filestorage"),
             },
             "USE_FOR_WRITE": True,
         },
