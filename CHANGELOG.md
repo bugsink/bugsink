@@ -1,5 +1,10 @@
 # Changes
 
+## 1.7.6 (1 August 2025)
+
+* envelope-headers `sent_at` check should allow 00+00 (See #179)
+* evenlope-header validation failure should not lead to envelope-rejection (See #179)
+
 ## 1.7.5 (31 July 2025)
 
 ### General Improvements
