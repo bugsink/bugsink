@@ -81,7 +81,9 @@ def filter_valid_envelope_headers(headers):
                 envelope_validators[key](val)
                 result[key] = val
             except Exception:
-                pass
+                # no_bandit_expl: try/except/pass over a very small piece of code is fine (though we _could_ rewrite
+                # the validators into true/false shape to avoid this too)
+                pass  # nosec B110
 
     return result
 
@@ -136,6 +138,8 @@ def filter_valid_item_headers(headers):
                 item_validators[key](val)
                 result[key] = val
             except Exception:
-                pass
+                # no_bandit_expl: try/except/pass over a very small piece of code is fine (though we _could_ rewrite
+                # the validators into true/false shape to avoid this too)
+                pass  # nosec B110
 
     return result
