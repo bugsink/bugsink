@@ -32,6 +32,7 @@ from bsmain.management.commands.send_json import Command as SendJsonCommand
 from .views import BaseIngestAPIView
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 from .event_counter import check_for_thresholds
+
 from bugsink.exceptions import ViolatedExpectation
 
 
@@ -884,3 +885,17 @@ class TestParser(RegularTestCase):
 
         with self.assertRaises(StopIteration):
             header, item = next(items)
+
+    def test_garbage_sent_at(self):
+        # based on test_envelope_with_2_items_last_newline_omitted, but with a garbage sent_at value
+        parser = StreamingEnvelopeParser(io.BytesIO(b"""{"event_id":"9ec79c33ec9942ab8353589fcb2e04dc","dsn":"https://e12d836b15bb49d7bbf99e64295d995b:@sentry.io/42","sent_at":"garbage"}\n{"type":"attachment","length":10,"content_type":"text/plain","filename":"hello.txt"}\n\xef\xbb\xbfHello\r\n\n{"type":"event","length":41,"content_type":"application/json","filename":"application.log"}\n{"message":"hello world","level":"error"}\n"""))  # noqa
+
+        envelope_headers = parser.get_envelope_headers()
+
+        # note: sent_at filtered out
+        self.assertEqual(
+            {"event_id": "9ec79c33ec9942ab8353589fcb2e04dc",
+             "dsn": "https://e12d836b15bb49d7bbf99e64295d995b:@sentry.io/42"},
+            envelope_headers)
+
+        # the rest of the test is not repeated here

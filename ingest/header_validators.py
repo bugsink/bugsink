@@ -62,6 +62,20 @@ def validate_envelope_headers(headers):
             envelope_validators[key](val)
 
 
+def filter_valid_envelope_headers(headers):
+    result = {}
+
+    for key, val in headers.items():
+        if key in envelope_validators:  # this implies that only known headers remain
+            try:
+                envelope_validators[key](val)
+                result[key] = val
+            except Exception:
+                pass
+
+    return result
+
+
 ALLOWED_TYPES = {
     "event", "transaction", "attachment", "session", "sessions", "feedback", "user_report", "client_report",
     "replay_event", "replay_recording", "profile", "profile_chunk", "check_in", "log", "otel_log"
@@ -99,3 +113,19 @@ def validate_item_headers(headers):
     for key, val in headers.items():
         if key in item_validators:
             item_validators[key](val)
+
+
+def filter_valid_item_headers(headers):
+    if headers.get("type") != "event":
+        return headers  # or {} if you want to remove all item headers
+
+    result = {}
+    for key, val in headers.items():
+        if key in item_validators:  # this implies that only known headers remain
+            try:
+                item_validators[key](val)
+                result[key] = val
+            except Exception:
+                pass
+
+    return result

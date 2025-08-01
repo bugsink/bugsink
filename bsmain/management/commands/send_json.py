@@ -33,6 +33,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--x-forwarded-for", action="store",
             help="Set the X-Forwarded-For header to test whether your setup is properly ignoring it")
+        parser.add_argument("--sent-at", action="store", default=None, help="Set the sent_at header to this value")
         parser.add_argument("kind", action="store", help="The kind of object (filename, project, issue, event)")
         parser.add_argument("identifiers", nargs="+")
 
@@ -153,10 +154,14 @@ class Command(BaseCommand):
 
             data_bytes = json.dumps(data).encode("utf-8")
             if use_envelope:
-                # the smallest possible envelope:
                 event_id = data.get("event_id", uuid.uuid4().hex)
 
-                data_bytes = (b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") +
+                sent_at_snip = (b',"sent_at":"%s"' % options["sent_at"].encode("utf-8")) if options["sent_at"] else b""
+
+                # the smallest possible envelope:
+                data_bytes = (b'{"event_id": "%s"' % event_id.encode("utf-8") +
+                              sent_at_snip +
+                              b'}\n{"type": "event"}\n' +
                               data_bytes)
 
             if compress in ["gzip", "deflate"]:
