@@ -67,6 +67,9 @@ SNAPPEA = {
 
 }
 
+# Not actually a "database", this is a (tmp to the container) message queue.
+DATABASES["snappea"]["NAME"] = '/tmp/snappea.sqlite3'
+
 
 if os.getenv("DATABASE_URL"):
     DATABASE_URL = os.getenv("DATABASE_URL")
@@ -100,10 +103,6 @@ else:
     # which allows for throwaway setups (no volume mounted) to work out of the box.
     DATABASES['default']['NAME'] = os.getenv("DATABASE_PATH", '/data/db.sqlite3')
     database_path = os.path.dirname(DATABASES['default']['NAME'])
-    if not os.path.exists(database_path):
-        print(f"WARNING: {database_path} dir does not exist; creating it.")
-        print("WARNING: data will be lost when the container is removed.")
-        os.makedirs(database_path)
 
 
 if os.getenv("EMAIL_HOST"):
