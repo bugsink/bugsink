@@ -32,6 +32,7 @@ from bsmain.management.commands.send_json import Command as SendJsonCommand
 from .views import BaseIngestAPIView
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 from .event_counter import check_for_thresholds
+from .header_validators import validate_envelope_headers
 
 from bugsink.exceptions import ViolatedExpectation
 
@@ -899,3 +900,21 @@ class TestParser(RegularTestCase):
             envelope_headers)
 
         # the rest of the test is not repeated here
+
+
+class HeaderValidationTest(RegularTestCase):
+    # incomplete: regression-based-first (we'll add more later)
+
+    def test_sent_at_trailing_zeros(self):
+        # regression test for #179
+        validate_envelope_headers({"sent_at": "2025-07-31T23:05:37.0926585+00:00"})
+        validate_envelope_headers({"sent_at": "2025-07-31T23:05:37.0926585Z"})
+
+        with self.assertRaises(ParseError):
+            validate_envelope_headers({"sent_at": "garbage"})
+
+        with self.assertRaises(ParseError):
+            validate_envelope_headers({"sent_at": "2025-07-31T23:05:37.0926585032123+00:00"})
+
+        with self.assertRaises(ParseError):
+            validate_envelope_headers({"sent_at": "2025-07-31T23:05:37.0926+12:00"})

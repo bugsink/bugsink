@@ -16,7 +16,7 @@ from .exceptions import ParseError
 # * item headers -> only those that are relevant for "event" items
 
 
-_RFC3339_Z = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$")
+_RFC3339_Z = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(Z|\+00:00)$")
 _UUID32 = re.compile(r"^[0-9a-fA-F]{32}$")
 _UUID36 = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
@@ -35,12 +35,22 @@ def validate_sdk(v):
 
 def validate_sent_at(v):
     if not isinstance(v, str) or not _RFC3339_Z.match(v):
-        raise ParseError(f'Envelope header "sent_at" must be an RFC3339 UTC timestamp ending in Z: {v}')
+        raise ParseError(f'Envelope header "sent_at" must be an RFC3339 UTC timestamp: {v}')
 
     try:
-        datetime.strptime(v, "%Y-%m-%dT%H:%M:%SZ")
-    except ValueError:
-        datetime.fromisoformat(v.replace("Z", "+00:00"))
+        # Convert Z to +00:00 for isoformat compatibility
+        if v.endswith("Z"):
+            v = v[:-1] + "+00:00"
+
+        # Truncate fractional seconds to 6 digits (Python's datetime.fromisoformat supports up to 6 digits)
+        v = re.sub(
+            r"(\.\d{1,6})\d*(\+00:00)$",  # keep only first 6 digits before +00:00
+            r"\1\2",
+            v
+        )
+        return datetime.fromisoformat(v)
+    except ValueError as e:
+        raise ParseError(f'Envelope header "sent_at" is not a valid RFC3339 timestamp: {e}') from e
 
 
 def validate_event_id(v):
