@@ -159,9 +159,9 @@ class Command(BaseCommand):
                 sent_at_snip = (b',"sent_at":"%s"' % options["sent_at"].encode("utf-8")) if options["sent_at"] else b""
 
                 # the smallest possible envelope:
-                data_bytes = (b'{"event_id": "%s"' % event_id.encode("utf-8") +
+                data_bytes = (b'{"event_id":"%s"' % event_id.encode("utf-8") +
                               sent_at_snip +
-                              b'}\n{"type": "event"}\n' +
+                              b'}\n{"type":"event"}\n' +
                               data_bytes)
 
             if compress in ["gzip", "deflate"]:
