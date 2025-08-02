@@ -1,5 +1,6 @@
 {% extends "barest_base.html" %}
 {% load static %}
+{% load i18n %}
 
 {% block title %}Logged out · {{ site_title }}{% endblock %}
 
@@ -12,7 +13,7 @@
         </div>
 
         <div class="p-12 md:pt-24 md:pl-24 md:pr-24 md:pb-16">
-        You have been logged out. <a href="{% url 'login' %}" class="text-cyan-500 dark:text-cyan-300">Log in again</a>.
+        {% translate "You have been logged out." %} <a href="{% url 'login' %}" class="text-cyan-500 dark:text-cyan-300">{% translate "Log in again</a>." %}
         </div>
 
     </div>

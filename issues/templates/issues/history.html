@@ -1,11 +1,12 @@
 {% extends "issues/base.html" %}
 {% load static %}
 {% load user %}
+{% load i18n %}
 
 {% block tab_content %}
 
-<h1 class="text-2xl font-bold text-ellipsis whitespace-nowrap overflow-hidden">History</h1>
-<div class="italic">Most recent first</div>
+<h1 class="text-2xl font-bold text-ellipsis whitespace-nowrap overflow-hidden">{% translate "History" %}</h1>
+<div class="italic">{% translate "Most recent first" %}</div>
 
 
     <div class="flex"><!-- single turningpoint (for 'your comments')-->
@@ -17,12 +18,12 @@
         <div class="border-slate-300 dark:border-slate-600 border-2 rounded-md mt-6 flex-auto"><!-- the "your comments balloon" -->
             <div class="pl-4 flex triangle-left"><!-- 'header' row -->
                 <div class="mt-4 mb-4">
-                    <span class="font-bold text-slate-800 dark:text-slate-100 italic">Add comment as manual annotation</span>
+                    <span class="font-bold text-slate-800 dark:text-slate-100 italic">{% translate "Add comment as manual annotation" %}</span>
                 </div>
 
                 <div class="ml-auto flex"> <!-- 'header' row right side -->
                     <div class="p-4">
-                        Now
+                        {% translate "Now" %}
                     </div>
                 </div>
             </div>
@@ -31,8 +32,8 @@
                     <div class="mt-4">
                     <form action="{% url "history_comment_new" issue_pk=issue.id %}" method="post">
                     {% csrf_token %}
-                    <textarea name="comment" placeholder="comments..." class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md w-full h-32" onkeypress="submitOnCtrlEnter(event)"></textarea>
-                    <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring">Post comment</button>
+                    <textarea name="comment" placeholder="{% translate 'comments...' %}" class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md w-full h-32" onkeypress="submitOnCtrlEnter(event)"></textarea>
+                    <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring">{% translate "Post comment" %}</button>
                     </form>
                     </div>
                 </div>{# 'body' part of the balloon #}
@@ -55,7 +56,7 @@
         <div class="border-slate-300 dark:border-slate-600 border-2 rounded-md mt-6 flex-auto js-balloon"><!-- the "balloon" -->
             <div class="pl-4 flex triangle-left"><!-- 'header' row -->
                 <div class="mt-4 mb-4">
-                    <span class="font-bold text-slate-800 dark:text-slate-100">{{ turningpoint.get_kind_display }}</span> by
+                    <span class="font-bold text-slate-800 dark:text-slate-100">{{ turningpoint.get_kind_display }}</span> {% translate "by" context "History" %}
                     <span class="font-bold text-slate-800 dark:text-slate-100">{% if turningpoint.user_id %}{{ turningpoint.user|best_displayname }}{% else %}Bugsink{% endif %}</span>
 
                     {% if turningpoint.user_id == request.user.id %}

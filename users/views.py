@@ -7,6 +7,7 @@ from django.http import Http404
 from django.utils import timezone
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.utils.translation import gettext as _ 
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
 from bugsink.decorators import atomic_for_request_method
@@ -226,7 +227,10 @@ def preferences(request):
 
         if form.is_valid():
             form.save()
-            messages.success(request, "Updated preferences")
+            from django.utils import translation
+            translation.activate(user.language if user.language != 'auto' else translation.get_language())
+
+            messages.success(request, _("Updated preferences"))
             return redirect('preferences')
 
     else:

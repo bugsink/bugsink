@@ -1,5 +1,6 @@
 {% extends "issues/base.html" %}
 {% load static %}
+{% load i18n %}
 
 {% block tab_content %}
 
@@ -20,7 +21,7 @@
         <h1 class="text-2xl font-bold mt-4">No tags</h1>
 
         <div class="mb-6">
-            No tags found for this issue.
+            {% trans "No tags found for this issue." %}
         </div>
 
     {% endfor %}

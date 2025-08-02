@@ -1,7 +1,8 @@
 {% load add_to_qs %}
+{% load i18n %}
 
                 <form action="{% url this_view issue_pk=issue.pk nav="last" %}" method="get">{# nav="last": when doing a new search on an event-page, you want the most recent matching event to show up #}
-                <input type="text" name="q" value="{{ q }}" placeholder="search..." class="focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md mr-2"/>
+                <input type="text" name="q" value="{{ q }}" placeholder="{% translate 'search...' %}" class="focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md mr-2"/>
                 </form>
 
                 {% if has_prev %} {# no need for 'is_first': if you can go to the left, you can go all the way to the left too #}

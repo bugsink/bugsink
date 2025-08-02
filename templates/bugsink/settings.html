@@ -2,15 +2,16 @@
 {% load static %}
 {% load tailwind_forms %}
 {% load stricter_templates %}
+{% load i18n %}
 
-{% block title %}Settings  · {{ site_title }}{% endblock %}
+{% block title %}{% translate "Settings" %}  · {{ site_title }}{% endblock %}
 
 {% block content %}
 
 <div class="m-4">
 
     <div>
-        <h1 class="text-4xl my-4 font-bold">Site Settings</h1>
+        <h1 class="text-4xl my-4 font-bold">{% translate "Site Settings" %}</h1>
     </div>
 
     <h1 class="text-2xl font-bold mt-4">Bugsink</h1>

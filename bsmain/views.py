@@ -20,7 +20,7 @@ def auth_token_list(request):
         if action == "delete":
             AuthToken.objects.get(pk=pk).delete()
 
-            messages.success(request, 'Token deleted')
+            messages.success(request, _('Token deleted'))
             return redirect('auth_token_list')
 
     return render(request, 'bsmain/auth_token_list.html', {

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% load tailwind_forms %}
+{% load i18n %}
 
 {% block title %}Invite Members · {{ project.name }}  · {{ site_title }}{% endblock %}
 
@@ -22,11 +23,11 @@
         {% endif %}
 
         <div>
-            <h1 class="text-4xl my-4 font-bold">Invite members ({{ project.name }})</h1>
+            <h1 class="text-4xl my-4 font-bold">{% blocktranslate with project_name=project.name %}Invite members ({{ project_name }}){% endblocktranslate %}</h1>
         </div>
 
         <div class="mt-4 mb-4">
-            Invite a member to join the project "{{ project.name }}". They will receive an email with a link to join.
+            {% blocktranslate with project_name=project.name %}Invite a member to join the project "{{ project_name }}". They will receive an email with a link to join.{% endblocktranslate %}
         </div>
 
         {% tailwind_formfield_implicit form.email %}
@@ -46,9 +47,9 @@
             {% endif %}
         </div>
 
-        <button name="action" value="invite" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md">Invite Member</button>
-        <button name="action" value="invite_and_add_another" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">Invite and add another</button>
-        <a href="{% url "project_members" project_pk=project.pk %}" class="font-bold text-slate-500 dark:text-slate-300 ml-4">Cancel</a>
+        <button name="action" value="invite" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md">{% translate "Invite Member" %}</button>
+        <button name="action" value="invite_and_add_another" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">{% translate "Invite and add another" %}</button>
+        <a href="{% url "project_members" project_pk=project.pk %}" class="font-bold text-slate-500 dark:text-slate-300 ml-4">{% translate "Cancel" %}</a>
 
         </form>
 

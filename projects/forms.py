@@ -2,6 +2,8 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.template.defaultfilters import yesno
 from django.urls import reverse
+from django.utils.translation import gettext_lazy as _
+from django.utils.translation import pgettext_lazy
 
 from bugsink.utils import assert_
 from teams.models import TeamMembership
@@ -12,9 +14,9 @@ User = get_user_model()
 
 
 class ProjectMemberInviteForm(forms.Form):
-    email = forms.EmailField(label='Email', required=True)
+    email = forms.EmailField(label=_('Email'), required=True)
     role = forms.ChoiceField(
-        label='Role', choices=ProjectRole.choices, required=True, initial=ProjectRole.MEMBER, widget=forms.RadioSelect)
+        label=_('Role'), choices=ProjectRole.choices, required=True, initial=ProjectRole.MEMBER, widget=forms.RadioSelect)
 
     def __init__(self, user_must_exist, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -43,8 +45,11 @@ class MyProjectMembershipForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         assert_(self.instance is not None, "This form is only implemented for editing")
 
+        self.fields['role'].label = _("Role")
+
         if not edit_role:
             del self.fields['role']
+
 
         try:
             tm = TeamMembership.objects.get(team=self.instance.project.team, user=self.instance.user)
@@ -60,6 +65,7 @@ class MyProjectMembershipForm(forms.ModelForm):
             sea_default = self.instance.user.send_email_alerts
 
         empty_label = 'Default (%s, as per %s settings)' % (yesno(sea_default).capitalize(), sea_defined_at)
+        self.fields['send_email_alerts'].label = _("Send email alerts")
         self.fields['send_email_alerts'].empty_label = empty_label
         self.fields['send_email_alerts'].widget.choices[0] = ("unknown", empty_label)
 
@@ -80,7 +86,11 @@ class ProjectForm(forms.ModelForm):
         team_qs = kwargs.pop("team_qs", None)
         super().__init__(*args, **kwargs)
 
-        self.fields["retention_max_event_count"].help_text = "The maximum number of events to store before evicting."
+        self.fields["name"].label = pgettext_lazy("Project", "Name")
+        self.fields["visibility"].label = _("Visibility")
+
+        self.fields["retention_max_event_count"].label = _("Retention max event count")
+        self.fields["retention_max_event_count"].help_text = _("The maximum number of events to store before evicting.")
         if self.instance is not None and self.instance.pk is not None:
             # for editing, we disallow changing the team. consideration: it's somewhat hard to see what the consequences
             # for authorization are (from the user's perspective).
@@ -88,10 +98,9 @@ class ProjectForm(forms.ModelForm):
 
             # for editing, the DSN is availabe, but read-only
             self.fields["dsn"].initial = self.instance.dsn
-            self.fields["dsn"].label = "DSN (read-only)"
-            self.fields["dsn"].help_text = 'Use the DSN to <a href="' +\
-                                           reverse('project_sdk_setup', kwargs={'project_pk': self.instance.pk}) +\
-                                           '" class="text-cyan-800 font-bold">set up the SDK</a>.'
+            self.fields["dsn"].label = _("DSN (read-only)")
+            href = reverse('project_sdk_setup', kwargs={'project_pk': self.instance.pk})
+            self.fields["dsn"].help_text = _("Use the DSN to <a href=\"%s\" class=\"text-cyan-800 font-bold\">set up the SDK</a>.") % href
 
             # if we ever push slug to the form, editing it should probably be disallowed as well (but mainly because it
             # has consequences on the issue's short identifier)
@@ -102,9 +111,8 @@ class ProjectForm(forms.ModelForm):
             # it suggests at least somewhere that teams are a thing)
             self.fields["team"].queryset = team_qs
             if team_qs.count() == 0:
-                self.fields["team"].help_text = 'You don\'t have any teams yet; <a href="' +\
-                                                reverse("team_new") +\
-                                                '" class="text-cyan-800 font-bold">Create a team first.</a>'
+                href = reverse("team_new")
+                self.fields["team"].help_text = _('You don\'t have any teams yet; <a href="%s" class="text-cyan-800 font-bold">Create a team first.</a>') % href
             elif team_qs.count() == 1:
                 self.fields["team"].initial = team_qs.first()
 
