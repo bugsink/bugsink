@@ -35,7 +35,7 @@ def validate_sdk(v):
 
 def validate_sent_at(v):
     if not isinstance(v, str) or not _RFC3339_Z.match(v):
-        raise ParseError(f'Envelope header "sent_at" must be an RFC3339 UTC timestamp: {v}')
+        raise ParseError('Envelope header "sent_at" must be an RFC3339 UTC timestamp.')
 
     try:
         # Convert Z to +00:00 for isoformat compatibility
@@ -50,12 +50,12 @@ def validate_sent_at(v):
         )
         return datetime.fromisoformat(v)
     except ValueError as e:
-        raise ParseError(f'Envelope header "sent_at" is not a valid RFC3339 timestamp: {e}') from e
+        raise ParseError('Envelope header "sent_at" is not a valid RFC3339 timestamp.') from e
 
 
 def validate_event_id(v):
     if not isinstance(v, str) or not (_UUID32.match(v) or _UUID36.match(v)):
-        raise ParseError(f'Envelope header "event_id" must be a valid UUID string: {v}')
+        raise ParseError('Envelope header "event_id" must be a valid UUID string.')
 
 
 envelope_validators = {
@@ -107,7 +107,7 @@ def validate_type(v):
 
 def _validate_length(v):
     if not isinstance(v, int) or v < 0:
-        raise ParseError(f'Item header "length" must be a non-negative integer, got: {v}')
+        raise ParseError('Item header "length" must be a non-negative integer.')
 
 
 item_validators = {
