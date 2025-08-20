@@ -20,9 +20,4 @@ class Migration(migrations.Migration):
             name='blame_template',
             field=models.CharField(blank=True, max_length=500, null=True),
         ),
-        migrations.AddField(
-            model_name='project',
-            name='issue_template',
-            field=models.CharField(blank=True, max_length=500, null=True),
-        ),
     ]
