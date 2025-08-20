@@ -114,7 +114,7 @@ class ProjectForm(forms.ModelForm):
     class Meta:
         model = Project
 
-        fields = ["team", "name", "visibility", "retention_max_event_count"]
+        fields = ["team", "name", "visibility", "retention_max_event_count", "blame_template", "blame_ref_tag", "issue_template"]
         # "slug",  <= for now, we just do this in the model; if we want to do it in the form, I would want to have some
         # JS in place like we have in the admin. django/contrib/admin/static/admin/js/prepopulate.js is an example of
         # how Django does this (but it requires JQuery)
