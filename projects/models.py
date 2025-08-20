@@ -73,9 +73,7 @@ class Project(models.Model):
     # id is implied which makes it an Integer; we would prefer a uuid but the sentry clients have int baked into the DSN
     # parser (we could also introduce a special field for that purpose but that's ugly too)
 
-    team = models.ForeignKey(
-        "teams.Team", blank=False, null=True, on_delete=models.SET_NULL
-    )
+    team = models.ForeignKey("teams.Team", blank=False, null=True, on_delete=models.SET_NULL)
 
     name = models.CharField(max_length=255, blank=False, null=False, unique=True)
     slug = models.SlugField(max_length=50, blank=False, null=False, unique=True)
@@ -91,9 +89,7 @@ class Project(models.Model):
     # "public" key is public, and if you can help it it's always better to keep it private.
     sentry_key = models.UUIDField(editable=False, default=uuid.uuid4)
 
-    users = models.ManyToManyField(
-        settings.AUTH_USER_MODEL, blank=True, through="ProjectMembership"
-    )
+    users = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, through="ProjectMembership")
 
     # We don't implement private_key because as of late 2023 the Sentry documentation says the following:
     # > The secret part of the DSN is optional and effectively deprecated. While clients will still honor it, if
@@ -102,12 +98,8 @@ class Project(models.Model):
 
     # denormalized/cached/counted fields below
     has_releases = models.BooleanField(editable=False, default=False)
-    digested_event_count = models.PositiveIntegerField(
-        null=False, blank=False, default=0, editable=False
-    )
-    stored_event_count = models.IntegerField(
-        blank=False, null=False, default=0, editable=False
-    )
+    digested_event_count = models.PositiveIntegerField(null=False, blank=False, default=0, editable=False)
+    stored_event_count = models.IntegerField(blank=False, null=False, default=0, editable=False)
 
     # alerting conditions
     alert_on_new_issue = models.BooleanField(default=True)
@@ -116,10 +108,8 @@ class Project(models.Model):
 
     # visibility
     visibility = models.IntegerField(
-        choices=ProjectVisibility.choices,
-        default=ProjectVisibility.TEAM_MEMBERS,
-        help_text="Which users can see this project and its issues?",
-    )
+        choices=ProjectVisibility.choices, default=ProjectVisibility.TEAM_MEMBERS,
+        help_text="Which users can see this project and its issues?")
 
     # ingestion/digestion quota
     quota_exceeded_until = models.DateTimeField(null=True, blank=True)
@@ -127,12 +117,8 @@ class Project(models.Model):
 
     # retention
     retention_max_event_count = models.PositiveIntegerField(default=10_000)
-    issue_template = models.CharField(
-        max_length=500,
-        blank=True,
-        null=True,
-        help_text="What link template to use while refering to issues in comments etc? For example https://gitea.bugsink.com/owner/project/issues/<index>",
-    )
+
+    # blame config
     blame_template = models.CharField(
         max_length=500,
         blank=True,
@@ -159,7 +145,6 @@ class Project(models.Model):
 
     def get_latest_release(self):
         from releases.models import ordered_releases
-
         if not hasattr(self, "_latest_release"):  # per-instance cache
             self._latest_release = list(ordered_releases(project=self))[-1]
         return self._latest_release
@@ -168,9 +153,7 @@ class Project(models.Model):
         if self.slug in [None, ""]:
             # we don't want to have empty slugs, so we'll generate a unique one
             base_slug = slugify(self.name)
-            similar_slugs = Project.objects.filter(
-                slug__startswith=base_slug
-            ).values_list("slug", flat=True)
+            similar_slugs = Project.objects.filter(slug__startswith=base_slug).values_list("slug", flat=True)
             self.slug = base_slug
             i = 0
             while self.slug in similar_slugs:
