@@ -48,14 +48,23 @@ class Event(models.Model):
     # https://develop.sentry.dev/sdk/event-payloads/ (supposedly more human-readable)
     # https://develop.sentry.dev/sdk/event-payloads/types/ (more up-to-date and complete)
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, help_text="Bugsink-internal")
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text="Bugsink-internal",
+    )
 
     ingested_at = models.DateTimeField(blank=False, null=False)
     digested_at = models.DateTimeField(db_index=True, blank=False, null=False)
     remote_addr = models.GenericIPAddressField(blank=True, null=True, default=None)
 
-    issue = models.ForeignKey("issues.Issue", blank=False, null=False, on_delete=models.DO_NOTHING)
-    grouping = models.ForeignKey("issues.Grouping", blank=False, null=False, on_delete=models.DO_NOTHING)
+    issue = models.ForeignKey(
+        "issues.Issue", blank=False, null=False, on_delete=models.DO_NOTHING
+    )
+    grouping = models.ForeignKey(
+        "issues.Grouping", blank=False, null=False, on_delete=models.DO_NOTHING
+    )
 
     # The docs say:
     # > Required. Hexadecimal string representing a uuid4 value. The length is exactly 32 characters. Dashes are not
@@ -63,8 +72,12 @@ class Event(models.Model):
     # But event.schema.json has this anyOf [..] null and only speaks of "it is strongly recommended to generate that
     # uuid4 clientside". In any case, we just rely on the envelope's event_id (required per the envelope spec).
     # Not a primary key: events may be duplicated across projects
-    event_id = models.UUIDField(primary_key=False, null=False, editable=False, help_text="As per the sent data")
-    project = models.ForeignKey(Project, blank=False, null=False, on_delete=models.DO_NOTHING)
+    event_id = models.UUIDField(
+        primary_key=False, null=False, editable=False, help_text="As per the sent data"
+    )
+    project = models.ForeignKey(
+        Project, blank=False, null=False, on_delete=models.DO_NOTHING
+    )
 
     data = models.TextField(blank=False, null=False)
 
@@ -80,11 +93,15 @@ class Event(models.Model):
     # > ### Optional Attributes
 
     # > The record severity. Defaults to error. The value needs to be one on the supported level string values.
-    level = models.CharField(max_length=len("warning"), blank=True, null=False, choices=Level.choices)
+    level = models.CharField(
+        max_length=len("warning"), blank=True, null=False, choices=Level.choices
+    )
 
     # > The name of the logger which created the record.
     # max_length was deduced from current (late 2023) Sentry's Group model
-    logger = models.CharField(max_length=64, blank=True, null=False, default="")  # , db_index=True)
+    logger = models.CharField(
+        max_length=64, blank=True, null=False, default=""
+    )  # , db_index=True)
 
     # > The name of the transaction which caused this exception. For example, in a web app, this might be the route name
     # max_length was deduced from current (late 2023) Sentry's code ("based on the maximum for transactions in relay")
@@ -118,12 +135,22 @@ class Event(models.Model):
     debug_info = models.CharField(max_length=255, blank=True, null=False, default="")
 
     # denormalized/cached fields:
-    calculated_type = models.CharField(max_length=128, blank=True, null=False, default="")
-    calculated_value = models.TextField(max_length=1024, blank=True, null=False, default="")
+    calculated_type = models.CharField(
+        max_length=128, blank=True, null=False, default=""
+    )
+    calculated_value = models.TextField(
+        max_length=1024, blank=True, null=False, default=""
+    )
     # transaction = models.CharField(max_length=200, blank=True, null=False, default="")  defined first-class above
-    last_frame_filename = models.CharField(max_length=255, blank=True, null=False, default="")
-    last_frame_module = models.CharField(max_length=255, blank=True, null=False, default="")
-    last_frame_function = models.CharField(max_length=255, blank=True, null=False, default="")
+    last_frame_filename = models.CharField(
+        max_length=255, blank=True, null=False, default=""
+    )
+    last_frame_module = models.CharField(
+        max_length=255, blank=True, null=False, default=""
+    )
+    last_frame_function = models.CharField(
+        max_length=255, blank=True, null=False, default=""
+    )
 
     # 1-based, because this is for human consumption only, and using 0-based internally when we don't actually do
     # anything with this value other than showing it to humans is super-confusing. Sorry Dijkstra!
@@ -134,7 +161,9 @@ class Event(models.Model):
     irrelevance_for_retention = models.PositiveIntegerField(blank=False, null=False)
     never_evict = models.BooleanField(blank=False, null=False, default=False)
 
-    storage_backend = models.CharField(max_length=255, blank=True, null=True, default=None, editable=False)
+    storage_backend = models.CharField(
+        max_length=255, blank=True, null=True, default=None, editable=False
+    )
 
     # The following list of attributes are mentioned in the docs but are not attrs on our model (because we don't need
     # them to be [yet]):
@@ -160,7 +189,14 @@ class Event(models.Model):
             ("issue", "digest_order"),
         ]
         indexes = [
-            models.Index(fields=["project", "never_evict", "digested_at", "irrelevance_for_retention"]),
+            models.Index(
+                fields=[
+                    "project",
+                    "never_evict",
+                    "digested_at",
+                    "irrelevance_for_retention",
+                ]
+            ),
             models.Index(fields=["issue", "digested_at"]),
         ]
 
@@ -192,11 +228,22 @@ class Event(models.Model):
         return "/events/event/%s/download/" % self.id
 
     def title(self):
-        return get_title_for_exception_type_and_value(self.calculated_type, self.calculated_value)
+        return get_title_for_exception_type_and_value(
+            self.calculated_type, self.calculated_value
+        )
 
     @classmethod
-    def from_ingested(cls, event_metadata, digested_at, digest_order, stored_event_count, issue, grouping, parsed_data,
-                      denormalized_fields):
+    def from_ingested(
+        cls,
+        event_metadata,
+        digested_at,
+        digest_order,
+        stored_event_count,
+        issue,
+        grouping,
+        parsed_data,
+        denormalized_fields,
+    ):
 
         # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
@@ -211,7 +258,9 @@ class Event(models.Model):
         # just want to, paper over (it's not worth dropping the event for).
         try:
             event = cls.objects.create(
-                event_id=event_metadata["event_id"],  # the metadata is the envelope's event_id, which takes precedence
+                event_id=event_metadata[
+                    "event_id"
+                ],  # the metadata is the envelope's event_id, which takes precedence
                 project_id=event_metadata["project_id"],
                 issue=issue,
                 grouping=grouping,
@@ -219,33 +268,26 @@ class Event(models.Model):
                 digested_at=digested_at,
                 data=json.dumps(parsed_data) if write_storage is None else "",
                 storage_backend=None if write_storage is None else write_storage.name,
-
                 timestamp=parse_timestamp(parsed_data["timestamp"]),
                 platform=parsed_data["platform"][:64],
-
                 level=maybe_empty(parsed_data.get("level", "")),
                 logger=maybe_empty(parsed_data.get("logger", ""))[:64],
                 # transaction=maybe_empty(parsed_data.get("transaction", "")), part of denormalized_fields
-
                 server_name=maybe_empty(parsed_data.get("server_name", ""))[:255],
                 release=maybe_empty(parsed_data.get("release", ""))[:250],
                 dist=maybe_empty(parsed_data.get("dist", ""))[:64],
-
                 environment=maybe_empty(parsed_data.get("environment", ""))[:64],
-
                 sdk_name=maybe_empty(parsed_data.get("", {}).get("name", ""))[:255],
-                sdk_version=maybe_empty(parsed_data.get("", {}).get("version", ""))[:255],
-
+                sdk_version=maybe_empty(parsed_data.get("", {}).get("version", ""))[
+                    :255
+                ],
                 debug_info=event_metadata["debug_info"][:255],
-
                 # just getting from the dict would be more precise, since we always add this info, but doing the .get()
                 # allows for backwards compatability (digesting events for which the info was not added on-ingest) so
                 # we'll take the defensive approach "for now" (until most everyone is on >= 1.7.4)
                 remote_addr=event_metadata.get("remote_addr"),
-
                 digest_order=digest_order,
                 irrelevance_for_retention=irrelevance_for_retention,
-
                 **denormalized_fields,
             )
             created = True
@@ -269,8 +311,21 @@ class Event(models.Model):
     @cached_property
     def get_tags(self):
         return list(
-            self.tags.all().select_related("value", "value__key").order_by("value__key__key")
+            self.tags.all()
+            .select_related("value", "value__key")
+            .order_by("value__key__key")
         )
+
+    @cached_property
+    def get_blameref(self):
+        tag = (
+            self.tags.filter(value__key__key=self.project.blame_ref_tag)
+            .values("value__value")
+            .first()
+        )
+        if tag is not None:
+            return tag["value__value"]
+        return "main"
 
     def delete_deferred(self):
         """Schedules deletion of all related objects"""
