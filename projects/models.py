@@ -127,10 +127,19 @@ class Project(models.Model):
 
     # retention
     retention_max_event_count = models.PositiveIntegerField(default=10_000)
-    issue_template = models.CharField(max_length=500, blank=True, null=True, help_text="What link template to use while refering to issues in comments etc? For example https://gitea.bugsink.com/owner/project/issues/<index>")
-    blame_template = models.CharField(max_length=500, blank=True, null=True, help_text=" What link template to use while linking to traceback blames ? For example https://gitea.bugsink.com/owner/project/blob/-/<ref>/<path")
-
+    issue_template = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="What link template to use while refering to issues in comments etc? For example https://gitea.bugsink.com/owner/project/issues/<index>",
     )
+    blame_template = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text=" What link template to use while linking to traceback blames ? For example https://gitea.bugsink.com/owner/project/blob/-/<ref>/<path",
+    )
+
     blame_ref_tag = models.CharField(
         max_length=100,
         blank=True,

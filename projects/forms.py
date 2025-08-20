@@ -12,21 +12,28 @@ User = get_user_model()
 
 
 class ProjectMemberInviteForm(forms.Form):
-    email = forms.EmailField(label='Email', required=True)
+    email = forms.EmailField(label="Email", required=True)
     role = forms.ChoiceField(
-        label='Role', choices=ProjectRole.choices, required=True, initial=ProjectRole.MEMBER, widget=forms.RadioSelect)
+        label="Role",
+        choices=ProjectRole.choices,
+        required=True,
+        initial=ProjectRole.MEMBER,
+        widget=forms.RadioSelect,
+    )
 
     def __init__(self, user_must_exist, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.user_must_exist = user_must_exist
         if user_must_exist:
-            self.fields['email'].help_text = "The user must already exist in the system"
+            self.fields["email"].help_text = "The user must already exist in the system"
 
     def clean_email(self):
-        email = self.cleaned_data['email']
+        email = self.cleaned_data["email"]
 
         if self.user_must_exist and not User.objects.filter(email=email).exists():
-            raise forms.ValidationError('No user with this email address in the system.')
+            raise forms.ValidationError(
+                "No user with this email address in the system."
+            )
 
         return email
 
@@ -44,10 +51,12 @@ class MyProjectMembershipForm(forms.ModelForm):
         assert_(self.instance is not None, "This form is only implemented for editing")
 
         if not edit_role:
-            del self.fields['role']
+            del self.fields["role"]
 
         try:
-            tm = TeamMembership.objects.get(team=self.instance.project.team, user=self.instance.user)
+            tm = TeamMembership.objects.get(
+                team=self.instance.project.team, user=self.instance.user
+            )
             if tm.send_email_alerts is not None:
                 sea_defined_at = "team membership"
                 sea_default = tm.send_email_alerts
@@ -59,9 +68,12 @@ class MyProjectMembershipForm(forms.ModelForm):
             sea_defined_at = "user"
             sea_default = self.instance.user.send_email_alerts
 
-        empty_label = 'Default (%s, as per %s settings)' % (yesno(sea_default).capitalize(), sea_defined_at)
-        self.fields['send_email_alerts'].empty_label = empty_label
-        self.fields['send_email_alerts'].widget.choices[0] = ("unknown", empty_label)
+        empty_label = "Default (%s, as per %s settings)" % (
+            yesno(sea_default).capitalize(),
+            sea_defined_at,
+        )
+        self.fields["send_email_alerts"].empty_label = empty_label
+        self.fields["send_email_alerts"].widget.choices[0] = ("unknown", empty_label)
 
 
 class ProjectMembershipForm(forms.ModelForm):
@@ -80,7 +92,9 @@ class ProjectForm(forms.ModelForm):
         team_qs = kwargs.pop("team_qs", None)
         super().__init__(*args, **kwargs)
 
-        self.fields["retention_max_event_count"].help_text = "The maximum number of events to store before evicting."
+        self.fields["retention_max_event_count"].help_text = (
+            "The maximum number of events to store before evicting."
+        )
         if self.instance is not None and self.instance.pk is not None:
             # for editing, we disallow changing the team. consideration: it's somewhat hard to see what the consequences
             # for authorization are (from the user's perspective).
@@ -89,9 +103,11 @@ class ProjectForm(forms.ModelForm):
             # for editing, the DSN is availabe, but read-only
             self.fields["dsn"].initial = self.instance.dsn
             self.fields["dsn"].label = "DSN (read-only)"
-            self.fields["dsn"].help_text = 'Use the DSN to <a href="' +\
-                                           reverse('project_sdk_setup', kwargs={'project_pk': self.instance.pk}) +\
-                                           '" class="text-cyan-800 font-bold">set up the SDK</a>.'
+            self.fields["dsn"].help_text = (
+                'Use the DSN to <a href="'
+                + reverse("project_sdk_setup", kwargs={"project_pk": self.instance.pk})
+                + '" class="text-cyan-800 font-bold">set up the SDK</a>.'
+            )
 
             # if we ever push slug to the form, editing it should probably be disallowed as well (but mainly because it
             # has consequences on the issue's short identifier)
@@ -102,9 +118,11 @@ class ProjectForm(forms.ModelForm):
             # it suggests at least somewhere that teams are a thing)
             self.fields["team"].queryset = team_qs
             if team_qs.count() == 0:
-                self.fields["team"].help_text = 'You don\'t have any teams yet; <a href="' +\
-                                                reverse("team_new") +\
-                                                '" class="text-cyan-800 font-bold">Create a team first.</a>'
+                self.fields["team"].help_text = (
+                    "You don't have any teams yet; <a href=\""
+                    + reverse("team_new")
+                    + '" class="text-cyan-800 font-bold">Create a team first.</a>'
+                )
             elif team_qs.count() == 1:
                 self.fields["team"].initial = team_qs.first()
 
@@ -114,7 +132,15 @@ class ProjectForm(forms.ModelForm):
     class Meta:
         model = Project
 
-        fields = ["team", "name", "visibility", "retention_max_event_count", "blame_template", "blame_ref_tag", "issue_template"]
+        fields = [
+            "team",
+            "name",
+            "visibility",
+            "retention_max_event_count",
+            "blame_template",
+            "blame_ref_tag",
+            "issue_template",
+        ]
         # "slug",  <= for now, we just do this in the model; if we want to do it in the form, I would want to have some
         # JS in place like we have in the admin. django/contrib/admin/static/admin/js/prepopulate.js is an example of
         # how Django does this (but it requires JQuery)
