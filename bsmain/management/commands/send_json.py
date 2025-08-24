@@ -1,3 +1,4 @@
+import os
 import io
 import uuid
 import brotli
@@ -7,7 +8,7 @@ import json
 import requests
 import jsonschema
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 
 from compat.dsn import get_store_url, get_envelope_url, get_header_value
@@ -62,7 +63,15 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         compress = options['compress']
         use_envelope = not options['use_store_api']
-        dsn = options['dsn']
+
+        if options['dsn'] is None:
+            if os.environ.get("SENTRY_DSN"):
+                dsn = os.environ["SENTRY_DSN"]
+            else:
+                raise CommandError(
+                    "You must provide a DSN to send data to Sentry. Use --dsn or set SENTRY_DSN environment variable.")
+        else:
+            dsn = options['dsn']
 
         successfully_sent = []
 
