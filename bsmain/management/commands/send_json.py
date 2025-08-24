@@ -15,8 +15,6 @@ from compat.dsn import get_store_url, get_envelope_url, get_header_value
 from bugsink.streams import compress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE
 from bugsink.utils import nc_rnd
 
-from projects.models import Project
-
 
 class Command(BaseCommand):
     help = "Send raw events to a sentry-compatible server; events can be sources from the filesystem or your DB."
@@ -35,8 +33,7 @@ class Command(BaseCommand):
             "--x-forwarded-for", action="store",
             help="Set the X-Forwarded-For header to test whether your setup is properly ignoring it")
         parser.add_argument("--sent-at", action="store", default=None, help="Set the sent_at header to this value")
-        parser.add_argument("kind", action="store", help="The kind of object (filename, project, issue, event)")
-        parser.add_argument("identifiers", nargs="+")
+        parser.add_argument("filenames", nargs="+")
 
     def is_valid(self, data, identifier):
         # In our (private) samples we often have this "_meta" field. I can't (quickly) find any documentation for it,
@@ -75,35 +72,19 @@ class Command(BaseCommand):
 
         successfully_sent = []
 
-        kind = options["kind"]
+        for json_filename in options["filenames"]:
+            with open(json_filename) as f:
+                print("considering", json_filename)
+                try:
+                    data = json.loads(f.read())
+                except Exception as e:
+                    self.stderr.write("%s %s %s" % ("Not JSON", json_filename, str(e)))
+                    continue
 
-        if kind == "filename":
-            for json_filename in options["identifiers"]:
-                with open(json_filename) as f:
-                    print("considering", json_filename)
-                    try:
-                        data = json.loads(f.read())
-                    except Exception as e:
-                        self.stderr.write("%s %s %s" % ("Not JSON", json_filename, str(e)))
-                        continue
+                if self.send_to_server(dsn, options, json_filename, data, use_envelope, compress):
+                    successfully_sent.append(json_filename)
 
-                    if self.send_to_server(dsn, options, json_filename, data, use_envelope, compress):
-                        successfully_sent.append(json_filename)
-
-        elif kind == "project":
-            for project_id in options["identifiers"]:
-                print("considering", project_id)
-                project = Project.objects.get(pk=project_id)
-                for event in project.event_set.all():
-                    data = event.get_parsed_data()
-                    if self.send_to_server(dsn, options, str(event.id), data, use_envelope, compress):
-                        successfully_sent.append(event.id)
-
-        else:
-            self.stderr.write("Unknown kind of data %s" % kind)
-            exit(1)
-
-        print("Successfuly sent to server")
+        print("Successfuly sent to server:")
         for filename in successfully_sent:
             print(filename)
 
