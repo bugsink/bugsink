@@ -65,6 +65,7 @@
 
                 <div class="text-ellipsis overflow-hidden"> {# filename, function, lineno #}
                     {% if frame.in_app %}
+                    <a href='{{ project.blame_template}}/{{ event.get_blameref }}/{{ frame.filename }}'>🤷</a>
                         <span class="font-bold">{{ frame.filename }}</span>{% if frame.function %} in <span class="font-bold">{{ frame.function }}</span>{% endif %}{% if frame.lineno %} line <span class="font-bold">{{ frame.lineno }}</span>{% endif %}.
                     {% else %}
                         <span class="italic">{{ frame.filename }}{% if frame.function %} in {{ frame.function }}{% endif %}{% if frame.lineno%} line {{ frame.lineno }}{% endif %}.</span>
