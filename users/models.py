@@ -3,7 +3,19 @@ import secrets
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, get_language_info
+
+
+def language_choices():
+    items = [("auto", _("Auto (browser preference)"))]
+
+    for code, _label in settings.LANGUAGES:
+        info = get_language_info(code)
+        label = info["name_local"] \
+            if info["name_local"] == info["name_translated"] \
+            else f"{info['name_local']} ({info['name_translated']})"
+        items.append((code, label))
+    return items
 
 
 class User(AbstractUser):
@@ -30,10 +42,9 @@ class User(AbstractUser):
         blank=False,
     )
     language = models.CharField(
+        _("Language"),
         max_length=10,
-        # choices intentionally not set, we don't want changes to trigger migrations; the actual choices are set in
-        # forms.py; in Django 5.0 and up we can instead used a callable here
-        # choices=...
+        choices=language_choices,
         default="auto",
         blank=False,
     )
