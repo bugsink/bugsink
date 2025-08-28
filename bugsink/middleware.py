@@ -5,6 +5,10 @@ from django.contrib.auth.decorators import login_required
 from django.db import connection
 from django.conf import settings
 from django.core.exceptions import SuspiciousOperation
+from django.utils.translation import get_supported_language_variant
+from django.utils.translation.trans_real import parse_accept_lang_header
+from django.utils import translation
+
 
 performance_logger = logging.getLogger("bugsink.performance.views")
 
@@ -128,3 +132,35 @@ class SetRemoteAddrMiddleware:
             request.META["REMOTE_ADDR"] = self.parse_x_forwarded_for(request.META.get("HTTP_X_FORWARDED_FOR", None))
 
         return self.get_response(request)
+
+
+def language_from_accept_language(request):
+    """
+    Pick a language using ONLY the Accept-Language header. Ignores URL prefixes, session, and cookies.  I prefer to have
+    as little "magic" in the language selection as possible, and I _know_ we don't do anything with paths, so I'd rather
+    not have such code invoked at all (at the cost of reimplementing some of Django's logic here).
+    """
+    header = request.META.get("HTTP_ACCEPT_LANGUAGE", "")
+    for lang_code, _q in parse_accept_lang_header(header):
+        try:
+            # strict=False lets country variants match (e.g. 'es-CO' for 'es')
+            return get_supported_language_variant(lang_code, strict=False)
+        except LookupError:
+            continue
+    return settings.LANGUAGE_CODE
+
+
+def get_chosen_language(request_user, request):
+    if request_user.is_authenticated and request_user.language != "auto":
+        return get_supported_language_variant(request_user.language, strict=False)
+    return language_from_accept_language(request)
+
+
+class UserLanguageMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        translation.activate(get_chosen_language(request.user, request))
+        response = self.get_response(request)
+        return response

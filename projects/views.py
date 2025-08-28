@@ -11,12 +11,14 @@ from django.contrib import messages
 from django.contrib.auth import logout
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from users.models import EmailVerification
 from teams.models import TeamMembership, Team, TeamRole
 
 from bugsink.app_settings import get_settings, CB_ANYBODY, CB_MEMBERS, CB_ADMINS
 from bugsink.decorators import login_exempt, atomic_for_request_method
+from bugsink.utils import assert_
 
 from alerts.models import MessagingServiceConfig
 from alerts.forms import MessagingServiceConfigForm
@@ -77,7 +79,7 @@ def project_list(request, ownership_filter=None):
             if not project.is_joinable(user=request.user) and not request.user.is_superuser:
                 raise PermissionDenied("This project is not joinable")
 
-            messages.success(request, 'You have joined the project "%s"' % project.name)
+            messages.success(request, _('You have joined the project "%s"') % project.name)
             ProjectMembership.objects.create(
                 project_id=project_pk, user_id=request.user.id, role=ProjectRole.MEMBER, accepted=True)
             return redirect('project_member_settings', project_pk=project_pk, user_pk=request.user.id)
@@ -415,7 +417,7 @@ def project_sdk_setup(request, project_pk, platform=""):
     # NOTE about lexers:: I have bugsink/pyments_extensions; but the platforms mentioned there don't necessarily map to
     # what I will make selectable here. "We'll see" whether yet another lookup dict will be needed.
 
-    assert platform in ["", "python", "javascript", "php"]
+    assert_(platform in ["", "python", "javascript", "php"])
 
     template_name = "projects/project_sdk_setup%s.html" % ("_" + platform if platform else "")
 
@@ -501,6 +503,7 @@ def project_messaging_service_edit(request, project_pk, service_pk):
 
     return render(request, 'projects/project_messaging_service_edit.html', {
         'project': project,
+        'service_config': instance,
         'form': form,
         'config_form': config_form,
     })

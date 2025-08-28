@@ -1,6 +1,7 @@
 import datetime
 import math
-import random
+
+from bugsink.utils import nc_rnd
 
 
 # a way to generate some bursty streams of points-in-time.
@@ -26,8 +27,8 @@ def generate_bursty_data(nr_of_waves=1, base_amplitude=1, expected_nr_of_bursts=
         periodic_pattern = (1 + math.sin(i / period * 2 * math.pi)) / 2
 
         # Introduce burst with probability 'burst_prob'
-        if random.random() < burst_prob:
-            burst = abs(random.gauss(0, burst_amplitude))
+        if nc_rnd.random() < burst_prob:
+            burst = abs(nc_rnd.gauss(0, burst_amplitude))
             buckets[i] = periodic_pattern + burst
         else:
             buckets[i] = periodic_pattern
@@ -61,6 +62,6 @@ def buckets_to_points_in_time(buckets, begin, end, total_points):
         bucket_points = round(bucket_points)
 
         for j in range(bucket_points):
-            points.append(begin + datetime.timedelta(seconds=bucket_size * (i + random.uniform(0, 1))))
+            points.append(begin + datetime.timedelta(seconds=bucket_size * (i + nc_rnd.uniform(0, 1))))
 
     return sorted(points)

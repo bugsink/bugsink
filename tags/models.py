@@ -162,6 +162,11 @@ def digest_tags(event_data, event, issue):
     tags = {
         k: str(v)[:200] for k, v in deduce_tags(event_data).items()
     }
+
+    for key in "user.ip_address", "user":
+        if tags.get(key) == "{{auto}}":
+            tags[key] = event.remote_addr
+
     store_tags(event, issue, tags)
 
 

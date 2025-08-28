@@ -1,20 +1,19 @@
+import os
 import io
 import uuid
 import brotli
-import random
 
 import time
 import json
 import requests
 import jsonschema
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 
 from compat.dsn import get_store_url, get_envelope_url, get_header_value
 from bugsink.streams import compress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE
-
-from projects.models import Project
+from bugsink.utils import nc_rnd
 
 
 class Command(BaseCommand):
@@ -33,8 +32,8 @@ class Command(BaseCommand):
         parser.add_argument(
             "--x-forwarded-for", action="store",
             help="Set the X-Forwarded-For header to test whether your setup is properly ignoring it")
-        parser.add_argument("kind", action="store", help="The kind of object (filename, project, issue, event)")
-        parser.add_argument("identifiers", nargs="+")
+        parser.add_argument("--sent-at", action="store", default=None, help="Set the sent_at header to this value")
+        parser.add_argument("filenames", nargs="+")
 
     def is_valid(self, data, identifier):
         # In our (private) samples we often have this "_meta" field. I can't (quickly) find any documentation for it,
@@ -61,39 +60,31 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         compress = options['compress']
         use_envelope = not options['use_store_api']
-        dsn = options['dsn']
+
+        if options['dsn'] is None:
+            if os.environ.get("SENTRY_DSN"):
+                dsn = os.environ["SENTRY_DSN"]
+            else:
+                raise CommandError(
+                    "You must provide a DSN to send data to Sentry. Use --dsn or set SENTRY_DSN environment variable.")
+        else:
+            dsn = options['dsn']
 
         successfully_sent = []
 
-        kind = options["kind"]
+        for json_filename in options["filenames"]:
+            with open(json_filename) as f:
+                print("considering", json_filename)
+                try:
+                    data = json.loads(f.read())
+                except Exception as e:
+                    self.stderr.write("%s %s %s" % ("Not JSON", json_filename, str(e)))
+                    continue
 
-        if kind == "filename":
-            for json_filename in options["identifiers"]:
-                with open(json_filename) as f:
-                    print("considering", json_filename)
-                    try:
-                        data = json.loads(f.read())
-                    except Exception as e:
-                        self.stderr.write("%s %s %s" % ("Not JSON", json_filename, str(e)))
-                        continue
+                if self.send_to_server(dsn, options, json_filename, data, use_envelope, compress):
+                    successfully_sent.append(json_filename)
 
-                    if self.send_to_server(dsn, options, json_filename, data, use_envelope, compress):
-                        successfully_sent.append(json_filename)
-
-        elif kind == "project":
-            for project_id in options["identifiers"]:
-                print("considering", project_id)
-                project = Project.objects.get(pk=project_id)
-                for event in project.event_set.all():
-                    data = event.get_parsed_data()
-                    if self.send_to_server(dsn, options, str(event.id), data, use_envelope, compress):
-                        successfully_sent.append(event.id)
-
-        else:
-            self.stderr.write("Unknown kind of data %s" % kind)
-            exit(1)
-
-        print("Successfuly sent to server")
+        print("Successfuly sent to server:")
         for filename in successfully_sent:
             print(filename)
 
@@ -123,9 +114,9 @@ class Command(BaseCommand):
 
             # https://develop.sentry.dev/sdk/data-model/event-payloads/span/#attributes
             # > A random hex string with a length of 16 characters. [which is 8 bytes]
-            data["contexts"]["trace"]["span_id"] = random.getrandbits(64).to_bytes(8, byteorder='big').hex()
+            data["contexts"]["trace"]["span_id"] = nc_rnd.getrandbits(64).to_bytes(8, byteorder='big').hex()
             # > A random hex string with a length of 32 characters. [which is 16 bytes]
-            data["contexts"]["trace"]["trace_id"] = random.getrandbits(128).to_bytes(16, byteorder='big').hex()
+            data["contexts"]["trace"]["trace_id"] = nc_rnd.getrandbits(128).to_bytes(16, byteorder='big').hex()
 
         if options["tag"]:
             if "tags" not in data:
@@ -153,10 +144,14 @@ class Command(BaseCommand):
 
             data_bytes = json.dumps(data).encode("utf-8")
             if use_envelope:
-                # the smallest possible envelope:
                 event_id = data.get("event_id", uuid.uuid4().hex)
 
-                data_bytes = (b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") +
+                sent_at_snip = (b',"sent_at":"%s"' % options["sent_at"].encode("utf-8")) if options["sent_at"] else b""
+
+                # the smallest possible envelope:
+                data_bytes = (b'{"event_id":"%s"' % event_id.encode("utf-8") +
+                              sent_at_snip +
+                              b'}\n{"type":"event"}\n' +
                               data_bytes)
 
             if compress in ["gzip", "deflate"]:
@@ -176,6 +171,7 @@ class Command(BaseCommand):
                     get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
                     headers=headers,
                     data=compressed_data,
+                    timeout=10,
                 )
 
             elif compress == "br":
@@ -187,6 +183,7 @@ class Command(BaseCommand):
                     get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
                     headers=headers,
                     data=compressed_data,
+                    timeout=10,
                 )
 
             else:
@@ -197,6 +194,7 @@ class Command(BaseCommand):
                     get_envelope_url(dsn) if use_envelope else get_store_url(dsn),
                     headers=headers,
                     data=data_bytes,
+                    timeout=10,
                 )
 
             response.raise_for_status()

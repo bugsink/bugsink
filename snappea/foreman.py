@@ -14,6 +14,7 @@ import sentry_sdk
 
 from django.conf import settings
 from django.db import connections
+from django.utils._os import safe_join
 
 from sentry_sdk_extensions import capture_or_log_exception
 from performance.context_managers import time_to_logger
@@ -103,6 +104,28 @@ class Foreman:
             logger.info("Startup: Can't run Foreman in TASK_ALWAYS_EAGER mode, EXIT")
             sys.exit(1)
 
+        self.check_pid_file(pid)
+
+        logger.info("Startup: pid is %s", pid)
+        logger.info("Startup: DB-as-MQ location: %s", settings.DATABASES["snappea"]["NAME"])
+        logger.info("Startup: Wake up calls location: %s", self.settings.WAKEUP_CALLS_DIR)
+
+        # Counts the number of "wake up" signals that have not been dealt with yet. The main loop goes to sleep when
+        # this is 0
+        self.signal_semaphore = threading.Semaphore(0)
+
+        # Counts the number of available worker threads. When this is 0, create_workers will first wait until a worker
+        # stops. (the value of this semaphore is implicitly NUM_WORKERS - active_workers)
+        self.worker_semaphore = threading.Semaphore(self.settings.NUM_WORKERS)
+
+    def check_pid_file(self, pid):
+        if self.settings.PID_FILE is None:
+            # this is useful in setups where the lifecycle of the Foreman is _clearly_ the responsibility of some other
+            # thing (e.g. systemd), or the whatever is doing container orchestration. In such cases, the PID file is
+            # only going to get in the way.
+            logger.warning("Startup: no PID_FILE configured, pid-check disabled")
+            return
+
         # if the PID_FILE already exists, read it to see whether snappea is already running.
         # this implementation is not supposed to be bullet-proof for race conditions (nor is it cross-platform)... it's
         # just a small check to prevent the regularly occurring cases:
@@ -125,18 +148,6 @@ class Foreman:
         os.makedirs(os.path.dirname(self.settings.PID_FILE), exist_ok=True)
         with open(self.settings.PID_FILE, "w") as f:
             f.write(str(pid))
-
-        logger.info("Startup: pid is %s", pid)
-        logger.info("Startup: DB-as-MQ location: %s", settings.DATABASES["snappea"]["NAME"])
-        logger.info("Startup: Wake up calls location: %s", self.settings.WAKEUP_CALLS_DIR)
-
-        # Counts the number of "wake up" signals that have not been dealt with yet. The main loop goes to sleep when
-        # this is 0
-        self.signal_semaphore = threading.Semaphore(0)
-
-        # Counts the number of available worker threads. When this is 0, create_workers will first wait until a worker
-        # stops. (the value of this semaphore is implicitly NUM_WORKERS - active_workers)
-        self.worker_semaphore = threading.Semaphore(self.settings.NUM_WORKERS)
 
     def connection_close(self, using="default"):
         # (as a method to allow for a single point of documentation)
@@ -237,7 +248,7 @@ class Foreman:
         # Ensure that anything we might be waiting for is unblocked. A single notification file and .release call is
         # enough because after every wakeup_calls.read() /  acquire call in our codebase the first thing we do is
         # check_for_stopping(), so the release cannot be inadvertently be "used up" by something else.
-        with open(os.path.join(self.settings.WAKEUP_CALLS_DIR, str(uuid.uuid4())), "w"):
+        with open(safe_join(self.settings.WAKEUP_CALLS_DIR, str(uuid.uuid4())), "w"):
             pass
         self.worker_semaphore.release()
 
@@ -256,7 +267,7 @@ class Foreman:
             raise
 
     def _run_forever(self):
-        pre_existing_wakeup_notifications = glob.glob(os.path.join(self.settings.WAKEUP_CALLS_DIR, "*"))
+        pre_existing_wakeup_notifications = glob.glob(safe_join(self.settings.WAKEUP_CALLS_DIR, "*"))
         if len(pre_existing_wakeup_notifications) > 0:
             # We clear the wakeup_calls_dir on startup. Not strictly necessary because such files would be cleared by in
             # the loop anyway, but it's more efficient to do it first.
@@ -294,7 +305,7 @@ class Foreman:
                 # such that dogfood Bugsink will pick up on it. But in the end it's not really that relevant (despite
                 # being interesting) so I just catch the error.
                 with contextlib.suppress(FileNotFoundError):
-                    os.unlink(os.path.join(self.settings.WAKEUP_CALLS_DIR, event.name))
+                    os.unlink(safe_join(self.settings.WAKEUP_CALLS_DIR, event.name))
 
             self.check_for_stopping()  # check after .read() - it may have unblocked via handle_signal()
             while self.create_workers() == self.settings.TASK_QS_LIMIT:
@@ -416,4 +427,8 @@ class Foreman:
                         "Stopping: %s did not die in %.1fs, proceeding to kill",
                         short_id(task_id), self.settings.GRACEFUL_TIMEOUT)
 
-        os.remove(self.settings.PID_FILE)
+        if self.settings.PID_FILE is not None:
+            logger.info("Stopping: removing PID file %s", self.settings.PID_FILE)
+            os.remove(self.settings.PID_FILE)
+        else:
+            logger.info("Stopping: no PID file to remove")

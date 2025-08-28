@@ -1,5 +1,6 @@
 {% extends "barest_base.html" %}
 {% load static %}
+{% load i18n %}
 
 {% block title %}Confirm email · {{ site_title }}{% endblock %}
 
@@ -14,12 +15,12 @@
         <div class="p-12 md:pt-24 md:pl-24 md:pr-24 md:pb-16">
 
             <div class="mb-8">
-                Confirm your email address by clicking the button below.
+                {% translate "Confirm your email address by clicking the button below." %}
             </div>
 
             <form method="post" action=".">
                 {% csrf_token %}
-                <button class="bg-slate-800 font-medium p-2 md:p-4 text-white uppercase w-full">Confirm</button>
+                <button class="bg-slate-800 font-medium p-2 md:p-4 text-white uppercase w-full">{% translate "Confirm" %}</button>
             </form>
         </div>
 

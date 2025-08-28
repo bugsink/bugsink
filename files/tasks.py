@@ -46,7 +46,8 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
         for filename, manifest_entry in manifest["files"].items():
             file_data = bundle_zip.read(filename)
 
-            checksum = sha1(file_data).hexdigest()
+            # usedforsecurity=false: sha1 is not used cryptographically, it's part of the protocol, so we use it as is.
+            checksum = sha1(file_data, usedforsecurity=False).hexdigest()
 
             filename = basename(manifest_entry.get("url", filename))[:255]
 
@@ -112,7 +113,8 @@ def assemble_file(checksum, chunk_checksums, filename):
     chunks_in_order = [chunks_dicts[checksum] for checksum in chunk_checksums]  # implicitly checks chunk availability
     data = b"".join([chunk.data for chunk in chunks_in_order])
 
-    if sha1(data).hexdigest() != checksum:
+    # usedforsecurity=false: sha1 is not used cryptographically, and it's part of the protocol, so we use it as is.
+    if sha1(data, usedforsecurity=False).hexdigest() != checksum:
         raise Exception("checksum mismatch")
 
     result = File.objects.get_or_create(

@@ -1,4 +1,3 @@
-import random
 import io
 import uuid
 import brotli
@@ -13,16 +12,17 @@ from django.core.management.base import BaseCommand
 
 from compat.dsn import get_envelope_url, get_header_value
 from bugsink.streams import compress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE
+from bugsink.utils import nc_rnd
 from issues.utils import get_values
 
 
 def random_postfix():
     # avoids numbers, because when usedd in the type I imagine numbers may at some point be ignored in the grouping.
-    random_number = random.random()
+    random_number = nc_rnd.random()
 
     if random_number < 0.1:
         # 10% of the time we simply sample from 1M to create a "fat tail".
-        unevenly_distributed_number = int(random.random() * 1_000_000)
+        unevenly_distributed_number = int(nc_rnd.random() * 1_000_000)
     else:
         unevenly_distributed_number = int(1 / random_number)
 
@@ -105,9 +105,9 @@ class Command(BaseCommand):
 
             # https://develop.sentry.dev/sdk/data-model/event-payloads/span/#attributes
             # > A random hex string with a length of 16 characters. [which is 8 bytes]
-            data["contexts"]["trace"]["span_id"] = random.getrandbits(64).to_bytes(8, byteorder='big').hex()
+            data["contexts"]["trace"]["span_id"] = nc_rnd.getrandbits(64).to_bytes(8, byteorder='big').hex()
             # > A random hex string with a length of 32 characters. [which is 16 bytes]
-            data["contexts"]["trace"]["trace_id"] = random.getrandbits(128).to_bytes(16, byteorder='big').hex()
+            data["contexts"]["trace"]["trace_id"] = nc_rnd.getrandbits(128).to_bytes(16, byteorder='big').hex()
 
         if options["tag"]:
             if "tags" not in data:
@@ -129,7 +129,7 @@ class Command(BaseCommand):
         data_bytes = json.dumps(data).encode("utf-8")
 
         # the smallest possible envelope:
-        data_bytes = (b'{"event_id": "%s"}\n{"type": "event"}\n' % (data["event_id"]).encode("utf-8") +
+        data_bytes = (b'{"event_id":"%s"}\n{"type":"event"}\n' % (data["event_id"]).encode("utf-8") +
                       data_bytes)
 
         if compress in ["gzip", "deflate"]:
@@ -153,7 +153,7 @@ class Command(BaseCommand):
         for compressed_data in compressed_datas.values():
             if self.stopping:
                 return
-            dsn = random.choice(dsns)
+            dsn = nc_rnd.choice(dsns)
 
             t0 = time.time()
             success = Command.send_to_server(dsn, options, compress, compressed_data)
@@ -179,6 +179,7 @@ class Command(BaseCommand):
                     get_envelope_url(dsn),
                     headers=headers,
                     data=compressed_data,
+                    timeout=10,
                 )
 
             elif compress == "br":
@@ -187,12 +188,14 @@ class Command(BaseCommand):
                     get_envelope_url(dsn),
                     headers=headers,
                     data=compressed_data,
+                    timeout=10,
                 )
 
             response = requests.post(
                 get_envelope_url(dsn),
                 headers=headers,
                 data=compressed_data,
+                timeout=10,
             )
             response.raise_for_status()
             return True

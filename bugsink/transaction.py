@@ -192,8 +192,10 @@ class ImmediateAtomic(SuperDurableAtomic):
 
 
 @contextmanager
-def immediate_atomic(using=None, savepoint=True, durable=True):
+def immediate_atomic(using=None, savepoint=True, only_if_needed=False):
     # this is the Django 4.2 db.transaction.atomic, but using ImmediateAtomic, and with durable=True by default
+    # only_if_needed is useful if you want to wrap some code in an as tight-as-possible transaction to avoid hogging the
+    # global write lock, while not worrying about whether the code is already in a transaction or not.
 
     # the following assertion is because "BEGIN IMMEDIATE" supposes a "BEGIN" (of a transaction), i.e. has no meaning
     # when this wrapper is not the outermost one.
@@ -201,8 +203,15 @@ def immediate_atomic(using=None, savepoint=True, durable=True):
     # Side-note: the parameter `savepoint` is a bit of a misnomer, it is not about "is the current thing a savepoint",
     # but rather, "are savepoints allowed inside the current context". (The former would imply that it could never be
     # combined with durable=True, which is not the case.)
-    assert durable, "immediate_atomic should always be used with durable=True"
+
+    durable = True  # for the cases where only_if_needed is False or not applicable (i.e. 'needed') durable=True.
+
     using = DEFAULT_DB_ALIAS if using is None else using  # harmonize to "default" at the top for downstream lookups
+    connection = django_db_transaction.get_connection(using)
+
+    if only_if_needed and connection.in_atomic_block:
+        yield
+        return
 
     if callable(using):
         immediate_atomic = ImmediateAtomic(DEFAULT_DB_ALIAS, savepoint, durable)(using)

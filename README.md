@@ -1,4 +1,4 @@
-# Bugsink: Self-hosted Error Tracking 
+# Bugsink: Self-hosted Error Tracking
 
 * [Error Tracking](https://www.bugsink.com/error-tracking/)
 * [Built to self-host](https://www.bugsink.com/built-to-self-host/)
@@ -30,6 +30,6 @@ are `admin`.
 
 Now, you can [set up your first project](https://www.bugsink.com/docs/quickstart/) and start tracking errors.
 
-[Detailed installation instructions](https://www.bugsink.com/docs/installation/) are on the Bugsink website. 
+[Detailed installation instructions](https://www.bugsink.com/docs/installation/) are on the Bugsink website.
 
 [More information and documentation](https://www.bugsink.com/)

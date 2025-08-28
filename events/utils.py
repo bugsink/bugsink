@@ -6,6 +6,7 @@ import sourcemap
 from issues.utils import get_values
 
 from bugsink.transaction import delay_on_commit
+from bugsink.utils import assert_
 
 from compat.timestamp import format_timestamp
 
@@ -73,7 +74,7 @@ def annotate_var_with_meta(var, meta_var):
     """
     'var' is a (potentially trimmed) list or dict, 'meta_var' is a dict describing the trimming.
     """
-    assert isinstance(var, (list, dict, str))
+    assert_(isinstance(var, (list, dict, str)))
 
     if isinstance(var, list):
         Incomplete = IncompleteList

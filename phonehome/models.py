@@ -1,6 +1,10 @@
+import json
 import uuid
 
 from django.db import models
+from bugsink.transaction import immediate_atomic
+
+from bugsink.app_settings import get_settings
 
 
 class Installation(models.Model):
@@ -11,6 +15,29 @@ class Installation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     silence_email_system_warning = models.BooleanField(default=False)
+
+    email_quota_usage = models.TextField(null=False, default='{"per_month": {}}')
+
+    @classmethod
+    @immediate_atomic(only_if_needed=True)  # minimalize write-lock-hogging (while being callable within atomic blocks)
+    def check_and_inc_email_quota(cls, date):
+        obj = cls.objects.first()
+
+        email_quota_usage = json.loads(obj.email_quota_usage)
+
+        key = date.strftime('%Y-%m')
+        if key not in email_quota_usage["per_month"]:
+            email_quota_usage['per_month'] = {key: 0}  # full overwrite: no need to keep old info around.
+
+        if (get_settings().MAX_EMAILS_PER_MONTH is not None
+                and email_quota_usage['per_month'][key] >= get_settings().MAX_EMAILS_PER_MONTH):
+            return False
+
+        email_quota_usage['per_month'][key] += 1
+
+        obj.email_quota_usage = json.dumps(email_quota_usage)
+        obj.save()
+        return True
 
 
 class OutboundMessage(models.Model):

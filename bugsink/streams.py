@@ -3,6 +3,7 @@ import io
 import brotli
 
 from bugsink.app_settings import get_settings
+from bugsink.utils import assert_
 
 
 DEFAULT_CHUNK_SIZE = 8 * 1024
@@ -46,7 +47,7 @@ def brotli_generator(input_stream, chunk_size=DEFAULT_CHUNK_SIZE):
 
         yield decompressor.process(compressed_chunk)
 
-    assert decompressor.is_finished()
+    assert_(decompressor.is_finished())
 
 
 class GeneratorReader:

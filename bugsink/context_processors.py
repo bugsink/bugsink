@@ -1,8 +1,9 @@
+import json
 from datetime import timedelta
 from collections import namedtuple
 
-from django.conf import settings
 from django.utils import timezone
+from django.conf import settings
 from django.utils.safestring import mark_safe
 from django.urls import reverse
 from django.contrib.auth.models import AnonymousUser
@@ -21,10 +22,11 @@ from phonehome.models import Installation
 SystemWarning = namedtuple('SystemWarning', ['message', 'ignore_url'])
 
 
+# no_bandit_expl: literally a constant string so safe by defenition
 EMAIL_BACKEND_WARNING = mark_safe(
     """Email is not set up, emails won't be sent. To get the most out of Bugsink, please
     <a href="https://www.bugsink.com/docs/settings/#email" target="_blank" class="font-bold text-slate-800
-    dark:text-slate-100">set up email</a>.""")
+    dark:text-slate-100">set up email</a>.""")  # nosec
 
 
 def get_snappea_warnings():
@@ -118,6 +120,14 @@ def useful_settings_processor(request):
                 ignore_url = None
 
             system_warnings.append(SystemWarning(EMAIL_BACKEND_WARNING, ignore_url))
+
+        if get_settings().MAX_EMAILS_PER_MONTH is not None:
+            email_quota_usage = json.loads(installation.email_quota_usage)
+            this_month_usage = email_quota_usage.get("per_month", {}).get(timezone.now().strftime("%Y-%m"), 0)
+            if this_month_usage >= get_settings().MAX_EMAILS_PER_MONTH:
+                system_warnings.append(SystemWarning(
+                    f"Bugsink has sent {this_month_usage} emails this month, which is the maximum. "
+                    "No more emails will be sent until the 1st of next month.", None))
 
         return system_warnings + get_snappea_warnings()
 

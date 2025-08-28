@@ -162,7 +162,8 @@ def chunk_upload(request, organization_slug):
     for chunk in chunks:
         data = chunk.getvalue()
 
-        if sha1(data).hexdigest() != chunk.name:
+        # usedforsecurity=False: sha1 is not used cryptographically, and it's part of the protocol, so we use it as is.
+        if sha1(data, usedforsecurity=False).hexdigest() != chunk.name:
             raise Exception("checksum mismatch")
 
         with immediate_atomic():  # a snug fit around the only DB-writing thing we do here to ensure minimal blocking
@@ -208,6 +209,13 @@ def download_file(request, checksum):
 
 @csrf_exempt
 def api_catch_all(request, subpath):
+    # This is a catch-all for unimplemented API endpoints. It logs the request details and raises a 404 (if
+    # API_LOG_UNIMPLEMENTED_CALLS is set).
+
+    # the existance of this view (and the associated URL pattern) has the effect of `APPEND_SLASH=False` for our API
+    # endpoints, which is a good thing: for API enpoints you generally don't want this kind of magic (explicit breakage
+    # is desirable for APIs, and redirects don't even work for POST/PUT data)
+
     if not get_settings().API_LOG_UNIMPLEMENTED_CALLS:
         raise Http404("Unimplemented API endpoint: /api/" + subpath)
 

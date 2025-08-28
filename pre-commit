@@ -1,8 +1,32 @@
 #!/bin/sh
 
-files=`git diff --cached --name-status`
+# this script must be placed in .git/hooks/pre-commit for it to run automatically
+# it is put here in the repo so that it can be used by anyone who clones the repo
+# it assumes the environment to run `python manage.py tailwind build` is already set up
+# and activated
 
-. bin/activate
-python manage.py tailwind build
+should_run=$(git diff --cached --name-only -z | python tools/is_tracked_by_tailwind.py)
 
-git add theme/static/css/dist/styles.css
+if [ "$should_run" = "yes" ]; then
+    echo "Building Tailwind CSS..."
+    python manage.py tailwind build
+    git add theme/static/css/dist/styles.css
+else
+    echo "No relevant changes; skipping Tailwind build."
+fi
+
+# Check for trailing whitespace in staged files, fail if found
+
+git diff --cached --name-only --diff-filter=ACM | while IFS= read -r file; do
+    [ -f "$file" ] || continue
+
+    case "$file" in
+        *.py|*.js|*.ts|*.sh|*.md|*.txt|*.html|*.css)
+            if grep -qE '[[:space:]]+$' "$file"; then
+                echo "Commit aborted due to trailing whitespace."
+                echo "Fix it manually or use tools/strip-trailing-whitespace.sh"
+                exit 1
+            fi
+            ;;
+    esac
+done

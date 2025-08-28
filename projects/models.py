@@ -3,6 +3,7 @@ import uuid
 from django.db import models
 from django.conf import settings
 from django.utils.text import slugify
+from django.utils.translation import gettext_lazy as _, pgettext_lazy
 
 from bugsink.app_settings import get_settings
 from bugsink.transaction import delay_on_commit
@@ -46,21 +47,21 @@ from .tasks import delete_project_deps
 
 
 class ProjectRole(models.IntegerChoices):
-    MEMBER = 0
-    ADMIN = 1
+    MEMBER = 0, _("Member")
+    ADMIN = 1, _("Admin")
 
 
 class ProjectVisibility(models.IntegerChoices):
     # PUBLIC = 0  # anyone can see the project and its members; not sure if I want this or always require click-in
-    JOINABLE = 1  # anyone can join
+    JOINABLE = 1, _("Joinable")  # anyone can join
 
     # the project's existance is visible, but the project itself is not. the idea would be that you can "request to
     # join" (which is currently not implemented as a button, but you could do it 'out of bands' i.e. via email or chat).
-    DISCOVERABLE = 10
+    DISCOVERABLE = 10, _("Discoverable")
 
     # the project's exsitance is only visible to team-members; you still need to explicitly click "join" which will
     # immediately make you a member
-    TEAM_MEMBERS = 99
+    TEAM_MEMBERS = 99, _("Team Members")
 
     # having projects that are part of a certain team, but not visible to the team members, was considered, but
     # rejected. The basic thinking on the rejection is: it would hollow out the concept of Team to the point of
@@ -75,7 +76,7 @@ class Project(models.Model):
 
     team = models.ForeignKey("teams.Team", blank=False, null=True, on_delete=models.SET_NULL)
 
-    name = models.CharField(max_length=255, blank=False, null=False, unique=True)
+    name = models.CharField(pgettext_lazy("Project", "Name"), max_length=255, blank=False, null=False, unique=True)
     slug = models.SlugField(max_length=50, blank=False, null=False, unique=True)
     is_deleted = models.BooleanField(default=False)
 
@@ -108,15 +109,15 @@ class Project(models.Model):
 
     # visibility
     visibility = models.IntegerField(
-        choices=ProjectVisibility.choices, default=ProjectVisibility.TEAM_MEMBERS,
-        help_text="Which users can see this project and its issues?")
+        _("Visibility"), choices=ProjectVisibility.choices, default=ProjectVisibility.TEAM_MEMBERS,
+        help_text=_("Which users can see this project and its issues?"))
 
     # ingestion/digestion quota
     quota_exceeded_until = models.DateTimeField(null=True, blank=True)
     next_quota_check = models.PositiveIntegerField(null=False, default=0)
 
     # retention
-    retention_max_event_count = models.PositiveIntegerField(default=10_000)
+    retention_max_event_count = models.PositiveIntegerField(_("Retention max event count"), default=10_000)
 
     def __str__(self):
         return self.name
@@ -178,9 +179,9 @@ class ProjectMembership(models.Model):
     project = models.ForeignKey(Project, on_delete=models.DO_NOTHING)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
-    send_email_alerts = models.BooleanField(default=None, null=True)
+    send_email_alerts = models.BooleanField(_("Send email alerts"), default=None, null=True)
 
-    role = models.IntegerField(choices=ProjectRole.choices, default=ProjectRole.MEMBER)
+    role = models.IntegerField(_("Role"), choices=ProjectRole.choices, default=ProjectRole.MEMBER)
     accepted = models.BooleanField(default=False)
 
     def __str__(self):

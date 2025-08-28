@@ -5,6 +5,7 @@ import os
 from contextlib import contextmanager
 
 from django.conf import settings
+from bugsink.utils import assert_
 
 
 _KIBIBYTE = 1024
@@ -58,6 +59,8 @@ DEFAULTS = {
     # 50 requests/s (ingestion) on low-grade hardware that I measured, and with 50% of the default value for retention.
     "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": 1_000,
     "MAX_EVENTS_PER_PROJECT_PER_HOUR": 5_000,
+
+    "MAX_EMAILS_PER_MONTH": None,  # None means "no limit"; for non-None values, the quota is per calendar month
 
     # I don't think Sentry specifies this one, but we do: given the spec 8KiB should be enough by an order of magnitude.
     "MAX_HEADER_SIZE": 8 * _KIBIBYTE,
@@ -125,7 +128,7 @@ def override_settings(**new_settings):
     _settings = AttrLikeDict()
     _settings.update(old_settings)
     for k in new_settings:
-        assert k in old_settings, "Unknown setting (likely error in tests): %s" % k
+        assert_(k in old_settings, "Unknown setting (likely error in tests): %s" % k)
     _settings.update(new_settings)
     yield
     _settings = old_settings

@@ -21,8 +21,44 @@ if [[ $WHEEL_FILE == *"dev"* ]]; then
     TAGS="-t bugsink/bugsink:dev"
 else
     VERSION=$(echo $WHEEL_FILE | cut -d'-' -f2)
-    TAGS="-t bugsink/bugsink:$VERSION -t bugsink/bugsink:$(echo $VERSION | awk -F. '{print $1"."$2}') -t bugsink/bugsink:$(echo $VERSION | awk -F. '{print $1}') -t bugsink/bugsink:latest -t bugsink/bugsink"
-    echo "This is a non-dev version, tags will be added: $TAGS"
+
+    REPO="bugsink/bugsink"
+
+    # numeric tags for this build
+    TAG_LIST=(
+      "$REPO:$VERSION"
+      "$REPO:$(echo "$VERSION" | awk -F. '{print $1"."$2}')"
+      "$REPO:$(echo "$VERSION" | awk -F. '{print $1}')"
+    )
+
+    # Find highest published semver on Docker Hub (public repo; no auth needed)
+    HIGHEST_PUBLISHED=$(
+      curl -fsSL "https://hub.docker.com/v2/repositories/${REPO}/tags?page_size=100" \
+      | grep -o '"name":"[^"]*"' \
+      | cut -d'"' -f4 \
+      | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+      | sort -V \
+      | tail -n1
+    )
+
+    # Decide whether we’re allowed to move :latest forward
+    ADD_LATEST=true
+    if [[ -n "$HIGHEST_PUBLISHED" ]]; then
+      # if VERSION < HIGHEST_PUBLISHED, do NOT set :latest
+      top=$(printf '%s\n%s\n' "$HIGHEST_PUBLISHED" "$VERSION" | sort -V | tail -n1)
+      if [[ "$top" != "$VERSION" ]]; then
+        ADD_LATEST=false
+        echo "Not tagging :latest: $VERSION < already published $HIGHEST_PUBLISHED"
+      fi
+    fi
+
+    # Build TAGS string
+    TAGS=""
+    for t in "${TAG_LIST[@]}"; do TAGS+=" -t $t"; done
+    if $ADD_LATEST; then
+      TAGS+=" -t $REPO:latest -t $REPO"
+      echo "Tagging as latest: $VERSION ≥ ${HIGHEST_PUBLISHED:-<none>}"
+    fi
 fi
 
 

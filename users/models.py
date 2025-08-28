@@ -3,6 +3,7 @@ import secrets
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
+from django.utils.translation import gettext_lazy as _
 
 
 class User(AbstractUser):
@@ -18,14 +19,22 @@ class User(AbstractUser):
     send_email_alerts = models.BooleanField(default=True, blank=True)
 
     THEME_CHOICES = [
-        ("system", "System Default"),
-        ("light", "Light"),
-        ("dark", "Dark"),
+        ("system", _("System Default")),
+        ("light", _("Light")),
+        ("dark", _("Dark")),
     ]
     theme_preference = models.CharField(
         max_length=10,
         choices=THEME_CHOICES,
         default="system",
+        blank=False,
+    )
+    language = models.CharField(
+        max_length=10,
+        # choices intentionally not set, we don't want changes to trigger migrations; the actual choices are set in
+        # forms.py; in Django 5.0 and up we can instead used a callable here
+        # choices=...
+        default="auto",
         blank=False,
     )
 

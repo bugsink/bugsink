@@ -3,12 +3,15 @@ from .default import BASE_DIR, LOGGING, DATABASES, I_AM_RUNNING
 
 import os
 
+from django.utils._os import safe_join
 from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
 
 from bugsink.utils import deduce_allowed_hosts, eat_your_own_dogfood
 
 
-SECRET_KEY = 'django-insecure-$@clhhieazwnxnha-_zah&(bieq%yux7#^07&xsvhn58t)8@xw'
+# no_bandit_expl: _development_ settings, we know that this is insecure; would fail to deploy in prod if (as configured)
+# the django checks (with --check --deploy) are run.
+SECRET_KEY = 'django-insecure-$@clhhieazwnxnha-_zah&(bieq%yux7#^07&xsvhn58t)8@xw'  # nosec B105
 DEBUG = True
 
 
@@ -61,6 +64,7 @@ if not I_AM_RUNNING == "TEST":
 SNAPPEA = {
     "TASK_ALWAYS_EAGER": True,  # at least for (unit) tests, this is a requirement
     "NUM_WORKERS": 1,
+    "PID_FILE": "/tmp/snappea.pid",  # for development: a thing to 'tune' to None to test the no-pid-check branches.
 }
 
 EMAIL_HOST = os.getenv("EMAIL_HOST")
@@ -98,6 +102,8 @@ BUGSINK = {
     "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": 1_000_000,
     "MAX_EVENTS_PER_PROJECT_PER_HOUR": 50_000_000,
 
+    "MAX_EMAILS_PER_MONTH": 10,  # for development: a thing to tune if you want to the the quota system
+
     "KEEP_ARTIFACT_BUNDLES": True,  # in development: useful to preserve sourcemap uploads
 }
 
@@ -107,7 +113,7 @@ if not I_AM_RUNNING == "TEST":
         "local_flat_files": {
             "STORAGE": "events.storage.FileEventStorage",
             "OPTIONS": {
-                "basepath": os.path.join(BASE_DIR, "filestorage"),
+                "basepath": safe_join(BASE_DIR, "filestorage"),
             },
             "USE_FOR_WRITE": True,
         },

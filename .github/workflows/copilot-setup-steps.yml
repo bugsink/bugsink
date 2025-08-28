@@ -1,0 +1,59 @@
+name: "Copilot Setup Steps"
+on:
+  push:
+    paths:
+      - ".github/workflows/copilot-setup-steps.yml"
+  workflow_dispatch:
+  # The "on" section defines when this workflow runs independently.
+  # It has no effect on Copilot itself — Copilot runs this job on demand
+  # if the job name is exactly "copilot-setup-steps".
+  # These triggers just let us test the workflow manually if needed.
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      DJANGO_SETTINGS_MODULE: bugsink.settings.development
+      SAMPLES_DIR: ${{ github.workspace }}/event-samples
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install project `pre-commit` hook
+        run: |
+          cp pre-commit .git/hooks/pre-commit
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements.development.txt
+        # We install directly from source using pip — no wheels, no Docker.
+        # This keeps the setup fast and simple for Copilot.
+        # To ensure correctness for more complex scenarios (e.g. multiple DBs),
+        # we rely on the actual CI pipeline.
+
+      - name: Run migrations
+        run: |
+          python manage.py migrate
+        # Ensures the SQLite database is initialized.
+
+      - name: Create superuser
+        env:
+          DJANGO_SUPERUSER_USERNAME: admin@example.com
+          DJANGO_SUPERUSER_EMAIL: admin@example.com
+          DJANGO_SUPERUSER_PASSWORD: admin
+        run: |
+          python manage.py createsuperuser --noinput
+
+      - name: Check out event-samples outside workspace
+        # by using a plain-old `git-clone` we are able to "ecape from the working dir"
+        run: |
+          git clone https://github.com/bugsink/event-samples.git ../event-samples

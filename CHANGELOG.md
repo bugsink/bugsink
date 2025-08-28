@@ -1,5 +1,52 @@
 # Changes
 
+## 1.7.6 (1 August 2025)
+
+* envelope-headers `sent_at` check should allow 00+00 (See #179)
+* evenlope-header validation failure should not lead to envelope-rejection (See #179)
+
+## 1.7.5 (31 July 2025)
+
+### General Improvements
+
+* Add failure visibility for alert backends (See #169)
+* Add per-month quota for email-sending (Fix #34)
+* Store `remote_addr` on the event (Fix #165)
+* Use `remote_addr` for `'{{auto}}'` `ip_addr` tags (See #165)
+* `PID_FILE` check: make optional (See #99)
+* `PID_FILE` check: don't use in docker/systemd (Fix #99)
+* Breadcrumb timestamps: display harmonized w/ rest of application (ceca12940bd5)
+
+### Sourcemaps: better debugging
+
+* sourcemaps: Uploaded, but ignored, files: warn (See #158)
+* Sourcemaps: Warn (in the logs) on multiple-debug-ids source uploads (See #157, #158)
+* Debug IDs for missing sourcemaps: show them right in the stacktrace (See #158)
+* Sourcemap Images IDs: show those in event details (See #158)
+
+### Configuration / Settings
+
+* `SINGLE_USER` implies `SINGLE_TEAM` and more (Fix #162)
+* Docker config: `BEHIND_PLAIN_HTTP_PROXY` (Fix #164)
+* Development setting: keep artifact bundles (1aef4a45c2dc)
+
+### Security Hardening
+
+* CI pipeline security checks with Bandit (See #175)
+* Envelope parsing validates headers strictly (See #173)
+* Use `django.utils._os.safe_join` to construct paths (see #173)
+
+### Internal Tooling
+
+* Remove the Django Debug Toolbar entirely (Fix #168)
+* semaphore-for-db-write-lock: sqlite only (See #117)
+* `send_json` utility: make envelope API the default (13226603ec7a)
+
+## 1.7.4, 1.6.4, 1.5.5, 1.4.3 (29 July 2025)
+
+Security release. Upgrading is highly recommended. See [this
+notice](https://github.com/bugsink/bugsink/security/advisories/GHSA-q78p-g86f-jg6q)
+
 ## 1.7.3 (17 July 2025)
 
 Migration fix: delete TurningPoints w/ project=None (Fix #155)

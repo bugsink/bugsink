@@ -1,10 +1,10 @@
 import logging
 from django.db.models import Q, Min, Max, Count
 
-from random import random
 from datetime import timezone, datetime
 
 from bugsink.moreiterutils import pairwise, map_N_until
+from bugsink.utils import assert_, nc_rnd
 from performance.context_managers import time_and_query_count
 
 from .storage_registry import get_storage
@@ -38,7 +38,7 @@ def get_epoch(datetime_obj):
     # in the search for a cut-off value for the total irrelevance, so it doesn't matter in the end.)
 
     # assuming we use model fields this 'just works' because Django's stores its stuff in timezone-aware UTC in the DB.
-    assert datetime_obj.tzinfo == timezone.utc
+    assert_(datetime_obj.tzinfo == timezone.utc)
 
     return int(datetime_obj.timestamp() / 3600)
 
@@ -85,8 +85,8 @@ def get_random_irrelevance(stored_event_count):
     """
     # assert as a tripwire to check our assumptions; note that the actual calculation actually "succeeds" for < 1, but
     # it becomes non-sensical, so I'd rather have it fail. The present event is part of the count, i.e. always >= 1
-    assert stored_event_count >= 1
-    return nonzero_leading_bits(round(random() * stored_event_count * 2))
+    assert_(stored_event_count >= 1)
+    return nonzero_leading_bits(round(nc_rnd.random() * stored_event_count * 2))
 
 
 def should_evict(project, timestamp, stored_event_count):

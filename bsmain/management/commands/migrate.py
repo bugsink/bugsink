@@ -1,6 +1,9 @@
 import time
 from django.core.management.commands.migrate import Command as DjangoMigrateCommand
 
+from . import monkey_patch_deconstruct
+monkey_patch_deconstruct()  # needed for migrate.py to avoid the warning about non-reflected changes
+
 
 class Command(DjangoMigrateCommand):
     # We override the default Django migrate command to add the elapsed time for each migration. (This could in theory
@@ -10,8 +13,7 @@ class Command(DjangoMigrateCommand):
     # We care more about the elapsed time for each migration than the average Django user because sqlite takes such a
     # prominent role in our architecture, and because migrations are run out of our direct control ("self hosted").
     #
-    # AFAIU, "just dropping a file called migrate.py in one of our apps" is good enough to be the override (and if it
-    # isn't, it's not critical, since all we do is add a bit more info to the output).
+    # AFAIU, "just dropping a file called migrate.py in one of our apps" is good enough to be the override.
 
     def migration_progress_callback(self, action, migration=None, fake=False):
         # Django 4.2's method, with a single change

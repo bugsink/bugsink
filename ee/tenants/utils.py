@@ -1,11 +1,12 @@
 from contextlib import contextmanager
 
 from .base import get_tenant_subdomain, use_tenant_subdomain
+from bugsink.utils import assert_
 
 
 def add_tenant_subdomain_to_kwargs():
     tenant_subdomain = get_tenant_subdomain()
-    assert tenant_subdomain is not None, "Must have tenant set to be able to pass this to snappea"
+    assert_(tenant_subdomain is not None, "Must have tenant set to be able to pass this to snappea")
     return {"TENANT_SUBDOMAIN": tenant_subdomain}
 
 

@@ -32,6 +32,9 @@ from bsmain.management.commands.send_json import Command as SendJsonCommand
 from .views import BaseIngestAPIView
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 from .event_counter import check_for_thresholds
+from .header_validators import (
+    validate_envelope_headers, validate_item_headers, filter_valid_item_headers, filter_valid_envelope_headers)
+
 from bugsink.exceptions import ViolatedExpectation
 
 
@@ -884,3 +887,88 @@ class TestParser(RegularTestCase):
 
         with self.assertRaises(StopIteration):
             header, item = next(items)
+
+    def test_garbage_sent_at(self):
+        # based on test_envelope_with_2_items_last_newline_omitted, but with a garbage sent_at value
+        parser = StreamingEnvelopeParser(io.BytesIO(b"""{"event_id":"9ec79c33ec9942ab8353589fcb2e04dc","dsn":"https://e12d836b15bb49d7bbf99e64295d995b:@sentry.io/42","sent_at":"garbage"}\n{"type":"attachment","length":10,"content_type":"text/plain","filename":"hello.txt"}\n\xef\xbb\xbfHello\r\n\n{"type":"event","length":41,"content_type":"application/json","filename":"application.log"}\n{"message":"hello world","level":"error"}\n"""))  # noqa
+
+        envelope_headers = parser.get_envelope_headers()
+
+        # note: sent_at filtered out
+        self.assertEqual(
+            {"event_id": "9ec79c33ec9942ab8353589fcb2e04dc",
+             "dsn": "https://e12d836b15bb49d7bbf99e64295d995b:@sentry.io/42"},
+            envelope_headers)
+
+        # the rest of the test is not repeated here
+
+
+class HeaderValidationTest(RegularTestCase):
+    # incomplete: regression-based-first (we'll add more later)
+
+    def test_sent_at_trailing_zeros(self):
+        # regression test for #179
+        validate_envelope_headers({"sent_at": "2025-07-31T23:05:37.0926585+00:00"})
+        validate_envelope_headers({"sent_at": "2025-07-31T23:05:37.0926585Z"})
+
+        with self.assertRaises(ParseError):
+            validate_envelope_headers({"sent_at": "garbage"})
+
+        with self.assertRaises(ParseError):
+            validate_envelope_headers({"sent_at": "2025-07-31T23:05:37.0926585032123+00:00"})
+
+        with self.assertRaises(ParseError):
+            validate_envelope_headers({"sent_at": "2025-07-31T23:05:37.0926+12:00"})
+
+    def test_dsn(self):
+        validate_envelope_headers({"dsn": "https://public@example.com/1"})
+        with self.assertRaises(ParseError):
+            validate_envelope_headers({"dsn": "not-a-dsn"})
+
+    def test_sdk(self):
+        validate_envelope_headers({"sdk": {}})
+        with self.assertRaises(ParseError):
+            validate_envelope_headers({"sdk": "1.0"})
+
+    def test_event_id(self):
+        valid32 = "a" * 32
+        valid36 = "123e4567-e89b-12d3-a456-426614174000"
+        validate_envelope_headers({"event_id": valid32})
+        validate_envelope_headers({"event_id": valid36})
+
+        with self.assertRaises(ParseError):
+            validate_envelope_headers({"event_id": "xyz"})
+
+        with self.assertRaises(ParseError):
+            validate_envelope_headers({"event_id": "g" * 32})
+
+    def test_filter_valid_envelope_headers(self):
+        headers = {
+            "dsn": "bad",
+            "sent_at": "2025-08-02T00:00:00Z",
+            "sdk": "bad",
+            "event_id": "deadbeefdeadbeefdeadbeefdeadbeef"
+        }
+
+        self.assertEqual(filter_valid_envelope_headers(headers), {
+            "sent_at": "2025-08-02T00:00:00Z",
+            "event_id": "deadbeefdeadbeefdeadbeefdeadbeef",
+        })
+
+    def test_validate_item_headers_non_event_doesnt_raise(self):
+        validate_item_headers({"type": "transaction", "length": -1})
+
+    def test_validate_item_headers(self):
+        validate_item_headers({"type": "event", "length": 0})
+
+        with self.assertRaises(ParseError):
+            validate_item_headers({"type": "event", "length": -1})
+
+    def test_filter_valid_item_headers_non_event(self):
+        header = {"type": "transaction", "length": -1}
+        self.assertIs(filter_valid_item_headers(header), header)
+
+    def test_filter_valid_item_headers_event(self):
+        self.assertEqual(filter_valid_item_headers(
+            {"type": "event", "length": 3, "foo": 1}),
+            {"type": "event", "length": 3})

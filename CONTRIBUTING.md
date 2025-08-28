@@ -40,6 +40,8 @@ python manage.py tailwind build
 git add theme/static/css/dist/styles.css
 ```
 
+The pre-commit hook in the project's root does this automatically if needed, copy it to .git/hooks
+to auto-run.
 
 ### Security
 

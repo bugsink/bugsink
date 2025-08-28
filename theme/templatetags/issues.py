@@ -1,12 +1,16 @@
+from datetime import datetime
 import re
 from django import template
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 
 from django.utils.html import escape
-from django.utils.safestring import mark_safe
+from django.utils.safestring import SafeData, mark_safe
+from django.template.defaultfilters import date
 
+from compat.timestamp import parse_timestamp
 
+from bugsink.utils import assert_
 from bugsink.pygments_extensions import guess_lexer_for_filename, lexer_for_platform
 
 register = template.Library()
@@ -19,7 +23,7 @@ def _split(joined, lengths):
         result.append(joined[start:start + length])
         start += length
 
-    assert [len(r) for r in result] == lengths
+    assert_([len(r) for r in result] == lengths)
     return result
 
 
@@ -48,7 +52,7 @@ def _core_pygments(code, filename=None, platform=None):
     # a line is" is not properly defined. (i.e.: is the thing after the final newline a line or not, both for the input
     # and the output?). At the level of _pygmentize_lines the idea of a line is properly defined, so we only have to
     # deal with pygments' funnyness.
-    # assert len(code.split("\n")) == result.count("\n"), "%s != %s" % (len(code.split("\n")), result.count("\n"))
+    # assert_(len(code.split("\n")) == result.count("\n"), "%s != %s" % (len(code.split("\n")), result.count("\n")))
 
     return result
 
@@ -67,7 +71,7 @@ def _pygmentize_lines(lines, filename=None, platform=None):
 
     # [:-1] to remove the last empty line, a result of split()
     result = _core_pygments(code, filename=filename, platform=platform).split('\n')[:-1]
-    assert len(lines) == len(result), "%s != %s" % (len(lines), len(result))
+    assert_(len(lines) == len(result), "%s != %s" % (len(lines), len(result)))
     return result
 
 
@@ -99,9 +103,10 @@ def pygmentize(value, platform):
 
     pre_context, context_lines, post_context = _split(lines, lengths)
 
-    value['pre_context'] = [mark_safe(s) for s in pre_context]
-    value['context_line'] = mark_safe(context_lines[0])
-    value['post_context'] = [mark_safe(s) for s in post_context]
+    # no_bandit_expl: see tests.TestPygmentizeEscape
+    value['pre_context'] = [mark_safe(s) for s in pre_context]  # nosec B703, B308
+    value['context_line'] = mark_safe(context_lines[0])  # nosec B703, B308
+    value['post_context'] = [mark_safe(s) for s in post_context]  # nosec B703, B308
 
     return value
 
@@ -137,6 +142,18 @@ def shortsha(value):
     return value[:12]
 
 
+def safe_join(sep, items, strict=False):
+    """join() that takes safe strings into account; strict=True means: I expect all inputs to be safe"""
+
+    text = sep.join(items)
+    if isinstance(sep, SafeData) and all(isinstance(i, SafeData) for i in items):
+        # no_bandit_expl: as per the check right above
+        return mark_safe(text)  # nosec B703, B308
+    if strict:
+        raise ValueError("Cannot join non-safe in strict mode")
+    return text
+
+
 @register.filter()
 def format_var(value):
     """Formats a variable for display in the template; deals with 'marked as incomplete'."""
@@ -166,23 +183,27 @@ def format_var(value):
 
     def gen_list(lst):
         for value in lst:
-            yield "", storevalue(value)
+            yield escape(""), storevalue(value)
 
         if hasattr(lst, "incomplete"):
-            yield f"<i>&lt;{lst.incomplete} items trimmed…&gt;</i>", None
+            # no_bandit_expl: constant string w/ substitution of an int (asserted)
+            assert_(isinstance(lst.incomplete, int))
+            yield mark_safe(f"<i>&lt;{lst.incomplete} items trimmed…&gt;</i>"), None  # nosec B703, B308
 
     def gen_dict(d):
         for (k, v) in d.items():
-            yield escape(repr(k)) + ": ", storevalue(v)
+            yield escape(repr(k)) + escape(": "), storevalue(v)
 
         if hasattr(d, "incomplete"):
-            yield f"<i>&lt;{d.incomplete} items trimmed…&gt;</i>", None
+            # no_bandit_expl: constant string w/ substitution of an int (asserted)
+            assert_(isinstance(d.incomplete, int))
+            yield mark_safe(f"<i>&lt;{d.incomplete} items trimmed…&gt;</i>"), None  # nosec B703, B308
 
     def gen_switch(obj):
         if isinstance(obj, list):
-            return bracket_wrap(gen_list(obj), "[", ", ", "]")
+            return bracket_wrap(gen_list(obj), escape("["), escape(", "), escape("]"))
         if isinstance(obj, dict):
-            return bracket_wrap(gen_dict(obj), "{", ", ", "}")
+            return bracket_wrap(gen_dict(obj), escape("{"), escape(", "), escape("}"))
         return gen_base(obj)
 
     result = []
@@ -205,8 +226,7 @@ def format_var(value):
             stack.append(todo)
             todo = gen_switch(recurse())
 
-    # mark_safe is OK because the only non-escaped characters are the brackets, commas, and colons.
-    return mark_safe("".join(result))
+    return safe_join(escape(""), result, strict=True)
 
 
 # recursive equivalent:
@@ -214,19 +234,17 @@ def format_var(value):
 # def format_var(value):
 #     """Formats a variable for display in the template; deals with 'marked as incomplete'.
 #     """
-#     # mark_safe is OK because the only non-escaped characters are the brackets, commas, and colons.
-#
 #     if isinstance(value, dict):
-#         parts = [(escape(repr(k)) + ": " + format_var(v)) for (k, v) in value.items()]
+#         parts = [(escape(repr(k)) + escape(": ") + format_var(v)) for (k, v) in value.items()]
 #         if hasattr(value, "incomplete"):
 #             parts.append(mark_safe(f"<i>&lt;{value.incomplete} items trimmed…&gt;</i>"))
-#         return mark_safe("{" + ", ".join(parts) + "}")
+#         return escape("{") + safe_join(escape(", "), parts, strict=True) + escape("}")
 #
 #     if isinstance(value, list):
 #         parts = [format_var(v) for v in value]
 #         if hasattr(value, "incomplete"):
 #             parts.append(mark_safe(f"<i>&lt;{value.incomplete} items trimmed…&gt;</i>"))
-#         return mark_safe("[" + ", ".join(parts) + "]")
+#         return escape("[") + safe_join(escape(", "), parts, strict=True) + escape("]")
 #
 #     return escape(value)
 
@@ -235,3 +253,33 @@ def format_var(value):
 def incomplete(value):
     # needed to disinguish between 'has an incomplete' attr (set by us) and 'contains an incomplete key' (event-data)
     return hasattr(value, "incomplete")
+
+
+def _date_with_milis_html(timestamp):
+    # no_bandit_expl: constant string w/ substitution of dates/milis (escaped even), see also TimestampWithMillisTagTest
+    return (
+        mark_safe('<span class="whitespace-nowrap">') +  # nosec
+        escape(date(timestamp, "j M G:i:s")) + mark_safe(".") +  # nosec
+        mark_safe('<span class="text-xs">') + escape(date(timestamp, "u")[:3]) +  # nosec
+        mark_safe('</span></span>'))  # nosec
+
+
+@register.filter
+def timestamp_with_millis(value):
+    """
+    Timestamp formatting with milliseconds; robust for datetime.datetime, as well as the strings/floats/ints that may
+    show up in the event data.
+    """
+    if isinstance(value, datetime):
+        dt = value
+
+    else:
+        try:
+            dt = parse_timestamp(value)
+        except Exception:
+            return value
+
+    if dt is None:
+        return value
+
+    return _date_with_milis_html(dt)

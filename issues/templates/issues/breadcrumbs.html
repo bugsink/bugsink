@@ -3,6 +3,7 @@
 {% load stricter_templates %}
 {% load issues %}
 {% load humanize %}
+{% load i18n %}
 
 {% block tab_content %}
 
@@ -21,7 +22,7 @@
 {% if not breadcrumbs %}
 
     <div class="mt-6 mb-6 italic">
-        No breadcrumbs available for this event.
+        {% translate "No breadcrumbs available for this event." %}
     </div>
 
 {% else %}
@@ -49,8 +50,7 @@
         {{ breadcrumb.message }}
     </td>
     <td class="p-4 font-bold text-slate-500 dark:text-slate-300 align-top">
-        {{ breadcrumb.timestamp }}
-        {# {{ breadcrumb.timestamp|date:"G:i T" and milis  }} #}
+        {{ breadcrumb.timestamp|timestamp_with_millis }}
     </td>
 
     </tr>

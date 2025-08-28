@@ -180,7 +180,8 @@ def _process_view_steps(middleware, request, wider_context):
 
     try:
         middleware._check_token(request)
-        result["_check_token"] = "OK"
+        # no_bandit_expl: bandit triggers on the word "token" here but this is not exposure of a secret token
+        result["_check_token"] = "OK"  # nosec
     except RejectRequest as e:
         result["_check_token"] = "FAILS WITH %s" % e.reason
         result["process_view"] = "FAILS at _check_token"
@@ -219,7 +220,8 @@ def csrf_debug(request):
             "META": {
                 k: request.META.get(k) for k in request.META.keys() if k.startswith("HTTP_")
             },
-            "SECURE_PROXY_SSL_HEADER": settings.SECURE_PROXY_SSL_HEADER[0] if settings.SECURE_PROXY_SSL_HEADER else None,
+            "SECURE_PROXY_SSL_HEADER":
+                settings.SECURE_PROXY_SSL_HEADER[0] if settings.SECURE_PROXY_SSL_HEADER else None,
 
             "process_view": _process_view_steps(middleware, request, context),
         })

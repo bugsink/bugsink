@@ -7,9 +7,16 @@ name: Continuous Integration
 
 on:
   push:
-    branches: [ "main" ]
+    # hardcoded list; GitHub does not support wildcards in branch names AFAICT
+    branches: [ "main", "1.4.x", "1.5.x", "1.6.x", "1.7.x", "1.8.x", "1.9.x", "1.10.x", "1.11.x" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:  # Enables manual invocation via "Run workflow" button in the Actions UI
+    inputs:
+      target_branch:
+        description: 'Branch to run workflow on'
+        required: false
+        default: 'main'
 
 env:
   DJANGO_SETTINGS_MODULE: "bugsink.settings.development"
@@ -33,6 +40,56 @@ jobs:
         # https://github.com/PyCQA/flake8/issues/515 shows a dead end of doing this "properly"
         # so we just specify it on the command line
         flake8 --extend-ignore=E127,E741,E501,E731 `git ls-files | grep py$`
+
+  bandit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+
+      - name: Install Bandit and Plugins
+        run: |
+          pip install bandit spoils
+
+      - name: Run Bandit and format results
+        shell: bash
+        run: |
+          # set +e disables "exit on any non-zero command" behavior
+          # set +o pipefail disables GH's default "fail the whole pipeline if any stage fails"
+          set +e +o pipefail
+
+          # Note: .py files only; at the time of writing I checked the conf_templates/*.template
+          # also; but they had 2 False positives only (SECRET_KEY lives there by design) and I
+          # don't want to pollute templates that other people deal with with "nosec".
+          bandit_json_output=$( \
+            git ls-files \
+              | grep '\.py$' \
+              | xargs bandit -q -f json --ini .bandit \
+          )
+          bandit_exit_code=$?
+
+          echo "$bandit_json_output" \
+            | jq -r '
+                .results[]
+                | [ .filename
+                  , .line_number
+                  , .test_id
+                  , .issue_confidence
+                  , .issue_severity
+                  , .test_name
+                  ]
+                | @tsv
+              ' \
+            | column -t
+
+          if [[ $bandit_exit_code -ne 0 ]]; then
+            echo "Bandit found issues (exit code $bandit_exit_code)"
+            exit $bandit_exit_code
+          fi
 
   test:
     runs-on: ubuntu-latest
