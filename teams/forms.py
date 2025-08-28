@@ -49,14 +49,9 @@ class MyTeamMembershipForm(forms.ModelForm):
             del self.fields['role']
 
         global_send_email_alerts = self.instance.user.send_email_alerts
-        global_send_email_alerts = self.instance.user.send_email_alerts
+        global_send_email_alerts_text = yesno(global_send_email_alerts).capitalize()
 
-        if global_send_email_alerts:
-            global_send_email_alerts_text = _("Yes")
-        else:
-            global_send_email_alerts_text = _("No")
-
-        empty_label = _("User-default (%s)") % global_send_email_alerts
+        empty_label = _("User-default (%s)") % global_send_email_alerts_text
         self.fields['send_email_alerts'].label = _("Send email alerts")
         self.fields['send_email_alerts'].empty_label = empty_label
         self.fields['send_email_alerts'].widget.choices[0] = ("unknown", empty_label)

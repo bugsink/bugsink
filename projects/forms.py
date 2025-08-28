@@ -64,7 +64,7 @@ class MyProjectMembershipForm(forms.ModelForm):
             sea_defined_at = "user"
             sea_default = self.instance.user.send_email_alerts
 
-        empty_label = 'Default (%s, as per %s settings)' % (yesno(sea_default).capitalize(), sea_defined_at)
+        empty_label = _('Default (%s, as per %s settings)') % (yesno(sea_default).capitalize(), sea_defined_at)
         self.fields['send_email_alerts'].label = _("Send email alerts")
         self.fields['send_email_alerts'].empty_label = empty_label
         self.fields['send_email_alerts'].widget.choices[0] = ("unknown", empty_label)

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-07-30 21:26+0800\n"
+"POT-Creation-Date: 2025-08-28 14:10+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -303,7 +303,7 @@ msgstr "这个事件没有栈追踪。"
 msgid "No tags found for this issue."
 msgstr "这个问题没有标签。"
 
-#: projects/forms.py:17 teams/forms.py:14 users/forms.py:85
+#: projects/forms.py:17 teams/forms.py:14 users/forms.py:87
 msgid "Email"
 msgstr "电子邮件"
 
@@ -312,7 +312,12 @@ msgstr "电子邮件"
 msgid "Role"
 msgstr "角色"
 
-#: projects/forms.py:68 teams/forms.py:60 users/forms.py:137
+#: projects/forms.py:67
+#, python-format
+msgid "Default (%s, as per %s settings)"
+msgstr ""
+
+#: projects/forms.py:68 teams/forms.py:55 users/forms.py:151
 msgid "Send email alerts"
 msgstr "发送邮件通知"
 
@@ -321,7 +326,7 @@ msgctxt "Project"
 msgid "Name"
 msgstr "项目名称"
 
-#: projects/forms.py:90 teams/forms.py:81
+#: projects/forms.py:90 teams/forms.py:76
 msgid "Visibility"
 msgstr "可见性"
 
@@ -624,20 +629,12 @@ msgstr "邀请并继续添加"
 msgid "You have joined the project \"%s\""
 msgstr "你已经加入了项目 \"%s\""
 
-#: teams/forms.py:55 users/forms.py:15
-msgid "Yes"
-msgstr "是"
-
-#: teams/forms.py:57 users/forms.py:16
-msgid "No"
-msgstr "否"
-
-#: teams/forms.py:59
+#: teams/forms.py:54
 #, python-format
 msgid "User-default (%s)"
 msgstr "用户缺省 (%s)"
 
-#: teams/forms.py:80
+#: teams/forms.py:75
 msgctxt "Team"
 msgid "Name"
 msgstr "团队名称"
@@ -790,11 +787,23 @@ msgstr "偏好"
 msgid "Log out"
 msgstr "登出"
 
-#: users/forms.py:139
+#: users/forms.py:17
+msgid "Yes"
+msgstr "是"
+
+#: users/forms.py:18
+msgid "No"
+msgstr "否"
+
+#: users/forms.py:137
+msgid "Auto (browser preference)"
+msgstr "自动（浏览器偏好）"
+
+#: users/forms.py:153
 msgid "Theme preference"
 msgstr "主题偏好"
 
-#: users/forms.py:145
+#: users/forms.py:159
 msgid "Language"
 msgstr "语言"
 
@@ -809,18 +818,6 @@ msgstr "明亮"
 #: users/models.py:23
 msgid "Dark"
 msgstr "黑暗"
-
-#: users/models.py:33
-msgid "Auto"
-msgstr "自动"
-
-#: users/models.py:34
-msgid "English"
-msgstr "英语"
-
-#: users/models.py:35
-msgid "Simplified Chinese"
-msgstr "简体中文"
 
 #: users/templates/users/confirm_email.html:18
 msgid "Confirm your email address by clicking the button below."
@@ -884,15 +881,10 @@ msgstr "确定删除该用户？该操作不可撤销。"
 msgid "Superuser"
 msgstr "超级管理员"
 
-#: users/views.py:233
+#: users/views.py:237
 msgid "Updated preferences"
 msgstr "偏好已更新"
 
-#~ msgctxt "Project"
-#~ msgid "Team"
-#~ msgstr "团队"
-
 # Fix on https://code.djangoproject.com/ticket/36579
-#. Translators: Please do not add spaces around commas.
 msgid "yes,no,maybe"
-msgstr "是、,否、,也许"
+msgstr "是,否,也许"
