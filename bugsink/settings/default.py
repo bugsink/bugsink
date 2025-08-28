@@ -103,6 +103,10 @@ MIDDLEWARE = [
 
     'bugsink.middleware.LoginRequiredMiddleware',
 
+    # note on ordering: we need request.user, so after AuthenticationMiddleware; and we're not tied to "before
+    # CommonMiddleware" as django.middleware.locale.LocaleMiddleware is, because we don't do path-related stuff.
+    'bugsink.middleware.UserLanguageMiddleware',
+
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
@@ -240,6 +244,14 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Europe/Amsterdam'
 
 USE_I18N = True
+
+USE_L10N = True
+
+LOCALE_PATHS = [BASE_DIR / "locale"]
+LANGUAGES = (
+    ("en", "English"),
+    ("zh-hans", "简体中文"),
+)
 
 USE_TZ = True
 

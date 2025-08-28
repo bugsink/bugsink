@@ -9,17 +9,14 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth import password_validation
 from django.forms import ModelForm
 from django.utils.html import escape, mark_safe
+from django.utils.translation import gettext_lazy as _, get_language_info
+from django.conf import settings
 
 
 TRUE_FALSE_CHOICES = (
-    (True, 'Yes'),
-    (False, 'No')
+    (True, _("Yes")),
+    (False, _("No"))
 )
-
-
-def _(x):
-    # dummy gettext
-    return x
 
 
 User = get_user_model()
@@ -87,7 +84,7 @@ class UserEditForm(ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['username'].validators = [EmailValidator()]
-        self.fields['username'].label = "Email"
+        self.fields['username'].label = _("Email")
 
         self.fields['username'].help_text = None  # "Email" is descriptive enough
 
@@ -136,6 +133,18 @@ class SetPasswordForm(BaseSetPasswordForm):
         self.fields['new_password2'].help_text = None  # "Confirm password" is descriptive enough
 
 
+def language_choices():
+    items = [("auto", _("Auto (browser preference)"))]
+
+    for code, _label in settings.LANGUAGES:
+        info = get_language_info(code)
+        label = info["name_local"] \
+            if info["name_local"] == info["name_translated"] \
+            else f"{info['name_local']} ({info['name_translated']})"
+        items.append((code, label))
+    return items
+
+
 class PreferencesForm(ModelForm):
     # I haven't gotten a decent display for checkboxes in forms yet; the quickest hack around this is a ChoiceField
     send_email_alerts = forms.ChoiceField(
@@ -146,7 +155,13 @@ class PreferencesForm(ModelForm):
         required=True,
         widget=forms.Select(),
     )
+    language = forms.ChoiceField(
+        label=_("Language"),
+        choices=language_choices,
+        required=True,
+        widget=forms.Select(),
+    )
 
     class Meta:
         model = User
-        fields = ("send_email_alerts", "theme_preference",)
+        fields = ("send_email_alerts", "theme_preference", "language",)

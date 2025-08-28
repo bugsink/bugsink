@@ -3,6 +3,7 @@
 {% load stricter_templates %}
 {% load issues %}
 {% load humanize %}
+{% load i18n %}
 
 {% block tab_content %}
 
@@ -21,7 +22,7 @@
 {% if not breadcrumbs %}
 
     <div class="mt-6 mb-6 italic">
-        No breadcrumbs available for this event.
+        {% translate "No breadcrumbs available for this event." %}
     </div>
 
 {% else %}

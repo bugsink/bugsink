@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
+{% load i18n %}
 
 {% block title %}Users · {{ site_title }}{% endblock %}
 
@@ -12,7 +13,7 @@
             <h3 class="text-2xl font-semibold text-slate-800 dark:text-slate-100 mt-3 mb-4">Delete User</h3>
             <div class="mt-4 mb-6">
                 <p class="text-slate-700 dark:text-slate-300">
-                    Are you sure you want to delete this user? This action cannot be undone.
+                    {% translate "Are you sure you want to delete this user? This action cannot be undone." %}
                 </p>
             </div>
             <div class="flex items-center justify-center space-x-4 mb-4">
@@ -41,7 +42,7 @@
         {% endif %}
 
         <div class="flex">
-            <h1 class="text-4xl mt-4 font-bold">Users</h1>
+            <h1 class="text-4xl mt-4 font-bold">{% translate "Users" %}</h1>
             {% comment %}
             Our current invite-system is tied to either a team or a project; no "global" invites (yet).
             <div class="ml-auto mt-6">
@@ -58,7 +59,7 @@
           <tbody>
                 <thead>
                 <tr class="bg-slate-200 dark:bg-slate-800">
-                    <th class="w-full p-4 text-left text-xl" colspan="2">Users</th>
+                    <th class="w-full p-4 text-left text-xl" colspan="2">{% translate "Users" %}</th>
                 </tr>
 
                 {% for user in users %}
@@ -67,7 +68,7 @@
                     <div>
                         <a href="{% url "user_edit" user_pk=user.pk %}" class="text-xl text-cyan-500 dark:text-cyan-300 font-bold">{{ user.username }}</a>
                         {% if member.is_superuser %}
-                        <span class="bg-cyan-100 dark:bg-cyan-900 rounded-2xl px-4 py-2 ml-2 text-sm">Superuser</span>
+                        <span class="bg-cyan-100 dark:bg-cyan-900 rounded-2xl px-4 py-2 ml-2 text-sm">{% translate "Superuser" %}</span>
                         {% endif %}
                     </div>
                 </td>
