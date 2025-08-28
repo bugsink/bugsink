@@ -5,6 +5,10 @@ from django.contrib.auth.decorators import login_required
 from django.db import connection
 from django.conf import settings
 from django.core.exceptions import SuspiciousOperation
+from django.utils.translation import get_supported_language_variant
+from django.utils.translation.trans_real import parse_accept_lang_header
+from django.utils import translation
+
 
 performance_logger = logging.getLogger("bugsink.performance.views")
 
@@ -130,30 +134,33 @@ class SetRemoteAddrMiddleware:
         return self.get_response(request)
 
 
+def language_from_accept_language(request):
+    """
+    Pick a language using ONLY the Accept-Language header. Ignores URL prefixes, session, and cookies.  I prefer to have
+    as little "magic" in the language selection as possible, and I _know_ we don't do anything with paths, so I'd rather
+    not have such code invoked at all (at the cost of reimplementing some of Django's logic here).
+    """
+    header = request.META.get("HTTP_ACCEPT_LANGUAGE", "")
+    for lang_code, _q in parse_accept_lang_header(header):
+        try:
+            # strict=False lets country variants match (e.g. 'es-CO' for 'es')
+            return get_supported_language_variant(lang_code, strict=False)
+        except LookupError:
+            continue
+    return settings.LANGUAGE_CODE
+
+
 class UserLanguageMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
+        if request.user.is_authenticated and request.user.language != "auto":
+            normalized_explicit_lang = get_supported_language_variant(request.user.language, strict=False)
+            translation.activate(normalized_explicit_lang)
+        else:
+            auto_lang = language_from_accept_language(request)
+            translation.activate(auto_lang)
+
         response = self.get_response(request)
-        
-        if (request.user.is_authenticated and 
-            hasattr(request.user, 'language')):
-            
-            user_language = request.user.language
-            current_cookie = request.COOKIES.get('django_language')
-            
-            if user_language == 'auto':
-                if current_cookie is not None:
-                    response.delete_cookie('django_language')
-            else:
-                if current_cookie != user_language:
-                    response.set_cookie(
-                        'django_language',
-                        user_language,
-                        max_age=365 * 24 * 60 * 60,
-                        httponly=False,
-                        samesite='Lax'
-                    )
-        
         return response

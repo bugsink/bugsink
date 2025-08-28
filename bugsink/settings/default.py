@@ -97,12 +97,14 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'verbose_csrf_middleware.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
 
     'bugsink.middleware.LoginRequiredMiddleware',
+
+    # note on ordering: we need request.user, so after AuthenticationMiddleware; and we're not tied to "before
+    # CommonMiddleware" as django.middleware.locale.LocaleMiddleware is, because we don't do path-related stuff.
     'bugsink.middleware.UserLanguageMiddleware',
 
     'django.contrib.messages.middleware.MessageMiddleware',
