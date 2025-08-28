@@ -16,7 +16,8 @@ User = get_user_model()
 class ProjectMemberInviteForm(forms.Form):
     email = forms.EmailField(label=_('Email'), required=True)
     role = forms.ChoiceField(
-        label=_('Role'), choices=ProjectRole.choices, required=True, initial=ProjectRole.MEMBER, widget=forms.RadioSelect)
+        label=_('Role'), choices=ProjectRole.choices, required=True, initial=ProjectRole.MEMBER,
+        widget=forms.RadioSelect)
 
     def __init__(self, user_must_exist, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -49,7 +50,6 @@ class MyProjectMembershipForm(forms.ModelForm):
 
         if not edit_role:
             del self.fields['role']
-
 
         try:
             tm = TeamMembership.objects.get(team=self.instance.project.team, user=self.instance.user)
@@ -100,7 +100,8 @@ class ProjectForm(forms.ModelForm):
             self.fields["dsn"].initial = self.instance.dsn
             self.fields["dsn"].label = _("DSN (read-only)")
             href = reverse('project_sdk_setup', kwargs={'project_pk': self.instance.pk})
-            self.fields["dsn"].help_text = _("Use the DSN to <a href=\"%s\" class=\"text-cyan-800 font-bold\">set up the SDK</a>.") % href
+            self.fields["dsn"].help_text = _(
+                "Use the DSN to <a href=\"%s\" class=\"text-cyan-800 font-bold\">set up the SDK</a>.") % href
 
             # if we ever push slug to the form, editing it should probably be disallowed as well (but mainly because it
             # has consequences on the issue's short identifier)
@@ -112,7 +113,9 @@ class ProjectForm(forms.ModelForm):
             self.fields["team"].queryset = team_qs
             if team_qs.count() == 0:
                 href = reverse("team_new")
-                self.fields["team"].help_text = _('You don\'t have any teams yet; <a href="%s" class="text-cyan-800 font-bold">Create a team first.</a>') % href
+                self.fields["team"].help_text = _(
+                    'You don\'t have any teams yet; '
+                    '<a href="%s" class="text-cyan-800 font-bold">Create a team first.</a>') % href
             elif team_qs.count() == 1:
                 self.fields["team"].initial = team_qs.first()
 

@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect
 from django.http import Http404
 from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
+from django.utils.translation import gettext_lazy as _
 
 from bugsink.decorators import atomic_for_request_method
 

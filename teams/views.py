@@ -127,7 +127,8 @@ def team_edit(request, team_pk):
 
         if action == 'delete':
             # Double-check that the user is an admin or superuser
-            if not (TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists() or
+            if not (TeamMembership.objects.filter(
+                        team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists() or
                     request.user.is_superuser):
                 raise PermissionDenied("Only team admins can delete teams")
 

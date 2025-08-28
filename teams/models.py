@@ -5,6 +5,7 @@ from django.db import models
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 
+
 class TeamRole(models.IntegerChoices):
     MEMBER = 0, _("Member")
     ADMIN = 1, _("Admin")

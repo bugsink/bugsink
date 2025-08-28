@@ -53,7 +53,7 @@ class ProjectRole(models.IntegerChoices):
 
 class ProjectVisibility(models.IntegerChoices):
     # PUBLIC = 0  # anyone can see the project and its members; not sure if I want this or always require click-in
-    JOINABLE = 1, _("Joinable") # anyone can join
+    JOINABLE = 1, _("Joinable")  # anyone can join
 
     # the project's existance is visible, but the project itself is not. the idea would be that you can "request to
     # join" (which is currently not implemented as a button, but you could do it 'out of bands' i.e. via email or chat).
