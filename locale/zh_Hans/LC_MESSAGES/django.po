@@ -891,3 +891,8 @@ msgstr "偏好已更新"
 #~ msgctxt "Project"
 #~ msgid "Team"
 #~ msgstr "团队"
+
+# Fix on https://code.djangoproject.com/ticket/36579
+#. Translators: Please do not add spaces around commas.
+msgid "yes,no,maybe"
+msgstr "是、,否、,也许"
