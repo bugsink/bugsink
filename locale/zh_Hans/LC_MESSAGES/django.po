@@ -342,22 +342,23 @@ msgstr "超过此数量的事件将会被丢弃。"
 msgid "DSN (read-only)"
 msgstr "DSN (只读)"
 
+#. Translators: {link} will be replaced with an HTML link; place it where it reads naturally.
+#, python-brace-format
+msgid "Use the DSN to {link}."
+msgstr "使用 DSN 来{link}。"
+
 #: projects/forms.py:103
-#, python-format
-msgid ""
-"Use the DSN to <a href=\"%s\" class=\"text-cyan-800 font-bold\">set up the "
-"SDK</a>."
-msgstr ""
-"<a href=\"%s\" class=\"text-cyan-800 font-bold\">设置SDK</a>以使用DSN。"
+msgid "set up the SDK"
+msgstr "设置 SDK"
 
 #: projects/forms.py:115
-#, fuzzy, python-format
-msgid ""
-"You don't have any teams yet; <a href=\"%s\" class=\"text-cyan-800 font-"
-"bold\">Create a team first.</a>"
-msgstr ""
-"你没有任何可用团队。<a href=\"%s\" class=\"text-cyan-800 font-bold\">创建一个"
-"新团队。</a>"
+#. Translators: This text is followed by a clickable link. Adjust punctuation/spacing naturally.
+msgid "You don't have any teams yet; "
+msgstr "你还没有任何团队；"
+
+#: projects/forms.py:115
+msgid "Create a team first."
+msgstr "先创建一个团队。"
 
 #: projects/models.py:50 teams/models.py:9
 msgid "Member"

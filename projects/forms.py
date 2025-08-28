@@ -4,6 +4,7 @@ from django.template.defaultfilters import yesno
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import pgettext_lazy
+from django.utils.html import format_html
 
 from bugsink.utils import assert_
 from teams.models import TeamMembership
@@ -100,8 +101,11 @@ class ProjectForm(forms.ModelForm):
             self.fields["dsn"].initial = self.instance.dsn
             self.fields["dsn"].label = _("DSN (read-only)")
             href = reverse('project_sdk_setup', kwargs={'project_pk': self.instance.pk})
-            self.fields["dsn"].help_text = _(
-                "Use the DSN to <a href=\"%s\" class=\"text-cyan-800 font-bold\">set up the SDK</a>.") % href
+
+            self.fields["dsn"].help_text = format_html(
+                _("Use the DSN to {link}."),
+                link=format_html('<a href="{}" class="text-cyan-800 font-bold">{}</a>', href, _("set up the SDK")),
+            )
 
             # if we ever push slug to the form, editing it should probably be disallowed as well (but mainly because it
             # has consequences on the issue's short identifier)
@@ -113,9 +117,10 @@ class ProjectForm(forms.ModelForm):
             self.fields["team"].queryset = team_qs
             if team_qs.count() == 0:
                 href = reverse("team_new")
-                self.fields["team"].help_text = _(
-                    'You don\'t have any teams yet; '
-                    '<a href="%s" class="text-cyan-800 font-bold">Create a team first.</a>') % href
+                self.fields["team"].help_text = format_html(
+                    "{}{}", _("You don't have any teams yet; "),
+                    format_html('<a href="{}" class="text-cyan-800 font-bold">{}</a>', href, _("Create a team first.")))
+
             elif team_qs.count() == 1:
                 self.fields["team"].initial = team_qs.first()
 
