@@ -3,7 +3,7 @@ import uuid
 from django.db import models
 from django.conf import settings
 from django.utils.text import slugify
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, pgettext_lazy
 
 from bugsink.app_settings import get_settings
 from bugsink.transaction import delay_on_commit
@@ -76,7 +76,7 @@ class Project(models.Model):
 
     team = models.ForeignKey("teams.Team", blank=False, null=True, on_delete=models.SET_NULL)
 
-    name = models.CharField(max_length=255, blank=False, null=False, unique=True)
+    name = models.CharField(pgettext_lazy("Project", "Name"), max_length=255, blank=False, null=False, unique=True)
     slug = models.SlugField(max_length=50, blank=False, null=False, unique=True)
     is_deleted = models.BooleanField(default=False)
 
@@ -109,7 +109,7 @@ class Project(models.Model):
 
     # visibility
     visibility = models.IntegerField(
-        choices=ProjectVisibility.choices, default=ProjectVisibility.TEAM_MEMBERS,
+        _("Visibility"), choices=ProjectVisibility.choices, default=ProjectVisibility.TEAM_MEMBERS,
         help_text=_("Which users can see this project and its issues?"))
 
     # ingestion/digestion quota
@@ -117,7 +117,7 @@ class Project(models.Model):
     next_quota_check = models.PositiveIntegerField(null=False, default=0)
 
     # retention
-    retention_max_event_count = models.PositiveIntegerField(default=10_000)
+    retention_max_event_count = models.PositiveIntegerField(_("Retention max event count"), default=10_000)
 
     def __str__(self):
         return self.name
@@ -179,9 +179,9 @@ class ProjectMembership(models.Model):
     project = models.ForeignKey(Project, on_delete=models.DO_NOTHING)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
-    send_email_alerts = models.BooleanField(default=None, null=True)
+    send_email_alerts = models.BooleanField(_("Send email alerts"), default=None, null=True)
 
-    role = models.IntegerField(choices=ProjectRole.choices, default=ProjectRole.MEMBER)
+    role = models.IntegerField(_("Role"), choices=ProjectRole.choices, default=ProjectRole.MEMBER)
     accepted = models.BooleanField(default=False)
 
     def __str__(self):

@@ -3,7 +3,6 @@ from django.contrib.auth import get_user_model
 from django.template.defaultfilters import yesno
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from django.utils.translation import pgettext_lazy
 from django.utils.html import format_html
 
 from bugsink.utils import assert_
@@ -47,8 +46,6 @@ class MyProjectMembershipForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         assert_(self.instance is not None, "This form is only implemented for editing")
 
-        self.fields['role'].label = _("Role")
-
         if not edit_role:
             del self.fields['role']
 
@@ -66,7 +63,6 @@ class MyProjectMembershipForm(forms.ModelForm):
             sea_default = self.instance.user.send_email_alerts
 
         empty_label = _('Default (%s, as per %s settings)') % (yesno(sea_default).capitalize(), sea_defined_at)
-        self.fields['send_email_alerts'].label = _("Send email alerts")
         self.fields['send_email_alerts'].empty_label = empty_label
         self.fields['send_email_alerts'].widget.choices[0] = ("unknown", empty_label)
 
@@ -87,10 +83,6 @@ class ProjectForm(forms.ModelForm):
         team_qs = kwargs.pop("team_qs", None)
         super().__init__(*args, **kwargs)
 
-        self.fields["name"].label = pgettext_lazy("Project", "Name")
-        self.fields["visibility"].label = _("Visibility")
-
-        self.fields["retention_max_event_count"].label = _("Retention max event count")
         self.fields["retention_max_event_count"].help_text = _("The maximum number of events to store before evicting.")
         if self.instance is not None and self.instance.pk is not None:
             # for editing, we disallow changing the team. consideration: it's somewhat hard to see what the consequences

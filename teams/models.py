@@ -3,7 +3,7 @@ import uuid
 from django.db import models
 
 from django.conf import settings
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, pgettext_lazy
 
 
 class TeamRole(models.IntegerChoices):
@@ -27,9 +27,10 @@ class TeamVisibility(models.IntegerChoices):
 class Team(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
-    name = models.CharField(max_length=255, blank=False, null=False, unique=True)
+    name = models.CharField(pgettext_lazy("Team", "Name"), max_length=255, blank=False, null=False, unique=True)
 
     visibility = models.IntegerField(
+        _("Visibility"),
         choices=TeamVisibility.choices, default=TeamVisibility.DISCOVERABLE,
         help_text=_("Which users can see this team and its issues?"))
 
@@ -49,8 +50,8 @@ class TeamMembership(models.Model):
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
-    send_email_alerts = models.BooleanField(default=None, null=True, blank=True)
-    role = models.IntegerField(choices=TeamRole.choices, default=TeamRole.MEMBER)
+    send_email_alerts = models.BooleanField(_("Send email alerts"), default=None, null=True, blank=True)
+    role = models.IntegerField(_("Role"), choices=TeamRole.choices, default=TeamRole.MEMBER)
     accepted = models.BooleanField(default=False)
 
     def __str__(self):
