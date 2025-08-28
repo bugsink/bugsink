@@ -250,7 +250,7 @@ USE_L10N = True
 LOCALE_PATHS = [BASE_DIR / "locale"]
 LANGUAGES = (
     ("en", "English"),
-    ("zh-Hans", "简体中文"),
+    ("zh-hans", "简体中文"),
 )
 
 USE_TZ = True

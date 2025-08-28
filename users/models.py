@@ -28,15 +28,11 @@ class User(AbstractUser):
         default="system",
         blank=False,
     )
-
-    LANGUAGE_CHOICES = [
-        ("auto", _("Auto")),
-        ("en", _("English")),
-        ("zh-Hans", _("Simplified Chinese")),
-    ]
     language = models.CharField(
         max_length=10,
-        choices=LANGUAGE_CHOICES,
+        # choices intentionally not set, we don't want changes to trigger migrations; the actual choices are set in
+        # forms.py; in Django 5.0 and up we can instead used a callable here
+        # choices=...
         default="auto",
         blank=False,
     )

@@ -9,7 +9,9 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth import password_validation
 from django.forms import ModelForm
 from django.utils.html import escape, mark_safe
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, get_language_info
+from django.conf import settings
+
 
 TRUE_FALSE_CHOICES = (
     (True, _("Yes")),
@@ -131,6 +133,18 @@ class SetPasswordForm(BaseSetPasswordForm):
         self.fields['new_password2'].help_text = None  # "Confirm password" is descriptive enough
 
 
+def language_choices():
+    items = [("auto", _("Auto (browser preference)"))]
+
+    for code, _label in settings.LANGUAGES:
+        info = get_language_info(code)
+        label = info["name_local"] \
+            if info["name_local"] == info["name_translated"] \
+            else f"{info['name_local']} ({info['name_translated']})"
+        items.append((code, label))
+    return items
+
+
 class PreferencesForm(ModelForm):
     # I haven't gotten a decent display for checkboxes in forms yet; the quickest hack around this is a ChoiceField
     send_email_alerts = forms.ChoiceField(
@@ -143,7 +157,7 @@ class PreferencesForm(ModelForm):
     )
     language = forms.ChoiceField(
         label=_("Language"),
-        choices=User.LANGUAGE_CHOICES,
+        choices=language_choices,
         required=True,
         widget=forms.Select(),
     )
