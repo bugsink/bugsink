@@ -150,17 +150,17 @@ def language_from_accept_language(request):
     return settings.LANGUAGE_CODE
 
 
+def get_chosen_language(request_user, request):
+    if request_user.is_authenticated and request_user.language != "auto":
+        return get_supported_language_variant(request_user.language, strict=False)
+    return language_from_accept_language(request)
+
+
 class UserLanguageMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.user.is_authenticated and request.user.language != "auto":
-            normalized_explicit_lang = get_supported_language_variant(request.user.language, strict=False)
-            translation.activate(normalized_explicit_lang)
-        else:
-            auto_lang = language_from_accept_language(request)
-            translation.activate(auto_lang)
-
+        translation.activate(get_chosen_language(request.user, request))
         response = self.get_response(request)
         return response

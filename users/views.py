@@ -7,10 +7,12 @@ from django.http import Http404
 from django.utils import timezone
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.utils.translation import gettext as _ 
+from django.utils.translation import gettext as _
+from django.utils import translation
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
 from bugsink.decorators import atomic_for_request_method
+from bugsink.middleware import get_chosen_language
 
 from .forms import (
     UserCreationForm, ResendConfirmationForm, RequestPasswordResetForm, SetPasswordForm, PreferencesForm, UserEditForm)
@@ -226,9 +228,11 @@ def preferences(request):
         form = PreferencesForm(request.POST, instance=user)
 
         if form.is_valid():
-            form.save()
-            from django.utils import translation
-            translation.activate(user.language if user.language != 'auto' else translation.get_language())
+            user = form.save()
+
+            # activate the selected language immediately for the Success message; we've already passed the middleware
+            # stage (which looked at the pre-change language), so we need to do this ourselves with the fresh value.
+            translation.activate(get_chosen_language(user, request))
 
             messages.success(request, _("Updated preferences"))
             return redirect('preferences')
