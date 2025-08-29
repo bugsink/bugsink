@@ -88,6 +88,17 @@ function expandSection(element) {
 }
 
 function toggleFrameVisibility(frameHeader) {
+    console.log("toggling frame visibility");
+    const selection = window.getSelection().toString();
+    if (selection.length > 0) {
+        // don't toggle if the user is selecting text (which one might do to copy a
+        // filename or similar); the assumption here is: if there's a selection,
+        // it was just created using the mouse because non-selecting mouseclick
+        // deselect all text before the click is triggered. this assumption
+        // holds on desktop browsers; on mobile we might need to refine this.
+        return;
+    }
+
     const frameDetails = frameHeader.parentNode.querySelector(".js-frame-details");
     if (frameDetails.getAttribute("data-collapsed") === "true") {
         expandSection(frameDetails);
