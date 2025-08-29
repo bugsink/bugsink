@@ -38,6 +38,7 @@ from releases.models import create_release_if_needed
 from alerts.tasks import send_new_issue_alert, send_regression_alert
 from compat.timestamp import format_timestamp, parse_timestamp
 from tags.models import digest_tags
+from bsmain.utils import b108_makedirs
 
 from .parsers import StreamingEnvelopeParser, ParseError
 from .filestore import get_filename_for_event_id
@@ -633,7 +634,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
                     raise ParseError("event_id in envelope headers is not a valid UUID")
 
                 filename = get_filename_for_event_id(envelope_headers["event_id"])
-                os.makedirs(os.path.dirname(filename), exist_ok=True)
+                b108_makedirs(os.path.dirname(filename))
                 return MaxDataWriter("MAX_EVENT_SIZE", open(filename, 'wb'))
 
             # everything else can be discarded; (we don't check for individual size limits, because these differ

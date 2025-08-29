@@ -2,6 +2,7 @@ import os
 
 from django.db import models
 from django.utils._os import safe_join
+from bsmain.utils import b108_makedirs
 
 from .settings import get_settings
 from . import thread_uuid
@@ -47,8 +48,7 @@ class Stat(models.Model):
 def wakeup_server():
     wakeup_file = safe_join(get_settings().WAKEUP_CALLS_DIR, thread_uuid)
 
-    if not os.path.exists(get_settings().WAKEUP_CALLS_DIR):
-        os.makedirs(get_settings().WAKEUP_CALLS_DIR, exist_ok=True)
+    b108_makedirs(get_settings().WAKEUP_CALLS_DIR)
 
     if not os.path.exists(wakeup_file):
         with open(wakeup_file, "w"):

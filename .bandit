@@ -1,7 +1,4 @@
 [bandit]
-# Skip B108 ("hardcoded temp dir"), see https://github.com/bugsink/bugsink/issues/174
-skips = B108
-
 # Exclude any file named tests.py anywhere under the tree
 exclude = tests.py
 

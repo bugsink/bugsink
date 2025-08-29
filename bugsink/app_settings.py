@@ -66,7 +66,8 @@ DEFAULTS = {
     "MAX_HEADER_SIZE": 8 * _KIBIBYTE,
 
     # Locations of files & directories:
-    "INGEST_STORE_BASE_DIR": "/tmp/bugsink/ingestion",
+    # no_bandit_expl: the usage of this path (via get_filename_for_event_id) is protected with `b108_makedirs`
+    "INGEST_STORE_BASE_DIR": "/tmp/bugsink/ingestion",  # nosec
     "EVENT_STORAGES": {},
 
     # Security:
