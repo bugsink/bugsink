@@ -72,6 +72,13 @@ RUN --mount=type=cache,target=/var/cache/buildkit/pip \
 RUN cp /usr/local/lib/python3.12/site-packages/bugsink/conf_templates/docker.py.template /app/bugsink_conf.py && \
     cp /usr/local/lib/python3.12/site-packages/bugsink/gunicorn.docker.conf.py /app/gunicorn.docker.conf.py
 
+RUN groupadd --gid 14237 bugsink \
+ && useradd --uid 14237 --gid bugsink \
+ && mkdir -p /data \
+ && chown -R bugsink:bugsink /data
+
+USER bugsink
+
 RUN ["bugsink-manage", "migrate", "snappea", "--database=snappea"]
 
 HEALTHCHECK CMD python -c 'import requests; requests.get("http://localhost:8000/health/ready").raise_for_status()'
