@@ -65,7 +65,7 @@ SNAPPEA = {
     "TASK_ALWAYS_EAGER": True,  # at least for (unit) tests, this is a requirement
     "NUM_WORKERS": 1,
 
-    # no_bandit_expl: development setting, we know that this is insecure
+    # no_bandit_expl: development setting, we know that this is insecure "in theory" at least
     "PID_FILE": "/tmp/bugsink/snappea.pid",  # nosec B108
 }
 

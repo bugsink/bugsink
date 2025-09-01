@@ -45,7 +45,8 @@ SNAPPEA = {
 
     "PID_FILE": None,
     # alternatively (if you don't trust systemd to get at most one snappea foreman running; or if you don't use systemd
-    # at all), use the below:
+    # at all), use the below. Make sure the file is in a directory owned by the user running bugsink/snappea (the
+    # directory will be created if it does not exist yet).
     # "PID_FILE": "{{ base_dir }}/snappea/snappea.pid",
 
     "WAKEUP_CALLS_DIR": "{{ base_dir }}/snappea/wakeup",
