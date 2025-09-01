@@ -66,7 +66,7 @@ SNAPPEA = {
     "NUM_WORKERS": 1,
 
     # no_bandit_expl: development setting, we know that this is insecure
-    "PID_FILE": "/tmp/snappea.pid",  # nosec B108
+    "PID_FILE": "/tmp/bugsink/snappea.pid",  # nosec B108
 }
 
 EMAIL_HOST = os.getenv("EMAIL_HOST")
