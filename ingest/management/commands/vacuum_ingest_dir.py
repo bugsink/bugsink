@@ -3,6 +3,7 @@ import re
 import time
 
 from django.core.management.base import BaseCommand, CommandError
+from django.utils._os import safe_join
 
 from bugsink.app_settings import get_settings
 
@@ -50,7 +51,7 @@ class Command(BaseCommand):
         unexpected_files = []
 
         for filename in os.listdir(ingest_dir):
-            filepath = os.path.join(ingest_dir, filename)
+            filepath = safe_join(ingest_dir, filename)
 
             # Skip directories
             if os.path.isdir(filepath):
