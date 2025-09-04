@@ -32,8 +32,8 @@
                     <div class="mt-4">
                     <form action="{% url "history_comment_new" issue_pk=issue.id %}" method="post">
                     {% csrf_token %}
-                    <textarea name="comment" placeholder="{% translate 'comments...' %}" class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md w-full h-32" onkeypress="submitOnCtrlEnter(event)"></textarea>
-                    <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring">{% translate "Post comment" %}</button>
+                    <textarea name="comment" placeholder="{% translate 'comments...' %}" class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-3-cyan-200 dark:focus:ring-3-cyan-700 rounded-md w-full h-32" onkeypress="submitOnCtrlEnter(event)"></textarea>
+                    <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3">{% translate "Post comment" %}</button>
                     </form>
                     </div>
                 </div>{# 'body' part of the balloon #}
@@ -98,8 +98,8 @@
                         <div class="js-comment-editable hidden">
                             <form action="{% url "history_comment_edit" issue_pk=issue.id comment_pk=turningpoint.pk %}" method="post">
                             {% csrf_token %}
-                            <textarea name="comment" placeholder="comments..." class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md w-full h-32" onkeypress="submitOnCtrlEnter(event)">{{ turningpoint.comment }}</textarea>{# note: we don't actually use {{ form.comments }} here; this means the show-red-on-invalid loop won't work but since everything is valid and we haven't implemented the other parts of that loop that's fine #}
-                            <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring">Update comment</button>
+                            <textarea name="comment" placeholder="comments..." class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-3-cyan-200 dark:focus:ring-3-cyan-700 rounded-md w-full h-32" onkeypress="submitOnCtrlEnter(event)">{{ turningpoint.comment }}</textarea>{# note: we don't actually use {{ form.comments }} here; this means the show-red-on-invalid loop won't work but since everything is valid and we haven't implemented the other parts of that loop that's fine #}
+                            <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3">Update comment</button>
                             </form>
                         </div>
                         {% endif %}

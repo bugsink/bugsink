@@ -22,7 +22,7 @@
                 <form method="post" action="." id="deleteForm">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="delete">
-                    <button type="submit" class="font-bold py-2 px-4 rounded bg-red-500 dark:bg-red-700 text-white border-2 border-red-600 dark:border-red-400 hover:bg-red-600 dark:hover:bg-red-800 active:ring">Confirm</button>
+                    <button type="submit" class="font-bold py-2 px-4 rounded bg-red-500 dark:bg-red-700 text-white border-2 border-red-600 dark:border-red-400 hover:bg-red-600 dark:hover:bg-red-800 active:ring-3">Confirm</button>
                 </form>
             </div>
         </div>
@@ -48,9 +48,9 @@
         {% tailwind_formfield form.dsn %}
 
         <div class="flex items-center mt-4">
-            <button name="action" value="invite" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md">{% translate "Save" %}</button>
+            <button name="action" value="invite" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">{% translate "Save" %}</button>
             <a href="{% url "project_list" %}" class="text-cyan-500 dark:text-cyan-300 font-bold ml-2">{% translate "Cancel" %}</a>
-            <button type="button" id="deleteButton" class="font-bold py-2 px-4 rounded bg-red-500 dark:bg-red-700 text-white border-2 border-red-600 dark:border-red-400 hover:bg-red-600 dark:hover:bg-red-800 active:ring ml-4 ml-auto">{% translate "Delete Project" %}</button>
+            <button type="button" id="deleteButton" class="font-bold py-2 px-4 rounded bg-red-500 dark:bg-red-700 text-white border-2 border-red-600 dark:border-red-400 hover:bg-red-600 dark:hover:bg-red-800 active:ring-3 ml-4 ml-auto">{% translate "Delete Project" %}</button>
         </div>
         </form>
     </div>

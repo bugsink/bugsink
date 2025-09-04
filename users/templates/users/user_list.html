@@ -21,7 +21,7 @@
                 <form method="post" action="." id="deleteForm">
                     {% csrf_token %}
                     <input type="hidden" name="action" id="deleteAction" value="">
-                    <button type="submit" class="font-bold py-2 px-4 rounded bg-red-500 dark:bg-red-700 text-white border-2 border-red-600 dark:border-red-400 hover:bg-red-600 dark:hover:bg-red-800 active:ring">Confirm</button>
+                    <button type="submit" class="font-bold py-2 px-4 rounded bg-red-500 dark:bg-red-700 text-white border-2 border-red-600 dark:border-red-400 hover:bg-red-600 dark:hover:bg-red-800 active:ring-3">Confirm</button>
                 </form>
             </div>
         </div>
@@ -46,7 +46,7 @@
             {% comment %}
             Our current invite-system is tied to either a team or a project; no "global" invites (yet).
             <div class="ml-auto mt-6">
-                <a class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md" href="{% url "team_members_invite" team_pk=team.pk %}">Invite Member</a>
+                <a class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md" href="{% url "team_members_invite" team_pk=team.pk %}">Invite Member</a>
             </div>
             {% endcomment %}
         </div>
@@ -77,10 +77,10 @@
                     <div class="flex justify-end">
                         {% if not request.user == user %}
                             {% if user.is_active %}
-                                <button name="action" value="deactivate:{{ user.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">Deactivate</button>
+                                <button name="action" value="deactivate:{{ user.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md">Deactivate</button>
                             {% else %}
-                                <button name="action" value="activate:{{ user.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">Activate</button>
-                                <button type="button" class="delete-button font-bold py-2 px-4 rounded bg-red-500 dark:bg-red-700 text-white border-2 border-red-600 dark:border-red-400 hover:bg-red-600 dark:hover:bg-red-800 active:ring ml-4" data-user-id="{{ user.id }}">Delete</button>
+                                <button name="action" value="activate:{{ user.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md">Activate</button>
+                                <button type="button" class="delete-button font-bold py-2 px-4 rounded bg-red-500 dark:bg-red-700 text-white border-2 border-red-600 dark:border-red-400 hover:bg-red-600 dark:hover:bg-red-800 active:ring-3 ml-4" data-user-id="{{ user.id }}">Delete</button>
                             {% endif %}
                         {% endif %}
                     </div>

@@ -18,7 +18,7 @@
     <div class="ml-auto"><!-- top, RHS (buttons) -->
         {% if can_create %}
         <div>
-            <a class="block font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md" href="{% url 'project_new' %}">{% translate "New Project" %}</a>
+            <a class="block font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md" href="{% url 'project_new' %}">{% translate "New Project" %}</a>
         </div>
         {% endif %}
     </div> {# top, RHS (buttons) #}
@@ -47,7 +47,7 @@
     </div>
     {% comment %}
     <div class="ml-auto p-2">
-        <input type="text" name="search" placeholder="search projects..." class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md"/>
+        <input type="text" name="search" placeholder="search projects..." class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-3-cyan-200 dark:focus:ring-3-cyan-700 rounded-md"/>
     </div>
     {% endcomment %}
 </div>
@@ -155,13 +155,13 @@
                         </div>
                     {% else %}
                         <div>
-                            <button name="action" value="leave:{{ project.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md whitespace-nowrap">{% translate "Leave" %}</button>
+                            <button name="action" value="leave:{{ project.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Leave" %}</button>
                         </div>
                     {% endif %}
                 {% else %}
                     {% if ownership_filter == "teams" or project.is_joinable or request.user.is_superuser %}{# ownership_filter check: you can always join your own team's projects, so if you're looking at a list of them... #}
                         <div>
-                            <button name="action" value="join:{{ project.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2  dark:hover:bg-slate-700 active:ring rounded-md whitespace-nowrap">{% translate "Join" %}</button>
+                            <button name="action" value="join:{{ project.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2  dark:hover:bg-slate-700 active:ring-3 rounded-md whitespace-nowrap">{% translate "Join" %}</button>
                         </div>
                     {% endif %}
                 {% endif %}
