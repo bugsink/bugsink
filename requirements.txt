@@ -1,7 +1,7 @@
 gunicorn==23.0.*
 Django==4.2.*
 sentry-sdk==2.*
-django-tailwind==3.6.*
+django-tailwind==4.2.*
 jsonschema==4.25.*
 semver==3.0.*
 django-admin-autocomplete-filter==0.7.*
