@@ -2,7 +2,7 @@ from os.path import basename
 from datetime import datetime, timezone
 from uuid import UUID
 import json
-import sourcemap
+import ecma426
 from issues.utils import get_values
 
 from bugsink.transaction import delay_on_commit
@@ -134,7 +134,7 @@ def apply_sourcemaps(event_data):
         ]
 
     sourcemap_for_filename = {
-        filename: sourcemap.loads(_postgres_fix(meta.file.data))
+        filename: ecma426.loads(_postgres_fix(meta.file.data))
         for (filename, meta) in filenames_with_metas
     }
 
@@ -155,18 +155,18 @@ def apply_sourcemaps(event_data):
             if frame.get("filename") in sourcemap_for_filename:
                 sm = sourcemap_for_filename[frame["filename"]]
 
-                token = sm.lookup(frame["lineno"] + FROM_DISPLAY, frame["colno"])
+                mapping = sm.lookup_left(frame["lineno"] + FROM_DISPLAY, frame["colno"])
 
-                if token.src in source_for_filename:
-                    lines = source_for_filename[token.src]
+                if mapping.source in source_for_filename:
+                    lines = source_for_filename[mapping.source]
 
-                    frame["pre_context"] = lines[max(0, token.src_line - 5):token.src_line]
-                    frame["context_line"] = lines[token.src_line]
-                    frame["post_context"] = lines[token.src_line + 1:token.src_line + 5]
-                    frame["lineno"] = token.src_line + TO_DISPLAY
-                    frame['filename'] = token.src
-                    frame['function'] = token.name
-                    # frame["colno"] = token.src_col + TO_DISPLAY  not actually used
+                    frame["pre_context"] = lines[max(0, mapping.original_line - 5):mapping.original_line]
+                    frame["context_line"] = lines[mapping.original_line]
+                    frame["post_context"] = lines[mapping.original_line + 1:mapping.original_line + 5]
+                    frame["lineno"] = mapping.original_line + TO_DISPLAY
+                    frame['filename'] = mapping.source
+                    frame['function'] = mapping.name
+                    # frame["colno"] = mapping.original_column + TO_DISPLAY  not actually used
 
             elif frame.get("filename") in debug_id_for_filename:
                 # The event_data reports that a debug_id is available for this filename, but we don't have it; this
