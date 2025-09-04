@@ -45,7 +45,7 @@
                 {% if service_config.last_failure_response_text %}
                     <div class="mt-2">
                         <p><strong>Response{% if service_config.last_failure_is_json %} (JSON){% endif %}:</strong></p>
-                        <pre class="p-2 rounded text-sm mt-1 overflow-x-auto">{{ service_config.last_failure_response_text }}</pre>
+                        <pre class="p-2 rounded-sm text-sm mt-1 overflow-x-auto">{{ service_config.last_failure_response_text }}</pre>
                     </div>
                 {% endif %}
             </div>
