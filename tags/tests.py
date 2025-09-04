@@ -92,7 +92,7 @@ class StoreTagsTestCase(DjangoTestCase):
         self.assertEqual(self.event.tags.count(), 0)
 
     def test_store_1_tags(self):
-        with self.assertNumQueries(7):
+        with self.assertNumQueries(6):
             store_tags(self.event, self.issue, {"foo": "bar"})
 
         self.assertEqual(self.event.tags.count(), 1)
@@ -105,7 +105,7 @@ class StoreTagsTestCase(DjangoTestCase):
         self.assertEqual(self.issue.tags.first().value.key.key, "foo")
 
     def test_store_5_tags(self):
-        with self.assertNumQueries(7):
+        with self.assertNumQueries(6):
             store_tags(self.event, self.issue, {f"k-{i}": f"v-{i}" for i in range(5)})
 
         self.assertEqual(self.event.tags.count(), 5)

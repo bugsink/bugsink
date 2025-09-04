@@ -207,17 +207,12 @@ def _store_tags(event, issue, tags):
     # there is some principled point here that there is always a single value of mostly_unique per key, but this point
     # is not formalized in our datbase schema; it "just happens to work correctly" (at least as long as we don't change
     # the list of mostly unique keys, at which point we'll have to do a datamigration).
-    TagKey.objects.bulk_create([
+    tag_key_objects = [
         TagKey(project_id=event.project_id, key=key, mostly_unique=is_mostly_unique(key)) for key in tags.keys()
-    ], ignore_conflicts=True)
-
-    # Select-back what we just created (or was already there); this is needed because "Enabling the ignore_conflicts or
-    # update_conflicts parameter disable setting the primary key on each model instance (if the database normally
-    # support it)." in Django 4.2; in Django 5.0 and up this is no longer so for `update_conflicts`, so we could use
-    # that instead and save a query.
-    # Re 'project_id': in the selection-queries below the non-necessity of the project_id is mentioned a number of
-    # times, but that's precisly _because_ we encode the link to project in TagKay. i.e. here it is needed.
-    tag_key_objects = TagKey.objects.filter(project_id=event.project_id, key__in=tags.keys())
+    ]
+    TagKey.objects.bulk_create(
+        tag_key_objects, update_conflicts=True, unique_fields=['project', 'key'],
+        update_fields=['mostly_unique'])
 
     TagValue.objects.bulk_create([
         TagValue(project_id=event.project_id, key=key_obj, value=tags[key_obj.key]) for key_obj in tag_key_objects
