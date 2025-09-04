@@ -1,3 +1,4 @@
+@config "../tailwind.config.js";
 @import "tailwindcss";
 
 /* ibm-plex-sans-regular - cyrillic_cyrillic-ext_greek_latin_latin-ext_vietnamese */
