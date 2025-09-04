@@ -19,7 +19,7 @@ https://docs.sentry.io/platforms/python/enriching-events/tags/
 
 
 from django.db import models
-from django.db.models import Q, F
+from django.db.models import F
 
 from projects.models import Project
 from tags.utils import deduce_tags, is_mostly_unique
@@ -66,6 +66,7 @@ class TagValue(models.Model):
         # This is the obvious constraint, which doubles as a lookup index for
         # * store_tags (where we look up by both)
         # * search (where we join on key)
+        # Note that project is not part of the index, because it's implied by key.
         unique_together = ('key', 'value')
 
     def __str__(self):
@@ -214,15 +215,13 @@ def _store_tags(event, issue, tags):
         tag_key_objects, update_conflicts=True, unique_fields=['project', 'key'],
         update_fields=['mostly_unique'])
 
-    TagValue.objects.bulk_create([
+    tag_value_objects = [
         TagValue(project_id=event.project_id, key=key_obj, value=tags[key_obj.key]) for key_obj in tag_key_objects
-    ], ignore_conflicts=True)
+    ]
 
-    # Select-back what we just created (or was already there); see above; the resulting SQL is a bit more complex than
-    # the previous one though, which raises the question whether this is performant.
-    # Re 'project_id': this is not needed here, because it's already implied by key_obj.
-    tag_value_objects = TagValue.objects.filter(_or_join([
-        Q(key=key_obj, value=tags[key_obj.key]) for key_obj in tag_key_objects]))
+    # 'project' is not part of the unique constraint, which means it goes into update_fields.
+    TagValue.objects.bulk_create(
+        tag_value_objects, update_conflicts=True, unique_fields=['key', 'value'], update_fields=['project'])
 
     EventTag.objects.bulk_create([
         EventTag(
