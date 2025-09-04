@@ -19,7 +19,8 @@ https://docs.sentry.io/platforms/python/enriching-events/tags/
 
 
 from django.db import models
-from django.db.models import F
+from django.db.models import F, Q
+from django.db import connection
 
 from projects.models import Project
 from tags.utils import deduce_tags, is_mostly_unique
@@ -183,6 +184,13 @@ def store_tags(event, issue, tags):
 
 
 def _store_tags(event, issue, tags):
+    def _uf(fields):
+        # mysql "does not support updating conflicts with specifying unique fields that can trigger the upsert.";
+        # But for sqlite and postgres the value _is_ required. So empty for mysql, passed fields for the others.
+        if connection.vendor == "mysql":  # includes mariadb
+            return []
+        return fields
+
     if not tags:
         return  # short-circuit; which is a performance optimization which also avoids some the need for further guards
 
@@ -212,8 +220,13 @@ def _store_tags(event, issue, tags):
         TagKey(project_id=event.project_id, key=key, mostly_unique=is_mostly_unique(key)) for key in tags.keys()
     ]
     TagKey.objects.bulk_create(
-        tag_key_objects, update_conflicts=True, unique_fields=['project', 'key'],
-        update_fields=['mostly_unique'])
+        tag_key_objects, update_conflicts=True, unique_fields=_uf(['project', 'key']), update_fields=['mostly_unique'])
+
+    if connection.vendor == "mysql":
+        # In mysql, bulk_create does not actually set pk on the created objects, so we need to re-query.
+        # 'project_id': in the selection-queries below the non-necessity of the project_id is mentioned a number of
+        # times, but that's precisly _because_ we encode the link to project in TagKay. i.e. here it is needed.
+        tag_key_objects = TagKey.objects.filter(project_id=event.project_id, key__in=tags.keys())
 
     tag_value_objects = [
         TagValue(project_id=event.project_id, key=key_obj, value=tags[key_obj.key]) for key_obj in tag_key_objects
@@ -221,7 +234,14 @@ def _store_tags(event, issue, tags):
 
     # 'project' is not part of the unique constraint, which means it goes into update_fields.
     TagValue.objects.bulk_create(
-        tag_value_objects, update_conflicts=True, unique_fields=['key', 'value'], update_fields=['project'])
+        tag_value_objects, update_conflicts=True, unique_fields=_uf(['key', 'value']), update_fields=['project'])
+
+    if connection.vendor == "mysql":
+        # In mysql, bulk_create does not actually set pk on the created objects, so we need to re-query.
+        # Select-back what we just created (or was already there);
+        # 'project_id' is not needed here, because it's already implied by key_obj.
+        tag_value_objects = TagValue.objects.filter(_or_join([
+            Q(key=key_obj, value=tags[key_obj.key]) for key_obj in tag_key_objects]))
 
     EventTag.objects.bulk_create([
         EventTag(

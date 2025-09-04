@@ -1,5 +1,6 @@
 from unittest import TestCase as RegularTestCase
 from django.test import TestCase as DjangoTestCase
+from django.conf import settings
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project
@@ -84,6 +85,8 @@ class StoreTagsTestCase(DjangoTestCase):
         self.project = Project.objects.create(name="Test Project")
         self.issue, _ = get_or_create_issue(self.project)
         self.event = create_event(self.project, issue=self.issue)
+        # correct for mysql's inability to shave 2 queries off
+        self.correct_for_mysql = 2 if 'mysql' in settings.DATABASES['default']['ENGINE'] else 0
 
     def test_store_0_tags(self):
         with self.assertNumQueries(0):
@@ -92,7 +95,7 @@ class StoreTagsTestCase(DjangoTestCase):
         self.assertEqual(self.event.tags.count(), 0)
 
     def test_store_1_tags(self):
-        with self.assertNumQueries(5):
+        with self.assertNumQueries(5 + self.correct_for_mysql):
             store_tags(self.event, self.issue, {"foo": "bar"})
 
         self.assertEqual(self.event.tags.count(), 1)
@@ -105,7 +108,7 @@ class StoreTagsTestCase(DjangoTestCase):
         self.assertEqual(self.issue.tags.first().value.key.key, "foo")
 
     def test_store_5_tags(self):
-        with self.assertNumQueries(5):
+        with self.assertNumQueries(5 + self.correct_for_mysql):
             store_tags(self.event, self.issue, {f"k-{i}": f"v-{i}" for i in range(5)})
 
         self.assertEqual(self.event.tags.count(), 5)
