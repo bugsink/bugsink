@@ -19,7 +19,8 @@ https://docs.sentry.io/platforms/python/enriching-events/tags/
 
 
 from django.db import models
-from django.db.models import Q, F
+from django.db.models import F, Q
+from django.db import connection
 
 from projects.models import Project
 from tags.utils import deduce_tags, is_mostly_unique
@@ -66,6 +67,7 @@ class TagValue(models.Model):
         # This is the obvious constraint, which doubles as a lookup index for
         # * store_tags (where we look up by both)
         # * search (where we join on key)
+        # Note that project is not part of the index, because it's implied by key.
         unique_together = ('key', 'value')
 
     def __str__(self):
@@ -182,6 +184,13 @@ def store_tags(event, issue, tags):
 
 
 def _store_tags(event, issue, tags):
+    def _uf(fields):
+        # mysql "does not support updating conflicts with specifying unique fields that can trigger the upsert.";
+        # But for sqlite and postgres the value _is_ required. So empty for mysql, passed fields for the others.
+        if connection.vendor == "mysql":  # includes mariadb
+            return []
+        return fields
+
     if not tags:
         return  # short-circuit; which is a performance optimization which also avoids some the need for further guards
 
@@ -207,27 +216,32 @@ def _store_tags(event, issue, tags):
     # there is some principled point here that there is always a single value of mostly_unique per key, but this point
     # is not formalized in our datbase schema; it "just happens to work correctly" (at least as long as we don't change
     # the list of mostly unique keys, at which point we'll have to do a datamigration).
-    TagKey.objects.bulk_create([
+    tag_key_objects = [
         TagKey(project_id=event.project_id, key=key, mostly_unique=is_mostly_unique(key)) for key in tags.keys()
-    ], ignore_conflicts=True)
+    ]
+    TagKey.objects.bulk_create(
+        tag_key_objects, update_conflicts=True, unique_fields=_uf(['project', 'key']), update_fields=['mostly_unique'])
 
-    # Select-back what we just created (or was already there); this is needed because "Enabling the ignore_conflicts or
-    # update_conflicts parameter disable setting the primary key on each model instance (if the database normally
-    # support it)." in Django 4.2; in Django 5.0 and up this is no longer so for `update_conflicts`, so we could use
-    # that instead and save a query.
-    # Re 'project_id': in the selection-queries below the non-necessity of the project_id is mentioned a number of
-    # times, but that's precisly _because_ we encode the link to project in TagKay. i.e. here it is needed.
-    tag_key_objects = TagKey.objects.filter(project_id=event.project_id, key__in=tags.keys())
+    if connection.vendor == "mysql":
+        # In mysql, bulk_create does not actually set pk on the created objects, so we need to re-query.
+        # 'project_id': in the selection-queries below the non-necessity of the project_id is mentioned a number of
+        # times, but that's precisly _because_ we encode the link to project in TagKay. i.e. here it is needed.
+        tag_key_objects = TagKey.objects.filter(project_id=event.project_id, key__in=tags.keys())
 
-    TagValue.objects.bulk_create([
+    tag_value_objects = [
         TagValue(project_id=event.project_id, key=key_obj, value=tags[key_obj.key]) for key_obj in tag_key_objects
-    ], ignore_conflicts=True)
+    ]
 
-    # Select-back what we just created (or was already there); see above; the resulting SQL is a bit more complex than
-    # the previous one though, which raises the question whether this is performant.
-    # Re 'project_id': this is not needed here, because it's already implied by key_obj.
-    tag_value_objects = TagValue.objects.filter(_or_join([
-        Q(key=key_obj, value=tags[key_obj.key]) for key_obj in tag_key_objects]))
+    # 'project' is not part of the unique constraint, which means it goes into update_fields.
+    TagValue.objects.bulk_create(
+        tag_value_objects, update_conflicts=True, unique_fields=_uf(['key', 'value']), update_fields=['project'])
+
+    if connection.vendor == "mysql":
+        # In mysql, bulk_create does not actually set pk on the created objects, so we need to re-query.
+        # Select-back what we just created (or was already there);
+        # 'project_id' is not needed here, because it's already implied by key_obj.
+        tag_value_objects = TagValue.objects.filter(_or_join([
+            Q(key=key_obj, value=tags[key_obj.key]) for key_obj in tag_key_objects]))
 
     EventTag.objects.bulk_create([
         EventTag(

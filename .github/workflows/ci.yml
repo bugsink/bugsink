@@ -158,6 +158,6 @@ jobs:
         # because we're outside the project directory, the test discovery won't find our packages. We simply enumerate
         # them using some shell-magic. Note that the only non-apps that we still care about are 'bugsink' (project, not
         # app), and sentry_sdk_extensions, which we mention separately
-        bugsink-manage test `bugsink-manage shell -c 'from django.conf import settings; print(" ".join(settings.BUGSINK_APPS))'` bugsink sentry_sdk_extensions -v2
+        bugsink-manage test `bugsink-manage shell -v0 -c 'from django.conf import settings; print(" ".join(settings.BUGSINK_APPS))'` bugsink sentry_sdk_extensions -v2
         # bugsink-manage test ${GITHUB_WORKSPACE}  -v2  # fails with the following, which I don't understand:
         # ImportError: 'tests' module incorrectly imported from '/opt/hostedtoolcache/Python/3.10.15/x64/lib/python3.10/site-packages/alerts'. Expected '/home/runner/work/bugsink-private/bugsink-private/alerts'. Is this module globally installed? 

@@ -1,5 +1,5 @@
 gunicorn==23.0.*
-Django==4.2.*
+Django==5.2.*
 sentry-sdk==2.*
 django-tailwind==4.2.*
 jsonschema==4.25.*
