@@ -27,8 +27,8 @@
 	<body class="dark:bg-slate-700 dark:text-slate-100">
         <div id="content">
             <div class="flex pl-4 bg-slate-200 dark:bg-slate-800">
-                <a href="/"><img src="{% static 'images/bugsink-logo.png' %}" class="p-2 h-12 w-12 dark:hidden block" alt="Bugsink logo"><img src="{% static 'images/bugsink-logo-dark.png' %}" class="p-2 h-12 w-12 hidden dark:block" alt="Bugsink logo"></a>
-                <a href="/"><div class="px-2 py-2 my-2 font-bold hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{{ site_title }}</div></a>
+                <a href="{{ script_prefix }}/"><img src="{% static 'images/bugsink-logo.png' %}" class="p-2 h-12 w-12 dark:hidden block" alt="Bugsink logo"><img src="{% static 'images/bugsink-logo-dark.png' %}" class="p-2 h-12 w-12 hidden dark:block" alt="Bugsink logo"></a>
+                <a href="{{ script_prefix }}/"><div class="px-2 py-2 my-2 font-bold hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{{ site_title }}</div></a>
 
                 {% if not app_settings.SINGLE_TEAM %}
                 <a href="{% url "team_list" %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Teams" %}</div></a>
@@ -42,18 +42,18 @@
 
                 <div class="ml-auto flex">
                 {% if app_settings.USE_ADMIN and user.is_staff %}
-                <a href="/admin/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Admin" %}</div></a>
+                <a href="{{ script_prefix }}/admin/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Admin" %}</div></a>
                 {% endif %}
 
                 {% if user.is_superuser %}
-                <a href="/users/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Users" %}</div></a>
-                <a href="/bsmain/auth_tokens/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Tokens" %}</div></a>
+                <a href="{{ script_prefix }}/users/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Users" %}</div></a>
+                <a href="{{ script_prefix }}/bsmain/auth_tokens/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Tokens" %}</div></a>
                 {% endif %}
 
                 {% if logged_in_user.is_anonymous %}
-                    <a href="/accounts/login/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Login" %}</div></a>  {# I don't think this is actually ever shown in practice, because you must always be logged in #}
+                    <a href="{{ script_prefix }}/accounts/login/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Login" %}</div></a>  {# I don't think this is actually ever shown in practice, because you must always be logged in #}
                 {% else %}
-                    <a href="/accounts/preferences/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Preferences" %}</div></a>
+                    <a href="{{ script_prefix }}/accounts/preferences/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Preferences" %}</div></a>
                     <div class="px-4 py-2 my-2 mr-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl"><form id="logout-form" method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">{% translate "Log out" %}</button></form></div>
                 {% endif %}
                 </div>

@@ -8,6 +8,7 @@ from django.core.exceptions import SuspiciousOperation
 from django.utils.translation import get_supported_language_variant
 from django.utils.translation.trans_real import parse_accept_lang_header
 from django.utils import translation
+from django.urls import get_script_prefix
 
 
 performance_logger = logging.getLogger("bugsink.performance.views")
@@ -48,7 +49,7 @@ class LoginRequiredMiddleware:
 
         # we explicitly ignore the admin and accounts paths, and the api; we can always push this to a setting later
         for path in ["/admin", "/accounts", "/api"]:
-            if request.path.startswith(path):
+            if request.path.startswith(get_script_prefix().rstrip("/") + path):
                 return None
 
         if getattr(view_func, 'login_exempt', False):
