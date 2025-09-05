@@ -21,7 +21,7 @@
         {% tailwind_formfield form.name %}
         {% tailwind_formfield form.visibility %}
 
-        <button name="action" value="invite" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md">{% translate "Save" %}</button>
+        <button name="action" value="invite" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">{% translate "Save" %}</button>
         <a href="{% url "team_list" %}" class="text-cyan-500 dark:text-cyan-300 font-bold ml-2">{% translate "Cancel" %}</a>
 
         </form>

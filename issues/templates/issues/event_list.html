@@ -27,11 +27,11 @@
         {# adapted copy/pasta from _event_nav #}
         <div class="flex place-content-end">
                 <form action="." method="get">
-                <input type="text" name="q" value="{{ q }}" placeholder="search..." class="focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md mr-2"/>
+                <input type="text" name="q" value="{{ q }}" placeholder="search..." class="focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-3-cyan-200 dark:focus:ring-3-cyan-700 rounded-md mr-2"/>
                 </form>
 
                 {% if page_obj.has_previous %} {# no need for 'is_first': if you can go to the left, you can go all the way to the left too #}
-                <a href="?{% add_to_qs page=1 %}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring inline-flex items-center justify-center" title="First page">
+                <a href="?{% add_to_qs page=1 %}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 inline-flex items-center justify-center" title="First page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M3.22 7.595a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 0 0 1.06-1.06l-2.72-2.72 2.72-2.72a.75.75 0 0 0-1.06-1.06l-3.25 3.25Zm8.25-3.25-3.25 3.25a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 1 0 1.06-1.06l-2.72-2.72 2.72-2.72a.75.75 0 0 0-1.06-1.06Z" clip-rule="evenodd" /></svg></a>
                 {% else %}
                 <div class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md inline-flex items-center justify-center" title="First page">
@@ -40,7 +40,7 @@
                 {% endif %}
 
                 {% if page_obj.has_previous %}
-                <a href="?{% add_to_qs page=page_obj.previous_page_number %}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring inline-flex items-center justify-center" title="Previous page">
+                <a href="?{% add_to_qs page=page_obj.previous_page_number %}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 inline-flex items-center justify-center" title="Previous page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M9.78 4.22a.75.75 0 0 1 0 1.06L7.06 8l2.72 2.72a.75.75 0 1 1-1.06 1.06L5.47 8.53a.75.75 0 0 1 0-1.06l3.25-3.25a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}
@@ -50,7 +50,7 @@
                 {% endif %}
 
                 {% if page_obj.has_next %}
-                <a href="?{% add_to_qs page=page_obj.next_page_number %}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring inline-flex items-center justify-center" title="Next page">
+                <a href="?{% add_to_qs page=page_obj.next_page_number %}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 inline-flex items-center justify-center" title="Next page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M6.22 4.22a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06L8.94 8 6.22 5.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}
@@ -60,7 +60,7 @@
                 {% endif %}
 
                 {% if page_obj.has_next %}
-                <a href="?{% add_to_qs page=page_obj.paginator.num_pages %}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring inline-flex items-center justify-center" title="Last page">
+                <a href="?{% add_to_qs page=page_obj.paginator.num_pages %}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 inline-flex items-center justify-center" title="Last page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M12.78 7.595a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06l2.72-2.72-2.72-2.72a.75.75 0 0 1 1.06-1.06l3.25 3.25Zm-8.25-3.25 3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06l2.72-2.72-2.72-2.72a.75.75 0 0 1 1.06-1.06Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}

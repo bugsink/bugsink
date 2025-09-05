@@ -47,6 +47,13 @@ COPY bugsink/conf_templates/docker.py.template bugsink_conf.py
 RUN apt update && apt install -y git
 RUN pip install -e .
 
+RUN groupadd --gid 14237 bugsink \
+ && useradd --uid 14237 --gid bugsink \
+ && mkdir -p /data \
+ && chown -R bugsink:bugsink /data
+
+USER bugsink
+
 RUN ["bugsink-manage", "migrate", "snappea", "--database=snappea"]
 
 HEALTHCHECK CMD python -c 'import requests; requests.get("http://localhost:8000/health/ready").raise_for_status()'

@@ -25,7 +25,7 @@
     <h2 class="text-2xl font-bold mt-4">POST Data</h2>
     <form action="{% url 'csrf_debug' %}" method="post">
         {% csrf_token %}
-        <button class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md">Click to debug</button>
+        <button class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">Click to debug</button>
     </form>
     {% else %}
 

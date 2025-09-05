@@ -45,7 +45,7 @@
                 {% if service_config.last_failure_response_text %}
                     <div class="mt-2">
                         <p><strong>Response{% if service_config.last_failure_is_json %} (JSON){% endif %}:</strong></p>
-                        <pre class="p-2 rounded text-sm mt-1 overflow-x-auto">{{ service_config.last_failure_response_text }}</pre>
+                        <pre class="p-2 rounded-sm text-sm mt-1 overflow-x-auto">{{ service_config.last_failure_response_text }}</pre>
                     </div>
                 {% endif %}
             </div>
@@ -60,7 +60,7 @@
             {% tailwind_formfield field %}
         {% endfor %}
 
-        <button name="action" value="add" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md">Save</button>
+        <button name="action" value="add" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">Save</button>
         <a href="{% url "project_alerts_setup" project_pk=project.pk %}" class="font-bold text-slate-500 dark:text-slate-300 ml-4">Cancel</a>
 
         </form>

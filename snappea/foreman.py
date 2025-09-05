@@ -19,6 +19,7 @@ from django.utils._os import safe_join
 from sentry_sdk_extensions import capture_or_log_exception
 from performance.context_managers import time_to_logger
 from bugsink.transaction import durable_atomic, get_stat
+from bsmain.utils import b108_makedirs
 
 from . import registry
 from .models import Task
@@ -88,8 +89,7 @@ class Foreman:
         signal.signal(signal.SIGTERM, self.handle_signal)
 
         # We use inotify to wake up the Foreman when a new Task is created.
-        if not os.path.exists(self.settings.WAKEUP_CALLS_DIR):
-            os.makedirs(self.settings.WAKEUP_CALLS_DIR, exist_ok=True)
+        b108_makedirs(self.settings.WAKEUP_CALLS_DIR)
         self.wakeup_calls = INotify()
         self.wakeup_calls.add_watch(self.settings.WAKEUP_CALLS_DIR, flags.CREATE)
 
@@ -145,6 +145,7 @@ class Foreman:
             # as per the above: not bullet proof, and non-critical, hence also: not a reason to crash on this.
             logger.error("Startup: Ignored Error while checking PID file", exc_info=e)
 
+        # Note: no b108_makedirs here yet, because we can't assume a self-owned containing directory (see #195)
         os.makedirs(os.path.dirname(self.settings.PID_FILE), exist_ok=True)
         with open(self.settings.PID_FILE, "w") as f:
             f.write(str(pid))
