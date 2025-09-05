@@ -272,6 +272,8 @@ STATICFILES_DIRS = [
 # > the collectstatic command during the build, so long as you do not wish to use any of the caching and compression
 # > features provided by the storage backends.
 #
+# ("so long as" implies: we don't use "whitenoise.storage.CompressedManifestStaticFilesStorage" or similar)
+#
 # Reasons to enable this in production:
 #
 # * Simplicity-as-a-core-value: yet another step we can remove from the install/upgrade process
