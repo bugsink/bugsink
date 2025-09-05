@@ -4,7 +4,19 @@
 
 ### Backwards incompatible changes
 
-* Python 3.9 is no longer supported (12af5302efdd)
+* Python 3.9 is no longer supported
+
+[Unless you're running Debian Bullseye this will not affect you](12af5302efdd).
+
+The minimum supported version for the database backends has been raised to:
+
+* SQLite ≥ 3.31.0
+* MySQL ≥ 8.0.11
+* PostgreSQL ≥ 14
+* MariaDB ≥ 10.5
+
+[Overview of typical versions in various
+OSes](https://github.com/bugsink/bugsink/pull/89#issuecomment-3253843464)
 
 #### Non-root Docker
 
