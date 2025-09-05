@@ -1,4 +1,4 @@
-{% load static tailwind_tags %}<!DOCTYPE html>{# copy of base.html, but without variables (and hence no menu), for use in contextless templates (e.g. 500.html) #}
+{% load static tailwind_tags urls %}<!DOCTYPE html>{# copy of base.html, but without variables (and hence no menu), for use in contextless templates (e.g. 500.html) #}
 <html lang="en" data-theme="system">
 	<head>
     <title>{% block title %}Bugsink{% endblock %}</title>
@@ -26,8 +26,8 @@
 	<body class="dark:bg-slate-700 dark:text-slate-100">
         <div id="content">
             <div class="flex pl-4 bg-slate-200 dark:bg-slate-800">
-                <a href="/"><img src="{% static 'images/bugsink-logo.png' %}" class="p-2 h-12 w-12 dark:hidden block" alt="Bugsink logo"><img src="{% static 'images/bugsink-logo-dark.png' %}" class="p-2 h-12 w-12 hidden dark:block" alt="Bugsink logo"></a>
-                <a href="/"><div class="pt-4 pb-4 pl-2 pr-2 font-bold">Bugsink</div></a>
+                <a href="{{ "/" | with_prefix }}"><img src="{% static 'images/bugsink-logo.png' %}" class="p-2 h-12 w-12 dark:hidden block" alt="Bugsink logo"><img src="{% static 'images/bugsink-logo-dark.png' %}" class="p-2 h-12 w-12 hidden dark:block" alt="Bugsink logo"></a>
+                <a href="{{ "/" | with_prefix }}"><div class="pt-4 pb-4 pl-2 pr-2 font-bold">Bugsink</div></a>
             </div>
             <div>
                 {% block content %}{% endblock %}

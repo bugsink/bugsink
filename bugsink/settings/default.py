@@ -343,3 +343,10 @@ if I_AM_RUNNING == "SNAPPEA":
     for logger in LOGGING['loggers'].values():
         if "handlers" in logger and "console" in logger["handlers"]:
             logger["handlers"] = ["snappea"]
+
+# Set FORCE_SCRIPT_NAME for subpath hosting support
+# Import here to avoid circular dependency
+from bugsink.app_settings import get_path_prefix
+_path_prefix = get_path_prefix()
+if _path_prefix:
+    FORCE_SCRIPT_NAME = _path_prefix

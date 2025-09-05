@@ -5,6 +5,7 @@
 {% load stricter_templates %}
 {% load add_to_qs %}
 {% load i18n %}
+{% load urls %}
 
 {% block title %}{{ issue.title }} · {{ block.super }}{% endblock %}
 
@@ -109,13 +110,13 @@
     {# overflow-x-auto is needed at the level of the flex item such that it works at the level where we need it (the code listings)#}
     <div class="ml-4 mb-4 mr-4 border-2 overflow-x-auto flex-[2_1_96rem]"><!-- the whole of the big tabbed view--> {# 96rem is 1536px, which matches the 2xl class; this is no "must" but eyeballing revealed: good result #}
         <div class="flex bg-slate-50 dark:bg-slate-800 border-b-2"><!-- container for the actual tab buttons -->
-            <a href="/issues/issue/{{ issue.id }}/event/{% if event %}{{ event.id }}{% else %}last{% endif %}/{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if tab == "stacktrace" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">{% translate "Stacktrace" %}</div></a>
-            <a href="/issues/issue/{{ issue.id }}/event/{% if event %}{{ event.id }}{% else %}last{% endif %}/details/{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if tab == "event-details" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">{% translate "Event&nbsp;Details" %}</div></a>
-            <a href="/issues/issue/{{ issue.id }}/event/{% if event %}{{ event.id }}{% else %}last{% endif %}/breadcrumbs/{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if tab == "breadcrumbs" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">{% translate "Breadcrumbs" %}</div></a>
-            <a href="/issues/issue/{{ issue.id }}/events/{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if tab == "event-list" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">{% translate "Event&nbsp;List" %}</div></a>
-            <a href="/issues/issue/{{ issue.id }}/tags/{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if tab == "tags" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">{% translate "Tags" %}</div></a>
-            <a href="/issues/issue/{{ issue.id }}/grouping/{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if tab == "grouping" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">{% translate "Grouping" %}</div></a>
-            <a href="/issues/issue/{{ issue.id }}/history/{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if tab == "history" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">{% translate "History" %}</div></a>
+            <a href="{% with event_id=event.id|default:'last' %}{{ "/issues/issue/" | add:issue.id | add:"/event/" | add:event_id | add:"/" | with_prefix }}{% endwith %}{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if tab == "stacktrace" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">{% translate "Stacktrace" %}</div></a>
+            <a href="{% with event_id=event.id|default:'last' %}{{ "/issues/issue/" | add:issue.id | add:"/event/" | add:event_id | add:"/details/" | with_prefix }}{% endwith %}{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if tab == "event-details" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">{% translate "Event&nbsp;Details" %}</div></a>
+            <a href="{% with event_id=event.id|default:'last' %}{{ "/issues/issue/" | add:issue.id | add:"/event/" | add:event_id | add:"/breadcrumbs/" | with_prefix }}{% endwith %}{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if tab == "breadcrumbs" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">{% translate "Breadcrumbs" %}</div></a>
+            <a href="{{ "/issues/issue/" | add:issue.id | add:"/events/" | with_prefix }}{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if tab == "event-list" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">{% translate "Event&nbsp;List" %}</div></a>
+            <a href="{{ "/issues/issue/" | add:issue.id | add:"/tags/" | with_prefix }}{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if tab == "tags" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">{% translate "Tags" %}</div></a>
+            <a href="{{ "/issues/issue/" | add:issue.id | add:"/grouping/" | with_prefix }}{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if tab == "grouping" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">{% translate "Grouping" %}</div></a>
+            <a href="{{ "/issues/issue/" | add:issue.id | add:"/history/" | with_prefix }}{% current_qs %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if tab == "history" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 border-slate-400 hover:border-b-4{% endif %}">{% translate "History" %}</div></a>
         </div>
 
         <div class="m-4"><!-- div for tab_content -->
@@ -127,16 +128,16 @@
             {% if is_event_page %}<div>{% blocktranslate with digest_order=event.digest_order|intcomma total_events=issue.digested_event_count|intcomma ingested_at=event.ingested_at|date:"j M G:i T" %}Event {{ digest_order }} of {{ total_events }} which occured at <span class="font-bold">{{ ingested_at }}</span>{% endblocktranslate %}</div>{% endif %}
             <div class="ml-auto pr-4 font-bold text-slate-500 dark:text-slate-300">
                 {% if is_event_page %}
-                <a href="/events/event/{{ event.id }}/download/">{% translate "Download" %}</a>
-                | <a href="/events/event/{{ event.id }}/raw/" >{% translate "JSON" %}</a>
-                | <a href="/events/event/{{ event.id }}/plain/" >{% translate "Plain" %}</a>
+                <a href="{{ "/events/event/" | add:event.id | add:"/download/" | with_prefix }}">{% translate "Download" %}</a>
+                | <a href="{{ "/events/event/" | add:event.id | add:"/raw/" | with_prefix }}" >{% translate "JSON" %}</a>
+                | <a href="{{ "/events/event/" | add:event.id | add:"/plain/" | with_prefix }}" >{% translate "Plain" %}</a>
                 {% endif %}
 
                 {% if app_settings.USE_ADMIN and user.is_staff %}
                     {% if is_event_page %}
-                        | <a href="/admin/events/event/{{ event.id }}/change/">{% translate "Event Admin" %}</a> |
+                        | <a href="{{ "/admin/events/event/" | add:event.id | add:"/change/" | with_prefix }}">{% translate "Event Admin" %}</a> |
                     {% endif %}
-                    <a href="/admin/issues/issue/{{ issue.id }}/change/">{% translate "Issue Admin" %}</a>
+                    <a href="{{ "/admin/issues/issue/" | add:issue.id | add:"/change/" | with_prefix }}">{% translate "Issue Admin" %}</a>
                 {% endif %}
 
             </div>

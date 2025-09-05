@@ -1,0 +1,1 @@
+                <a href="{{ "/" ><img src="{% static 'images/bugsink-logo.png' %}" class="h-8 w-8 md:h-16 md:w-16 dark:hidden block" alt="Bugsink logo"><img src="{% static 'images/bugsink-logo-dark.png' %}" class="h-8 w-8 md:h-16 md:w-16 hidden dark:block" alt="Bugsink logo"></a>

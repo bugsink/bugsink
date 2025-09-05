@@ -2,6 +2,7 @@
 # alternative would be: just put "everything" in the big settings.py (or some mix-using-imports version of that).
 # but for now I like the idea of keeping the bugsink-as-an-app stuff separate from the regular Django/db/global stuff.
 import os
+import urllib.parse
 from contextlib import contextmanager
 
 from django.conf import settings
@@ -108,6 +109,22 @@ def _sanitize(settings):
         settings["SINGLE_TEAM"] = True
         settings["USER_REGISTRATION"] = CB_NOBODY
         settings["TEAM_CREATION"] = CB_NOBODY
+
+
+def get_path_prefix():
+    """Extract the path prefix from BASE_URL for subpath hosting support."""
+    base_url = get_settings().BASE_URL
+    parsed_url = urllib.parse.urlparse(base_url)
+    path = parsed_url.path
+    
+    # Ensure path starts with / and doesn't end with / (unless it's just "/")
+    if path and path != "/":
+        if not path.startswith("/"):
+            path = "/" + path
+        if path.endswith("/"):
+            path = path[:-1]
+        return path
+    return ""
 
 
 def get_settings():

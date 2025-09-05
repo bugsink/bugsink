@@ -3,6 +3,7 @@
 {% load add_to_qs %}
 {% load humanize %}
 {% load add_to_qs %}
+{% load urls %}
 
 {% block tab_content %}
 
@@ -119,11 +120,11 @@ TODO
     <tr class="border-slate-200 dark:border-slate-700 border-2 ">
 
         <td class="p-4 font-bold text-slate-500 dark:text-slate-300 align-top">
-            <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/{% current_qs %}">{{ event.digest_order }}</a>
+            <a href="{{ "/issues/issue/" | add:issue.id | add:"/event/" | add:event.id | add:"/" | with_prefix }}{% current_qs %}">{{ event.digest_order }}</a>
         </td>
 
         <td class="p-4 font-bold text-slate-500 dark:text-slate-300 align-top"> {# how useful is this really? #}
-            <a href="/issues/issue/{{ issue.id }}/event/{{ event.id }}/{% current_qs %}">{{ event.id|truncatechars:9 }}</a>
+            <a href="{{ "/issues/issue/" | add:issue.id | add:"/event/" | add:event.id | add:"/" | with_prefix }}{% current_qs %}">{{ event.id|truncatechars:9 }}</a>
         </td>
 
         <td class="p-4 font-mono whitespace-nowrap align-top">

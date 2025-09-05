@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% load i18n %}
+{% load urls %}
 
 {% block title %}{% translate "Projects" %} · {{ site_title }}{% endblock %}
 
@@ -64,7 +65,7 @@
             <td class="w-full p-4">
                 <div>
                     {% if project.member or request.user.is_superuser %}
-                    <a href="/issues/{{ project.id }}" class="text-xl text-cyan-500 dark:text-cyan-300 font-bold">{{ project.name }}</a>
+                    <a href="{{ "/issues/" | add:project.id | with_prefix }}" class="text-xl text-cyan-500 dark:text-cyan-300 font-bold">{{ project.name }}</a>
                     {% else %}
                     <span class="text-xl text-slate-800 dark:text-slate-100 font-bold">{{ project.name }}</span>
                     {% endif %}

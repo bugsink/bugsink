@@ -10,7 +10,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.db.utils import OperationalError
 from django.db.models import Sum
 
-from bugsink.app_settings import get_settings, CB_ANYBODY
+from bugsink.app_settings import get_settings, CB_ANYBODY, get_path_prefix
 from bugsink.transaction import durable_atomic
 from bugsink.timed_sqlite_backend.base import different_runtime_limit
 
@@ -135,6 +135,7 @@ def useful_settings_processor(request):
         'site_title': get_settings().SITE_TITLE,
         'registration_enabled': get_settings().USER_REGISTRATION == CB_ANYBODY,
         'app_settings': get_settings(),
+        'path_prefix': get_path_prefix(),
         'system_warnings': get_system_warnings,
     }
 
