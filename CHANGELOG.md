@@ -1,5 +1,53 @@
 # Changes
 
+## 2.0.0 (...)
+
+### Backwards incompatible changes
+
+* Python 3.9 is no longer supported (12af5302efdd)
+
+#### Non-root Docker
+
+The provided Docker container no longer runs the Bugsink process as the root
+user. This improves security (defense in depth), but may require changes to
+your setup (i.e. volume permissions).
+
+Setups that mount the `/data` dir as a volume must ensure that the directory is
+owned by UID 14237 (the user the process runs as inside the container).
+[Further migration
+instructions](https://github.com/bugsink/bugsink/issues/176#issuecomment-3139184180)
+
+If you have not mounted any volumes, you will not be visibly affected by this change.
+
+#### Hardening of Temporary-Directory
+
+Bugsink now requires ownership of the `INGEST_STORE_BASE_DIR` directory to avoid
+certain classes of local privilege escalation attacks. (see #174)
+
+If you manually configured this directory to be something that the process
+running Bugsink _cannot_ own (e.g. to `/tmp/` without a further subdir), you
+must change it to something it can own (e.g. the default of `/tmp/bugsink/ingestion`)
+
+The Docker image is not affected by this (manual configuration wasn't possible to
+begin with).
+
+### Various Improvements & Fixes
+
+* When selecting text in the stacktrace frameHeader, don't toggle the frame (d62d016be3aa)
+* i18n support and Chinese translation (See #192, #161)
+* minor changes to `send_json` util (f0d3667121ab, c38ca8c58a4c)
+* Docker: bugsink-show-version on-start (42ba5a71facc)
+* Implement `vacuum_ingest_dir` management command (See #163)
+
+### Dependency updates
+
+* Replace `python-sourcemap` with `ecma426` (see 0764024389fc)
+* django 4.2 => django 5.2
+* Tailwind 3 => Tailwind 4
+* django-tailwind 3.6 => 4.2
+* `inotify_simple` => 2.0
+
+
 ## 1.7.6 (1 August 2025)
 
 * envelope-headers `sent_at` check should allow 00+00 (See #179)
