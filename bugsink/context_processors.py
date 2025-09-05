@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.contrib.auth.models import AnonymousUser
 from django.db.utils import OperationalError
 from django.db.models import Sum
+from django.urls import get_script_prefix
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
 from bugsink.transaction import durable_atomic
@@ -136,6 +137,7 @@ def useful_settings_processor(request):
         'registration_enabled': get_settings().USER_REGISTRATION == CB_ANYBODY,
         'app_settings': get_settings(),
         'system_warnings': get_system_warnings,
+        'script_prefix': get_script_prefix().rstrip("/"),  # TODO why
     }
 
 

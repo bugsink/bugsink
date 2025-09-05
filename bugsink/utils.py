@@ -77,6 +77,27 @@ def deduce_allowed_hosts(base_url):
     return [url.hostname] + ["localhost", "127.0.0.1"]
 
 
+def deduce_script_name(base_url):
+    """Extract the path prefix from BASE_URL for subpath hosting support."""
+
+    # On the matter of leading an trailing slashes:
+    # https://datatracker.ietf.org/doc/html/rfc3875#section-4.1.13  (the CGI spec) -> SCRIPT_NAME must start with a /
+    # trailing slash: doesn't matter https://github.com/django/django/commit/a15a3e9148e9 (but normalized away)
+    # So: leading-but-no-trailing slash is what we want.
+    # Our usage in STATIC_URL is made consistent with that.
+    # Because BASE_URL is documented to be "no trailing slash", the below produces exactly what we want.
+
+    try:
+        parsed_url = urlparse(base_url)
+        path = parsed_url.path
+    except Exception:
+        # maximize robustness here: one broken setting shouldn't break the deduction for others (the brokenness of
+        # BASE_URL will be manifested elsewhere more explicitly anyway)
+        return None
+
+    return path if path not in (None, "", "/") else None
+
+
 # Note: the excessive string-matching in the below is intentional:
 # I'd rather have our error-handling code as simple as possible
 # instead of relying on all kinds of imports of Exception classes.

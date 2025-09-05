@@ -1,7 +1,7 @@
 import os
 from urllib.parse import urlparse
 
-from bugsink.utils import deduce_allowed_hosts, eat_your_own_dogfood
+from bugsink.utils import deduce_allowed_hosts, eat_your_own_dogfood, deduce_script_name
 
 from bugsink.settings.default import *  # noqa
 from bugsink.settings.default import DATABASES
@@ -195,3 +195,11 @@ if os.getenv("FILE_EVENT_STORAGE_PATH"):
             "USE_FOR_WRITE": os.getenv("FILE_EVENT_STORAGE_USE_FOR_WRITE", "false").lower() in ("true", "1", "yes"),
         },
     }
+
+
+FORCE_SCRIPT_NAME = deduce_script_name(BUGSINK["BASE_URL"])
+if FORCE_SCRIPT_NAME:
+    # "in theory" a "relative" (non-leading-slash) config for STATIC_URL should just prepend [FORCE_]SCRIPT_NAME
+    # automatically, but I haven't been able to get that to work reliably, https://code.djangoproject.com/ticket/34028
+    # so we'll just be explicit about it.
+    STATIC_URL = f"{FORCE_SCRIPT_NAME}/static/"

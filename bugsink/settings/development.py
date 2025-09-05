@@ -6,7 +6,7 @@ import os
 from django.utils._os import safe_join
 from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
 
-from bugsink.utils import deduce_allowed_hosts, eat_your_own_dogfood
+from bugsink.utils import deduce_allowed_hosts, eat_your_own_dogfood, deduce_script_name
 
 
 # no_bandit_expl: _development_ settings, we know that this is insecure; would fail to deploy in prod if (as configured)
@@ -86,7 +86,7 @@ BUGSINK = {
     # "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
     # "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
 
-    "BASE_URL": "http://bugsink:8000",  # no trailing slash
+    "BASE_URL": "http://bugsink:8000/foobar",  # no trailing slash
     "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 
     # undocumented feature: this enables links to the admin interface in the header/footer. I'm not sure where the admin
@@ -151,3 +151,11 @@ ALLOWED_HOSTS = deduce_allowed_hosts(BUGSINK["BASE_URL"])
 
 # django-tailwind setting; the below allows for environment-variable overriding of the npm binary path.
 NPM_BIN_PATH = os.getenv("NPM_BIN_PATH", "npm")
+
+
+FORCE_SCRIPT_NAME = deduce_script_name(BUGSINK["BASE_URL"])
+if FORCE_SCRIPT_NAME:
+    # "in theory" a "relative" (non-leading-slash) config for STATIC_URL should just prepend [FORCE_]SCRIPT_NAME
+    # automatically, but I haven't been able to get that to work reliably, https://code.djangoproject.com/ticket/34028
+    # so we'll just be explicit about it.
+    STATIC_URL = f"{FORCE_SCRIPT_NAME}/static/"
