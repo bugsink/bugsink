@@ -66,7 +66,20 @@ INSTALLED_APPS = [
 
     'tailwind',  # As currently set up, this is also needed in production (templatetags)
     'admin_auto_filters',
+    'rest_framework',
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',  # from the tutorial
+    'PAGE_SIZE': 10,
+
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ],
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+    ],
+}
 
 BUGSINK_APPS = [
     'bsmain',

@@ -5,6 +5,8 @@ from django.urls import include, path
 from django.contrib.auth import views as auth_views
 from django.views.generic import RedirectView, TemplateView
 
+from rest_framework import routers
+
 from alerts.views import debug_email as debug_alerts_email
 from users.views import debug_email as debug_users_email
 from teams.views import debug_email as debug_teams_email
@@ -14,6 +16,12 @@ from ingest.views import download_envelope
 from files.views import chunk_upload, artifact_bundle_assemble, api_root, api_catch_all
 from bugsink.decorators import login_exempt
 
+from events.api_views import EventViewSet
+from issues.api_views import IssueViewSet, GroupingViewSet
+from projects.api_views import ProjectViewSet
+from releases.api_views import ReleaseViewSet
+from teams.api_views import TeamViewSet
+
 from .views import home, trigger_error, favicon, settings_view, silence_email_system_warning, counts, health_check_ready
 from .debug_views import csrf_debug
 
@@ -21,6 +29,15 @@ from .debug_views import csrf_debug
 admin.site.site_header = get_settings().SITE_TITLE
 admin.site.site_title = get_settings().SITE_TITLE
 admin.site.index_title = "Admin"  # everyone calls this the "admin" anyway. Let's set the title accordingly.
+
+
+api_router = routers.DefaultRouter()
+api_router.register(r'events', EventViewSet)
+api_router.register(r'issues', IssueViewSet)
+api_router.register(r'groupings', GroupingViewSet)
+api_router.register(r'projects', ProjectViewSet)
+api_router.register(r'releases', ReleaseViewSet)
+api_router.register(r'teams', TeamViewSet)
 
 
 urlpatterns = [
@@ -42,6 +59,8 @@ urlpatterns = [
 
     # many user-related views are directly exposed above (/accounts/), the rest is here:
     path("users/", include("users.urls")),
+
+    path("api/canonical/0/", include(api_router.urls)),
 
     # these are sentry-cli endpoint for uploading; they're unrelated to e.g. the ingestion API.
     # the /api/0/ is just a hard prefix (for the ingest API, that position indicates the project id, but here it's just
