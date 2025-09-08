@@ -86,7 +86,7 @@ BUGSINK = {
     # "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
     # "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
 
-    "BASE_URL": "http://bugsink:8000/foobar",  # no trailing slash
+    "BASE_URL": "http://bugsink:8000",  # no trailing slash
     "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 
     # undocumented feature: this enables links to the admin interface in the header/footer. I'm not sure where the admin
