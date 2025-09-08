@@ -6,7 +6,7 @@ import os
 from django.utils._os import safe_join
 from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
 
-from bugsink.utils import deduce_allowed_hosts, eat_your_own_dogfood, deduce_script_name
+from bugsink.conf_utils import deduce_allowed_hosts, eat_your_own_dogfood, deduce_script_name
 
 
 # no_bandit_expl: _development_ settings, we know that this is insecure; would fail to deploy in prod if (as configured)
