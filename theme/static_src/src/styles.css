@@ -1,6 +1,13 @@
 @config "../tailwind.config.js";
 @import "tailwindcss";
 
+/* Preserve Tailwind 3 behavior: default border color was gray.200 */
+@layer base {
+  *, ::before, ::after {
+    border-color: theme('colors.gray.200');
+  }
+}
+
 /* ibm-plex-sans-regular - cyrillic_cyrillic-ext_greek_latin_latin-ext_vietnamese */
 @font-face {
   font-display: swap; /* Check https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/font-display for other options. */
