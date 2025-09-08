@@ -50,6 +50,7 @@ urlpatterns = [
     path("api/0/organizations/<slug:organization_slug>/artifactbundle/assemble/", artifact_bundle_assemble,
          name="artifact_bundle_assemble"),
 
+    path('api/', include('ingest.urls')),
     path('api/0/', api_root, name='api_root'),
 
     path('api/<path:subpath>', api_catch_all, name='api_catch_all'),
