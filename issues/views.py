@@ -403,6 +403,10 @@ def _get_event(qs, issue, event_pk, digest_order, nav, bounds):
         try:
             return Event.objects.get(pk=event_pk)
         except Event.DoesNotExist:
+            # we match on external id "for user ergonomics" (presumed); i.e. in the (unchecked) presumption that people
+            # may sometimes copy/paste the SDK-generated UUID for whatever reason straight into the URL bar. However:
+            # [1] the below is not guaranteed unique and [2] it's not indexed as such so may be slow (project_id is a
+            # prefix in the index) so YMMV.
             return Event.objects.get(event_id=event_pk)
 
     elif digest_order is not None:
