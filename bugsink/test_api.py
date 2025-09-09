@@ -9,9 +9,9 @@ class BearerAuthRouterTests(unittest.TestCase):
         self.client = APIClient()
 
     def test_ok_on_event_list(self):
-        tok = AuthToken.objects.create()
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tok.token}")
-        resp = self.client.get(reverse("api:event-list"))
+        token = AuthToken.objects.create()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        resp = self.client.get(reverse("api:event-list"), {"issue": "00000000-0000-0000-0000-000000000000"})
         self.assertEqual(resp.status_code, 200)
 
     def test_missing_on_event_list(self):
