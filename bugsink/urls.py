@@ -17,7 +17,7 @@ from files.views import chunk_upload, artifact_bundle_assemble, api_root, api_ca
 from bugsink.decorators import login_exempt
 
 from events.api_views import EventViewSet
-from issues.api_views import IssueViewSet, GroupingViewSet
+from issues.api_views import IssueViewSet
 from projects.api_views import ProjectViewSet
 from releases.api_views import ReleaseViewSet
 from teams.api_views import TeamViewSet
@@ -34,7 +34,6 @@ admin.site.index_title = "Admin"  # everyone calls this the "admin" anyway. Let'
 api_router = routers.DefaultRouter()
 api_router.register(r'events', EventViewSet)
 api_router.register(r'issues', IssueViewSet)
-api_router.register(r'groupings', GroupingViewSet)
 api_router.register(r'projects', ProjectViewSet)
 api_router.register(r'releases', ReleaseViewSet)
 api_router.register(r'teams', TeamViewSet)

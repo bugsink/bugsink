@@ -2,8 +2,8 @@ from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
 
-from .models import Issue, Grouping
-from .serializers import IssueSerializer, GroupingSerializer
+from .models import Issue
+from .serializers import IssueSerializer
 
 
 class IssueViewSet(viewsets.ReadOnlyModelViewSet):
@@ -55,10 +55,3 @@ class IssueViewSet(viewsets.ReadOnlyModelViewSet):
         obj = get_object_or_404(queryset, **filter_kwargs)
         self.check_object_permissions(self.request, obj)
         return obj
-
-
-class GroupingViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Grouping.objects.all().order_by('grouping_key')  # TBD
-    serializer_class = GroupingSerializer
-
-    # TODO: the idea of required filter-fields when listing.

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Issue, Grouping
+from .models import Issue
 
 
 class IssueSerializer(serializers.ModelSerializer):
@@ -32,14 +32,4 @@ class IssueSerializer(serializers.ModelSerializer):
             # "events_at",  too "raw"? i.e. too implementation-tied?
             "is_muted",
             # "unmute_on_volume_based_conditions",  too "raw"? i.e. too implementation-tied?
-        ]
-
-
-class GroupingSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Grouping
-        fields = [
-            "project",
-            "grouping_key",
-            "issue",
         ]
