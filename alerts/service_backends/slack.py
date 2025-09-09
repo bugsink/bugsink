@@ -94,14 +94,14 @@ def slack_backend_send_test_message(webhook_url, project_name, display_name, ser
                     "text": {
                         "type": "plain_text",
                         "text": "TEST issue",
-                    }
+                    },
                 },
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
                         "text": "Test message by Bugsink to test the webhook setup.",
-                    }
+                    },
                 },
                 {
                     "type": "section",
@@ -113,7 +113,7 @@ def slack_backend_send_test_message(webhook_url, project_name, display_name, ser
                         {
                             "type": "mrkdwn",
                             "text": "*message backend*: " + _safe_markdown(display_name),
-                        }
+                        },
                     ]
                 }
             ]}
@@ -152,15 +152,15 @@ def slack_backend_send_alert(
                     "text": {
                         "type": "plain_text",
                         "text": f"{alert_reason} issue",
-                    }
+                    },
                 },
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
                         "text": link,
-                    }
-                }
+                    },
+                },
                ]
 
     if unmute_reason:
@@ -169,7 +169,7 @@ def slack_backend_send_alert(
             "text": {
                 "type": "mrkdwn",
                 "text": unmute_reason,
-            }
+            },
         })
 
     # assumption: visavis email, project.name is of less importance, because in slack-like things you may (though not
@@ -185,7 +185,7 @@ def slack_backend_send_alert(
     # if event.environment:
     #     fields["environment"] = event.environment
 
-    data = {"text": f"{alert_reason} issue",
+    data = {"text" : sections[0]["text"]["text"],  # mattermost requires at least one text field; use the first section
             "blocks": sections + [
                 {
                     "type": "section",
@@ -195,7 +195,7 @@ def slack_backend_send_alert(
                             "text": f"*{field}*: " + _safe_markdown(value),
                         } for field, value in fields.items()
                     ]
-                }
+                },
             ]}
 
     try:
