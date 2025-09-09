@@ -73,6 +73,13 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',  # from the tutorial
     'PAGE_SIZE': 10,
 
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "bugsink.authentication.BearerTokenAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "bugsink.permissions.IsGlobalAuthenticated",
+    ],
+
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",
     ],

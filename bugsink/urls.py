@@ -60,7 +60,7 @@ urlpatterns = [
     # many user-related views are directly exposed above (/accounts/), the rest is here:
     path("users/", include("users.urls")),
 
-    path("api/canonical/0/", include(api_router.urls)),
+    path("api/canonical/0/", include((api_router.urls, "api"), namespace="api")),
 
     # these are sentry-cli endpoint for uploading; they're unrelated to e.g. the ingestion API.
     # the /api/0/ is just a hard prefix (for the ingest API, that position indicates the project id, but here it's just
