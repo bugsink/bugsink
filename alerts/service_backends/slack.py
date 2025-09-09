@@ -87,7 +87,7 @@ def _store_success_info(service_config_id):
 def slack_backend_send_test_message(webhook_url, project_name, display_name, service_config_id):
     # See Slack's Block Kit Builder
 
-    data = {"text": "Test message by Bugsink to test the webhook setup.", 
+    data = {"text": "Test message by Bugsink to test the webhook setup.",
             "blocks": [
                 {
                     "type": "header",
@@ -185,7 +185,7 @@ def slack_backend_send_alert(
     # if event.environment:
     #     fields["environment"] = event.environment
 
-    data = {"text" : sections[0]["text"]["text"],  # mattermost requires at least one text field; use the first section
+    data = {"text": sections[0]["text"]["text"],  # mattermost requires at least one text field; use the first section
             "blocks": sections + [
                 {
                     "type": "section",
