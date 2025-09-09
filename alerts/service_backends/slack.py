@@ -87,20 +87,21 @@ def _store_success_info(service_config_id):
 def slack_backend_send_test_message(webhook_url, project_name, display_name, service_config_id):
     # See Slack's Block Kit Builder
 
-    data = {"blocks": [
+    data = {"text": "Test message by Bugsink to test the webhook setup.", 
+            "blocks": [
                 {
                     "type": "header",
                     "text": {
                         "type": "plain_text",
                         "text": "TEST issue",
-                    },
+                    }
                 },
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
                         "text": "Test message by Bugsink to test the webhook setup.",
-                    },
+                    }
                 },
                 {
                     "type": "section",
@@ -112,10 +113,9 @@ def slack_backend_send_test_message(webhook_url, project_name, display_name, ser
                         {
                             "type": "mrkdwn",
                             "text": "*message backend*: " + _safe_markdown(display_name),
-                        },
+                        }
                     ]
                 }
-
             ]}
 
     try:
@@ -152,15 +152,15 @@ def slack_backend_send_alert(
                     "text": {
                         "type": "plain_text",
                         "text": f"{alert_reason} issue",
-                    },
+                    }
                 },
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
                         "text": link,
-                    },
-                },
+                    }
+                }
                ]
 
     if unmute_reason:
@@ -169,7 +169,7 @@ def slack_backend_send_alert(
             "text": {
                 "type": "mrkdwn",
                 "text": unmute_reason,
-            },
+            }
         })
 
     # assumption: visavis email, project.name is of less importance, because in slack-like things you may (though not
@@ -185,7 +185,8 @@ def slack_backend_send_alert(
     # if event.environment:
     #     fields["environment"] = event.environment
 
-    data = {"blocks": sections + [
+    data = {"text": f"{alert_reason} issue",
+            "blocks": sections + [
                 {
                     "type": "section",
                     "fields": [
@@ -194,7 +195,7 @@ def slack_backend_send_alert(
                             "text": f"*{field}*: " + _safe_markdown(value),
                         } for field, value in fields.items()
                     ]
-                },
+                }
             ]}
 
     try:
