@@ -4,6 +4,8 @@ from .models import Issue
 
 
 class IssueSerializer(serializers.ModelSerializer):
+    # grouping_keys = serializers.SerializerMethodField()  # read-only list of strings
+
     class Meta:
         model = Issue
 
@@ -32,4 +34,9 @@ class IssueSerializer(serializers.ModelSerializer):
             # "events_at",  too "raw"? i.e. too implementation-tied?
             "is_muted",
             # "unmute_on_volume_based_conditions",  too "raw"? i.e. too implementation-tied?
+            # "grouping_keys",  TODO (likely) once we have the "expand" idea implemented
         ]
+
+    # def get_grouping_keys(self, obj):
+    #     # TODO: prefetch grouping_key in IssueViewSet
+    #     return list(obj.grouping_set.values_list("grouping_key", flat=True))
