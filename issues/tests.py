@@ -193,7 +193,8 @@ class RegressionIssueTestCase(DjangoTestCase):
 
     def test_issue_is_regression_no_releases(self):
         project = Project.objects.create()
-        create_release_if_needed(fresh(project), "", create_event(project))
+        timestamp = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        create_release_if_needed(fresh(project), "", timestamp)
 
         # new issue is not a regression
         issue = Issue.objects.create(project=project, **denormalized_issue_fields())
@@ -212,7 +213,8 @@ class RegressionIssueTestCase(DjangoTestCase):
 
     def test_issue_had_no_releases_but_now_does(self):
         project = Project.objects.create()
-        create_release_if_needed(fresh(project), "", create_event(project))
+        timestamp = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        create_release_if_needed(fresh(project), "", timestamp)
 
         # new issue is not a regression
         issue = Issue.objects.create(project=project, **denormalized_issue_fields())
@@ -223,15 +225,16 @@ class RegressionIssueTestCase(DjangoTestCase):
         issue.save()
 
         # a new release happens
-        create_release_if_needed(fresh(project), "1.0.0", create_event(project))
+        create_release_if_needed(fresh(project), "1.0.0", timestamp)
 
         self.assertTrue(issue_is_regression(fresh(issue), "1.0.0"))
 
     def test_issue_is_regression_with_releases_resolve_by_latest(self):
         project = Project.objects.create()
+        timestamp = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
-        create_release_if_needed(fresh(project), "1.0.0", create_event(project))
-        create_release_if_needed(fresh(project), "2.0.0", create_event(project))
+        create_release_if_needed(fresh(project), "1.0.0", timestamp)
+        create_release_if_needed(fresh(project), "2.0.0", timestamp)
 
         # new issue is not a regression
         issue = Issue.objects.create(project=project, **denormalized_issue_fields())
@@ -244,7 +247,7 @@ class RegressionIssueTestCase(DjangoTestCase):
         self.assertTrue(issue_is_regression(fresh(issue), "2.0.0"))
 
         # a new release happens, and the issue is seen there: also a regression
-        create_release_if_needed(fresh(project), "3.0.0", create_event(project))
+        create_release_if_needed(fresh(project), "3.0.0", timestamp)
         self.assertTrue(issue_is_regression(fresh(issue), "3.0.0"))
 
         # reopen the issue (as is done when a real regression is seen; or as would be done manually); nothing is a
@@ -256,9 +259,10 @@ class RegressionIssueTestCase(DjangoTestCase):
 
     def test_issue_is_regression_with_releases_resolve_by_next(self):
         project = Project.objects.create()
+        timestamp = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
-        create_release_if_needed(fresh(project), "1.0.0", create_event(project))
-        create_release_if_needed(fresh(project), "2.0.0", create_event(project))
+        create_release_if_needed(fresh(project), "1.0.0", timestamp)
+        create_release_if_needed(fresh(project), "2.0.0", timestamp)
 
         # new issue is not a regression
         issue = Issue.objects.create(project=project, **denormalized_issue_fields())
@@ -271,11 +275,11 @@ class RegressionIssueTestCase(DjangoTestCase):
         self.assertFalse(issue_is_regression(fresh(issue), "2.0.0"))
 
         # a new release appears (as part of a new event); this is a regression
-        create_release_if_needed(fresh(project), "3.0.0", create_event(project))
+        create_release_if_needed(fresh(project), "3.0.0", timestamp)
         self.assertTrue(issue_is_regression(fresh(issue), "3.0.0"))
 
         # first-seen at any later release: regression
-        create_release_if_needed(fresh(project), "4.0.0", create_event(project))
+        create_release_if_needed(fresh(project), "4.0.0", timestamp)
         self.assertTrue(issue_is_regression(fresh(issue), "4.0.0"))
 
 

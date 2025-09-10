@@ -100,7 +100,7 @@ class Release(models.Model):
         return self.version[:12]
 
 
-def create_release_if_needed(project, version, event, issue=None):
+def create_release_if_needed(project, version, timestamp, issue=None):
     if version is None:
         # because `create_release_if_needed` is called with Issue.release (non-nullable), the below "won't happen"
         raise ValueError('The None-like version must be the empty string')
@@ -119,16 +119,14 @@ def create_release_if_needed(project, version, event, issue=None):
         if release == project.get_latest_release():
             resolved_by_next_qs = Issue.objects.filter(project=project, is_resolved_by_next_release=True)
 
-            # NOTE: once we introduce an explicit way of creating releases (not event-based) we can not rely on a
-            # triggering event anymore for our timestamp.
-
             TurningPoint.objects.bulk_create([TurningPoint(
                     project=project,
-                    issue=issue, kind=TurningPointKind.NEXT_MATERIALIZED, triggering_event=event,
-                    metadata=json.dumps({"actual_release": release.version}), timestamp=event.ingested_at)
+                    issue=issue, kind=TurningPointKind.NEXT_MATERIALIZED,
+                    # the detection of a new release through an event does not imply a triggering of a TurningPoint:
+                    triggering_event=None,
+                    metadata=json.dumps({"actual_release": release.version}), timestamp=timestamp)
                 for issue in resolved_by_next_qs
             ])
-            event.never_evict = True  # .save() will be called by the caller of this function
 
             resolved_by_next_qs.update(
                 fixed_at=Concat("fixed_at", Value(release.version + "\n")),
