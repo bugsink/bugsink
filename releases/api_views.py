@@ -1,11 +1,39 @@
 from rest_framework import viewsets
+from rest_framework.exceptions import ValidationError
 
-from .models import Release
-from .serializers import ReleaseSerializer
+from projects.models import Project
+from .models import Release, ordered_releases
+from .serializers import ReleaseListSerializer, ReleaseDetailSerializer, ReleaseCreateSerializer
 
 
 class ReleaseViewSet(viewsets.ModelViewSet):
-    queryset = Release.objects.all().order_by('sort_epoch')
-    serializer_class = ReleaseSerializer
+    """
+    LIST requires: ?project=<id>
+    Ordered by sort_epoch.
+    CREATE allowed. DELETE potential TODO.
+    """
+    queryset = Release.objects.all()
+    serializer_class = ReleaseListSerializer
+    http_method_names = ["get", "post", "head", "options"]
 
-    # TODO: the idea of required filter-fields when listing; in particular: project is required.
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        if self.action != "list":
+            return queryset
+
+        query_params = self.request.query_params
+        project_id = query_params.get("project")
+        if not project_id:
+            raise ValidationError({"project": ["This field is required."]})
+
+        # application-ordering (as opposed to in-db); will have performance implications, but we do "correct first, fast
+        # later":
+        project = Project.objects.get(pk=project_id)
+        return ordered_releases(project=project)
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return ReleaseCreateSerializer
+        if self.action == "retrieve":
+            return ReleaseDetailSerializer
+        return ReleaseListSerializer

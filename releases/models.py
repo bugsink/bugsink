@@ -110,7 +110,9 @@ def create_release_if_needed(project, version, timestamp, issue=None):
 
     version = sanitize_version(version)
 
-    release, release_created = Release.objects.get_or_create(project=project, version=version)
+    release, release_created = Release.objects.get_or_create(project=project, version=version, defaults={
+        "date_released": timestamp,
+    })
     if release_created and version != "":
         if not project.has_releases:
             project.has_releases = True
@@ -138,7 +140,7 @@ def create_release_if_needed(project, version, timestamp, issue=None):
                 issue.fixed_at = issue.fixed_at + release.version + "\n"
                 issue.is_resolved_by_next_release = False
 
-    return release
+    return release, release_created
 
 
 def sanitize_version(version):
