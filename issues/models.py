@@ -198,7 +198,8 @@ class Issue(models.Model):
             ("project", "digest_order"),
         ]
         indexes = [
-            # 4 indexes for the list view (state_filter)
+            # 4 indexes for the list view (state_filter). Note: no is_deleted here; basic assumption is: is_deleted=True
+            # are such a minority that a post-index filter is more efficient than having more indexes. see 7b340fd8ff1d
             models.Index(fields=["project", "is_resolved", "is_muted", "last_seen"], name="issue_list_open"),
             models.Index(fields=["project", "is_muted", "last_seen"], name="issue_list_muted"),
             models.Index(fields=["project", "is_resolved", "last_seen"], name="issue_list_resolved"),  # and unresolved
