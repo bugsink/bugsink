@@ -1,8 +1,16 @@
+import json
 from django.test import TestCase as DjangoTestCase
 from datetime import timedelta
 
 from projects.models import Project
-from .models import Release, ordered_releases, RE_PACKAGE_VERSION
+
+from django.test import TestCase
+from django.utils import timezone
+
+from issues.models import TurningPoint, TurningPointKind
+from issues.factories import get_or_create_issue
+
+from .models import Release, ordered_releases, RE_PACKAGE_VERSION, create_release_if_needed
 
 
 class ReleaseTestCase(DjangoTestCase):
@@ -61,3 +69,69 @@ class ReleaseTestCase(DjangoTestCase):
         self.assertEqual(
             {"package": "@mypac@kage", "version": "1.2.3"},
             RE_PACKAGE_VERSION.match("@mypac@kage@1.2.3").groupdict())
+
+
+class CreateReleaseIfNeededTests(TestCase):
+    def setUp(self):
+        self.timestamp0 = timezone.now()
+        self.timestamp1 = self.timestamp0 + timedelta(seconds=5)
+        self.timestamp2 = self.timestamp1 + timedelta(seconds=5)
+
+    def test_empty_version_creates_release_without_side_effects(self):
+        project = Project.objects.create()
+
+        release, created = create_release_if_needed(project, "", self.timestamp0)
+        self.assertTrue(created)
+        self.assertEqual(release.version, "")
+        self.assertEqual(release.date_released, self.timestamp0)
+
+        project.refresh_from_db()
+        self.assertFalse(getattr(project, "has_releases", False))
+        self.assertEqual(TurningPoint.objects.count(), 0)
+
+    def test_turning_point_metadata_contains_actual_release(self):
+        project = Project.objects.create()
+        issue, _ = get_or_create_issue(project=project)
+        issue.is_resolved_by_next_release = True
+        issue.save()
+
+        create_release_if_needed(project, "1.2.3", self.timestamp0)
+        turning_point = TurningPoint.objects.filter(kind=TurningPointKind.NEXT_MATERIALIZED, project=project).first()
+        self.assertIsNotNone(turning_point)
+        self.assertEqual(json.loads(turning_point.metadata).get("actual_release"), "1.2.3")
+
+    def test_idempotent_when_release_exists(self):
+        project = Project.objects.create()
+
+        create_release_if_needed(project, "2.0.0", self.timestamp0)
+        turning_point_count_before = TurningPoint.objects.count()
+        has_releases_before = getattr(project, "has_releases", False)
+
+        _, created = create_release_if_needed(project, "2.0.0", self.timestamp1)
+        self.assertFalse(created)
+
+        self.assertEqual(TurningPoint.objects.count(), turning_point_count_before)
+        project.refresh_from_db()
+        self.assertEqual(getattr(project, "has_releases", False), has_releases_before)
+
+    def test_next_release_materialization_transforms_issue(self):
+        project = Project.objects.create()
+        issue, _ = get_or_create_issue(project=project)
+        issue.is_resolved = True
+        issue.is_resolved_by_next_release = True
+        issue.fixed_at = ""
+        issue.save()
+
+        create_release_if_needed(project, "1.0.0", self.timestamp0)
+
+        issue.refresh_from_db()
+        self.assertTrue(issue.is_resolved)
+        self.assertFalse(issue.is_resolved_by_next_release)
+        self.assertEqual(issue.fixed_at, "1.0.0\n")
+
+        self.assertEqual(
+            TurningPoint.objects.filter(
+                project=project, issue=issue, kind=TurningPointKind.NEXT_MATERIALIZED
+            ).count(),
+            1,
+        )
