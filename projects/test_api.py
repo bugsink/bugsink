@@ -1,4 +1,4 @@
-from django.test import TestCase as DjangoTestCase
+from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
@@ -7,7 +7,7 @@ from teams.models import Team
 from projects.models import Project
 
 
-class ProjectApiTests(DjangoTestCase):
+class ProjectApiTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
         token = AuthToken.objects.create()
@@ -77,7 +77,7 @@ class ProjectApiTests(DjangoTestCase):
         self.assertEqual(r.status_code, 405)
 
 
-class ExpansionTests(DjangoTestCase):
+class ExpansionTests(TransactionTestCase):
     """
     Expansion tests are exercised via ProjectViewSet, but the intent is to validate the
     generic ExpandableSerializerMixin infrastructure.

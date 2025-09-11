@@ -1,4 +1,4 @@
-from django.test import TestCase as DjangoTestCase
+from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
@@ -6,7 +6,7 @@ from bsmain.models import AuthToken
 from teams.models import Team
 
 
-class TeamApiTests(DjangoTestCase):
+class TeamApiTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
         token = AuthToken.objects.create()

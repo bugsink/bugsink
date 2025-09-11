@@ -1,4 +1,4 @@
-from django.test import TestCase as DjangoTestCase
+from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
@@ -11,7 +11,7 @@ from issues.factories import get_or_create_issue
 from events.factories import create_event_data
 
 
-class EventApiTests(DjangoTestCase):
+class EventApiTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
         token = AuthToken.objects.create()
@@ -70,7 +70,7 @@ class EventApiTests(DjangoTestCase):
         self.assertEqual(ids[1], str(e1.id))
 
 
-class EventPaginationTests(DjangoTestCase):
+class EventPaginationTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
         token = AuthToken.objects.create()

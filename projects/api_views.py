@@ -2,7 +2,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 
 from bugsink.api_pagination import AscDescCursorPagination
-from bugsink.api_mixins import ExpandViewSetMixin
+from bugsink.api_mixins import ExpandViewSetMixin, AtomicRequestMixin
 
 from .models import Project
 from .serializers import (
@@ -20,7 +20,7 @@ class ProjectPagination(AscDescCursorPagination):
     default_direction = "asc"
 
 
-class ProjectViewSet(ExpandViewSetMixin, viewsets.ModelViewSet):
+class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewSet):
     """
     /api/canonical/0/projects/
     GET /projects/           → list ordered by name ASC, hides soft-deleted, optional ?team=<uuid> filter

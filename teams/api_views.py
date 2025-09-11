@@ -2,6 +2,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 
 from bugsink.api_pagination import AscDescCursorPagination
+from bugsink.api_mixins import AtomicRequestMixin
 
 from .models import Team
 from .serializers import (
@@ -19,7 +20,7 @@ class TeamPagination(AscDescCursorPagination):
     default_direction = "asc"
 
 
-class TeamViewSet(viewsets.ModelViewSet):
+class TeamViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
     """
     /api/canonical/0/teams/
     GET /teams/           → list ordered by name ASC

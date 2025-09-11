@@ -1,4 +1,4 @@
-from django.test import TestCase as DjangoTestCase
+from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -9,7 +9,7 @@ from releases.models import Release
 from releases.api_views import ReleaseViewSet
 
 
-class ReleaseApiTests(DjangoTestCase):
+class ReleaseApiTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
         token = AuthToken.objects.create()
@@ -81,7 +81,7 @@ class ReleaseApiTests(DjangoTestCase):
         self.assertEqual(delete_response.status_code, 405)
 
 
-class ReleasePaginationTests(DjangoTestCase):
+class ReleasePaginationTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
         token = AuthToken.objects.create()

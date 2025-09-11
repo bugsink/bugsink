@@ -1,5 +1,13 @@
 from rest_framework.exceptions import ValidationError
 
+from bugsink.decorators import atomic_for_request_method
+
+
+class AtomicRequestMixin:
+    def dispatch(self, request, *args, **kwargs):
+        wrapped = atomic_for_request_method(super().dispatch, using=None)
+        return wrapped(request, *args, **kwargs)
+
 
 class ExpandableSerializerMixin:
     expandable_fields = {}

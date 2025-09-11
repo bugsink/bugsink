@@ -1,4 +1,4 @@
-from django.test import TestCase as DjangoTestCase
+from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -13,7 +13,7 @@ from events.factories import create_event_data
 from issues.api_views import IssueViewSet
 
 
-class IssueApiTests(DjangoTestCase):
+class IssueApiTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
         token = AuthToken.objects.create()
@@ -86,7 +86,7 @@ class IssueApiTests(DjangoTestCase):
         self.assertEqual(r.json(), {"sort": ["Must be 'digest_order' or 'last_seen'."]})
 
 
-class IssuePaginationTests(DjangoTestCase):
+class IssuePaginationTests(TransactionTestCase):
     last_seen_deltas = [3, 1, 4, 0, 2]
 
     def setUp(self):

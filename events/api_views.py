@@ -4,6 +4,7 @@ from rest_framework.exceptions import ValidationError
 
 from bugsink.utils import assert_
 from bugsink.api_pagination import AscDescCursorPagination
+from bugsink.api_mixins import AtomicRequestMixin
 
 from .models import Event
 from .serializers import EventListSerializer, EventDetailSerializer
@@ -18,7 +19,7 @@ class EventPagination(AscDescCursorPagination):
     default_direction = "desc"  # newest first by default, aligned with UI
 
 
-class EventViewSet(viewsets.ReadOnlyModelViewSet):
+class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     """
     LIST requires: ?issue=<uuid>
     Optional: ?order=asc|desc   (default: desc)

@@ -2,6 +2,7 @@ from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
 
 from bugsink.api_pagination import AscDescCursorPagination
+from bugsink.api_mixins import AtomicRequestMixin
 
 from .models import Release
 from .serializers import ReleaseListSerializer, ReleaseDetailSerializer, ReleaseCreateSerializer
@@ -16,7 +17,7 @@ class ReleasePagination(AscDescCursorPagination):
     default_direction = "desc"
 
 
-class ReleaseViewSet(viewsets.ModelViewSet):
+class ReleaseViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
     """
     LIST requires: ?project=<id>
     Ordered by sort_epoch.

@@ -3,6 +3,8 @@ from rest_framework import viewsets
 from rest_framework.pagination import CursorPagination
 from rest_framework.exceptions import ValidationError
 
+from bugsink.api_mixins import AtomicRequestMixin
+
 from .models import Issue
 from .serializers import IssueSerializer
 
@@ -53,7 +55,7 @@ class IssuesCursorPagination(CursorPagination):
         return ["last_seen", "id"]
 
 
-class IssueViewSet(viewsets.ReadOnlyModelViewSet):
+class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     """
     LIST requires: ?project=<uuid>
     Optional: ?order=asc|desc        (default: desc)
