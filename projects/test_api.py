@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase as DjangoTestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
@@ -7,7 +7,7 @@ from teams.models import Team
 from projects.models import Project
 
 
-class ProjectApiTests(TestCase):
+class ProjectApiTests(DjangoTestCase):
     def setUp(self):
         self.client = APIClient()
         token = AuthToken.objects.create()
@@ -75,3 +75,64 @@ class ProjectApiTests(TestCase):
         p = Project.objects.create(team=self.team, name="Temp")
         r = self.client.delete(reverse("api:project-detail", args=[p.id]))
         self.assertEqual(r.status_code, 405)
+
+
+class ExpansionTests(DjangoTestCase):
+    """
+    Expansion tests are exercised via ProjectViewSet, but the intent is to validate the
+    generic ExpandableSerializerMixin infrastructure.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        token = AuthToken.objects.create()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        self.team = Team.objects.create(name="T")
+        self.project = Project.objects.create(name="P", team=self.team)
+
+    def _get(self, expand=None):
+        url = reverse("api:project-detail", args=[self.project.id])
+        qp = {"expand": expand} if expand else {}
+        return self.client.get(url, qp)
+
+    def test_default_no_expand(self):
+        r = self._get()
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        # team is just rendered as a reference, not expanded
+        self.assertEqual(data["team"], str(self.team.id))
+
+    def test_with_valid_expand(self):
+        r = self._get("team")
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        # team is fully expanded into object
+        self.assertEqual(data["team"]["id"], str(self.team.id))
+        self.assertEqual(data["team"]["name"], self.team.name)
+
+    def test_with_invalid_expand(self):
+        r = self._get("not_a_field")
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(
+            r.json(),
+            {"expand": ["Unknown field: not_a_field"]},
+        )
+
+    def test_with_comma_separated_expands(self):
+        # only 'team' is valid, 'not_a_field' should trigger 400
+        r = self._get("team,not_a_field")
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(
+            r.json(),
+            {"expand": ["Unknown field: not_a_field"]},
+        )
+
+    def test_expand_rejected_when_not_supported(self):
+        # ProjectListSerializer does not support expand
+        url = reverse("api:project-list")
+        r = self.client.get(url, {"expand": "team"})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(
+            r.json(),
+            {"expand": ["Expansions are not supported on this endpoint."]},
+        )

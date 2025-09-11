@@ -2,6 +2,9 @@ from rest_framework import serializers
 from bugsink.api_fields import EnumLowercaseChoiceField
 
 from teams.models import Team
+from bugsink.api_mixins import ExpandableSerializerMixin
+
+from teams.serializers import TeamDetailSerializer
 from .models import Project, ProjectVisibility
 
 
@@ -28,7 +31,8 @@ class ProjectListSerializer(serializers.ModelSerializer):
         ]
 
 
-class ProjectDetailSerializer(serializers.ModelSerializer):
+class ProjectDetailSerializer(ExpandableSerializerMixin, serializers.ModelSerializer):
+    expandable_fields = {"team": TeamDetailSerializer}
     visibility = EnumLowercaseChoiceField(ProjectVisibility)
     dsn = serializers.CharField(read_only=True)
 
