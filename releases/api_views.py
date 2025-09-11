@@ -1,9 +1,19 @@
 from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
 
-from projects.models import Project
-from .models import Release, ordered_releases
+from bugsink.api_pagination import AscDescCursorPagination
+
+from .models import Release
 from .serializers import ReleaseListSerializer, ReleaseDetailSerializer, ReleaseCreateSerializer
+
+
+class ReleasePagination(AscDescCursorPagination):
+    # Cursor pagination requires an indexed, mostly-stable ordering field. We use `digest_order`: We require
+    # ?project=<id> and have a composite (project_id, date_released) index, so ORDER BY date_released after filtering by
+    # project is fast and cursor-stable. (also note that date_released generally comes in in-order).
+    base_ordering = ("date_released",)
+    page_size = 250
+    default_direction = "desc"
 
 
 class ReleaseViewSet(viewsets.ModelViewSet):
@@ -15,6 +25,7 @@ class ReleaseViewSet(viewsets.ModelViewSet):
     queryset = Release.objects.all()
     serializer_class = ReleaseListSerializer
     http_method_names = ["get", "post", "head", "options"]
+    pagination_class = ReleasePagination
 
     def filter_queryset(self, queryset):
         queryset = super().filter_queryset(queryset)
@@ -26,10 +37,7 @@ class ReleaseViewSet(viewsets.ModelViewSet):
         if not project_id:
             raise ValidationError({"project": ["This field is required."]})
 
-        # application-ordering (as opposed to in-db); will have performance implications, but we do "correct first, fast
-        # later":
-        project = Project.objects.get(pk=project_id)
-        return ordered_releases(project=project)
+        return queryset.filter(project=project_id)
 
     def get_serializer_class(self):
         if self.action == "create":

@@ -83,7 +83,8 @@ class Release(models.Model):
         unique_together = ("project", "version")
 
         indexes = [
-            models.Index(fields=["sort_epoch"]),
+            models.Index(fields=["project", "sort_epoch"]),
+            models.Index(fields=["project", "date_released"]),
         ]
 
     def get_short_version(self):

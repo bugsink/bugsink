@@ -1,10 +1,12 @@
 from django.test import TestCase as DjangoTestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from bsmain.models import AuthToken
 from projects.models import Project
-from releases.models import ordered_releases
+from releases.models import Release
+from releases.api_views import ReleaseViewSet
 
 
 class ReleaseApiTests(DjangoTestCase):
@@ -24,19 +26,6 @@ class ReleaseApiTests(DjangoTestCase):
         response = self.client.get(reverse("api:release-list"))
         self.assertEqual(response.status_code, 400)
         self.assertEqual({"project": ["This field is required."]}, response.json())
-
-    def test_list_uses_ordered_releases(self):
-        # Create in arbitrary order
-        self._create("1.0.0")
-        self._create("1.0.0+build")
-        self._create("1.0.1")
-
-        response = self.client.get(reverse("api:release-list"), {"project": str(self.project.id)})
-        self.assertEqual(response.status_code, 200)
-
-        versions_from_api = [row["version"] for row in response.json()["results"]]
-        versions_expected = [r.version for r in ordered_releases(project=self.project)]
-        self.assertEqual(versions_from_api, versions_expected)
 
     def test_create_new_returns_201_and_detail_shape(self):
         response = self._create("1.2.3", timestamp="2024-01-01T00:00:00Z")
@@ -90,3 +79,58 @@ class ReleaseApiTests(DjangoTestCase):
         self.assertEqual(put_response.status_code, 405)
         self.assertEqual(patch_response.status_code, 405)
         self.assertEqual(delete_response.status_code, 405)
+
+
+class ReleasePaginationTests(DjangoTestCase):
+    def setUp(self):
+        self.client = APIClient()
+        token = AuthToken.objects.create()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        self.old_size = ReleaseViewSet.pagination_class.page_size
+        ReleaseViewSet.pagination_class.page_size = 2
+
+    def tearDown(self):
+        ReleaseViewSet.pagination_class.page_size = self.old_size
+
+    def _make_releases(self, project, deltas):
+        base = timezone.now().replace(microsecond=0)
+        releases = []
+        for i, delta in enumerate(deltas):
+            rel = Release.objects.create(
+                project=project,
+                version=f"v{i}",
+                date_released=base + delta,
+            )
+            releases.append(rel)
+        return releases
+
+    def _ids(self, resp):
+        return [row["id"] for row in resp.json()["results"]]
+
+    def test_date_released_desc_two_pages(self):
+        proj = Project.objects.create(name="P")
+        releases = self._make_releases(
+            proj, [timezone.timedelta(days=i) for i in range(5)]
+        )
+
+        r1 = self.client.get(
+            reverse("api:release-list"), {"project": str(proj.id), "order": "desc"}
+        )
+        self.assertEqual(self._ids(r1), [str(releases[4].id), str(releases[3].id)])
+
+        r2 = self.client.get(r1.json()["next"])
+        self.assertEqual(self._ids(r2), [str(releases[2].id), str(releases[1].id)])
+
+    def test_date_released_asc_two_pages(self):
+        proj = Project.objects.create(name="P2")
+        releases = self._make_releases(
+            proj, [timezone.timedelta(days=i) for i in range(5)]
+        )
+
+        r1 = self.client.get(
+            reverse("api:release-list"), {"project": str(proj.id), "order": "asc"}
+        )
+        self.assertEqual(self._ids(r1), [str(releases[0].id), str(releases[1].id)])
+
+        r2 = self.client.get(r1.json()["next"])
+        self.assertEqual(self._ids(r2), [str(releases[2].id), str(releases[3].id)])
