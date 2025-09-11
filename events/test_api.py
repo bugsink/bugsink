@@ -5,7 +5,10 @@ from rest_framework.test import APIClient
 from projects.models import Project
 from bsmain.models import AuthToken
 from events.factories import create_event
+from events.api_views import EventViewSet
+
 from issues.factories import get_or_create_issue
+from events.factories import create_event_data
 
 
 class EventApiTests(DjangoTestCase):
@@ -65,3 +68,50 @@ class EventApiTests(DjangoTestCase):
         ids = [item["id"] for item in response.json()["results"]]
         self.assertEqual(ids[0], str(e0.id))
         self.assertEqual(ids[1], str(e1.id))
+
+
+class EventPaginationTests(DjangoTestCase):
+    def setUp(self):
+        self.client = APIClient()
+        token = AuthToken.objects.create()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        self.old_size = EventViewSet.pagination_class.page_size
+        EventViewSet.pagination_class.page_size = 2
+
+    def tearDown(self):
+        EventViewSet.pagination_class.page_size = self.old_size
+
+    def _make_events(self, issue, n=5):
+        events = []
+        for i in range(n):
+            ev = create_event(issue=issue)
+            events.append(ev)
+        return events
+
+    def _ids(self, resp):
+        return [row["id"] for row in resp.json()["results"]]
+
+    def test_digest_order_desc_two_pages(self):
+        proj = Project.objects.create(name="P")
+        issue = get_or_create_issue(project=proj, event_data=create_event_data(exception_type="root"))[0]
+        events = self._make_events(issue, 5)
+
+        # default (desc) → events 5,4 on page 1; 3,2 on page 2
+        r1 = self.client.get(reverse("api:event-list"), {"issue": str(issue.id)})
+        self.assertEqual(self._ids(r1), [str(events[4].id), str(events[3].id)])
+
+        r2 = self.client.get(r1.json()["next"])
+        self.assertEqual(self._ids(r2), [str(events[2].id), str(events[1].id)])
+
+    def test_digest_order_asc_two_pages(self):
+        proj = Project.objects.create(name="P2")
+        issue = get_or_create_issue(project=proj, event_data=create_event_data(exception_type="root2"))[0]
+        events = self._make_events(issue, 5)
+
+        # asc → events 1,2 on page 1; 3,4 on page 2
+        r1 = self.client.get(reverse("api:event-list"),
+                             {"issue": str(issue.id), "order": "asc"})
+        self.assertEqual(self._ids(r1), [str(events[0].id), str(events[1].id)])
+
+        r2 = self.client.get(r1.json()["next"])
+        self.assertEqual(self._ids(r2), [str(events[2].id), str(events[3].id)])

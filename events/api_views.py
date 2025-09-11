@@ -3,9 +3,19 @@ from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
 
 from bugsink.utils import assert_
+from bugsink.api_pagination import AscDescCursorPagination
 
 from .models import Event
 from .serializers import EventListSerializer, EventDetailSerializer
+
+
+class EventPagination(AscDescCursorPagination):
+    # Cursor pagination requires an indexed, mostly-stable ordering field. We use `digest_order`: we require
+    # ?issue=<uuid> and have a composite (issue_id, digest_order) index, so ORDER BY digest_order after filtering by
+    # issue is fast and cursor-stable. (also note that digest_order comes in in-order).
+    base_ordering = ("digest_order",)
+    page_size = 250
+    default_direction = "desc"  # newest first by default, aligned with UI
 
 
 class EventViewSet(viewsets.ReadOnlyModelViewSet):
@@ -17,6 +27,7 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Event.objects.all()  # router requirement for basename inference
     serializer_class = EventListSerializer
+    pagination_class = EventPagination
 
     def filter_queryset(self, queryset):
         query_params = self.request.query_params
@@ -24,14 +35,7 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
         if "issue" not in query_params:
             raise ValidationError({"issue": ["This field is required."]})
 
-        order = query_params.get("order", "desc")
-        if order not in ("asc", "desc"):
-            raise ValidationError({"order": ["Must be 'asc' or 'desc'."]})
-
-        ordering = "digest_order" if order == "asc" else "-digest_order"
-
-        # (issue, digest_order) is a db-index
-        return queryset.filter(issue=query_params["issue"]).order_by(ordering)
+        return queryset.filter(issue=query_params["issue"])
 
     def get_object(self):
         """

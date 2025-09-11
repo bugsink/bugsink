@@ -1,11 +1,22 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
+
+from bugsink.api_pagination import AscDescCursorPagination
+
 from .models import Team
 from .serializers import (
     TeamListSerializer,
     TeamDetailSerializer,
     TeamCreateUpdateSerializer,
 )
+
+
+class TeamPagination(AscDescCursorPagination):
+    # Cursor pagination requires an indexed, mostly-stable ordering field. We use `name`, which is indexed; for Teams,
+    # updates are rare and the table is small, so "requirement met in practice though not in theory".
+    base_ordering = ("name",)
+    page_size = 250
+    default_direction = "asc"
 
 
 class TeamViewSet(viewsets.ModelViewSet):
@@ -19,12 +30,7 @@ class TeamViewSet(viewsets.ModelViewSet):
     """
     queryset = Team.objects.all()
     http_method_names = ["get", "post", "patch", "head", "options"]
-
-    def filter_queryset(self, queryset):
-        if self.action != "list":
-            return queryset
-        # Explicit ordering aligned with UI
-        return queryset.order_by("name")
+    pagination_class = TeamPagination
 
     def get_object(self):
         # Pure PK lookup (bypass filter_queryset)

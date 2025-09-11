@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
+from bugsink.api_pagination import AscDescCursorPagination
 
 from .models import Project
 from .serializers import (
@@ -7,6 +8,14 @@ from .serializers import (
     ProjectDetailSerializer,
     ProjectCreateUpdateSerializer,
 )
+
+
+class ProjectPagination(AscDescCursorPagination):
+    # Cursor pagination requires an indexed, mostly-stable ordering field. We use `name`, which is indexed; for Teams,
+    # updates are rare and the table is small, so "requirement met in practice though not in theory".
+    base_ordering = ("name",)
+    page_size = 250
+    default_direction = "asc"
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
@@ -20,6 +29,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     """
     queryset = Project.objects.all()
     http_method_names = ["get", "post", "patch", "head", "options"]
+    pagination_class = ProjectPagination
 
     def filter_queryset(self, queryset):
         if self.action != "list":
@@ -34,8 +44,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         if team_id:
             qs = qs.filter(team=team_id)
 
-        # Explicit ordering aligned with UI
-        return qs.order_by("name")
+        return qs
 
     def get_object(self):
         # Pure PK lookup (bypass filter_queryset)

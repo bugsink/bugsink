@@ -1,9 +1,56 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
+from rest_framework.pagination import CursorPagination
 from rest_framework.exceptions import ValidationError
 
 from .models import Issue
 from .serializers import IssueSerializer
+
+
+class IssuesCursorPagination(CursorPagination):
+    """
+    Cursor paginator for /issues supporting ?sort=… and ?order=asc|desc.
+
+    Sort modes are named after the *primary* column:
+      - sort=digest_order → unique per project → no tie-breakers needed
+      - sort=last_seen    → timestamp          → tie-breaker on id
+
+    Direction applies to primary *and beyond* (i.e. all fields in the list).
+    The view MUST filter by project; ordering is handled here.
+    """
+    # Cursor pagination requires an indexed, mostly-stable ordering. Stable mode: sort=digest_order (default). We
+    # require ?project=<uuid> and have a composite (project_id, digest_order) index, so ORDER BY digest_order after
+    # filtering by project is fast and cursor-stable.
+
+    # We also offer a "recent" mode: sort=last_seen. This is not stable, as new events can come in mid-cursor, and
+    # reshuffle things causing misses or duplicates. However, this is the desired UX for a "recent activity" view.
+    # i.e. the typical usage would in fact just be to get the "first page" of recent activity.
+    page_size = 250
+    default_direction = "asc"
+    default_sort = "digest_order"
+
+    VALID_SORTS = ("digest_order", "last_seen")
+    VALID_ORDERS = ("asc", "desc")
+
+    def get_ordering(self, request, queryset, view):
+        sort = request.query_params.get("sort", self.default_sort)
+        if sort not in self.VALID_SORTS:
+            raise ValidationError({"sort": ["Must be 'digest_order' or 'last_seen'."]})
+
+        order = request.query_params.get("order", self.default_direction)
+        if order not in self.VALID_ORDERS:
+            raise ValidationError({"order": ["Must be 'asc' or 'desc'."]})
+
+        desc = (order == "desc")
+
+        if sort == "digest_order":
+            # Unique per project; stable cursor once filtered by project.
+            return ["-digest_order" if desc else "digest_order"]
+
+        # sort == "last_seen": timestamp needs a deterministic tie-breaker.
+        if desc:
+            return ["-last_seen", "-id"]
+        return ["last_seen", "id"]
 
 
 class IssueViewSet(viewsets.ReadOnlyModelViewSet):
@@ -15,6 +62,7 @@ class IssueViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Issue.objects.filter(is_deleted=False)  # hide soft-deleted issues; also satisfies router
     serializer_class = IssueSerializer
+    pagination_class = IssuesCursorPagination
 
     def get_queryset(self):
         return self.queryset
@@ -24,19 +72,12 @@ class IssueViewSet(viewsets.ReadOnlyModelViewSet):
         if self.action != "list":
             return queryset
 
-        query_params = self.request.query_params
-
-        project = query_params.get("project")
+        project = self.request.query_params.get("project")
         if not project:
-            # the below until we have a UI for cross-project Issue listing, i.e. #190
+            # the below at least until we have a UI for cross-project Issue listing, i.e. #190
             raise ValidationError({"project": ["This field is required."]})
 
-        order = query_params.get("order", "desc")
-        if order not in ("asc", "desc"):
-            raise ValidationError({"order": ["Must be 'asc' or 'desc'."]})
-
-        ordering = "last_seen" if order == "asc" else "-last_seen"
-        return queryset.filter(project=project).order_by(ordering)
+        return queryset.filter(project=project)
 
     def get_object(self):
         """
