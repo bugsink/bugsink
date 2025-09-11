@@ -34,6 +34,9 @@ class DisallowChunkedMiddleware:
 
 
 class LoginRequiredMiddleware:
+    # NOTE: this predates Django 5.1's built-in LoginRequiredMiddleware; we may want to switch to that at some point,
+    # but for now we have something that works and there's no real upside so we'll leave it as is.
+
     def __init__(self, get_response):
         self.get_response = get_response
 
