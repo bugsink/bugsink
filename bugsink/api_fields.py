@@ -1,17 +1,22 @@
 from rest_framework import serializers
 
 
-class EnumLowercaseChoiceField(serializers.ChoiceField):
+def make_enum_field(enum_cls, *, name=None):
 
-    def __init__(self, enum_cls, **kwargs):
-        self._to_value = {member.name.lower(): member.value for member in enum_cls}
-        super().__init__(choices=self._to_value, **kwargs)
-        self._to_name = {member.value: member.name.lower() for member in enum_cls}
+    class EnumChoiceField(serializers.ChoiceField):
+        _enum_cls = enum_cls
 
-    def to_representation(self, value):
-        # fails hard for invalid values (shouldn't happen, would imply data corruption)
-        return self._to_name[value]
+        def __init__(self, **kwargs):
+            self._to_value = {m.name.lower(): m.value for m in enum_cls}
+            self._to_name = {m.value: m.name.lower() for m in enum_cls}
+            super().__init__(choices=self._to_value, **kwargs)
 
-    def to_internal_value(self, data):
-        key = super().to_internal_value(data)
-        return self._to_value[key]
+        def to_representation(self, value):
+            return self._to_name[value]
+
+        def to_internal_value(self, data):
+            key = super().to_internal_value(data)
+            return self._to_value[key]
+
+    EnumChoiceField.__name__ = name or f"{enum_cls.__name__}Field"
+    return EnumChoiceField

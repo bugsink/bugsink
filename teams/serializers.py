@@ -1,10 +1,13 @@
 from rest_framework import serializers
-from bugsink.api_fields import EnumLowercaseChoiceField
+from bugsink.api_fields import make_enum_field
 from .models import Team, TeamVisibility
 
 
+TeamVisibilityField = make_enum_field(TeamVisibility)
+
+
 class TeamListSerializer(serializers.ModelSerializer):
-    visibility = EnumLowercaseChoiceField(TeamVisibility)
+    visibility = TeamVisibilityField()
 
     class Meta:
         model = Team
@@ -12,7 +15,7 @@ class TeamListSerializer(serializers.ModelSerializer):
 
 
 class TeamDetailSerializer(serializers.ModelSerializer):
-    visibility = EnumLowercaseChoiceField(TeamVisibility)
+    visibility = TeamVisibilityField()
 
     class Meta:
         model = Team
@@ -21,7 +24,7 @@ class TeamDetailSerializer(serializers.ModelSerializer):
 
 class TeamCreateUpdateSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(read_only=True)
-    visibility = EnumLowercaseChoiceField(TeamVisibility, required=False)
+    visibility = TeamVisibilityField(required=False)
 
     class Meta:
         model = Team
