@@ -78,6 +78,7 @@ class EagerPaginator(Paginator):
 
 class KnownCountPaginator(EagerPaginator):
     """optimization: we know the total count of the queryset, so we can avoid a count() query"""
+    # see also: bugsink/api_pagination.py for an alternative approach
 
     def __init__(self, *args, **kwargs):
         self._count = kwargs.pop("count")
@@ -103,6 +104,7 @@ class UncountablePage(Page):
 
 class UncountablePaginator(EagerPaginator):
     """optimization: counting is too expensive; to be used in a template w/o .count and .last"""
+    # see also: bugsink/api_pagination.py for an alternative approach
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

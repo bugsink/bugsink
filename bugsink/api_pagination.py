@@ -11,6 +11,15 @@ class AscDescCursorPagination(CursorPagination):
         page_size = <int>
     """
 
+    # note to self: CursorPagination is the "obviously right" choice for navigating large datasets because it scales
+    # well; I'm not entirely sure why I didn't use the non-API equvivalent of this for the web UI (in issues/views.py)
+    # when I ran into performance problems in the past. I suspect it's because (at least partially) because the "cursor"
+    # approach precludes jumping to arbitrary pages; another part might be that I assumed that "endless scrolling" (by
+    # clicking 'next page' repeatedly) is an unlikely use case anyway, especially since I already generally have very
+    # large page sizes; in short, I probably dind't think that the performance problem of "navigating to a large offset"
+    # was likely to happen in practice (as opposed to: count breaking down at scale, which I did see in practice and
+    # solved). For now: we'll keep this for the API only, and see how it goes.
+
     base_ordering = None
     default_direction = "desc"
 
