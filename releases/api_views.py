@@ -1,5 +1,6 @@
 from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_pagination import AscDescCursorPagination
 from bugsink.api_mixins import AtomicRequestMixin
@@ -27,6 +28,20 @@ class ReleaseViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
     serializer_class = ReleaseListSerializer
     http_method_names = ["get", "post", "head", "options"]
     pagination_class = ReleasePagination
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="project",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Filter releases by project id (required).",
+            ),
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
     def filter_queryset(self, queryset):
         queryset = super().filter_queryset(queryset)

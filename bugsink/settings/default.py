@@ -67,6 +67,8 @@ INSTALLED_APPS = [
     'tailwind',  # As currently set up, this is also needed in production (templatetags)
     'admin_auto_filters',
     'rest_framework',
+    'drf_spectacular',
+    'drf_spectacular_sidecar',  # this brings the swagger-ui
 ]
 
 REST_FRAMEWORK = {
@@ -86,6 +88,22 @@ REST_FRAMEWORK = {
     "DEFAULT_PARSER_CLASSES": [
         "rest_framework.parsers.JSONParser",
     ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Bugsink',
+    'DESCRIPTION': 'Bugsink API Documentation',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,  # keep the docs clean and not document the docs endpoint itself.
+
+    "SECURITY": [
+        {"bearerAuth": []}
+    ],
+    "ENUM_NAME_OVERRIDES": {
+        "TeamVisibilityEnum": ["joinable", "discoverable", "hidden"],
+        "ProjectVisibilityEnum": ["joinable", "discoverable", "team_members"],
+    },
 }
 
 BUGSINK_APPS = [

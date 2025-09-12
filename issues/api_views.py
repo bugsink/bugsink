@@ -2,6 +2,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from rest_framework.pagination import CursorPagination
 from rest_framework.exceptions import ValidationError
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_mixins import AtomicRequestMixin
 
@@ -68,6 +69,36 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         return self.queryset
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="project",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Filter issues by project id (required).",
+            ),
+            OpenApiParameter(
+                name="sort",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                enum=["digest_order", "last_seen"],
+                description="Sort mode (default: digest_order).",
+            ),
+            OpenApiParameter(
+                name="order",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                enum=["asc", "desc"],
+                description="Sort order (default: asc).",
+            ),
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
     def filter_queryset(self, queryset):
         queryset = super().filter_queryset(queryset)

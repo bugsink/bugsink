@@ -6,6 +6,7 @@ from django.contrib.auth import views as auth_views
 from django.views.generic import RedirectView, TemplateView
 
 from rest_framework import routers
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from alerts.views import debug_email as debug_alerts_email
 from users.views import debug_email as debug_users_email
@@ -60,6 +61,8 @@ urlpatterns = [
     path("users/", include("users.urls")),
 
     path("api/canonical/0/", include((api_router.urls, "api"), namespace="api")),
+    path("api/canonical/0/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/canonical/0/schema/swagger-ui/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
 
     # these are sentry-cli endpoint for uploading; they're unrelated to e.g. the ingestion API.
     # the /api/0/ is just a hard prefix (for the ingest API, that position indicates the project id, but here it's just

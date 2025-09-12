@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from bugsink.utils import assert_
 from bugsink.api_pagination import AscDescCursorPagination
@@ -37,6 +38,28 @@ class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
             raise ValidationError({"issue": ["This field is required."]})
 
         return queryset.filter(issue=query_params["issue"])
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="issue",
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Filter events by issue UUID (required).",
+            ),
+            OpenApiParameter(
+                name="order",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                enum=["asc", "desc"],
+                description="Sort order of digest_order (default: desc).",
+            ),
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
     def get_object(self):
         """

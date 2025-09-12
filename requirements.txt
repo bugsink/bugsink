@@ -17,3 +17,4 @@ fastjsonschema==2.21.*
 verbose_csrf_middleware==1.0.*
 ecma426>=0.2.0
 djangorestframework==3.16.*
+drf-spectacular[sidecar]

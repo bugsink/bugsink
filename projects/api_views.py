@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_pagination import AscDescCursorPagination
 from bugsink.api_mixins import ExpandViewSetMixin, AtomicRequestMixin
@@ -32,6 +33,20 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
     queryset = Project.objects.all()
     http_method_names = ["get", "post", "patch", "head", "options"]
     pagination_class = ProjectPagination
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="team",
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Optional filter by team UUID.",
+            ),
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
     def filter_queryset(self, queryset):
         if self.action != "list":
