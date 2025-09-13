@@ -16,7 +16,7 @@ services:
       retries: 30
 
   web:
-    image: bugsink/bugsink
+    image: bugsink/bugsink:1
     depends_on:
       mysql:
         condition: service_healthy
