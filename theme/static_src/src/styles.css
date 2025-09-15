@@ -1,10 +1,13 @@
 @config "../tailwind.config.js";
 @import "tailwindcss";
 
-/* Preserve Tailwind 3 behavior: default border color was gray.200 */
+/* Preserve Tailwind 3 behavior: default border color was gray.200
+the dark-mode stuff is actually an improvement over our previous design @tailwind 3 that we simply added
+because we were in the process of fixing borders globally anyway */
+
 @layer base {
   *, ::before, ::after {
-    border-color: theme('colors.gray.200');
+    @apply border-gray-200 dark:border-slate-800;
   }
 }
 
