@@ -596,7 +596,7 @@ class IntegrationTest(TransactionTestCase):
                 filename, response.content if response.status_code != 302 else response.url))
 
         event = Event.objects.get(issue__project=project, event_id=data["event_id"])
-        md = render_stacktrace_md(event, frames="all", exceptions="all", include_locals=True)
+        md = render_stacktrace_md(event, frames="all", include_locals=True)
 
         self.assertEqual('''# CapturedStacktraceFo
 4 kinds of frames

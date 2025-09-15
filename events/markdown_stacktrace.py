@@ -128,7 +128,7 @@ def _select_frames(frames, in_app_only):
     return filtered if filtered else frames
 
 
-def render_stacktrace_md(event, frames="in_app", exceptions="last", include_locals=True):
+def render_stacktrace_md(event, frames="in_app", include_locals=True):
     parsed = event.get_parsed_data()
     try:
         apply_sourcemaps(parsed)
@@ -142,8 +142,6 @@ def render_stacktrace_md(event, frames="in_app", exceptions="last", include_loca
     stack_of_plates = getattr(event, "platform", None) != "python"
     if stack_of_plates:
         excs = list(reversed(excs))
-    if exceptions == "last":
-        excs = excs[-1:]
 
     lines = []
     for i, exc in enumerate(excs):

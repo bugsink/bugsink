@@ -104,5 +104,5 @@ class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     )
     def stacktrace(self, request, pk=None):
         event = self.get_object()
-        text = render_stacktrace_md(event, frames="in_app", exceptions="last", include_locals=True)
+        text = render_stacktrace_md(event, frames="in_app", include_locals=True)
         return Response(text)
