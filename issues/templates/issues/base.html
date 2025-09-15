@@ -129,6 +129,7 @@
                 {% if is_event_page %}
                 <a href="{{ script_prefix }}/events/event/{{ event.id }}/download/">{% translate "Download" %}</a>
                 | <a href="{{ script_prefix }}/events/event/{{ event.id }}/raw/" >{% translate "JSON" %}</a>
+                | <a href="{{ script_prefix }}/events/event/{{ event.id }}/md/" >{% translate "Markdown" %}</a>
                 | <a href="{{ script_prefix }}/events/event/{{ event.id }}/plain/" >{% translate "Plain" %}</a>
                 {% endif %}
 
