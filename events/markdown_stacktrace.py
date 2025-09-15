@@ -183,4 +183,4 @@ def render_stacktrace_md(event, frames="in_app", include_locals=True):
                 if loc_lines:
                     lines += loc_lines
 
-    return "\n".join(lines).strip()
+    return "\n".join([s.rstrip() for s in lines]).strip()
