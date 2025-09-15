@@ -1,7 +1,10 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes, OpenApiResponse
+
 
 from bugsink.utils import assert_
 from bugsink.api_pagination import AscDescCursorPagination
@@ -9,6 +12,8 @@ from bugsink.api_mixins import AtomicRequestMixin
 
 from .models import Event
 from .serializers import EventListSerializer, EventDetailSerializer
+from .markdown_stacktrace import render_stacktrace_md
+from .renderers import MarkdownRenderer
 
 
 class EventPagination(AscDescCursorPagination):
@@ -86,3 +91,18 @@ class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
 
     def get_serializer_class(self):
         return EventDetailSerializer if self.action == "retrieve" else EventListSerializer
+
+    @extend_schema(
+        description="Render the event's stacktrace (frames, source, locals) as Markdown-like text.",
+        responses={200: OpenApiResponse(response=str, description="Stacktrace as Markdown")},
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="stacktrace",
+        renderer_classes=[MarkdownRenderer],
+    )
+    def stacktrace(self, request, pk=None):
+        event = self.get_object()
+        text = render_stacktrace_md(event, frames="in_app", exceptions="last", include_locals=True)
+        return Response(text)

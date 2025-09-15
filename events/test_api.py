@@ -35,6 +35,30 @@ class EventApiTests(TransactionTestCase):
         detail = response.json()
         self.assertEqual(detail["id"], str(self.event.id))
         self.assertIn("data", detail)
+        self.assertTrue("event_id" in detail["data"])
+
+    def test_detail_includes_stacktrace_md_field(self):
+        url = reverse("api:event-detail", args=[self.event.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        detail = response.json()
+
+        self.assertIn("stacktrace_md", detail)
+        self.assertIsInstance(detail["stacktrace_md"], str)
+        self.assertTrue(len(detail["stacktrace_md"]) > 0)
+
+        self.assertEqual("_No stacktrace available._", detail["stacktrace_md"])
+
+    def test_stacktrace_action_returns_markdown(self):
+        url = reverse("api:event-stacktrace", args=[self.event.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        self.assertTrue(response["Content-Type"].startswith("text/markdown"))
+        body = response.content.decode("utf-8")
+        self.assertTrue(len(body) > 0)
+
+        self.assertEqual("_No stacktrace available._", body)
 
     def test_list_by_issue_is_light_payload(self):
         response = self.client.get(reverse("api:event-list"), {"issue": str(self.issue.id)})
