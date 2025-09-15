@@ -68,7 +68,7 @@ class TestPygmentizeLineLineCountHandling(RegularTestCase):
         _pygmentize_lines(["\n", "\n", "\n"])
 
 
-class TestChooseLexerForPatter(RegularTestCase):
+class TestChooseLexerForPattern(RegularTestCase):
     def test_choose_lexer_for_pattern(self):
         # simple 'does it not crash' test:
 
