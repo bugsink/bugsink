@@ -10,8 +10,13 @@
 # The provided markdown is not a stable interface; it's intended to be useful but not something you'd parse
 # programmatically (just use the event data instead).
 
-
+import logging
+from django.conf import settings
 from events.utils import apply_sourcemaps
+
+from sentry_sdk_extensions import capture_or_log_exception
+
+logger = logging.getLogger("bugsink.issues")
 
 
 def _code_segments(frame):
@@ -132,8 +137,13 @@ def render_stacktrace_md(event, frames="in_app", include_locals=True):
     parsed = event.get_parsed_data()
     try:
         apply_sourcemaps(parsed)
-    except Exception:
-        pass
+    except Exception as e:
+        if settings.DEBUG or settings.I_AM_RUNNING == "TEST":
+            # when developing/testing, I _do_ want to get notified
+            raise
+
+        # sourcemaps are still experimental; we don't want to fail on them, so we just log the error and move on.
+        capture_or_log_exception(e, logger)
 
     excs = _iter_exceptions(parsed)
     if not excs:

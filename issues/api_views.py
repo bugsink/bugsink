@@ -5,6 +5,7 @@ from rest_framework.exceptions import ValidationError
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_mixins import AtomicRequestMixin
+from bugsink.utils import assert_
 
 from .models import Issue
 from .serializers import IssueSerializer
@@ -120,7 +121,8 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         queryset = self.get_queryset()
 
         lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
-        assert lookup_url_kwarg in self.kwargs, (
+        assert_(
+            lookup_url_kwarg in self.kwargs,
             'Expected view %s to be called with a URL keyword argument named "%s".'
             % (self.__class__.__name__, lookup_url_kwarg)
         )
