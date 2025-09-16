@@ -149,6 +149,12 @@ jobs:
       working-directory: separate_dir
       run: |
         bugsink-manage makemigrations --check
+    - name: Check bugsink-manage in settingless mode
+      working-directory: separate_dir
+      shell: bash
+      run: |
+        # Run the console entry in the most trivial way (--help), but with DJANGO_SETTINGS_MODULE truly unset
+        env -u DJANGO_SETTINGS_MODULE bugsink-manage --help >/dev/null
     - name: Run Tests
       working-directory: separate_dir
       env:
