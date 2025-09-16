@@ -171,7 +171,7 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     # Build the Docker image, start it, wait for readiness, log in at /accounts/login/,
-    # and verify that / redirects to /teams/mine/.
+    # and verify that / redirects to /teams/.
     steps:
       - uses: actions/checkout@v4
 
@@ -227,11 +227,11 @@ jobs:
             exit 1
           fi
 
-          # 3) HEAD / and check redirect to /teams/mine/
+          # 3) HEAD / and check redirect to /teams/
           curl -sS -b cookies.txt -I http://localhost:8000/ > headers_root.txt
 
-          if ! grep -qi '^Location: /teams/mine/' headers_root.txt; then
-            echo "Expected redirect to /teams/mine/ not found"
+          if ! grep -qi '^Location: /teams/' headers_root.txt; then
+            echo "Expected redirect to /teams/ not found"
             echo "--- / (status + Location):"
             sed -n '1p;/^Location:/Ip' headers_root.txt
             echo "--- cookies (names):"
@@ -239,4 +239,4 @@ jobs:
             exit 1
           fi
 
-          echo "Login OK and / redirects to /teams/mine/"
+          echo "Login OK and / redirects to /teams/"
