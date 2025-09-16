@@ -73,7 +73,7 @@ RUN cp /usr/local/lib/python3.12/site-packages/bugsink/conf_templates/docker.py.
     cp /usr/local/lib/python3.12/site-packages/bugsink/gunicorn.docker.conf.py /app/gunicorn.docker.conf.py
 
 RUN groupadd --gid 14237 bugsink \
- && useradd --uid 14237 --gid bugsink \
+ && useradd --uid 14237 --gid 14237 bugsink \
  && mkdir -p /data \
  && chown -R bugsink:bugsink /data
 

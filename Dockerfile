@@ -48,7 +48,7 @@ RUN apt update && apt install -y git
 RUN pip install -e .
 
 RUN groupadd --gid 14237 bugsink \
- && useradd --uid 14237 --gid bugsink \
+ && useradd --uid 14237 --gid 14237 bugsink \
  && mkdir -p /data \
  && chown -R bugsink:bugsink /data
 
