@@ -1,5 +1,9 @@
 # Changes
 
+## 2.0.1 (16 September 2025)
+
+2 docker-related fixes (e346f8d5c22a and aa799e9c940f)
+
 ## 2.0.0 (16 September 2025)
 
 ### Backwards incompatible changes
