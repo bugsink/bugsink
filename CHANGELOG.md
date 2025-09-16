@@ -1,6 +1,6 @@
 # Changes
 
-## 2.0.0 (...)
+## 2.0.0 (16 September 2025)
 
 ### Backwards incompatible changes
 
@@ -50,6 +50,15 @@ begin with).
 * minor changes to `send_json` util (f0d3667121ab, c38ca8c58a4c)
 * Docker: bugsink-show-version on-start (42ba5a71facc)
 * Implement `vacuum_ingest_dir` management command (See #163)
+* add dark-mode default for border color (833776c646f5)
+* API: first version (see #211, #146)
+* docker compose sample: use alpine postgres (#208)
+* docker compose sample: fix major version (#207)
+* Improve Slack alerts to work with Mattermost (#203)
+* Fix #97: implement /api/0/ endpoint
+* Move conf utils to separate module
+* transaction: use connection.vendor instead of settings.DATABASES engine check (see #117)
+* support hosting at subpath (#201, #93)
 
 ### Dependency updates
 
@@ -58,7 +67,6 @@ begin with).
 * Tailwind 3 => Tailwind 4
 * django-tailwind 3.6 => 4.2
 * `inotify_simple` => 2.0
-
 
 ## 1.7.6 (1 August 2025)
 
