@@ -1,6 +1,5 @@
 from django.db.backends.signals import connection_created
 from django.contrib.auth.management.commands.createsuperuser import Command as CreateSuperUserCommand
-from drf_spectacular.extensions import OpenApiAuthenticationExtension
 
 
 def set_pragmas(sender, connection, **kwargs):
@@ -41,16 +40,3 @@ def _get_input_message(self, field, default=None):
 
 unpatched_get_input_message = CreateSuperUserCommand._get_input_message
 CreateSuperUserCommand._get_input_message = _get_input_message
-
-
-class BearerTokenAuthenticationExtension(OpenApiAuthenticationExtension):
-    # Will be auto-discovered b/c in __init__.py and subclass of OpenApiAuthenticationExtension
-    target_class = 'bugsink.authentication.BearerTokenAuthentication'
-    name = 'BearerAuth'
-
-    def get_security_definition(self, auto_schema):
-        return {
-            'type': 'http',
-            'scheme': 'bearer',
-            'bearerFormat': 'token',
-        }

@@ -1,6 +1,8 @@
 from django.contrib.auth.models import AnonymousUser
 from rest_framework.authentication import BaseAuthentication
 from rest_framework import exceptions
+from drf_spectacular.extensions import OpenApiAuthenticationExtension
+
 from bsmain.models import AuthToken
 
 
@@ -29,3 +31,16 @@ class BearerTokenAuthentication(BaseAuthentication):
     def authenticate_header(self, request):
         # tells DRF what to send in WWW-Authenticate on 401 responses, hinting the required auth scheme
         return self.keyword
+
+
+class BearerTokenAuthenticationExtension(OpenApiAuthenticationExtension):
+    # auto-discovered b/c authentication is loaded in settnigs and this is a subclass of OpenApiAuthenticationExtension
+    target_class = 'bugsink.authentication.BearerTokenAuthentication'
+    name = 'BearerAuth'
+
+    def get_security_definition(self, auto_schema):
+        return {
+            'type': 'http',
+            'scheme': 'bearer',
+            'bearerFormat': 'token',
+        }
