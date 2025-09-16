@@ -198,7 +198,7 @@ jobs:
       - name: Login via /accounts/login/ and expect redirect from /
         shell: bash
         run: |
-          rm -f cookies.txt
+          rm -f cookies.txt headers_root.txt
 
           # 1) Get the login page and receive csrftoken
           curl -sS -c cookies.txt http://localhost:8000/accounts/login/ >/dev/null
@@ -221,11 +221,16 @@ jobs:
             exit 1
           fi
 
-          # 3) Fetch / and check redirect to /teams/mine/
-          if ! curl -sS -b cookies.txt -I http://localhost:8000/ | grep -q "Location: /teams/mine/"; then
+          # 3) HEAD / and check redirect to /teams/mine/
+          curl -sS -b cookies.txt -I http://localhost:8000/ > headers_root.txt
+
+          if ! grep -qi '^Location: /teams/mine/' headers_root.txt; then
             echo "Expected redirect to /teams/mine/ not found"
+            echo "--- / (status + Location):"
+            sed -n '1p;/^Location:/Ip' headers_root.txt
+            echo "--- cookies (names):"
+            awk '{print $6}' cookies.txt | sort -u || true
             exit 1
           fi
 
           echo "Login OK and / redirects to /teams/mine/"
-
