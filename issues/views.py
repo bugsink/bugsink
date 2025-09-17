@@ -35,8 +35,8 @@ from theme.templatetags.issues import timestamp_with_millis
 from .models import Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind
 from .forms import CommentForm
 from .utils import get_values, get_main_exception
-from events.utils import annotate_with_meta, apply_sourcemaps, get_sourcemap_images
-
+from events.utils import annotate_with_meta
+from events.source_maps import SourceMaps
 logger = logging.getLogger("bugsink.issues")
 
 
@@ -270,7 +270,7 @@ def _apply_action(manager, issue_or_qs, action, user):
 def issue_list(request, project_pk, state_filter="open"):
     # to keep the write lock as short as possible, issue_list is split up into 2 parts (read/write vs pure reading),
     # which take in the order of 5ms / 120ms respectively. Some info is passed between transactions (project and
-    # unapplied_issue_ids), but since this is respectively sensitive to much change and the direct result of our own
+    # unapplied_issue_ids), but since this is respectively sensitive too much change and the direct result of our own
     # current action, I don't think this can lead to surprising results.
 
     project, unapplied_issue_ids = _issue_list_pt_1(request, project_pk=project_pk, state_filter=state_filter)
@@ -343,7 +343,7 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
 
 def event_by_internal_id(request, event_pk):
     # a view that allows to link straight to an event by (internal) id. This comes with the cost of a bunch more queries
-    # and a Http redirect when actually clicked, but has the advantage of not needing that event's issue id when
+    # and an Http redirect when actually clicked, but has the advantage of not needing that event's issue id when
     # rendering the link. Note that no Auth is needed here because nothing is actually shown.
     event = get_object_or_404(Event, id=event_pk)
     issue = event.issue
@@ -461,7 +461,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
         sentry_sdk.capture_exception(e)
 
     try:
-        apply_sourcemaps(parsed_data)
+        SourceMaps.apply_source_map_global(parsed_data)
     except Exception as e:
         if settings.DEBUG or settings.I_AM_RUNNING == "TEST":
             # when developing/testing, I _do_ want to get notified
@@ -658,7 +658,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
     contexts = get_contexts_enriched_with_ua(parsed_data)
 
     try:
-        sourcemaps_images = get_sourcemap_images(parsed_data)
+        sourcemaps_images = SourceMaps.get_sourcemap_images(parsed_data)
     except Exception as e:
         if settings.DEBUG or settings.I_AM_RUNNING == "TEST":
             # when developing/testing, I _do_ want to get notified
@@ -749,7 +749,7 @@ def issue_event_list(request, issue):
     if request.method == "POST":
         return _handle_post(request, issue)
 
-    # because we we need _actual events_ for display, and we don't have the regular has_prev/has_next (paginator
+    # because we need _actual events_ for display, and we don't have the regular has_prev/has_next (paginator
     # instead), we don't try to optimize using search_events_optimized in this view (except for counting)
     if "q" in request.GET:
         event_list = search_events(issue.project, issue, request.GET["q"]).order_by("digest_order")
