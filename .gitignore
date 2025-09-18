@@ -53,3 +53,4 @@ node_modules
 
 # Docker artifacts
 /bugsink*tar
+/.idea
