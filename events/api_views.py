@@ -70,6 +70,7 @@ class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         """
         DRF's get_object(), but we intentionally bypass filter_queryset for detail routes to keep PK lookups
         db-index-friendly (no WHERE filters other than the PK which is already indexed).
+        # NOTE: alternatively, we just complain hard when a filter is applied to a detail view.
         """
         queryset = self.get_queryset()  # no filter_queryset() here
 

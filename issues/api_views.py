@@ -117,6 +117,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         """
         DRF's get_object(), but bypass filter_queryset for detail.
         """
+        # NOTE: alternatively, we just complain hard when a filter is applied to a detail view.
         # TODO: copy/paste from events/api_views.py
         queryset = self.get_queryset()
 

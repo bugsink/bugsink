@@ -65,6 +65,7 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
 
     def get_object(self):
         # Pure PK lookup (bypass filter_queryset)
+        # NOTE: alternatively, we just complain hard when a filter is applied to a detail view.
         queryset = self.get_queryset()
         lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
         obj = get_object_or_404(queryset, **{self.lookup_field: self.kwargs[lookup_url_kwarg]})
