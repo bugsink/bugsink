@@ -64,7 +64,7 @@
                 <div class="m-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer" onclick="toggleContainedCheckbox(this); matchIssueCheckboxesStateToMain(this)">
 
                     {# the below sounds expensive, but this list is cached #}
-                    {% if page_obj.object_list|length > 0 %}<input type="checkbox" class="bg-white dark:bg-slate-900 border-cyan-800 dark:border-cyan-400 text-cyan-500 dark:text-cyan-300 focus:ring-cyan-200 dark:focus:ring-cyan-700 m-4 cursor-pointer js-main-checkbox" onclick="event.stopPropagation(); matchIssueCheckboxesStateToMain(this.parentNode)"/>{% endif %}
+                    {% if page_obj.object_list|length > 0 %}<input type="checkbox" class="border-cyan-800 dark:border-cyan-400 text-cyan-500 dark:text-cyan-300 focus:ring-cyan-200 dark:focus:ring-cyan-700 m-4 cursor-pointer js-main-checkbox" onclick="event.stopPropagation(); matchIssueCheckboxesStateToMain(this.parentNode)"/>{% endif %}
                 </div>
             </td>
             <td class="w-full ml-0 pb-4 pt-4 pr-4 flex">
@@ -165,7 +165,7 @@
             <tr class="bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-600 border-2 ">
             <td>
                 <div class="m-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer" onclick="toggleContainedCheckbox(this); matchMainCheckboxStateToIssueCheckboxes()">
-                    <input type="checkbox" {% if issue.id in unapplied_issue_ids %}checked{% endif %} name="issue_ids[]" value="{{ issue.id }}" class="bg-white dark:bg-slate-900 border-cyan-800 dark:border-cyan-400 text-cyan-500 dark:text-cyan-300 focus:ring-cyan-200 dark:focus:ring-cyan-700 m-4 cursor-pointer js-issue-checkbox" onclick="event.stopPropagation(); {# prevent the container's handler from undoing the default action #} matchMainCheckboxStateToIssueCheckboxes()"/>
+                    <input type="checkbox" {% if issue.id in unapplied_issue_ids %}checked{% endif %} name="issue_ids[]" value="{{ issue.id }}" class="border-cyan-800 dark:border-cyan-400 text-cyan-500 dark:text-cyan-300 focus:ring-cyan-200 dark:focus:ring-cyan-700 m-4 cursor-pointer js-issue-checkbox" onclick="event.stopPropagation(); {# prevent the container's handler from undoing the default action #} matchMainCheckboxStateToIssueCheckboxes()"/>
                 </div>
             </td>
             <td class="w-full ml-0 pb-4 pt-4 pr-4">
