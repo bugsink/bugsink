@@ -157,7 +157,26 @@ class DigestTagsTestCase(DjangoTestCase):
         event.save()
         digest_tags(event_data, event, issue)
 
+        # twice because "user" and "user.ip_address"
         self.assertEqual(["123.123.123.123", "123.123.123.123"], [e.value.value for e in event.get_tags])
+
+    def test_auto_ip_address_when_not_available(self):
+        # could be non-available because of proxy misconfig or other reasons, in any case it should not break anything:
+        # Event.remote_addr is nullable so downstream code should be able to handle None
+        project = Project.objects.create(name="Test Project")
+        issue, _ = get_or_create_issue(project)
+        event = create_event(project, issue=issue)
+
+        event_data = {
+            "user": {
+                "ip_address": "{{auto}}",
+            },
+        }
+        event.remote_addr = None
+        event.save()
+        digest_tags(event_data, event, issue)
+
+        self.assertEqual([], [e.value.value for e in event.get_tags])
 
 
 class SearchParserTestCase(RegularTestCase):

@@ -167,7 +167,12 @@ def digest_tags(event_data, event, issue):
 
     for key in "user.ip_address", "user":
         if tags.get(key) == "{{auto}}":
-            tags[key] = event.remote_addr
+            if event.remote_addr is None:
+                # removing the tag if we don't have the info seems the most faithful to the semantics, i.e. if we don't
+                # have the information it shouldn't appear in tags.
+                del tags[key]
+            else:
+                tags[key] = event.remote_addr
 
     store_tags(event, issue, tags)
 
