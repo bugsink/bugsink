@@ -119,6 +119,21 @@ class Project(models.Model):
     # retention
     retention_max_event_count = models.PositiveIntegerField(_("Retention max event count"), default=10_000)
 
+    # blame config
+    blame_template = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text=" What link template to use while linking to traceback blames ? For example https://gitea.bugsink.com/owner/project/blob/-/<ref>/<path",
+    )
+
+    blame_ref_tag = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Which event tag will be used to find the git-ref while locating the blame?",
+    )
+
     def __str__(self):
         return self.name
 
