@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% load static %}
+{% load i18n %}
 
-{% block title %}Teams · {{ site_title }}{% endblock %}
+{% block title %}{% translate "Teams" %} · {{ site_title }}{% endblock %}
 
 {% block content %}
 
@@ -10,14 +11,14 @@
 <div class="m-4 flex flex-row items-end">
 
     <div><!-- top, LHS (h1) -->
-        <h1 class="text-4xl mt-4 font-bold">Teams</h1>
+        <h1 class="text-4xl mt-4 font-bold">{% translate "Teams" %}</h1>
     </div>
 
     {# align to bottom #}
     <div class="ml-auto"><!-- top, RHS (buttons) -->
         {% if can_create %}
         <div>
-            <a class="block font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md" href="{% url 'team_new' %}">New Team</a>
+            <a class="block font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md" href="{% url 'team_new' %}">{% translate "New Team" %}</a>
         </div>
         {% endif %}
     </div> {# top, RHS (buttons) #}
@@ -28,8 +29,8 @@
 
 <div class="flex bg-slate-50 dark:bg-slate-800 mt-4 items-end">
     <div class="flex">
-    <a href="{% url "team_list_mine" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 dark:hover:bg-slate-800 {% if ownership_filter == "mine" %}text-cyan-500 dark:text-cyan-400 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400 dark:hover:border-slate-500{% endif %}">My Teams</div></a>
-    <a href="{% url "team_list_other" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 dark:hover:bg-slate-800 {% if ownership_filter == "other" %}text-cyan-500 dark:text-cyan-400 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400 dark:hover:border-slate-500{% endif %}">Other Teams</div></a>
+    <a href="{% url "team_list_mine" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 dark:hover:bg-slate-800 {% if ownership_filter == "mine" %}text-cyan-500 dark:text-cyan-400 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400 dark:hover:border-slate-500{% endif %}">{% translate "My Teams" %}</div></a>
+    <a href="{% url "team_list_other" %}"><div class="p-4 font-bold text-xl hover:bg-slate-200 dark:hover:bg-slate-800 {% if ownership_filter == "other" %}text-cyan-500 dark:text-cyan-400 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400 dark:hover:border-slate-500{% endif %}">{% translate "Other Teams" %}</div></a>
     </div>
     {% comment %}
     <div class="ml-auto p-2">
@@ -52,10 +53,10 @@
                     {{ team.name }}
                 </div>
                 <div>
-                    {{ team.project_count }} projects
-                    | {{ team.member_count }} members
+                    {{ team.project_count }} {% translate "projects" %}
+                    | {{ team.member_count }} {% translate "members" %}
                     {% if team.member %}
-                    | <a href="{% url 'team_member_settings' team_pk=team.id user_pk=request.user.id %}" class="font-bold text-cyan-500 dark:text-cyan-400">my settings</a>
+                    | <a href="{% url 'team_member_settings' team_pk=team.id user_pk=request.user.id %}" class="font-bold text-cyan-500 dark:text-cyan-400">{% translate "my settings" %}</a>
                     {% endif %}
                 </div>
             </td>
@@ -65,7 +66,7 @@
                     {% if not team.member.accepted %}
                     <span class="bg-slate-100 dark:bg-slate-700 rounded-2xl px-4 py-2 ml-2 text-sm">You're&nbsp;invited!</span>
                     {% elif team.member.is_admin %} {# NOTE: we intentionally hide admin-ness for non-accepted users #}
-                    <span class="bg-cyan-100 dark:bg-cyan-900 rounded-2xl px-4 py-2 ml-2 text-sm">Admin</span>
+                    <span class="bg-cyan-100 dark:bg-cyan-900 rounded-2xl px-4 py-2 ml-2 text-sm whitespace-nowrap">{% translate "Admin" %}</span>
                     {% endif %}
                 {% endif %}
             </td>
@@ -100,17 +101,17 @@
                 {% if team.member %}
                     {% if not team.member.accepted %}
                         <div>
-                            <a href="{% url 'team_members_accept' team_pk=team.id %}" class="font-bold text-cyan-500 dark:text-cyan-400">Invitation</a>
+                            <a href="{% url 'team_members_accept' team_pk=team.id %}" class="font-bold text-cyan-500 dark:text-cyan-400 whitespace-nowrap">{% translate "Invitation" %}</a>
                         </div>
                     {% else %}
                         <div>
-                            <button name="action" value="leave:{{ team.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">Leave</button>
+                            <button name="action" value="leave:{{ team.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Leave" %}</button>
                         </div>
                     {% endif %}
                 {% else %}
                     {% if team.is_joinable or request.user.is_superuser %}
                         <div>
-                            <button name="action" value="join:{{ team.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">Join</button>
+                            <button name="action" value="join:{{ team.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Join" %}</button>
                         </div>
                     {% endif %}
                 {% endif %}
@@ -120,7 +121,7 @@
             {% empty %}
             <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
             <td class="w-full p-4">
-                No teams found.
+                {% translate "No teams found." %}
             </td>
 
             </tr>

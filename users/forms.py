@@ -9,17 +9,13 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth import password_validation
 from django.forms import ModelForm
 from django.utils.html import escape, mark_safe
+from django.utils.translation import gettext_lazy as _
 
 
 TRUE_FALSE_CHOICES = (
-    (True, 'Yes'),
-    (False, 'No')
+    (True, _("Yes")),
+    (False, _("No"))
 )
-
-
-def _(x):
-    # dummy gettext
-    return x
 
 
 User = get_user_model()
@@ -87,7 +83,7 @@ class UserEditForm(ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['username'].validators = [EmailValidator()]
-        self.fields['username'].label = "Email"
+        self.fields['username'].label = _("Email")
 
         self.fields['username'].help_text = None  # "Email" is descriptive enough
 
@@ -149,4 +145,4 @@ class PreferencesForm(ModelForm):
 
     class Meta:
         model = User
-        fields = ("send_email_alerts", "theme_preference",)
+        fields = ("send_email_alerts", "theme_preference", "language",)

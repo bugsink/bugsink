@@ -1,5 +1,81 @@
 # Changes
 
+## 2.0.2 (22 September 2025)
+
+* Fix broken checkbox in issue list (See #225)
+
+## 2.0.1 (16 September 2025)
+
+2 docker-related fixes (e346f8d5c22a and aa799e9c940f)
+
+## 2.0.0 (16 September 2025)
+
+### Backwards incompatible changes
+
+* Python 3.9 is no longer supported
+
+[Unless you're running Debian Bullseye this will not affect you](12af5302efdd).
+
+The minimum supported version for the database backends has been raised to:
+
+* SQLite ≥ 3.31.0
+* MySQL ≥ 8.0.11
+* PostgreSQL ≥ 14
+* MariaDB ≥ 10.5
+
+[Overview of typical versions in various
+OSes](https://github.com/bugsink/bugsink/pull/89#issuecomment-3253843464)
+
+#### Non-root Docker
+
+The provided Docker container no longer runs the Bugsink process as the root
+user. This improves security (defense in depth), but may require changes to
+your setup (i.e. volume permissions).
+
+Setups that mount the `/data` dir as a volume must ensure that the directory is
+owned by UID 14237 (the user the process runs as inside the container).
+[Further migration
+instructions](https://github.com/bugsink/bugsink/issues/176#issuecomment-3139184180)
+
+If you have not mounted any volumes, you will not be visibly affected by this change.
+
+#### Hardening of Temporary-Directory
+
+Bugsink now requires ownership of the `INGEST_STORE_BASE_DIR` directory to avoid
+certain classes of local privilege escalation attacks. (see #174)
+
+If you manually configured this directory to be something that the process
+running Bugsink _cannot_ own (e.g. to `/tmp/` without a further subdir), you
+must change it to something it can own (e.g. the default of `/tmp/bugsink/ingestion`)
+
+The Docker image is not affected by this (manual configuration wasn't possible to
+begin with).
+
+### Various Improvements & Fixes
+
+* When selecting text in the stacktrace frameHeader, don't toggle the frame (d62d016be3aa)
+* i18n support and Chinese translation (See #192, #161)
+* minor changes to `send_json` util (f0d3667121ab, c38ca8c58a4c)
+* Docker: bugsink-show-version on-start (42ba5a71facc)
+* Implement `vacuum_ingest_dir` management command (See #163)
+* add dark-mode default for border color (833776c646f5)
+* API: first version (see #211, #146)
+* docker compose sample: use alpine postgres (#208)
+* docker compose sample: fix major version (#207)
+* Improve Slack alerts to work with Mattermost (#203)
+* Fix #97: implement /api/0/ endpoint
+* Move conf utils to separate module
+* transaction: use connection.vendor instead of settings.DATABASES engine check (see #117)
+* support hosting at subpath (#201, #93)
+
+### Dependency updates
+
+* Replace `python-sourcemap` with `ecma426` (see 0764024389fc)
+* django 4.2 => django 5.2
+* Tailwind 3 => Tailwind 4
+* django-tailwind 3.6 => 4.2
+* `inotify_simple` => 2.0
+
 ## 1.7.6 (1 August 2025)
 
 * envelope-headers `sent_at` check should allow 00+00 (See #179)

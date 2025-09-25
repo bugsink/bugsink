@@ -1,0 +1,891 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-08-28 14:10+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: bsmain/templates/bsmain/auth_token_list.html:5
+#: bsmain/templates/bsmain/auth_token_list.html:23
+#: bsmain/templates/bsmain/auth_token_list.html:41
+msgid "Auth Tokens"
+msgstr "授权令牌"
+
+#: bsmain/templates/bsmain/auth_token_list.html:28
+msgid "Add Token"
+msgstr "添加令牌"
+
+#: bsmain/templates/bsmain/auth_token_list.html:54
+#: issues/templates/issues/issue_list.html:23
+#: issues/templates/issues/issue_list.html:147
+msgid "Delete"
+msgstr "删除"
+
+#: bsmain/templates/bsmain/auth_token_list.html:63
+msgid "No Auth Tokens."
+msgstr "没有可用令牌。"
+
+#: bsmain/views.py:23
+msgid "Token deleted"
+msgstr "令牌已删除"
+
+#: issues/models.py:489 issues/templates/issues/base.html:201
+msgid "First seen"
+msgstr "首次出现"
+
+#: issues/models.py:490 issues/templates/issues/base.html:165
+#: issues/templates/issues/issue_list.html:44
+msgid "Resolved"
+msgstr "已解决"
+
+#: issues/models.py:491 issues/templates/issues/base.html:172
+#: issues/templates/issues/issue_list.html:43
+msgid "Muted"
+msgstr "已静默"
+
+#: issues/models.py:492
+msgid "Marked as regressed"
+msgstr "标记为"
+
+#: issues/models.py:493
+msgid "Unmuted"
+msgstr "已取消静默"
+
+#: issues/models.py:495
+msgid "Release info added"
+msgstr ""
+
+#: issues/models.py:498
+msgid "Manual annotation"
+msgstr "手动注释"
+
+#: issues/templates/issues/_event_nav.html:5
+msgid "search..."
+msgstr "搜索..."
+
+#: issues/templates/issues/base.html:23 issues/templates/issues/base.html:37
+#: issues/templates/issues/issue_list.html:79
+msgid "Resolved in next release"
+msgstr ""
+
+#: issues/templates/issues/base.html:28 issues/templates/issues/base.html:56
+#: issues/templates/issues/issue_list.html:84
+#: issues/templates/issues/issue_list.html:109
+msgid "Resolve"
+msgstr "解决"
+
+#: issues/templates/issues/base.html:64 issues/templates/issues/base.html:66
+#: issues/templates/issues/issue_list.html:117
+#: issues/templates/issues/issue_list.html:119
+msgid "Mute"
+msgstr "静默"
+
+#: issues/templates/issues/base.html:71 issues/templates/issues/base.html:79
+#: issues/templates/issues/issue_list.html:124
+#: issues/templates/issues/issue_list.html:132
+msgid "Mute for/until&nbsp;&nbsp;"
+msgstr "静默至/&nbsp;&nbsp;"
+
+#: issues/templates/issues/base.html:88 issues/templates/issues/base.html:90
+#: issues/templates/issues/issue_list.html:138
+#: issues/templates/issues/issue_list.html:140
+msgid "Unmute"
+msgstr "取消静默"
+
+#: issues/templates/issues/base.html:112
+msgid "Stacktrace"
+msgstr "栈追踪"
+
+#: issues/templates/issues/base.html:113
+msgid "Event&nbsp;Details"
+msgstr "事件详情"
+
+#: issues/templates/issues/base.html:114
+msgid "Breadcrumbs"
+msgstr "面包屑"
+
+#: issues/templates/issues/base.html:115
+msgid "Event&nbsp;List"
+msgstr "事件列表"
+
+#: issues/templates/issues/base.html:116
+msgid "Tags"
+msgstr "标签"
+
+#: issues/templates/issues/base.html:117
+msgid "Grouping"
+msgstr "分组"
+
+#: issues/templates/issues/base.html:118 issues/templates/issues/history.html:8
+#: templates/admin/change_form_object_tools.html:5
+msgid "History"
+msgstr "历史"
+
+#: issues/templates/issues/base.html:127
+#, python-format
+msgid ""
+"Event %(digest_order)s of %(total_events)s which occured at <span "
+"class=\"font-bold\">%(ingested_at)s</span>"
+msgstr ""
+"事件 %(digest_order)s 共 %(total_events)s 个 发生于 <span class=\"font-"
+"bold\">%(ingested_at)s</span>"
+
+#: issues/templates/issues/base.html:130
+#: templates/admin/change_form_object_tools.html:8
+msgid "Download"
+msgstr "下载"
+
+#: issues/templates/issues/base.html:131
+msgid "JSON"
+msgstr "JSON"
+
+#: issues/templates/issues/base.html:132
+msgid "Plain"
+msgstr "原始文本"
+
+#: issues/templates/issues/base.html:137
+msgid "Event Admin"
+msgstr "事件管理"
+
+#: issues/templates/issues/base.html:139
+msgid "Issue Admin"
+msgstr "问题管理"
+
+#: issues/templates/issues/base.html:157
+msgid "Issue"
+msgstr "问题"
+
+#: issues/templates/issues/base.html:162
+msgid "State"
+msgstr "状态"
+
+#: issues/templates/issues/base.html:167
+msgid "in"
+msgstr "于"
+
+#: issues/templates/issues/base.html:183
+#: issues/templates/issues/issue_list.html:41
+msgid "Open"
+msgstr "打开"
+
+#: issues/templates/issues/base.html:190
+msgid "Nr. of events"
+msgstr "事件数量"
+
+#: issues/templates/issues/base.html:206
+msgid "Last seen"
+msgstr "最后出现"
+
+#: issues/templates/issues/base.html:211
+msgid "Seen at"
+msgstr "出现时间"
+
+#: issues/templates/issues/base.html:234
+msgid "Issue Tags"
+msgstr "问题标签"
+
+#: issues/templates/issues/breadcrumbs.html:25
+msgid "No breadcrumbs available for this event."
+msgstr "这个事件没有可用的面包屑。"
+
+#: issues/templates/issues/history.html:9
+msgid "Most recent first"
+msgstr "新内容优先"
+
+#: issues/templates/issues/history.html:21
+msgid "Add comment as manual annotation"
+msgstr "添加评论作为手动注释"
+
+#: issues/templates/issues/history.html:26
+msgid "Now"
+msgstr "现在"
+
+#: issues/templates/issues/history.html:35
+msgid "comments..."
+msgstr "评论..."
+
+#: issues/templates/issues/history.html:36
+msgid "Post comment"
+msgstr "发表评论"
+
+#: issues/templates/issues/history.html:59
+msgctxt "History"
+msgid "by"
+msgstr "发表自"
+
+#: issues/templates/issues/issue_list.html:7
+#: issues/templates/issues/issue_list.html:31
+#: issues/templates/issues/issue_list.html:234
+#: issues/templates/issues/issue_list.html:239 theme/templates/base.html:40
+msgid "Issues"
+msgstr "问题"
+
+#: issues/templates/issues/issue_list.html:15
+msgid "Delete Issues"
+msgstr "删除问题"
+
+#: issues/templates/issues/issue_list.html:18
+msgid ""
+"Deleting an Issue is a permanent action and cannot be undone. It's typically "
+"better to resolve or mute an issue instead of deleting it, as this allows "
+"you to keep track of past issues and their resolutions."
+msgstr ""
+"删除问题是一个无法被撤销的永久行为。通常更建议标记为解决或者静默，而不是直接"
+"删除问题，以便于追踪您过去的问题和决议。"
+
+#: issues/templates/issues/issue_list.html:22
+#: projects/templates/projects/project_edit.html:21
+#: projects/templates/projects/project_edit.html:52
+#: projects/templates/projects/project_member_settings.html:43
+#: projects/templates/projects/project_member_settings.html:45
+#: projects/templates/projects/project_members_invite.html:52
+#: projects/templates/projects/project_new.html:27
+#: teams/templates/teams/team_edit.html:30
+#: teams/templates/teams/team_member_settings.html:43
+#: teams/templates/teams/team_member_settings.html:45
+#: teams/templates/teams/team_members_invite.html:54
+#: teams/templates/teams/team_new.html:25
+#: users/templates/users/user_edit.html:28
+msgid "Cancel"
+msgstr "取消"
+
+#: issues/templates/issues/issue_list.html:35
+msgid ""
+"The chosen action is not applicable to all selected issues. Issues for which "
+"it has not been applied have been left with checkboxes checked so that you "
+"can try again with another action."
+msgstr ""
+
+#: issues/templates/issues/issue_list.html:42
+msgid "Unresolved"
+msgstr "未解决"
+
+#: issues/templates/issues/issue_list.html:45
+msgid "All"
+msgstr "全部"
+
+#: issues/templates/issues/issue_list.html:49
+msgid "Search issues..."
+msgstr "搜索问题..."
+
+#: issues/templates/issues/issue_list.html:178
+#, python-format
+msgid "with <b>%(event_count)s</b> events"
+msgstr "共 <b>%(event_count)s</b> 个事件"
+
+#: issues/templates/issues/issue_list.html:199
+msgid "Congratulations! You have no open issues."
+msgstr "恭喜你！现在没有打开的问题。"
+
+#: issues/templates/issues/issue_list.html:204
+#, python-format
+msgid "No %(state_filter)s issues found."
+msgstr "没有找到 %(state_filter)s 的问题。"
+
+#: issues/templates/issues/stacktrace.html:25
+msgid "No stacktrace available for this event."
+msgstr "这个事件没有栈追踪。"
+
+#: issues/templates/issues/tags.html:24
+msgid "No tags found for this issue."
+msgstr "这个问题没有标签。"
+
+#: projects/forms.py:17 teams/forms.py:14 users/forms.py:87
+msgid "Email"
+msgstr "电子邮件"
+
+#: projects/forms.py:19 projects/forms.py:48 teams/forms.py:16
+#: teams/forms.py:46
+msgid "Role"
+msgstr "角色"
+
+#: projects/forms.py:67
+#, python-format
+msgid "Default (%s, as per %s settings)"
+msgstr ""
+
+#: projects/forms.py:68 teams/forms.py:55 users/forms.py:151
+msgid "Send email alerts"
+msgstr "发送邮件通知"
+
+#: projects/forms.py:89
+msgctxt "Project"
+msgid "Name"
+msgstr "项目名称"
+
+#: projects/forms.py:90 teams/forms.py:76
+msgid "Visibility"
+msgstr "可见性"
+
+#: projects/forms.py:92
+msgid "Retention max event count"
+msgstr "事件保留上限"
+
+#: projects/forms.py:93
+msgid "The maximum number of events to store before evicting."
+msgstr "超过此数量的事件将会被丢弃。"
+
+#: projects/forms.py:101
+msgid "DSN (read-only)"
+msgstr "DSN (只读)"
+
+#. Translators: {link} will be replaced with an HTML link; place it where it reads naturally.
+#, python-brace-format
+msgid "Use the DSN to {link}."
+msgstr "使用 DSN 来{link}。"
+
+#: projects/forms.py:103
+msgid "set up the SDK"
+msgstr "设置 SDK"
+
+#: projects/forms.py:115
+#. Translators: This text is followed by a clickable link. Adjust punctuation/spacing naturally.
+msgid "You don't have any teams yet; "
+msgstr "你还没有任何团队；"
+
+#: projects/forms.py:115
+msgid "Create a team first."
+msgstr "先创建一个团队。"
+
+#: projects/models.py:50 teams/models.py:9
+msgid "Member"
+msgstr "成员"
+
+#: projects/models.py:51 projects/templates/projects/project_list.html:87
+#: projects/templates/projects/project_members.html:51 teams/models.py:10
+#: teams/templates/teams/team_list.html:70
+#: teams/templates/teams/team_members.html:51 theme/templates/base.html:45
+msgid "Admin"
+msgstr "管理员"
+
+#: projects/models.py:56 teams/models.py:15
+msgid "Joinable"
+msgstr "可加入"
+
+#: projects/models.py:60 teams/models.py:20
+msgid "Discoverable"
+msgstr "可发现"
+
+#: projects/models.py:64 teams/templates/teams/team_members.html:25
+msgid "Team Members"
+msgstr "团队成员"
+
+#: projects/models.py:113
+msgid "Which users can see this project and its issues?"
+msgstr "哪些用户可以看到这个项目以及它们的问题？"
+
+#: projects/templates/projects/project_alerts_setup.html:5
+#: projects/templates/projects/project_alerts_setup.html:25
+msgid "Alerts"
+msgstr "通知"
+
+#: projects/templates/projects/project_alerts_setup.html:28
+msgid "Add"
+msgstr "添加"
+
+#: projects/templates/projects/project_alerts_setup.html:40
+msgid "Messaging Services"
+msgstr "消息服务"
+
+#: projects/templates/projects/project_alerts_setup.html:68
+msgctxt "Alerts"
+msgid "Test"
+msgstr "测试"
+
+#: projects/templates/projects/project_alerts_setup.html:69
+msgctxt "Alerts"
+msgid "Remove"
+msgstr "移除"
+
+#: projects/templates/projects/project_alerts_setup.html:78
+msgid "No Messaging Services Configured."
+msgstr "没有已配置的消息通知服务。"
+
+#: projects/templates/projects/project_alerts_setup.html:78
+msgid "Add Messaging Service"
+msgstr "添加消息服务"
+
+#: projects/templates/projects/project_alerts_setup.html:92
+msgctxt "Alerts"
+msgid "Settings"
+msgstr "项目设置"
+
+#: projects/templates/projects/project_alerts_setup.html:93
+#: projects/templates/projects/project_members.html:90
+msgid "Back to Projects"
+msgstr "返回项目列表"
+
+#: projects/templates/projects/project_edit.html:6
+#: teams/templates/teams/team_edit.html:6
+#: users/templates/users/user_edit.html:6
+msgid "Edit"
+msgstr "编辑"
+
+#: projects/templates/projects/project_edit.html:14
+#: projects/templates/projects/project_edit.html:53
+msgid "Delete Project"
+msgstr "删除项目"
+
+#: projects/templates/projects/project_edit.html:17
+msgid ""
+"Are you sure you want to delete this project? This action cannot be undone "
+"and will delete all associated data."
+msgstr "确定删除该项目？该操作不可撤销。"
+
+#: projects/templates/projects/project_edit.html:38
+#, python-format
+msgid "Settings (%(project_name)s)"
+msgstr "项目设置 (%(project_name)s)"
+
+#: projects/templates/projects/project_edit.html:42
+#, python-format
+msgid "Project settings for \"%(project_name)s\"."
+msgstr "项目 \"%(project_name)s\" 的设置。"
+
+#: projects/templates/projects/project_edit.html:51
+#: projects/templates/projects/project_member_settings.html:41
+#: projects/templates/projects/project_new.html:26
+#: teams/templates/teams/team_edit.html:29
+#: teams/templates/teams/team_member_settings.html:41
+#: teams/templates/teams/team_new.html:24
+#: users/templates/users/preferences.html:34
+#: users/templates/users/user_edit.html:27
+msgid "Save"
+msgstr "保存"
+
+#: projects/templates/projects/project_list.html:5
+#: projects/templates/projects/project_list.html:14
+#: theme/templates/base.html:37
+msgid "Projects"
+msgstr "项目"
+
+#: projects/templates/projects/project_list.html:21
+#: projects/templates/projects/project_new.html:6
+#: projects/templates/projects/project_new.html:18
+msgid "New Project"
+msgstr "创建新项目"
+
+#: projects/templates/projects/project_list.html:42
+msgid "My Projects"
+msgstr "我的项目"
+
+#: projects/templates/projects/project_list.html:44
+msgid "Team Projects"
+msgstr "团队项目"
+
+#: projects/templates/projects/project_list.html:45
+msgid "Other Projects"
+msgstr "其他项目"
+
+#: projects/templates/projects/project_list.html:75
+#: teams/templates/teams/team_list.html:58
+msgid "members"
+msgstr "个成员"
+
+#: projects/templates/projects/project_list.html:78
+#: teams/templates/teams/team_list.html:60
+msgid "my settings"
+msgstr "我的设置"
+
+#: projects/templates/projects/project_list.html:85
+msgid "You're&nbsp;invited!"
+msgstr "您收到了邀请！"
+
+#: projects/templates/projects/project_list.html:155
+#: teams/templates/teams/team_list.html:105
+msgid "Invitation"
+msgstr "接受邀请"
+
+#: projects/templates/projects/project_list.html:159
+#: projects/templates/projects/project_members.html:62
+#: teams/templates/teams/team_list.html:109
+#: teams/templates/teams/team_members.html:62
+msgid "Leave"
+msgstr "离开"
+
+#: projects/templates/projects/project_list.html:165
+#: teams/templates/teams/team_list.html:115
+msgid "Join"
+msgstr "加入"
+
+#: projects/templates/projects/project_list.html:175
+msgid "No projects found."
+msgstr "没有找到项目。"
+
+#: projects/templates/projects/project_member_settings.html:6
+msgid "Member settings"
+msgstr "成员设置"
+
+#: projects/templates/projects/project_member_settings.html:27
+#: teams/templates/teams/team_member_settings.html:27
+msgid "Membership settings"
+msgstr "成员设置"
+
+#: projects/templates/projects/project_member_settings.html:32
+#, python-format
+msgid "Your membership settings for project \"%(project_name)s\"."
+msgstr "你作为项目 \"%(project_name)s\" 的成员设置。"
+
+#: projects/templates/projects/project_member_settings.html:34
+#, python-format
+msgid "Settings for project \"%(project_name)s\" and user %(username)s."
+msgstr "用户 %(username)s 作为项目 \"%(project_name)s\" 的成员设置。"
+
+#: projects/templates/projects/project_members.html:25
+msgid "Project Members"
+msgstr "项目成员"
+
+#: projects/templates/projects/project_members.html:28
+#: projects/templates/projects/project_members_invite.html:50
+#: teams/templates/teams/team_members.html:28
+#: teams/templates/teams/team_members_invite.html:52
+msgid "Invite Member"
+msgstr "邀请成员"
+
+#: projects/templates/projects/project_members.html:49
+#: teams/templates/teams/team_members.html:49
+msgid "Invitation pending"
+msgstr "等待同意邀请"
+
+#: projects/templates/projects/project_members.html:59
+#: teams/templates/teams/team_members.html:59
+msgid "Reinvite"
+msgstr "重新邀请"
+
+#: projects/templates/projects/project_members.html:64
+#: teams/templates/teams/team_members.html:64
+msgid "Remove"
+msgstr "移除团队"
+
+#: projects/templates/projects/project_members.html:75
+#: teams/templates/teams/team_members.html:75
+msgid "No members yet."
+msgstr "当前还没有成员。"
+
+#: projects/templates/projects/project_members.html:75
+#: teams/templates/teams/team_members.html:75
+msgid "Invite someone</a>."
+msgstr "邀请成员</a>。"
+
+#: projects/templates/projects/project_members.html:89
+#, python-format
+msgid " %(team_name)s Members"
+msgstr "%(team_name)s 团队的成员"
+
+#: projects/templates/projects/project_members_accept.html:18
+msgid "Invitation to"
+msgstr "受邀加入"
+
+#: projects/templates/projects/project_members_accept.html:22
+#, python-format
+msgid ""
+"You have been invited to join the project \"%(project_name)s\" in the role "
+"of \"%(role)s\". Please confirm by clicking the button below."
+msgstr ""
+"您正在作为 \"%(role)s\" 被邀请加入项目 \"%(project_name)s\" 项目的角色。请单"
+"击下面的按钮确认。"
+
+#: projects/templates/projects/project_members_accept.html:25
+msgid "Accept"
+msgstr "接受"
+
+#: projects/templates/projects/project_members_accept.html:26
+msgid "Decline"
+msgstr "拒绝"
+
+#: projects/templates/projects/project_members_invite.html:26
+#, python-format
+msgid "Invite members (%(project_name)s)"
+msgstr "邀请成员 (%(project_name)s)"
+
+#: projects/templates/projects/project_members_invite.html:30
+#, python-format
+msgid ""
+"Invite a member to join the project \"%(project_name)s\". They will receive "
+"an email with a link to join."
+msgstr ""
+"邀请一名新的成员加入项目 \"%(project_name)s\"。对方将收到一封含有加入团队链接"
+"的电子邮件。"
+
+#: projects/templates/projects/project_members_invite.html:51
+#: teams/templates/teams/team_members_invite.html:53
+msgid "Invite and add another"
+msgstr "邀请并继续添加"
+
+#: projects/views.py:82
+#, python-format
+msgid "You have joined the project \"%s\""
+msgstr "你已经加入了项目 \"%s\""
+
+#: teams/forms.py:54
+#, python-format
+msgid "User-default (%s)"
+msgstr "用户缺省 (%s)"
+
+#: teams/forms.py:75
+msgctxt "Team"
+msgid "Name"
+msgstr "团队名称"
+
+#: teams/models.py:23
+msgid "Hidden"
+msgstr ""
+
+#: teams/models.py:33
+msgid "Which users can see this team and its issues?"
+msgstr "哪些用户可以看到这个团队以及它们的问题？"
+
+#: teams/templates/teams/team_edit.html:18
+#, python-format
+msgid "Settings (%(team_name)s)"
+msgstr "团队设置 (%(team_name)s)"
+
+#: teams/templates/teams/team_edit.html:22
+#, python-format
+msgid "Team settings for \"%(team_name)s\"."
+msgstr "团队 \"%(team_name)s\" 的设置。"
+
+#: teams/templates/teams/team_list.html:5
+#: teams/templates/teams/team_list.html:14 theme/templates/base.html:34
+msgid "Teams"
+msgstr "团队"
+
+#: teams/templates/teams/team_list.html:21
+#: teams/templates/teams/team_new.html:18
+msgid "New Team"
+msgstr "创建新团队"
+
+#: teams/templates/teams/team_list.html:32
+msgid "My Teams"
+msgstr "我的团队"
+
+#: teams/templates/teams/team_list.html:33
+msgid "Other Teams"
+msgstr "其他团队"
+
+#: teams/templates/teams/team_list.html:57
+msgid "projects"
+msgstr "个项目"
+
+#: teams/templates/teams/team_list.html:125
+msgid "No teams found."
+msgstr "没有找到团队。"
+
+#: teams/templates/teams/team_member_settings.html:32
+#, python-format
+msgid "Your membership settings for team \"%(team_name)s\"."
+msgstr "你作为团队 \"%(team_name)s\" 的成员设置。"
+
+#: teams/templates/teams/team_member_settings.html:34
+#, python-format
+msgid "Settings for team \"%(team_name)s\" and user %(username)s."
+msgstr "用户 %(username)s 作为团队 \"%(team_name)s\" 的成员设置。"
+
+#: teams/templates/teams/team_members.html:5
+msgid "Members"
+msgstr "成员"
+
+#: teams/templates/teams/team_members.html:89
+msgid "Back to Teams"
+msgstr "返回团队列表"
+
+#: teams/templates/teams/team_members_invite.html:28
+#, python-format
+msgid "Invite members (%(team_name)s)"
+msgstr "邀请成员 (%(team_name)s)"
+
+#: teams/templates/teams/team_members_invite.html:32
+#, python-format
+msgid ""
+"Invite a member to join the team \"%(team_name)s\". They will receive an "
+"email with a link to join."
+msgstr ""
+"邀请一名新的成员加入团队 \"%(team_name)s\"。对方将收到一封含有加入团队链接的"
+"电子邮件。"
+
+#: teams/views.py:58
+#, python-format
+msgid "You have joined the team \"%s\""
+msgstr "你已经加入了团队 \"%s\""
+
+#: templates/admin/change_form_object_tools.html:7
+msgid "Raw"
+msgstr ""
+
+#: templates/admin/change_form_object_tools.html:9
+msgid "View on site"
+msgstr ""
+
+#: templates/bugsink/login.html:18
+msgid "Your username and password didn't match. Please try again."
+msgstr "用户名和密码不匹配，请重试"
+
+#: templates/bugsink/login.html:22
+msgid ""
+"Your account doesn't have access to this page. To proceed, please login with "
+"an account that has access."
+msgstr "您的帐户没有权限访问此页面，请登录具有权限的账户后重试"
+
+#: templates/bugsink/login.html:24
+msgid "Please login to see this page."
+msgstr "请登录后查看此页面"
+
+#: templates/bugsink/login.html:34
+msgid "Username"
+msgstr "用户名"
+
+#: templates/bugsink/login.html:40
+msgid "Password"
+msgstr "密码"
+
+#: templates/bugsink/login.html:43 theme/templates/base.html:54
+msgid "Login"
+msgstr "登录"
+
+#: templates/bugsink/login.html:48
+msgid "Forgot password?"
+msgstr "忘记密码？"
+
+#: templates/bugsink/login.html:49
+msgid "Create an account"
+msgstr "创建一个新账户"
+
+#: templates/bugsink/settings.html:7
+msgid "Settings"
+msgstr "设置"
+
+#: templates/bugsink/settings.html:14
+msgid "Site Settings"
+msgstr "站点设置"
+
+#: theme/templates/base.html:49 users/templates/users/user_list.html:45
+#: users/templates/users/user_list.html:63
+msgid "Users"
+msgstr "用户"
+
+#: theme/templates/base.html:50
+msgid "Tokens"
+msgstr "令牌"
+
+#: theme/templates/base.html:56
+msgid "Preferences"
+msgstr "偏好"
+
+#: theme/templates/base.html:57
+msgid "Log out"
+msgstr "登出"
+
+#: users/forms.py:17
+msgid "Yes"
+msgstr "是"
+
+#: users/forms.py:18
+msgid "No"
+msgstr "否"
+
+#: users/forms.py:137
+msgid "Auto (browser preference)"
+msgstr "自动（浏览器偏好）"
+
+#: users/forms.py:153
+msgid "Theme preference"
+msgstr "主题偏好"
+
+#: users/forms.py:159
+msgid "Language"
+msgstr "语言"
+
+#: users/models.py:21
+msgid "System Default"
+msgstr "系统缺省"
+
+#: users/models.py:22
+msgid "Light"
+msgstr "明亮"
+
+#: users/models.py:23
+msgid "Dark"
+msgstr "黑暗"
+
+#: users/templates/users/confirm_email.html:18
+msgid "Confirm your email address by clicking the button below."
+msgstr ""
+
+#: users/templates/users/confirm_email.html:23
+msgid "Confirm"
+msgstr "确认"
+
+#: users/templates/users/confirm_email_sent.html:17
+msgid ""
+"A verification email has been sent to your email address. Please verify your "
+"email address to complete the registration process."
+msgstr ""
+
+#: users/templates/users/logged_out.html:16
+msgid "You have been logged out."
+msgstr "你已经从系统中登出。"
+
+#: users/templates/users/logged_out.html:16
+msgid "Log in again</a>."
+msgstr "重新登录</a>。"
+
+#: users/templates/users/preferences.html:27
+msgid "User Preferences"
+msgstr "用户偏好"
+
+#: users/templates/users/request_reset_password.html:23
+#: users/templates/users/reset_password.html:27
+msgid "Reset password"
+msgstr "重置密码"
+
+#: users/templates/users/request_reset_password.html:27
+#: users/templates/users/reset_password.html:32
+msgid "Log in instead"
+msgstr ""
+
+#: users/templates/users/resend_confirmation.html:23
+msgid "Resend verification email"
+msgstr ""
+
+#: users/templates/users/reset_password_email_sent.html:16
+msgid ""
+"A password reset link has been sent to your email address. Please check your "
+"inbox and follow the instructions to reset your password."
+msgstr ""
+"一封含有密码重置链接的电子邮件已经发送给您。请您检查您的收件箱并按说明重置密"
+"码。"
+
+#: users/templates/users/user_edit.html:22
+#, python-format
+msgid "Settings for %(username)s."
+msgstr "%(username)s 的设置。"
+
+#: users/templates/users/user_list.html:16
+msgid ""
+"Are you sure you want to delete this user? This action cannot be undone."
+msgstr "确定删除该用户？该操作不可撤销。"
+
+#: users/templates/users/user_list.html:72
+msgid "Superuser"
+msgstr "超级管理员"
+
+#: users/views.py:237
+msgid "Updated preferences"
+msgstr "偏好已更新"
+
+# Fix on https://code.djangoproject.com/ticket/36579
+msgid "yes,no,maybe"
+msgstr "是,否,也许"

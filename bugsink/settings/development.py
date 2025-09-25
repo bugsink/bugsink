@@ -6,7 +6,7 @@ import os
 from django.utils._os import safe_join
 from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
 
-from bugsink.utils import deduce_allowed_hosts, eat_your_own_dogfood
+from bugsink.conf_utils import deduce_allowed_hosts, eat_your_own_dogfood, deduce_script_name
 
 
 # no_bandit_expl: _development_ settings, we know that this is insecure; would fail to deploy in prod if (as configured)
@@ -64,7 +64,9 @@ if not I_AM_RUNNING == "TEST":
 SNAPPEA = {
     "TASK_ALWAYS_EAGER": True,  # at least for (unit) tests, this is a requirement
     "NUM_WORKERS": 1,
-    "PID_FILE": "/tmp/snappea.pid",  # for development: a thing to 'tune' to None to test the no-pid-check branches.
+
+    # no_bandit_expl: development setting, we know that this is insecure "in theory" at least
+    "PID_FILE": "/tmp/bugsink/snappea.pid",  # nosec B108
 }
 
 EMAIL_HOST = os.getenv("EMAIL_HOST")
@@ -149,3 +151,11 @@ ALLOWED_HOSTS = deduce_allowed_hosts(BUGSINK["BASE_URL"])
 
 # django-tailwind setting; the below allows for environment-variable overriding of the npm binary path.
 NPM_BIN_PATH = os.getenv("NPM_BIN_PATH", "npm")
+
+
+FORCE_SCRIPT_NAME = deduce_script_name(BUGSINK["BASE_URL"])
+if FORCE_SCRIPT_NAME:
+    # "in theory" a "relative" (non-leading-slash) config for STATIC_URL should just prepend [FORCE_]SCRIPT_NAME
+    # automatically, but I haven't been able to get that to work reliably, https://code.djangoproject.com/ticket/34028
+    # so we'll just be explicit about it.
+    STATIC_URL = f"{FORCE_SCRIPT_NAME}/static/"

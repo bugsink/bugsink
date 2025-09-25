@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% load static %}
+{% load i18n %}
 
-{% block title %}Members · {{ team.name }}  · {{ site_title }}{% endblock %}
+{% block title %}{% translate "Members" %} · {{ team.name }}  · {{ site_title }}{% endblock %}
 
 {% block content %}
 
@@ -21,10 +22,10 @@
         {% endif %}
 
         <div class="flex">
-            <h1 class="text-4xl mt-4 font-bold">Team Members</h1>
+            <h1 class="text-4xl mt-4 font-bold">{% translate "Team Members" %}</h1>
 
             <div class="ml-auto mt-6">
-                <a class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md" href="{% url "team_members_invite" team_pk=team.pk %}">Invite Member</a>
+                <a class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md" href="{% url "team_members_invite" team_pk=team.pk %}">{% translate "Invite Member" %}</a>
             </div>
         </div>
 
@@ -45,9 +46,9 @@
                     <div>
                         <a href="{% url "team_member_settings" team_pk=team.pk user_pk=member.user_id %}" class="text-xl text-cyan-500 dark:text-cyan-300 font-bold">{{ member.user.email }}</a>  {# "best name" perhaps later? #}
                         {% if not member.accepted %}
-                        <span class="bg-slate-100 dark:bg-slate-700 rounded-2xl px-4 py-2 ml-2 text-sm">Invitation pending</span>
+                        <span class="bg-slate-100 dark:bg-slate-700 rounded-2xl px-4 py-2 ml-2 text-sm">{% translate "Invitation pending" %}</span>
                         {% elif member.is_admin %} {# NOTE: we intentionally hide admin-ness for non-accepted users #}
-                        <span class="bg-cyan-100 dark:bg-cyan-900 rounded-2xl px-4 py-2 ml-2 text-sm">Admin</span>
+                        <span class="bg-cyan-100 dark:bg-cyan-900 rounded-2xl px-4 py-2 ml-2 text-sm">{% translate "Admin" %}</span>
                         {% endif %}
                     </div>
                 </td>
@@ -55,12 +56,12 @@
                 <td class="p-4">
                     <div class="flex justify-end">
                         {% if not member.accepted %}
-                            <button name="action" value="reinvite:{{ member.user_id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">Reinvite</button>
+                            <button name="action" value="reinvite:{{ member.user_id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Reinvite" %}</button>
                         {% endif %}
                         {% if request.user == member.user %}
-                            <button name="action" value="remove:{{ member.user_id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">Leave</button>
+                            <button name="action" value="remove:{{ member.user_id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Leave" %}</button>
                         {% else %}  {# NOTE: in our setup request_user_is_admin is implied because only admins may view the membership page #}
-                            <button name="action" value="remove:{{ member.user_id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">Remove</button>
+                            <button name="action" value="remove:{{ member.user_id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Remove" %}</button>
                         {% endif %}
                     </div>
                 </td>
@@ -71,7 +72,7 @@
                 <td class="w-full p-4">
                     <div>
                         {# Note: this is already somewhat exceptional, because the usually you'll at least see yourself here (unless you're a superuser and a team has become memberless) #}
-                        No members yet. <a href="{% url "team_members_invite" team_pk=team.pk %}" class="text-cyan-500 dark:text-cyan-300 font-bold">Invite someone</a>.
+                        {% translate "No members yet." %} <a href="{% url "team_members_invite" team_pk=team.pk %}" class="text-cyan-500 dark:text-cyan-300 font-bold">{% translate "Invite someone</a>." %}
                     </div>
                 </td>
                 </tr>
@@ -85,7 +86,7 @@
 
     <div class="flex flex-direction-row">
         <div class="ml-auto py-8 pr-4">
-            <a href="{% url "team_list" %}" class="text-cyan-500 dark:text-cyan-300 font-bold">Back to Teams</a>
+            <a href="{% url "team_list" %}" class="text-cyan-500 dark:text-cyan-300 font-bold">{% translate "Back to Teams" %}</a>
         </div>
     </div>
 </div>

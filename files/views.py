@@ -207,8 +207,18 @@ def download_file(request, checksum):
     return response
 
 
+# Note: the below 2 views are not strictly "files" API views, but since the idea of "API Compatibility beyond ingest"
+# is basically files-only (and the views below are about API compatibility), they live here.
+
 @csrf_exempt
 def api_catch_all(request, subpath):
+    # This is a catch-all for unimplemented API endpoints. It logs the request details and raises a 404 (if
+    # API_LOG_UNIMPLEMENTED_CALLS is set).
+
+    # the existance of this view (and the associated URL pattern) has the effect of `APPEND_SLASH=False` for our API
+    # endpoints, which is a good thing: for API enpoints you generally don't want this kind of magic (explicit breakage
+    # is desirable for APIs, and redirects don't even work for POST/PUT data)
+
     if not get_settings().API_LOG_UNIMPLEMENTED_CALLS:
         raise Http404("Unimplemented API endpoint: /api/" + subpath)
 
@@ -242,3 +252,25 @@ def api_catch_all(request, subpath):
 
     logger.info("\n".join(lines))
     raise Http404("Unimplemented API endpoint: /api/" + subpath)
+
+
+@csrf_exempt
+@requires_auth_token
+def api_root(request):
+    # the results of this endpoint mimick what Sentry does for the GET on the /api/0/ path; we simply did a request on
+    # their endpoint and hardcoded the result below.
+
+    # This endpoint has some use in that sentry-cli uses it to check for token validity in the `login` flow (see #97)
+
+    # Bugsink currently only has Bugsink-wide tokens (superuser tokens) which best map to "org" tokens. Sentry's
+    # org-tokens "currently have a limited set of scopes", in particular they _only_ support 'org:ci' which maps to
+    # "Source Map Upload, Release Creation", which is exactly what we allow too.
+
+    # Returning the below for valid tokens makes sentry-cli say "Valid org token", which is great. And our failure for
+    # "@requires_auth_token" makes it say "Invalid token" which is also great.
+    return JsonResponse({
+        "version": "0",
+        "auth": {
+            "scopes": ["org:ci"]},
+        "user": None,
+    })

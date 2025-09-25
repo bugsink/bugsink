@@ -1,5 +1,6 @@
 from unittest import TestCase as RegularTestCase
 from django.test import TestCase as DjangoTestCase
+from django.conf import settings
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project
@@ -84,6 +85,8 @@ class StoreTagsTestCase(DjangoTestCase):
         self.project = Project.objects.create(name="Test Project")
         self.issue, _ = get_or_create_issue(self.project)
         self.event = create_event(self.project, issue=self.issue)
+        # correct for mysql's inability to shave 2 queries off
+        self.correct_for_mysql = 2 if 'mysql' in settings.DATABASES['default']['ENGINE'] else 0
 
     def test_store_0_tags(self):
         with self.assertNumQueries(0):
@@ -92,7 +95,7 @@ class StoreTagsTestCase(DjangoTestCase):
         self.assertEqual(self.event.tags.count(), 0)
 
     def test_store_1_tags(self):
-        with self.assertNumQueries(7):
+        with self.assertNumQueries(5 + self.correct_for_mysql):
             store_tags(self.event, self.issue, {"foo": "bar"})
 
         self.assertEqual(self.event.tags.count(), 1)
@@ -105,7 +108,7 @@ class StoreTagsTestCase(DjangoTestCase):
         self.assertEqual(self.issue.tags.first().value.key.key, "foo")
 
     def test_store_5_tags(self):
-        with self.assertNumQueries(7):
+        with self.assertNumQueries(5 + self.correct_for_mysql):
             store_tags(self.event, self.issue, {f"k-{i}": f"v-{i}" for i in range(5)})
 
         self.assertEqual(self.event.tags.count(), 5)
@@ -154,7 +157,26 @@ class DigestTagsTestCase(DjangoTestCase):
         event.save()
         digest_tags(event_data, event, issue)
 
+        # twice because "user" and "user.ip_address"
         self.assertEqual(["123.123.123.123", "123.123.123.123"], [e.value.value for e in event.get_tags])
+
+    def test_auto_ip_address_when_not_available(self):
+        # could be non-available because of proxy misconfig or other reasons, in any case it should not break anything:
+        # Event.remote_addr is nullable so downstream code should be able to handle None
+        project = Project.objects.create(name="Test Project")
+        issue, _ = get_or_create_issue(project)
+        event = create_event(project, issue=issue)
+
+        event_data = {
+            "user": {
+                "ip_address": "{{auto}}",
+            },
+        }
+        event.remote_addr = None
+        event.save()
+        digest_tags(event_data, event, issue)
+
+        self.assertEqual([], [e.value.value for e in event.get_tags])
 
 
 class SearchParserTestCase(RegularTestCase):

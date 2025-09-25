@@ -27,6 +27,7 @@ from ingest.views import BaseIngestAPIView
 from issues.factories import get_or_create_issue
 from tags.models import store_tags
 from tags.tasks import vacuum_tagvalues
+from events.markdown_stacktrace import render_stacktrace_md
 
 from .models import Issue, IssueStateManager, TurningPoint, TurningPointKind
 from .regressions import is_regression, is_regression_2, issue_is_regression
@@ -193,7 +194,8 @@ class RegressionIssueTestCase(DjangoTestCase):
 
     def test_issue_is_regression_no_releases(self):
         project = Project.objects.create()
-        create_release_if_needed(fresh(project), "", create_event(project))
+        timestamp = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        create_release_if_needed(fresh(project), "", timestamp)
 
         # new issue is not a regression
         issue = Issue.objects.create(project=project, **denormalized_issue_fields())
@@ -212,7 +214,8 @@ class RegressionIssueTestCase(DjangoTestCase):
 
     def test_issue_had_no_releases_but_now_does(self):
         project = Project.objects.create()
-        create_release_if_needed(fresh(project), "", create_event(project))
+        timestamp = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        create_release_if_needed(fresh(project), "", timestamp)
 
         # new issue is not a regression
         issue = Issue.objects.create(project=project, **denormalized_issue_fields())
@@ -223,15 +226,16 @@ class RegressionIssueTestCase(DjangoTestCase):
         issue.save()
 
         # a new release happens
-        create_release_if_needed(fresh(project), "1.0.0", create_event(project))
+        create_release_if_needed(fresh(project), "1.0.0", timestamp)
 
         self.assertTrue(issue_is_regression(fresh(issue), "1.0.0"))
 
     def test_issue_is_regression_with_releases_resolve_by_latest(self):
         project = Project.objects.create()
+        timestamp = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
-        create_release_if_needed(fresh(project), "1.0.0", create_event(project))
-        create_release_if_needed(fresh(project), "2.0.0", create_event(project))
+        create_release_if_needed(fresh(project), "1.0.0", timestamp)
+        create_release_if_needed(fresh(project), "2.0.0", timestamp)
 
         # new issue is not a regression
         issue = Issue.objects.create(project=project, **denormalized_issue_fields())
@@ -244,7 +248,7 @@ class RegressionIssueTestCase(DjangoTestCase):
         self.assertTrue(issue_is_regression(fresh(issue), "2.0.0"))
 
         # a new release happens, and the issue is seen there: also a regression
-        create_release_if_needed(fresh(project), "3.0.0", create_event(project))
+        create_release_if_needed(fresh(project), "3.0.0", timestamp)
         self.assertTrue(issue_is_regression(fresh(issue), "3.0.0"))
 
         # reopen the issue (as is done when a real regression is seen; or as would be done manually); nothing is a
@@ -256,9 +260,10 @@ class RegressionIssueTestCase(DjangoTestCase):
 
     def test_issue_is_regression_with_releases_resolve_by_next(self):
         project = Project.objects.create()
+        timestamp = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
-        create_release_if_needed(fresh(project), "1.0.0", create_event(project))
-        create_release_if_needed(fresh(project), "2.0.0", create_event(project))
+        create_release_if_needed(fresh(project), "1.0.0", timestamp)
+        create_release_if_needed(fresh(project), "2.0.0", timestamp)
 
         # new issue is not a regression
         issue = Issue.objects.create(project=project, **denormalized_issue_fields())
@@ -271,11 +276,11 @@ class RegressionIssueTestCase(DjangoTestCase):
         self.assertFalse(issue_is_regression(fresh(issue), "2.0.0"))
 
         # a new release appears (as part of a new event); this is a regression
-        create_release_if_needed(fresh(project), "3.0.0", create_event(project))
+        create_release_if_needed(fresh(project), "3.0.0", timestamp)
         self.assertTrue(issue_is_regression(fresh(issue), "3.0.0"))
 
         # first-seen at any later release: regression
-        create_release_if_needed(fresh(project), "4.0.0", create_event(project))
+        create_release_if_needed(fresh(project), "4.0.0", timestamp)
         self.assertTrue(issue_is_regression(fresh(issue), "4.0.0"))
 
 
@@ -442,6 +447,7 @@ class IntegrationTest(TransactionTestCase):
     def setUp(self):
         super().setUp()
         self.verbosity = self.get_verbosity()
+        self.maxDiff = None  # show full diff on assertEqual failures
 
     def get_verbosity(self):
         # https://stackoverflow.com/a/27457315/339144
@@ -523,6 +529,8 @@ class IntegrationTest(TransactionTestCase):
                     filename, response.content if response.status_code != 302 else response.url))
 
         for event in Event.objects.all():
+            render_stacktrace_md(event)  # just make sure this doesn't crash
+
             urls = [
                 f'/issues/issue/{ event.issue.id }/event/{ event.id }/',
                 f'/issues/issue/{ event.issue.id }/event/{ event.id }/details/',
@@ -547,6 +555,90 @@ class IntegrationTest(TransactionTestCase):
                 except Exception as e:
                     # we want to know _which_ event failed, hence the raise-from-e here
                     raise AssertionError("Error rendering event %s" % event.debug_info) from e
+
+    def test_render_stacktrace_md(self):
+        user = User.objects.create_user(username='test', password='test')
+        project = Project.objects.create(name="test")
+        ProjectMembership.objects.create(project=project, user=user)
+        self.client.force_login(user)
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+        # event through the ingestion pipeline
+        command = SendJsonCommand()
+        command.stdout = StringIO()
+        command.stderr = StringIO()
+
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
+
+        # a nice example because it has 4 kinds of frames (some missing source context, some missing local vars)
+        filename = SAMPLES_DIR + "/bugsink/frames-with-missing-info.json"
+
+        with open(filename) as f:
+            data = json.loads(f.read())
+
+        # leave as-is for reproducibility of the test
+        # data["event_id"] =
+
+        if not command.is_valid(data, filename):
+            raise Exception("validatity check in %s: %s" % (filename, command.stderr.getvalue()))
+
+        response = self.client.post(
+            f"/api/{ project.id }/store/",
+            json.dumps(data),
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+                "X-BugSink-DebugInfo": filename,
+            },
+        )
+        self.assertEqual(
+            200, response.status_code, "Error in %s: %s" % (
+                filename, response.content if response.status_code != 302 else response.url))
+
+        event = Event.objects.get(issue__project=project, event_id=data["event_id"])
+        md = render_stacktrace_md(event, frames="all", include_locals=True)
+
+        self.assertEqual('''# CapturedStacktraceFo
+4 kinds of frames
+
+### manage.py:22 in `complete_with_both` [in-app]
+  17 |         ) from exc
+  18 |     execute_from_command_line(sys.argv)
+  19 |
+  20 |
+  21 | if __name__ == '__main__':
+▶ 22 |     main()
+
+#### Locals
+
+* `__name__` = `'__main__'`
+* `__doc__` = `"Django's command-line utility for administrative tasks."`
+* `__package__` = `None`
+* `__loader__` = `<_frozen_importlib_external.SourceFileLoader object at 0x7fe00fb21810>`
+* `__spec__` = `None`
+* `__annotations__` = `{}`
+* `__builtins__` = `<module 'builtins' (built-in)>`
+* `__file__` = `'/mnt/datacrypt/dev/bugsink/manage.py'`
+* `__cached__` = `None`
+* `os` = `<module 'os' from '/usr/lib/python3.10/os.py'>`
+
+### manage.py in `missing_code` [in-app]
+_no source context available_
+
+#### Locals
+
+* `execute_from_command_line` = `<function execute_from_command_line at 0x7fe00ec72f80>`
+
+### django/core/management/__init__.py:442 in `missing_vars` [in-app]
+  437 |
+  438 |
+  439 | def execute_from_command_line(argv=None):
+  440 |     """Run a ManagementUtility."""
+  441 |     utility = ManagementUtility(argv)
+▶ 442 |     utility.execute()
+
+### django/core/management/__init__.py in `missing_everything` [in-app]
+_no source context available_''', md)
 
 
 class GroupingUtilsTestCase(DjangoTestCase):

@@ -62,7 +62,10 @@ class Event(models.Model):
     # > allowed. Has to be lowercase.
     # But event.schema.json has this anyOf [..] null and only speaks of "it is strongly recommended to generate that
     # uuid4 clientside". In any case, we just rely on the envelope's event_id (required per the envelope spec).
-    # Not a primary key: events may be duplicated across projects
+    # Not a primary key: events may be duplicated across projects. (this may actually be a historical mistake, this
+    # literally stems from the very first version of the Event model. Presumably anticipating forwarding across projects
+    # or similar. One way out of this (and similar notes in issues/views.py) would be introducing a unique index on
+    # event_id, but (obviously) not without some migration path.
     event_id = models.UUIDField(primary_key=False, null=False, editable=False, help_text="As per the sent data")
     project = models.ForeignKey(Project, blank=False, null=False, on_delete=models.DO_NOTHING)
 

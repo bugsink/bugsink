@@ -6,6 +6,9 @@ from pathlib import Path
 
 from django.utils.log import DEFAULT_LOGGING
 
+# Hide development server warning
+# https://docs.djangoproject.com/en/stable/ref/django-admin/#envvar-DJANGO_RUNSERVER_HIDE_WARNING
+os.environ["DJANGO_RUNSERVER_HIDE_WARNING"] = "true"
 
 # We have a single file for our default settings, and expect (if they use the singleserver setup) the end-users to
 # configure their setup using a single bugsink_conf.py also. To be able to have (slightly) different settings for e.g.
@@ -63,7 +66,45 @@ INSTALLED_APPS = [
 
     'tailwind',  # As currently set up, this is also needed in production (templatetags)
     'admin_auto_filters',
+    'rest_framework',
+    'drf_spectacular',
+    'drf_spectacular_sidecar',  # this brings the swagger-ui
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',  # from the tutorial
+    'PAGE_SIZE': 10,
+
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "bugsink.authentication.BearerTokenAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "bugsink.permissions.IsGlobalAuthenticated",
+    ],
+
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ],
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+    ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Bugsink',
+    'DESCRIPTION': 'Bugsink API Documentation',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,  # keep the docs clean and not document the docs endpoint itself.
+
+    "SECURITY": [
+        {"bearerAuth": []}
+    ],
+    "ENUM_NAME_OVERRIDES": {
+        "TeamVisibilityEnum": ["joinable", "discoverable", "hidden"],
+        "ProjectVisibilityEnum": ["joinable", "discoverable", "team_members"],
+    },
+}
 
 BUGSINK_APPS = [
     'bsmain',
@@ -102,6 +143,10 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
 
     'bugsink.middleware.LoginRequiredMiddleware',
+
+    # note on ordering: we need request.user, so after AuthenticationMiddleware; and we're not tied to "before
+    # CommonMiddleware" as django.middleware.locale.LocaleMiddleware is, because we don't do path-related stuff.
+    'bugsink.middleware.UserLanguageMiddleware',
 
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -214,7 +259,8 @@ DATABASE_ROUTERS = ("bugsink.dbrouters.SeparateSnappeaDBRouter",)
 CONN_MAX_AGE = 0
 
 
-LOGIN_REDIRECT_URL = "/"
+LOGIN_REDIRECT_URL = "home"
+LOGIN_URL = "login"
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -241,6 +287,14 @@ TIME_ZONE = 'Europe/Amsterdam'
 
 USE_I18N = True
 
+USE_L10N = True
+
+LOCALE_PATHS = [BASE_DIR / "locale"]
+LANGUAGES = (
+    ("en", "English"),
+    ("zh-hans", "简体中文"),
+)
+
 USE_TZ = True
 
 
@@ -255,6 +309,8 @@ STATICFILES_DIRS = [
 # > using Django’s “finders” API. [..] It’s also possible to use this setting in production, avoiding the need to run
 # > the collectstatic command during the build, so long as you do not wish to use any of the caching and compression
 # > features provided by the storage backends.
+#
+# ("so long as" implies: we don't use "whitenoise.storage.CompressedManifestStaticFilesStorage" or similar)
 #
 # Reasons to enable this in production:
 #

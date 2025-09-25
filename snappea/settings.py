@@ -4,8 +4,11 @@ from django.conf import settings
 DEFAULTS = {
     "TASK_ALWAYS_EAGER": False,
 
-    "PID_FILE": "/tmp/snappea.pid",
-    "WAKEUP_CALLS_DIR": "/tmp/snappea.wakeup",
+    # no_bandit_expl: monitored in #195
+    "PID_FILE": "/tmp/bugsink/snappea.pid",  # nosec
+
+    # no_bandit_expl: the usage of this path (in the foreman) is protected with `b108_makedirs`
+    "WAKEUP_CALLS_DIR": "/tmp/snappea.wakeup",  # nosec
 
     "NUM_WORKERS": 4,
 

@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% load static %}
 {% load tailwind_forms %}
+{% load i18n %}
 
-{% block title %}New project  · {{ site_title }}{% endblock %}
+{% block title %}{% translate "New Project" %} · {{ site_title }}{% endblock %}
 
 {% block content %}
 
@@ -14,7 +15,7 @@
         {% csrf_token %}
 
         <div>
-            <h1 class="text-4xl my-4 font-bold">New Project</h1>
+            <h1 class="text-4xl my-4 font-bold">{% translate "New Project" %}</h1>
         </div>
 
         {% tailwind_formfield form.team %}
@@ -22,8 +23,8 @@
         {% tailwind_formfield form.visibility %}
         {% tailwind_formfield form.retention_max_event_count %}
 
-        <button name="action" value="invite" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md">Save</button>
-        <a href="{% url "project_list" %}" class="text-cyan-500 dark:text-cyan-300 font-bold ml-2">Cancel</a>
+        <button name="action" value="invite" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">{% translate "Save" %}</button>
+        <a href="{% url "project_list" %}" class="text-cyan-500 dark:text-cyan-300 font-bold ml-2">{% translate "Cancel" %}</a>
 
         </form>
 

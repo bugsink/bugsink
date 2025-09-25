@@ -8,6 +8,7 @@ from django.db.models.functions import Concat
 from django.template.defaultfilters import date as default_date_filter
 from django.conf import settings
 from django.utils.functional import cached_property
+from django.utils.translation import gettext_lazy as _
 
 from bugsink.utils import assert_
 from bugsink.volume_based_condition import VolumeBasedCondition
@@ -197,7 +198,8 @@ class Issue(models.Model):
             ("project", "digest_order"),
         ]
         indexes = [
-            # 4 indexes for the list view (state_filter)
+            # 4 indexes for the list view (state_filter). Note: no is_deleted here; basic assumption is: is_deleted=True
+            # are such a minority that a post-index filter is more efficient than having more indexes. see 7b340fd8ff1d
             models.Index(fields=["project", "is_resolved", "is_muted", "last_seen"], name="issue_list_open"),
             models.Index(fields=["project", "is_muted", "last_seen"], name="issue_list_muted"),
             models.Index(fields=["project", "is_resolved", "last_seen"], name="issue_list_resolved"),  # and unresolved
@@ -485,16 +487,16 @@ class IssueQuerysetStateManager(object):
 class TurningPointKind(models.IntegerChoices):
     # The language of the kinds reflects a historic view of the system, e.g. "first seen" as opposed to "new issue"; an
     # alternative take (which is more consistent with the language used elsewhere" is a more "active" language.
-    FIRST_SEEN = 1, "First seen"
-    RESOLVED = 2, "Resolved"
-    MUTED = 3, "Muted"
-    REGRESSED = 4, "Marked as regressed"
-    UNMUTED = 5, "Unmuted"
+    FIRST_SEEN = 1, _("First seen")
+    RESOLVED = 2, _("Resolved")
+    MUTED = 3, _("Muted")
+    REGRESSED = 4, _("Marked as regressed")
+    UNMUTED = 5, _("Unmuted")
 
-    NEXT_MATERIALIZED = 10, "Release info added"
+    NEXT_MATERIALIZED = 10, _("Release info added")
 
     # ASSGINED = 10, "Assigned to user"   # perhaps later
-    MANUAL_ANNOTATION = 100, "Manual annotation"
+    MANUAL_ANNOTATION = 100, _("Manual annotation")
 
 
 class TurningPoint(models.Model):

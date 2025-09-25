@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.urls import reverse
 from django.contrib import messages
 from django.contrib.auth import logout
+from django.utils.translation import gettext_lazy as _
 
 from users.models import EmailVerification
 from bugsink.app_settings import get_settings, CB_ANYBODY, CB_ADMINS, CB_MEMBERS
@@ -54,7 +55,7 @@ def team_list(request, ownership_filter=None):
             if not team.is_joinable() and not request.user.is_superuser:
                 raise PermissionDenied("This team is not joinable")
 
-            messages.success(request, 'You have joined the team "%s"' % team.name)
+            messages.success(request, _('You have joined the team "%s"') % team.name)
             TeamMembership.objects.create(team_id=team_pk, user_id=request.user.id, role=TeamRole.MEMBER, accepted=True)
             return redirect('team_member_settings', team_pk=team_pk, user_pk=request.user.id)
 
@@ -126,7 +127,8 @@ def team_edit(request, team_pk):
 
         if action == 'delete':
             # Double-check that the user is an admin or superuser
-            if not (TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists() or
+            if not (TeamMembership.objects.filter(
+                        team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists() or
                     request.user.is_superuser):
                 raise PermissionDenied("Only team admins can delete teams")
 

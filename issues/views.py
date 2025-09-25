@@ -78,6 +78,7 @@ class EagerPaginator(Paginator):
 
 class KnownCountPaginator(EagerPaginator):
     """optimization: we know the total count of the queryset, so we can avoid a count() query"""
+    # see also: bugsink/api_pagination.py for an alternative approach
 
     def __init__(self, *args, **kwargs):
         self._count = kwargs.pop("count")
@@ -103,6 +104,7 @@ class UncountablePage(Page):
 
 class UncountablePaginator(EagerPaginator):
     """optimization: counting is too expensive; to be used in a template w/o .count and .last"""
+    # see also: bugsink/api_pagination.py for an alternative approach
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -403,6 +405,10 @@ def _get_event(qs, issue, event_pk, digest_order, nav, bounds):
         try:
             return Event.objects.get(pk=event_pk)
         except Event.DoesNotExist:
+            # we match on external id "for user ergonomics" (presumed); i.e. in the (unchecked) presumption that people
+            # may sometimes copy/paste the SDK-generated UUID for whatever reason straight into the URL bar. However:
+            # [1] the below is not guaranteed unique and [2] it's not indexed as such so may be slow (project_id is a
+            # prefix in the index) so YMMV.
             return Event.objects.get(event_id=event_pk)
 
     elif digest_order is not None:

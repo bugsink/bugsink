@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect
 from django.http import Http404
 from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
+from django.utils.translation import gettext_lazy as _
 
 from bugsink.decorators import atomic_for_request_method
 
@@ -20,7 +21,7 @@ def auth_token_list(request):
         if action == "delete":
             AuthToken.objects.get(pk=pk).delete()
 
-            messages.success(request, 'Token deleted')
+            messages.success(request, _('Token deleted'))
             return redirect('auth_token_list')
 
     return render(request, 'bsmain/auth_token_list.html', {

@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% load static %}
 {% load tailwind_forms %}
+{% load i18n %}
 
-{% block title %}Member settings · {{ project.name }}  · {{ site_title }}{% endblock %}
+{% block title %}{% translate "Member settings" %} · {{ project.name }}  · {{ site_title }}{% endblock %}
 
 {% block content %}
 
@@ -23,25 +24,25 @@
         {% endif %}
 
         <div>
-            <h1 class="text-4xl my-4 font-bold">Membership settings</h1>
+            <h1 class="text-4xl my-4 font-bold">{% translate "Membership settings" %}</h1>
         </div>
 
         <div class="mt-4 mb-4">
             {% if this_is_you %}
-                Your membership settings for project "{{ project.name }}".
+                {% blocktranslate with project_name=project.name %}Your membership settings for project "{{ project_name }}".{% endblocktranslate %}
             {% else %}
-                Settings for project "{{ project.name }}" and user {{ user.username }}.
+                {% blocktranslate with project_name=project.name username=user.username %}Settings for project "{{ project_name }}" and user {{ username }}.{% endblocktranslate %}
             {% endif %}
         </div>
 
         {% tailwind_formfield form.role %}
         {% tailwind_formfield form.send_email_alerts %}
 
-        <button class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md">Save</button>
+        <button class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">{% translate "Save" %}</button>
         {% if this_is_you %}
-            <a href="{% url "project_list" %}" class="text-cyan-500 dark:text-cyan-300 font-bold ml-2">Cancel</a> {# not quite perfect, because "you" can also click on yourself in the member list #}
+            <a href="{% url "project_list" %}" class="text-cyan-500 dark:text-cyan-300 font-bold ml-2">{% translate "Cancel" %}</a> {# not quite perfect, because "you" can also click on yourself in the member list #}
         {% else %}
-            <a href="{% url "project_members" project_pk=project.pk %}" class="text-cyan-500 dark:text-cyan-300 font-bold ml-2">Cancel</a>
+            <a href="{% url "project_members" project_pk=project.pk %}" class="text-cyan-500 dark:text-cyan-300 font-bold ml-2">{% translate "Cancel" %}</a>
         {% endif %}
         </form>
 

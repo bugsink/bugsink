@@ -28,11 +28,10 @@ RUN --mount=type=cache,target=/var/cache/buildkit/pip \
 # * this moves the dependency on the bugsink wheel up in the build-order, and
 #     that's precisely the most changing part, i.e. the thing that breaks caching.
 #
-# * all current (Apr 2025) dependencies .whl files are available on PyPI anyway.
-#     Exception: inotify_simple, but it's a pure python tar.gz; Nothing much
-#     is gained by fetch-first-install-later. And if we ever depend on further
-#     packages that require a build step, explicit action is probably needed
-#     anyway b/c of the build deps.
+# * all current (Aug 2025) dependencies .whl files are available on PyPI anyway.
+#     Nothing much is gained by fetch-first-install-later. And if we ever
+#     depend on packages that require a build step, explicit action is probably
+#     needed anyway b/c of the build deps.
 #
 # * pointing to requirements.txt here instead of the wheel is tempting, but
 #     breaks the idea of "just build the wheel" (requirements.txt is whatever
@@ -72,6 +71,13 @@ RUN --mount=type=cache,target=/var/cache/buildkit/pip \
 
 RUN cp /usr/local/lib/python3.12/site-packages/bugsink/conf_templates/docker.py.template /app/bugsink_conf.py && \
     cp /usr/local/lib/python3.12/site-packages/bugsink/gunicorn.docker.conf.py /app/gunicorn.docker.conf.py
+
+RUN groupadd --gid 14237 bugsink \
+ && useradd --uid 14237 --gid 14237 bugsink \
+ && mkdir -p /data \
+ && chown -R bugsink:bugsink /data
+
+USER bugsink
 
 RUN ["bugsink-manage", "migrate", "snappea", "--database=snappea"]
 

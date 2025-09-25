@@ -7,7 +7,7 @@
 # bugsink-create-conf --template=default
 
 from bugsink.settings.default import *  # noqa
-from bugsink.utils import eat_your_own_dogfood
+from bugsink.conf_utils import eat_your_own_dogfood
 
 SECRET_KEY = "{{ secret_key }}"
 

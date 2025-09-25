@@ -16,6 +16,9 @@ Portions of this software are licensed as follows:
   Please refer to the license of the respective component in your package
   manager's repository.
 
+* The following files are licensed under the Python Software Foundation License
+  * bsmain/future_python.py
+
 * Content outside of the above mentioned directories or restrictions above is
   available under the license as defined below:
 

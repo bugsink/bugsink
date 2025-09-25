@@ -7,7 +7,6 @@ import threading
 
 from django.db import transaction as django_db_transaction
 from django.db import DEFAULT_DB_ALIAS
-from django.conf import settings
 
 from snappea.settings import get_settings as get_snappea_settings
 
@@ -229,7 +228,7 @@ def immediate_atomic(using=None, savepoint=True, only_if_needed=False):
         with immediate_atomic:
             yield
 
-    elif "sqlite" not in settings.DATABASES[using]["ENGINE"]:
+    elif "sqlite" not in connection.vendor:
         # The SemaphoreContext was added specifically to address the WAL growth issue in sqlite; better not to use it
         # for other database backends; in particular, if such databases have longer default timeouts, then the error
         # message may be confusing (semaphore timeout after 10s throws an error... while the thread that hogs the DB

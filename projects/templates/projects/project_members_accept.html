@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
+{% load i18n %}
 
 {% block title %}Invitation · {{ project.name }}  · {{ site_title }}{% endblock %}
 
@@ -14,15 +15,15 @@
         {% csrf_token %}
 
         <div>
-            <h1 class="text-4xl my-4 font-bold">Invitation to "{{ project.name }}"</h1>
+            <h1 class="text-4xl my-4 font-bold">{% translate "Invitation to" %} "{{ project.name }}"</h1>
         </div>
 
         <div class="mt-4 mb-4">
-            You have been invited to join the project "{{ project.name }}" in the role of "{{ membership.get_role_display }}". Please confirm by clicking the button below.
+            {% blocktranslate with project_name=project.name role=membership.get_role_display %}You have been invited to join the project "{{ project_name }}" in the role of "{{ role }}". Please confirm by clicking the button below.{% endblocktranslate %}
         </div>
 
-        <button name="action" value="accept" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring rounded-md">Accept</button>
-        <button name="action" value="decline" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring rounded-md">Decline</button>
+        <button name="action" value="accept" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">{% translate "Accept" %}</button>
+        <button name="action" value="decline" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md">{% translate "Decline" %}</button>
         </form>
 
     </div>
