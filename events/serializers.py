@@ -1,11 +1,12 @@
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
+from bugsink.api_serializers import UTCModelSerializer
 
 from .markdown_stacktrace import render_stacktrace_md
 from .models import Event
 
 
-class EventListSerializer(serializers.ModelSerializer):
+class EventListSerializer(UTCModelSerializer):
     """Lightweight list view: excludes the (potentially large) `data` field."""
 
     class Meta:
@@ -23,7 +24,7 @@ class EventListSerializer(serializers.ModelSerializer):
         ]
 
 
-class EventDetailSerializer(serializers.ModelSerializer):
+class EventDetailSerializer(UTCModelSerializer):
     """Detail view: includes full `data` payload."""
     # NOTE as with Issue.grouping_keys: check viewset for prefetching
     # grouping_key = serializers.CharField(source="grouping.grouping_key", read_only=True)

@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from bugsink.api_serializers import UTCModelSerializer
 from bugsink.api_fields import make_enum_field
 
 from teams.models import Team
@@ -11,7 +12,7 @@ from .models import Project, ProjectVisibility
 ProjectVisibilityField = make_enum_field(ProjectVisibility)
 
 
-class ProjectListSerializer(serializers.ModelSerializer):
+class ProjectListSerializer(UTCModelSerializer):
     visibility = ProjectVisibilityField()
     dsn = serializers.CharField(read_only=True)
 
@@ -33,7 +34,7 @@ class ProjectListSerializer(serializers.ModelSerializer):
         ]
 
 
-class ProjectDetailSerializer(ExpandableSerializerMixin, serializers.ModelSerializer):
+class ProjectDetailSerializer(ExpandableSerializerMixin, UTCModelSerializer):
     expandable_fields = {"team": TeamDetailSerializer}
     visibility = ProjectVisibilityField()
     dsn = serializers.CharField(read_only=True)
@@ -56,7 +57,7 @@ class ProjectDetailSerializer(ExpandableSerializerMixin, serializers.ModelSerial
         ]
 
 
-class ProjectCreateUpdateSerializer(serializers.ModelSerializer):
+class ProjectCreateUpdateSerializer(UTCModelSerializer):
     id = serializers.UUIDField(read_only=True)
     team = serializers.PrimaryKeyRelatedField(queryset=Team.objects.all())
     visibility = ProjectVisibilityField(required=False)

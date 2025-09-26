@@ -1,5 +1,7 @@
+import datetime
 from django.utils import timezone
 from rest_framework import serializers
+from bugsink.api_serializers import UTCModelSerializer
 
 from projects.models import Project
 from rest_framework.exceptions import ValidationError
@@ -7,13 +9,13 @@ from rest_framework.exceptions import ValidationError
 from .models import Release, create_release_if_needed
 
 
-class ReleaseListSerializer(serializers.ModelSerializer):
+class ReleaseListSerializer(UTCModelSerializer):
     class Meta:
         model = Release
         fields = ["id", "project", "version", "date_released"]
 
 
-class ReleaseDetailSerializer(serializers.ModelSerializer):
+class ReleaseDetailSerializer(UTCModelSerializer):
     class Meta:
         model = Release
         fields = ["id", "project", "version", "date_released", "semver", "is_semver", "sort_epoch"]
@@ -23,7 +25,7 @@ class ReleaseDetailSerializer(serializers.ModelSerializer):
 class ReleaseCreateSerializer(serializers.Serializer):
     project = serializers.PrimaryKeyRelatedField(queryset=Project.objects.all())
     version = serializers.CharField(allow_blank=True)
-    timestamp = serializers.DateTimeField(required=False)
+    timestamp = serializers.DateTimeField(required=False, default_timezone=datetime.timezone.utc)
 
     def create(self, validated_data):
         project = validated_data["project"]

@@ -1,12 +1,13 @@
 from rest_framework import serializers
 from bugsink.api_fields import make_enum_field
+from bugsink.api_serializers import UTCModelSerializer
 from .models import Team, TeamVisibility
 
 
 TeamVisibilityField = make_enum_field(TeamVisibility)
 
 
-class TeamListSerializer(serializers.ModelSerializer):
+class TeamListSerializer(UTCModelSerializer):
     visibility = TeamVisibilityField()
 
     class Meta:
@@ -14,7 +15,7 @@ class TeamListSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "visibility"]
 
 
-class TeamDetailSerializer(serializers.ModelSerializer):
+class TeamDetailSerializer(UTCModelSerializer):
     visibility = TeamVisibilityField()
 
     class Meta:
@@ -22,7 +23,7 @@ class TeamDetailSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "visibility"]
 
 
-class TeamCreateUpdateSerializer(serializers.ModelSerializer):
+class TeamCreateUpdateSerializer(UTCModelSerializer):
     id = serializers.UUIDField(read_only=True)
     visibility = TeamVisibilityField(required=False)
 
