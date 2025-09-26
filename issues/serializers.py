@@ -16,7 +16,6 @@ class IssueSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "project",
-            "is_deleted",
             "digest_order",
             "last_seen",
             "first_seen",
