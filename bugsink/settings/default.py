@@ -6,10 +6,6 @@ from pathlib import Path
 
 from django.utils.log import DEFAULT_LOGGING
 
-# Hide development server warning
-# https://docs.djangoproject.com/en/stable/ref/django-admin/#envvar-DJANGO_RUNSERVER_HIDE_WARNING
-os.environ["DJANGO_RUNSERVER_HIDE_WARNING"] = "true"
-
 # We have a single file for our default settings, and expect (if they use the singleserver setup) the end-users to
 # configure their setup using a single bugsink_conf.py also. To be able to have (slightly) different settings for e.g.
 # logging for various commands, we expose a variable I_AM_RUNNING that can be used to determine what command is being

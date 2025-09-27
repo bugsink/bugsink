@@ -8,6 +8,10 @@ from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
 
 from bugsink.conf_utils import deduce_allowed_hosts, eat_your_own_dogfood, deduce_script_name
 
+# Hide development server warning
+# https://docs.djangoproject.com/en/stable/ref/django-admin/#envvar-DJANGO_RUNSERVER_HIDE_WARNING
+os.environ["DJANGO_RUNSERVER_HIDE_WARNING"] = "true"
+
 
 # no_bandit_expl: _development_ settings, we know that this is insecure; would fail to deploy in prod if (as configured)
 # the django checks (with --check --deploy) are run.
