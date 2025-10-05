@@ -1,5 +1,13 @@
 # Changes
 
+## 2.0.3 (5 October 2025)
+
+* Simplify login template (f8be55da89dd)
+* Better hints for malformed Token headers (d0e7b75dbba1)
+* API: datetime objects always in UTC (afd31d226352)
+* API: remove `is_deleted` as a field (0ca3e33e1f81)
+* Fix null constraint failure when `remote_addr` is `None` and user is '{{auto}}' (See #229)
+
 ## 2.0.2 (22 September 2025)
 
 * Fix broken checkbox in issue list (See #225)
