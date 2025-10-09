@@ -1,5 +1,14 @@
 # Changes
 
+## 2.0.4 (9 October 2025)
+
+* `convert_mariadb_uuids` command to fix UUID column problems on MariaDB
+
+If you upgrade (or have upgraded) from Bugsink < 2.0 to any 2.0.x version you
+need to run this command (and you need 2.0.4 to be able to run it).
+
+See #226
+
 ## 2.0.3 (5 October 2025)
 
 * Simplify login template (f8be55da89dd)
