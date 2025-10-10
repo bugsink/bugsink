@@ -596,7 +596,7 @@ class IntegrationTest(TransactionTestCase):
                 filename, response.content if response.status_code != 302 else response.url))
 
         event = Event.objects.get(issue__project=project, event_id=data["event_id"])
-        md = render_stacktrace_md(event, frames="all", include_locals=True)
+        md = render_stacktrace_md(event, in_app_only=False, include_locals=True)
 
         self.assertEqual('''# CapturedStacktraceFo
 4 kinds of frames
@@ -788,7 +788,7 @@ class IssueDeletionTestCase(TransactionTestCase):
 
         # see the note in `prune_orphans` about TagKey to understand why it's special.
         vacuum_models = [apps.get_model(app_label=s.split('.')[0], model_name=s.split('.')[1].lower())
-                         for s in ['tags.TagKey',]]
+                         for s in ['tags.TagKey']]
 
         for model in models + vacuum_models:
             # test-the-test: make sure some instances of the models actually exist after setup

@@ -47,4 +47,4 @@ class EventDetailSerializer(UTCModelSerializer):
 
     @extend_schema_field(serializers.CharField)
     def get_stacktrace_md(self, obj):
-        return render_stacktrace_md(obj, frames="in_app", include_locals=True)
+        return render_stacktrace_md(obj, in_app_only=False, include_locals=True)
