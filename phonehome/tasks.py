@@ -1,11 +1,12 @@
+import platform
 import logging
 import requests
-import platform
 import json
 
 from django.conf import settings
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from django.db import connection
 
 from bugsink.transaction import durable_atomic, immediate_atomic
 from bugsink.version import __version__
@@ -70,6 +71,11 @@ def send_if_due():
 
 
 def _make_message_body():
+    database_vendor = connection.vendor
+    if database_vendor == "mysql":
+        if connection.mysql_is_mariadb:
+            database_vendor = "mariadb"
+
     return {
         "installation_id": str(Installation.objects.get().id),
         "version": __version__,
@@ -81,14 +87,6 @@ def _make_message_body():
             "SITE_TITLE": get_settings().SITE_TITLE,
             "DEFAULT_FROM_EMAIL": settings.DEFAULT_FROM_EMAIL,
 
-            # we don't have these settings yet.
-            # LICENSE_KEY
-            # LICENSE_NAME
-            # LICENSE_EMAIL
-            # LICENSE_USERS
-            # LICENSE_EXPIRY
-            # LICENSE_TYPE
-
             # Settings that tell us a bit about how Bugsink is actually deployed. Useful for support.
             "SINGLE_USER": get_settings().SINGLE_USER,
             "SINGLE_TEAM": get_settings().SINGLE_TEAM,
@@ -97,6 +95,13 @@ def _make_message_body():
             "DIGEST_IMMEDIATELY": get_settings().DIGEST_IMMEDIATELY,
             "IS_DOCKER": settings.IS_DOCKER,
             "DATABASE_ENGINE": settings.DATABASES["default"]["ENGINE"],
+        },
+
+        # non-settings that tell us a bit about the environment
+        "runtime": {
+            "database_vendor": database_vendor,
+            "database_version": connection.get_database_version(),
+            "machine": platform.machine(),
         },
 
         "usage": {
