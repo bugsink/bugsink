@@ -68,7 +68,7 @@ SNAPPEA = {
 }
 
 # Not actually a "database", this is a (tmp to the container) message queue.
-DATABASES["snappea"]["NAME"] = '/tmp/snappea.sqlite3'
+DATABASES["snappea"]["NAME"] = os.environ.get("SNAPPEA_DATABASE_PATH", '/tmp/snappea.sqlite3')
 
 
 if os.getenv("DATABASE_URL"):
