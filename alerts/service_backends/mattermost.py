@@ -12,7 +12,7 @@ from bugsink.transaction import immediate_atomic
 from issues.models import Issue
 
 
-class SlackConfigForm(forms.Form):
+class MattermostConfigForm(forms.Form):
     webhook_url = forms.URLField(required=True)
     channel = forms.CharField(
         required=False,
@@ -37,8 +37,7 @@ class SlackConfigForm(forms.Form):
 
 
 def _safe_markdown(text):
-    # Slack assigns a special meaning to some characters, so we need to escape them
-    # to prevent them from being interpreted as formatting/special characters.
+    # Mattermost uses similar markdown escaping as Slack
     return (
         text.replace("&", "&amp;")
         .replace("<", "&lt;")
@@ -100,41 +99,32 @@ def _store_success_info(service_config_id):
 
 
 @shared_task
-def slack_backend_send_test_message(
+def mattermost_backend_send_test_message(
     webhook_url, project_name, display_name, service_config_id, channel=None
 ):
-    # See Slack's Block Kit Builder
+    # Uses Mattermost's attachment format (not Block Kit)
 
     data = {
         "text": "Test message by Bugsink to test the webhook setup.",
-        "blocks": [
+        "attachments": [
             {
-                "type": "header",
-                "text": {
-                    "type": "plain_text",
-                    "text": "TEST issue",
-                },
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "Test message by Bugsink to test the webhook setup.",
-                },
-            },
-            {
-                "type": "section",
+                "fallback": "Test message by Bugsink",
+                "color": "#36a64f",
+                "title": "TEST issue",
+                "text": "Test message by Bugsink to test the webhook setup.",
                 "fields": [
                     {
-                        "type": "mrkdwn",
-                        "text": "*project*: " + _safe_markdown(project_name),
+                        "short": True,
+                        "title": "project",
+                        "value": _safe_markdown(project_name),
                     },
                     {
-                        "type": "mrkdwn",
-                        "text": "*message backend*: " + _safe_markdown(display_name),
+                        "short": True,
+                        "title": "message backend",
+                        "value": _safe_markdown(display_name),
                     },
                 ],
-            },
+            }
         ],
     }
 
@@ -161,7 +151,7 @@ def slack_backend_send_test_message(
 
 
 @shared_task
-def slack_backend_send_alert(
+def mattermost_backend_send_alert(
     webhook_url,
     issue_id,
     state_description,
@@ -174,67 +164,46 @@ def slack_backend_send_alert(
     issue = Issue.objects.get(id=issue_id)
 
     issue_url = get_settings().BASE_URL + issue.get_absolute_url()
-    link = (
-        f"<{issue_url}|"
-        + _safe_markdown(truncatechars(issue.title().replace("|", ""), 200))
-        + ">"
-    )
+    # Mattermost uses markdown links in format [text](url)
+    link_text = _safe_markdown(truncatechars(issue.title(), 200))
 
-    sections = [
+    # Build attachment text
+    attachment_text = f"[{link_text}]({issue_url})"
+    if unmute_reason:
+        attachment_text += f"\n\n{unmute_reason}"
+
+    # Build fields
+    fields = [
         {
-            "type": "header",
-            "text": {
-                "type": "plain_text",
-                "text": f"{alert_reason} issue",
-            },
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": link,
-            },
-        },
+            "short": True,
+            "title": "project",
+            "value": _safe_markdown(issue.project.name),
+        }
     ]
 
-    if unmute_reason:
-        sections.append(
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": unmute_reason,
-                },
-            }
-        )
-
-    # assumption: visavis email, project.name is of less importance, because in slack-like things you may (though not
-    # always) do one-channel per project. more so for site_title (if you have multiple Bugsinks, you'll surely have
-    # multiple slack channels)
-    fields = {"project": issue.project.name}
-
-    # left as a (possible) TODO, because the amount of refactoring (passing event to this function) is too big for now
     # if event.release:
-    #     fields["release"] = event.release
+    #     fields.append({
+    #         "short": True,
+    #         "title": "release",
+    #         "value": _safe_markdown(event.release),
+    #     })
     # if event.environment:
-    #     fields["environment"] = event.environment
+    #     fields.append({
+    #         "short": True,
+    #         "title": "environment",
+    #         "value": _safe_markdown(event.environment),
+    #     })
 
     data = {
-        "text": sections[0]["text"][
-            "text"
-        ],  # mattermost requires at least one text field; use the first section
-        "blocks": sections
-        + [
+        "text": f"{alert_reason} issue: {issue.title()[:100]}",  # Fallback text
+        "attachments": [
             {
-                "type": "section",
-                "fields": [
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*{field}*: " + _safe_markdown(value),
-                    }
-                    for field, value in fields.items()
-                ],
-            },
+                "fallback": f"{alert_reason} issue: {issue.title()}",
+                "color": "#ff0000" if alert_reason == "NEW" else "#ff9900",
+                "title": f"{alert_reason} issue",
+                "text": attachment_text,
+                "fields": fields,
+            }
         ],
     }
 
@@ -260,16 +229,16 @@ def slack_backend_send_alert(
         _store_failure_info(service_config_id, e)
 
 
-class SlackBackend:
+class MattermostBackend:
     def __init__(self, service_config):
         self.service_config = service_config
 
     def get_form_class(self):
-        return SlackConfigForm
+        return MattermostConfigForm
 
     def send_test_message(self):
         config = json.loads(self.service_config.config)
-        slack_backend_send_test_message.delay(
+        mattermost_backend_send_test_message.delay(
             config["webhook_url"],
             self.service_config.project.name,
             self.service_config.display_name,
@@ -281,7 +250,7 @@ class SlackBackend:
         self, issue_id, state_description, alert_article, alert_reason, **kwargs
     ):
         config = json.loads(self.service_config.config)
-        slack_backend_send_alert.delay(
+        mattermost_backend_send_alert.delay(
             config["webhook_url"],
             issue_id,
             state_description,
