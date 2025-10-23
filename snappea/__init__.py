@@ -67,3 +67,13 @@ def check_no_nested_settings_in_unnested_form(app_configs, **kwargs):
                 id="snappea.W001",
             ))
     return errors
+
+
+@register("snappea")
+def check_using_sqlite(app_configs, **kwargs):
+    if "sqlite" not in django_settings.DATABASES['snappea']['ENGINE']:  # covers both timed_sqlite_backend and sqlite3
+        return [Warning(
+            "The snappea 'database' backend (queue really) is not set to use SQLite. It should be.", id="snappea.W002",
+        )]
+
+    return []
