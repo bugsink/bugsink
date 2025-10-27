@@ -5,15 +5,20 @@ from .service_backends.slack import SlackBackend
 from .service_backends.mattermost import MattermostBackend
 
 
+def kind_choices():
+    # no 18n needed for no
+    return [
+        ("slack", "Slack"),
+        ("mattermost", "Mattermost"),
+    ]
+
+
 class MessagingServiceConfig(models.Model):
     project = models.ForeignKey(Project, on_delete=models.DO_NOTHING, related_name="service_configs")
     display_name = models.CharField(max_length=100, blank=False,
                                     help_text='For display in the UI, e.g. "#general on company Slack"')
 
-    kind = models.CharField(choices=[
-        ("slack", "Slack"),
-        ("mattermost", "Mattermost"),
-    ], max_length=20, default="slack")
+    kind = models.CharField(choices=kind_choices, max_length=20, default="slack")
 
     config = models.TextField(blank=False)
 
