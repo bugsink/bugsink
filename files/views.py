@@ -231,10 +231,10 @@ def api_catch_all(request, subpath):
     if request.GET:
         lines.append(f"  GET:    {request.GET.dict()}")
 
+    body = request.body  # note: must be above request.POST access to avoid "You cannot access body after reading ..."
     if request.POST:
         lines.append(f"  POST:   {request.POST.dict()}")
 
-    body = request.body
     if body:
         try:
             decoded = body.decode("utf-8", errors="replace").strip()
