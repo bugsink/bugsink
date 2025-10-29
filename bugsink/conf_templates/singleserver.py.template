@@ -24,6 +24,9 @@ USE_X_REAL_IP = True
 # In the singleserver production setup, the database is SQLite. The single (unix) user is named `bugsink` and we put
 # the database in its home directory:
 DATABASES["default"]["NAME"] = '{{ base_dir }}/db.sqlite3'
+
+# This is a "database as message queue" setup; If you're reading this and are thinking of replacing this particular
+# DB with mysql/postgres, know that you "probably shouldn't".
 DATABASES["snappea"]["NAME"] = '{{ base_dir }}/snappea.sqlite3'
 
 

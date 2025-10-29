@@ -46,7 +46,7 @@ def send_rendered_email(subject, base_template_name, recipient_list, context=Non
 
     msg.attach_alternative(html_content, "text/html")
 
-    msg.send()
+    msg.send(fail_silently=False)  # (fail_silently=False is the default)
 
 
 def get_model_topography():
