@@ -115,6 +115,10 @@ if os.getenv("EMAIL_HOST"):
     # True, we use that.
     EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False").lower() in ("true", "1", "yes")
     EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", str(not EMAIL_USE_SSL)).lower() in ("true", "1", "yes")
+
+    if os.getenv("EMAIL_LOGGING", "false").lower() in ("true", "1", "yes"):
+        LOGGING['loggers']['bugsink.email']['level'] = "INFO"
+
 else:
     # print("WARNING: EMAIL_HOST not set; email will not be sent")
     EMAIL_BACKEND = "bugsink.email_backends.QuietConsoleEmailBackend"

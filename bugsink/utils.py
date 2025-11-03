@@ -30,6 +30,8 @@ def send_rendered_email(subject, base_template_name, recipient_list, context=Non
         )
         return
 
+    logger.info("Sending email with subject '%s' to %s", subject, recipient_list)
+
     if context is None:
         context = {}
 
