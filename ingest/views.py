@@ -39,6 +39,7 @@ from alerts.tasks import send_new_issue_alert, send_regression_alert
 from compat.timestamp import format_timestamp, parse_timestamp
 from tags.models import digest_tags
 from bsmain.utils import b108_makedirs
+from sentry.minidump import merge_minidump_event
 
 from .parsers import StreamingEnvelopeParser, ParseError
 from .filestore import get_filename_for_event_id
@@ -678,6 +679,59 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 # more stuff that we don't care about (up to 20MiB compressed) whereas the max event size (uncompressed) is 1MiB.
 # Another advantage: this allows us to raise the relevant Header parsing and size limitation Exceptions to the SDKs.
 #
+
+
+class MinidumpAPIView(BaseIngestAPIView):
+    # A Base "Ingest" APIView in the sense that it reuses some key building blocks (auth).
+    # I'm not 100% sure whether "philosophically" the minidump endpoint is also "ingesting"; we'll see.
+
+    @classmethod
+    def _ingest(cls, ingested_at, event_data, project, request):
+        # TSTTCPW: just ingest the invent as normally after we've done the minidump-parsing "immediately". We make
+        # ready for the expectations of process_event (DIGEST_IMMEDIATELY/event_output_stream) with an if-statement
+
+        event_output_stream = MaxDataWriter("MAX_EVENT_SIZE", io.BytesIO())
+        if get_settings().DIGEST_IMMEDIATELY:
+            # in this case the stream will be an BytesIO object, so we can actually call .get_value() on it.
+            event_output_stream.write(json.dumps(event_data).encode("utf-8"))
+
+        else:
+            # no need to actually touch event_output_stream for this case, we just need to write a file
+            filename = get_filename_for_event_id(event_data["event_id"])
+            b108_makedirs(os.path.dirname(filename))
+            with open(filename, 'w') as f:
+                json.dump(event_data, f)
+
+        cls.process_event(ingested_at, event_data["event_id"], event_output_stream, project, request)
+
+    def post(self, request, project_pk=None):
+        # not reusing the CORS stuff here; minidump-from-browser doesn't make sense.
+
+        ingested_at = datetime.now(timezone.utc)
+        project = self.get_project_for_request(project_pk, request)
+
+        try:
+            # in this flow, we don't get an event_id from the client, so we just generate one here.
+            event_id = uuid.uuid4().hex
+
+            minidump_bytes = request.FILES["upload_file_minidump"].read()
+
+            data = {
+                "event_id": event_id,
+                "platform": "native",
+                "extra": {},
+                "errors": [],
+            }
+
+            merge_minidump_event(data, minidump_bytes)
+
+            self._ingest(ingested_at, data, project, request)
+
+            return JsonResponse({"id": event_id})
+
+        except Exception as e:
+            raise
+            return JsonResponse({"detail": str(e)}, status=HTTP_400_BAD_REQUEST)
 
 
 @user_passes_test(lambda u: u.is_superuser)

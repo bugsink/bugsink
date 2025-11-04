@@ -6,24 +6,15 @@ import logging
 from symbolic import ProcessState
 
 
-LOG_LEVELS = {
-    logging.NOTSET: "sample",
-    logging.DEBUG: "debug",
-    logging.INFO: "info",
-    logging.WARNING: "warning",
-    logging.ERROR: "error",
-    logging.FATAL: "fatal",
-}
+def merge_minidump_event(data, minidump_bytes):
+    state = ProcessState.from_minidump_buffer(minidump_bytes)
 
-LOG_LEVELS_MAP = {v: k for k, v in LOG_LEVELS.items()}
+    data['level'] = 'fatal' if state.crashed else 'info'
 
-
-def merge_minidump_event(data, minidump_path):
-    state = ProcessState.from_minidump(minidump_path)
-
-    data['level'] = LOG_LEVELS_MAP['fatal'] if state.crashed else LOG_LEVELS_MAP['info']
-    data['message'] = 'Assertion Error: %s' % state.assertion if state.assertion \
+    exception_value =  'Assertion Error: %s' % state.assertion if state.assertion \
         else 'Fatal Error: %s' % state.crash_reason
+    # NO_BANANA: data['message'] is not the right target
+    # data['message'] = exception_value
 
     if state.timestamp:
         data['timestamp'] = float(state.timestamp)
@@ -62,7 +53,7 @@ def merge_minidump_event(data, minidump_path):
 
     # Extract the crash reason and infos
     exception = {
-        'value': data['message'],
+        'value': exception_value,
         'thread_id': crashed_thread['id'],
         'type': state.crash_reason,
         # Move stacktrace here from crashed_thread (mutating!)

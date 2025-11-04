@@ -66,9 +66,9 @@
 
                 <div class="text-ellipsis overflow-hidden"> {# filename, function, lineno #}
                     {% if frame.in_app %}
-                        <span class="font-bold">{{ frame.filename }}</span>{% if frame.function %} in <span class="font-bold">{{ frame.function }}</span>{% endif %}{% if frame.lineno %} line <span class="font-bold">{{ frame.lineno }}</span>{% endif %}.
+                        <span class="font-bold">{{ frame.filename }}</span>{% if frame.function %} in <span class="font-bold">{{ frame.function }}</span>{% endif %}{% if frame.lineno %} line <span class="font-bold">{{ frame.lineno }}</span>{% endif %}{% if frame.instruction_addr %} {{ frame.instruction_addr }}{% endif %}.
                     {% else %}
-                        <span class="italic">{{ frame.filename }}{% if frame.function %} in {{ frame.function }}{% endif %}{% if frame.lineno%} line {{ frame.lineno }}{% endif %}.</span>
+                        <span class="italic">{{ frame.filename }}{% if frame.function %} in {{ frame.function }}{% endif %}{% if frame.lineno%} line {{ frame.lineno }}{% endif %}{% if frame.instruction_addr %} {{ frame.instruction_addr }}{% endif %}.</span>
                     {% endif %}
                 </div>
 
