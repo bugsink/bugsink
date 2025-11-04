@@ -170,3 +170,12 @@ class NullWriter:
 
     def close(self):
         pass
+
+
+class UnclosableBytesIO(io.BytesIO):
+    """Intentionally does nothing on-close: BytesIO normally discards its buffer on .close(), breaking .getvalue(); this
+    overrides it so that we can use it in code that usually deals with real files (and calls .close()) while still using
+    the in-memory data afterwards. We just rely on the garbage collector for the actual cleanup."""
+
+    def close(self):
+        pass

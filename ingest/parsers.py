@@ -155,7 +155,6 @@ class StreamingEnvelopeParser:
 
     def get_items(self, output_stream_factory):
         # yields the item_headers and item_output_streams (with the content of the items written into them)
-        # closing the item_output_stream is the responsibility of the calller
 
         self.get_envelope_headers()
 
@@ -175,17 +174,21 @@ class StreamingEnvelopeParser:
                 finder = NewlineFinder()
 
             item_output_stream = output_stream_factory(item_headers)
-            self.remainder, self.at_eof = readuntil(
-                self.input_stream, self.remainder, finder, item_output_stream, self.chunk_size)
 
-            if "length" in item_headers:
-                # items with an explicit length are terminated by a newline (if at EOF, this is optional as per the set
-                # of examples in the docs)
-                should_be_empty = io.BytesIO()
+            try:
                 self.remainder, self.at_eof = readuntil(
-                    self.input_stream, self.remainder, NewlineFinder(), should_be_empty, self.chunk_size)
-                if should_be_empty.getvalue() != b"":
-                    raise ParseError("Item with explicit length not terminated by newline/EOF")
+                    self.input_stream, self.remainder, finder, item_output_stream, self.chunk_size)
+
+                if "length" in item_headers:
+                    # items with an explicit length are terminated by a newline (if at EOF, this is optional as per the
+                    # set of examples in the docs)
+                    should_be_empty = io.BytesIO()
+                    self.remainder, self.at_eof = readuntil(
+                        self.input_stream, self.remainder, NewlineFinder(), should_be_empty, self.chunk_size)
+                    if should_be_empty.getvalue() != b"":
+                        raise ParseError("Item with explicit length not terminated by newline/EOF")
+            finally:
+                item_output_stream.close()
 
             yield item_headers, item_output_stream
 

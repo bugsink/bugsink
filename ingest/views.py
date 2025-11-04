@@ -2,7 +2,6 @@ import uuid
 import hashlib
 import os
 import logging
-import io
 from datetime import datetime, timezone
 import json
 import jsonschema
@@ -29,7 +28,8 @@ from issues.regressions import issue_is_regression
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.exceptions import ViolatedExpectation
-from bugsink.streams import content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded
+from bugsink.streams import (
+    content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded, UnclosableBytesIO)
 from bugsink.app_settings import get_settings
 
 from events.models import Event
@@ -162,10 +162,6 @@ class BaseIngestAPIView(View):
             performance_logger.info("ingested event with %s bytes", len(event_data_bytes))
             cls.digest_event(event_metadata, event_data)
         else:
-            # In this case the stream will be a file that has been written the event's content to it.
-            # To ensure that the (possibly EAGER) handling of the digest has the file available, we flush it here:
-            event_data_stream.flush()
-
             performance_logger.info("ingested event with %s bytes", event_data_stream.bytes_written)
             digest.delay(event_id, event_metadata)
 
@@ -621,7 +617,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         def factory(item_headers):
             if item_headers.get("type") == "event":
                 if get_settings().DIGEST_IMMEDIATELY:
-                    return MaxDataWriter("MAX_EVENT_SIZE", io.BytesIO())
+                    return MaxDataWriter("MAX_EVENT_SIZE", UnclosableBytesIO())
 
                 # envelope_headers["event_id"] is required when type=event per the spec (and takes precedence over the
                 # payload's event_id), so we can rely on it having been set.
@@ -643,23 +639,19 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             return NullWriter()
 
         for item_headers, event_output_stream in parser.get_items(factory):
-            try:
-                if item_headers.get("type") != "event":
-                    logger.info("skipping non-event item: %s", item_headers.get("type"))
+            if item_headers.get("type") != "event":
+                logger.info("skipping non-event item: %s", item_headers.get("type"))
 
-                    if item_headers.get("type") == "transaction":
-                        # From the spec of type=event: This Item is mutually exclusive with `"transaction"` Items.
-                        # i.e. when we see a transaction, a regular event will not be present and we can stop.
-                        logger.info("discarding the rest of the envelope")
-                        break
+                if item_headers.get("type") == "transaction":
+                    # From the spec of type=event: This Item is mutually exclusive with `"transaction"` Items.
+                    # i.e. when we see a transaction, a regular event will not be present and we can stop.
+                    logger.info("discarding the rest of the envelope")
+                    break
 
-                    continue
+                continue
 
-                self.process_event(ingested_at, envelope_headers["event_id"], event_output_stream, project, request)
-                break  # From the spec of type=event: This Item may occur at most once per Envelope. once seen: done
-
-            finally:
-                event_output_stream.close()
+            self.process_event(ingested_at, envelope_headers["event_id"], event_output_stream, project, request)
+            break  # From the spec of type=event: This Item may occur at most once per Envelope. once seen: done
 
         return HttpResponse()
 
@@ -690,7 +682,7 @@ class MinidumpAPIView(BaseIngestAPIView):
         # TSTTCPW: just ingest the invent as normally after we've done the minidump-parsing "immediately". We make
         # ready for the expectations of process_event (DIGEST_IMMEDIATELY/event_output_stream) with an if-statement
 
-        event_output_stream = MaxDataWriter("MAX_EVENT_SIZE", io.BytesIO())
+        event_output_stream = MaxDataWriter("MAX_EVENT_SIZE", UnclosableBytesIO())
         if get_settings().DIGEST_IMMEDIATELY:
             # in this case the stream will be an BytesIO object, so we can actually call .get_value() on it.
             event_output_stream.write(json.dumps(event_data).encode("utf-8"))
