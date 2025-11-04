@@ -356,6 +356,13 @@ LOGGING['loggers']['bugsink.performance'] = {
     "propagate": False,
 }
 
+# Email logging is hidden below WARNING by default, but this can be changed by setting the level to INFO.
+LOGGING['loggers']['bugsink.email'] = {
+    "level": "WARNING",
+    "handlers": ["console"],
+    "propagate": False,
+}
+
 # Snappea Logging
 LOGGING["formatters"]["snappea"] = {
     "format": "{threadName} - {levelname:7} - {message}",
