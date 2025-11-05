@@ -15,8 +15,8 @@ from bugsink.app_settings import get_settings
 from bugsink.transaction import durable_atomic, immediate_atomic
 from bsmain.models import AuthToken
 
-from .models import Chunk, File
-from .tasks import assemble_artifact_bundle
+from .models import Chunk, File, FileMetadata
+from .tasks import assemble_artifact_bundle, assemble_file
 
 logger = logging.getLogger("bugsink.api")
 
@@ -86,7 +86,8 @@ def get_chunk_upload_settings(request, organization_slug):
             # yet.
             "release_files",
 
-            # this would seem to be the "javascript sourcemaps" thing, but how exactly I did not check yet.
+            # on second reading I would say: this is "actual source code", but I did not check yet and "don't touch it"
+            # (even though we don't actually have an implementation for sources yet)
             "sources",
 
             # https://github.com/getsentry/sentry/discussions/46967
@@ -100,7 +101,7 @@ def get_chunk_upload_settings(request, organization_slug):
             # "artifact_bundles_v2",
 
             # the rest of the options are below:
-            # "debug_files",
+            "debug_files",
             # "release_files",
             # "pdbs",
             # "bcsymbolmaps",
@@ -197,6 +198,78 @@ def artifact_bundle_assemble(request, organization_slug):
     # In the ALWAYS_EAGER setup, we process the bundle inline, so arguably we could return "OK" here too; "CREATED" is
     # what sentry returns though, so for faithful mimicking it's the safest bet.
     return JsonResponse({"state": ChunkFileState.CREATED, "missingChunks": []})
+
+
+@csrf_exempt  # we're in API context here; this could potentially be pulled up to a higher level though
+@requires_auth_token
+def difs_assemble(request, organization_slug, project_slug):
+    # TODO move to tasks.something.delay
+    # TODO think about the right transaction around this
+    data = json.loads(request.body)
+
+    file_checksums = set(data.keys())
+
+    existing_files = {
+        f.file.checksum: f
+        for f in FileMetadata.objects.filter(file__checksum__in=file_checksums)
+    }
+
+    all_requested_chunks = {
+        chunk
+        for file_info in data.values()
+        for chunk in file_info.get("chunks", [])
+    }
+
+    available_chunks = set(
+        Chunk.objects.filter(checksum__in=all_requested_chunks).values_list("checksum", flat=True)
+    )
+
+    response = {}
+
+    for file_checksum, file_info in data.items():
+        if file_checksum in existing_files:
+            response[file_checksum] = {
+                "state": ChunkFileState.OK,
+                "missingChunks": [],
+                # "dif": serialize(existing_files[file_checksum]),  # TODO: figure out if this is required.
+            }
+            continue
+
+        file_chunks = file_info.get("chunks", [])
+
+        # the sentry-cli sends an empty "chunks" list when just polling for file existence; since we already handled the
+        # case of existing files above, we can simply return NOT_FOUND here.
+        if not file_chunks:
+            response[file_checksum] = {
+                "state": ChunkFileState.NOT_FOUND,
+                "missingChunks": [],
+            }
+            continue
+
+        missing_chunks = [c for c in file_chunks if c not in available_chunks]
+        if missing_chunks:
+            response[file_checksum] = {
+                "state": ChunkFileState.NOT_FOUND,
+                "missingChunks": missing_chunks,
+            }
+            continue
+
+        file, _ = assemble_file(file_checksum, file_chunks, filename=file_info["name"])
+        FileMetadata.objects.get_or_create(
+            debug_id=file_info["debug_id"],
+            file_type="dif",  # I think? check!
+            defaults={
+                "file": file,
+                "data": "{}",  # this is the "catch all" field but I don't think we have anything in this case.
+            }
+        )
+
+        response[file_checksum] = {
+            "state": ChunkFileState.OK,
+            "missingChunks": [],
+        }
+
+    return JsonResponse(response)
 
 
 @user_passes_test(lambda u: u.is_superuser)
