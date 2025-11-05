@@ -296,7 +296,7 @@ class IngestViewTestCase(TransactionTestCase):
 
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
 
-        filename = glob(SAMPLES_DIR + "/sentry/mobile1-xen.json")[0]  # pick a fixed one for reproducibility
+        filename = glob(SAMPLES_DIR + "/bugsink/contexts.json")[0]  # pick a fixed one for reproducibility
 
         for i, include_event_id in enumerate([True, False]):
             with open(filename) as f:
@@ -329,6 +329,94 @@ class IngestViewTestCase(TransactionTestCase):
                 200, response.status_code, response.content if response.status_code != 302 else response.url)
 
             self.assertEqual(1 + i, Event.objects.count())
+
+    @tag("samples")
+    def test_envelope_endpoint_event_and_minidump(self):
+        # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
+
+        filename = glob(SAMPLES_DIR + "/bugsink/contexts.json")[0]  # pick a fixed one for reproducibility
+        with open(filename) as f:
+            data = json.loads(f.read())
+
+        data["event_id"] = uuid.uuid4().hex  # for good measure we reset this to avoid duplicates.
+
+        if "timestamp" not in data:
+            # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
+            data["timestamp"] = time.time()
+
+        filename = glob(SAMPLES_DIR + "/minidumps/linux_overflow.dmp")[0]  # pick a fixed one for reproducibility
+        with open(filename, 'rb') as f:
+            minidump_bytes = f.read()
+
+        event_id = data["event_id"]
+
+        event_bytes = json.dumps(data).encode("utf-8")
+        data_bytes = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "event"}\n' + event_bytes + b"\n" +
+            b'{"type": "attachment", "attachment_type": "event.minidump", "length": %d}\n' % len(minidump_bytes) +
+            minidump_bytes
+            )
+
+        response = self.client.post(
+            f"/api/{ project.id }/envelope/",
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+            },
+            data=data_bytes,
+        )
+        self.assertEqual(
+            200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+        self.assertEqual(1, Event.objects.count())
+        event = Event.objects.get()
+        self.assertTrue("prod" in ([tag.value.value for tag in event.tags.all()]))  # from the sample event
+
+        self.assertEqual('SIGABRT: Fatal Error: SIGABRT', Event.objects.get().title())
+
+    @tag("samples")
+    def test_envelope_endpoint_minidump_only(self):
+        # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
+
+        filename = glob(SAMPLES_DIR + "/minidumps/linux_overflow.dmp")[0]  # pick a fixed one for reproducibility
+        with open(filename, 'rb') as f:
+            minidump_bytes = f.read()
+
+        event_id = uuid.uuid4().hex  # required at the envelope level so we provide it.
+
+        data_bytes = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "attachment", "attachment_type": "event.minidump", "length": %d}\n' % len(minidump_bytes) +
+            minidump_bytes
+            )
+
+        response = self.client.post(
+            f"/api/{ project.id }/envelope/",
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+            },
+            data=data_bytes,
+        )
+        self.assertEqual(
+            200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+        self.assertEqual(1, Event.objects.count())
+        event = Event.objects.get()
+        self.assertFalse("prod" in ([tag.value.value for tag in event.tags.all()]))  # no sample event, so False
+
+        self.assertEqual('SIGABRT: Fatal Error: SIGABRT', Event.objects.get().title())
 
     @tag("samples")
     def test_envelope_endpoint_reused_ids_different_exceptions(self):
@@ -364,7 +452,6 @@ class IngestViewTestCase(TransactionTestCase):
                     content_type="application/json",
                     headers={
                         "X-Sentry-Auth": sentry_auth_header,
-                        "X-BugSink-DebugInfo": filename,
                     },
                     data=data_bytes,
                 )
@@ -450,7 +537,6 @@ class IngestViewTestCase(TransactionTestCase):
                     content_type="application/json",
                     headers={
                         "X-Sentry-Auth": sentry_auth_header,
-                        "X-BugSink-DebugInfo": filename,
                     },
                     data=data_bytes,
                 )
