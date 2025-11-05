@@ -14,7 +14,7 @@ from teams.views import debug_email as debug_teams_email
 from bugsink.app_settings import get_settings
 from users.views import signup, confirm_email, resend_confirmation, request_reset_password, reset_password, preferences
 from ingest.views import download_envelope
-from files.views import chunk_upload, artifact_bundle_assemble, api_root, api_catch_all
+from files.views import chunk_upload, artifact_bundle_assemble, dsyms_unknown, dsyms_upload, api_root, api_catch_all
 from bugsink.decorators import login_exempt
 
 from events.api_views import EventViewSet
@@ -70,6 +70,11 @@ urlpatterns = [
     path("api/0/organizations/<slug:organization_slug>/chunk-upload/", chunk_upload, name="chunk_upload"),
     path("api/0/organizations/<slug:organization_slug>/artifactbundle/assemble/", artifact_bundle_assemble,
          name="artifact_bundle_assemble"),
+
+    path("api/0/projects/<slug:organization_slug>/<slug:project_slug>/files/dsyms/unknown/", dsyms_unknown,
+         name="dsyms_unknown"),
+
+    path("api/0/projects/<slug:organization_slug>/<slug:project_slug>/files/dsyms/", dsyms_upload, name="dsyms_upload"),
 
     path('api/', include('ingest.urls')),
     path('api/0/', api_root, name='api_root'),

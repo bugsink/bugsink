@@ -1,3 +1,4 @@
+from zipfile import ZipFile
 import json
 from hashlib import sha1
 from gzip import GzipFile
@@ -197,6 +198,31 @@ def artifact_bundle_assemble(request, organization_slug):
     # In the ALWAYS_EAGER setup, we process the bundle inline, so arguably we could return "OK" here too; "CREATED" is
     # what sentry returns though, so for faithful mimicking it's the safest bet.
     return JsonResponse({"state": ChunkFileState.CREATED, "missingChunks": []})
+
+
+@csrf_exempt  # we're in API context here; this could potentially be pulled up to a higher level though
+# TODO: requires_auth (presumably)
+def dsyms_unknown(request, organization_slug, project_slug):
+    # TODO decide on "project_slug" handling (organization_slug is ignored, Bugsink has single-org model)
+
+    checksums = request.GET.getlist("checksums")
+    missing = checksums.copy()  # TODO the "working, inefficient" impl. is to just assume everything is missing
+
+    return JsonResponse({"missing": missing})
+
+
+@csrf_exempt
+def dsyms_upload(request, organization_slug, project_slug):
+    # NOTE: we read the whole unzipped file into memory; we _could_ take an approach like bugsink/streams.py.
+    # (Note that, because of the auth layer in front, we're slightly less worried about adverserial scenarios)
+    zf = ZipFile(request.FILES["file"], mode="r")
+
+    for filename_in_zip in zf.namelist():
+        with zf.open(filename_in_zip) as f:
+            foobar = f.read()
+            print("FOOBAR", filename_in_zip)
+
+    return JsonResponse({})
 
 
 @user_passes_test(lambda u: u.is_superuser)
