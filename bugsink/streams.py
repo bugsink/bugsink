@@ -116,7 +116,7 @@ class MaxDataReader:
         self.bytes_read = 0
         self.stream = stream
 
-        if isinstance(max_length, str):  # reusing this is a bit of a hack, but leads to readable code at usage
+        if isinstance(max_length, str):  # support for settings-name max_length makes both the code and errors better
             self.max_length = get_settings()[max_length]
             self.reason = "%s: %s" % (max_length, self.max_length)
         else:
@@ -145,7 +145,7 @@ class MaxDataWriter:
         self.bytes_written = 0
         self.stream = stream
 
-        if isinstance(max_length, str):  # reusing this is a bit of a hack, but leads to readable code at usage
+        if isinstance(max_length, str):  # support for settings-name max_length makes both the code and errors better
             self.max_length = get_settings()[max_length]
             self.reason = "%s: %s" % (max_length, self.max_length)
         else:

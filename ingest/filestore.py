@@ -4,7 +4,7 @@ from django.utils._os import safe_join
 from bugsink.app_settings import get_settings
 
 
-def get_filename_for_event_id(event_id):
+def get_filename_for_event_id(event_id, filetype="event"):
     # The idea of having some levels of directories here (to avoid too many files in a single dir) is not yet
     # implemented. However, counterpoint: when doing stress tests, it was quite hard to get a serious backlog going
     # (snappea was very well able to play catch-up). So this might not be necessary.
@@ -15,4 +15,8 @@ def get_filename_for_event_id(event_id):
     # without needing to inspect all call-sites)
     event_id_normalized = uuid.UUID(event_id).hex
 
-    return safe_join(get_settings().INGEST_STORE_BASE_DIR, event_id_normalized)
+    basename = event_id_normalized
+    if filetype == "minidump":
+        basename += ".dmp"
+
+    return safe_join(get_settings().INGEST_STORE_BASE_DIR, basename)

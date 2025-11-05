@@ -49,6 +49,7 @@ DEFAULTS = {
 
     # MAX* below mirror the (current) values for the Sentry Relay
     "MAX_EVENT_SIZE": _MEBIBYTE,
+    "MAX_ATTACHMENT_SIZE": 100 * _MEBIBYTE,
     "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,  # Note: this only applies to the deprecated "store" endpoint.
     "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
     "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
