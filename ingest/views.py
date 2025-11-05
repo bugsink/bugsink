@@ -28,8 +28,7 @@ from issues.regressions import issue_is_regression
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.exceptions import ViolatedExpectation
-from bugsink.streams import (
-    content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded, UnclosableBytesIO)
+from bugsink.streams import content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded
 from bugsink.app_settings import get_settings
 
 from events.models import Event
@@ -154,16 +153,8 @@ class BaseIngestAPIView(View):
     @classmethod
     def process_event(cls, ingested_at, event_id, event_data_stream, project, request):
         event_metadata = cls.get_event_meta(event_id, ingested_at, request, project)
-
-        if get_settings().DIGEST_IMMEDIATELY:
-            # in this case the stream will be an BytesIO object, so we can actually call .get_value() on it.
-            event_data_bytes = event_data_stream.getvalue()
-            event_data = json.loads(event_data_bytes.decode("utf-8"))
-            performance_logger.info("ingested event with %s bytes", len(event_data_bytes))
-            cls.digest_event(event_metadata, event_data)
-        else:
-            performance_logger.info("ingested event with %s bytes", event_data_stream.bytes_written)
-            digest.delay(event_id, event_metadata)
+        performance_logger.info("ingested event with %s bytes", event_data_stream.bytes_written)
+        digest.delay(event_id, event_metadata)
 
     @classmethod
     def get_event_meta(cls, event_id, ingested_at, request, project):
@@ -616,9 +607,6 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
         def factory(item_headers):
             if item_headers.get("type") == "event":
-                if get_settings().DIGEST_IMMEDIATELY:
-                    return MaxDataWriter("MAX_EVENT_SIZE", UnclosableBytesIO())
-
                 # envelope_headers["event_id"] is required when type=event per the spec (and takes precedence over the
                 # payload's event_id), so we can rely on it having been set.
                 if "event_id" not in envelope_headers:
@@ -650,7 +638,10 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
                 continue
 
-            self.process_event(ingested_at, envelope_headers["event_id"], event_output_stream, project, request)
+            performance_logger.info("ingested event with %s bytes", event_output_stream.bytes_written)
+            event_metadata = self.get_event_meta(envelope_headers["event_id"], ingested_at, request, project)
+            digest.delay(envelope_headers["event_id"], event_metadata)
+
             break  # From the spec of type=event: This Item may occur at most once per Envelope. once seen: done
 
         return HttpResponse()
@@ -679,22 +670,15 @@ class MinidumpAPIView(BaseIngestAPIView):
 
     @classmethod
     def _ingest(cls, ingested_at, event_data, project, request):
-        # TSTTCPW: just ingest the invent as normally after we've done the minidump-parsing "immediately". We make
-        # ready for the expectations of process_event (DIGEST_IMMEDIATELY/event_output_stream) with an if-statement
+        # TSTTCPW: convert the minidump data to an event and then proceed as usual.
+        filename = get_filename_for_event_id(event_data["event_id"])
+        b108_makedirs(os.path.dirname(filename))
+        with open(filename, 'w') as f:
+            json.dump(event_data, f)
 
-        event_output_stream = MaxDataWriter("MAX_EVENT_SIZE", UnclosableBytesIO())
-        if get_settings().DIGEST_IMMEDIATELY:
-            # in this case the stream will be an BytesIO object, so we can actually call .get_value() on it.
-            event_output_stream.write(json.dumps(event_data).encode("utf-8"))
-
-        else:
-            # no need to actually touch event_output_stream for this case, we just need to write a file
-            filename = get_filename_for_event_id(event_data["event_id"])
-            b108_makedirs(os.path.dirname(filename))
-            with open(filename, 'w') as f:
-                json.dump(event_data, f)
-
-        cls.process_event(ingested_at, event_data["event_id"], event_output_stream, project, request)
+        # performance_logger.info("ingested event with %s bytes", event_output_stream.bytes_written)  TODO for minidump
+        event_metadata = cls.get_event_meta(event_data["event_id"], ingested_at, request, project)
+        digest.delay(event_data["event_id"], event_metadata)
 
     def post(self, request, project_pk=None):
         # not reusing the CORS stuff here; minidump-from-browser doesn't make sense.

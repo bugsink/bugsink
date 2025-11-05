@@ -92,7 +92,6 @@ def _make_message_body():
             "SINGLE_TEAM": get_settings().SINGLE_TEAM,
             "EMAIL_BACKEND": settings.EMAIL_BACKEND,
             "TASK_ALWAYS_EAGER": get_snappea_settings().TASK_ALWAYS_EAGER,
-            "DIGEST_IMMEDIATELY": get_settings().DIGEST_IMMEDIATELY,
             "IS_DOCKER": settings.IS_DOCKER,
             "DATABASE_ENGINE": settings.DATABASES["default"]["ENGINE"],
         },

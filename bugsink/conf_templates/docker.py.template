@@ -52,7 +52,7 @@ eat_your_own_dogfood(SENTRY_DSN)
 
 
 # Our Docker image is hard-coded to run with snappea in the background; this means we hard-code (as opposed to reading
-# the from the env) certain variables: TASK_ALWAYS_EAGER, WORKAHOLIC and DIGEST_IMMEDIATELY.
+# the from the env) certain variables: TASK_ALWAYS_EAGER and WORKAHOLIC
 SNAPPEA = {
     "TASK_ALWAYS_EAGER": False,  # hard-coded, corresponds to Docker setup
     "WORKAHOLIC": True,  # hard-coded, corresponds to Docker setup
@@ -131,8 +131,6 @@ CB_NOBODY = "CB_NOBODY"
 
 
 BUGSINK = {
-    "DIGEST_IMMEDIATELY": False,  # hard-coded, corresponds to Docker setup
-
     # The URL where the Bugsink instance is hosted. This is used in the email notifications and to construct DSNs.
     "BASE_URL": os.getenv("BASE_URL", f"http://localhost:{_PORT}"),  # no trailing slash
 

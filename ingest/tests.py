@@ -395,11 +395,6 @@ class IngestViewTestCase(TransactionTestCase):
                         check()
 
     @tag("samples")
-    def test_envelope_endpoint_digest_non_immediate(self):
-        with override_settings(DIGEST_IMMEDIATELY=False):
-            self.test_envelope_endpoint()
-
-    @tag("samples")
     def test_filestore(self):
         # quick & dirty way to test the filestore; in absence of a proper test for it, we just run a more-or-less
         # integration test with the FileEventStorage activated. This will at least show the absence of the most obvious

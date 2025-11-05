@@ -83,8 +83,6 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL = 'Klaas van Schelven <klaas@bugsink.com>'
 
 
 BUGSINK = {
-    "DIGEST_IMMEDIATELY": False,
-
     # "MAX_EVENT_SIZE": _MEBIBYTE,
     # "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,
     # "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,

@@ -98,10 +98,6 @@ BUGSINK = {
     "SINGLE_TEAM": False,
     "TEAM_CREATION": CB_MEMBERS,  # who can create new teams. default: members, which means "any member of the site"
 
-    # In the singleserver production setup, we do not digest events immediately, but instead offload this to Snappea.
-    # This ensures a more response and reliable server when there are peak loads in the events.
-    "DIGEST_IMMEDIATELY": False,
-
     # "MAX_EVENT_SIZE": _MEBIBYTE,
     # "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,
     # "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
