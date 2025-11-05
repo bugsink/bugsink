@@ -151,12 +151,6 @@ class BaseIngestAPIView(View):
         return cls.get_project(project_pk, sentry_key)
 
     @classmethod
-    def process_event(cls, ingested_at, event_id, event_data_stream, project, request):
-        event_metadata = cls.get_event_meta(event_id, ingested_at, request, project)
-        performance_logger.info("ingested event with %s bytes", event_data_stream.bytes_written)
-        digest.delay(event_id, event_metadata)
-
-    @classmethod
     def get_event_meta(cls, event_id, ingested_at, request, project):
         # Meta means: not part of the event data. Basically: information that is available at the time of ingestion, and
         # that must be passed to digest() in a serializable form.
