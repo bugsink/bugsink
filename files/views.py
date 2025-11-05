@@ -151,6 +151,7 @@ def chunk_upload(request, organization_slug):
     # POST: upload (full-size) "chunks" and store them as Chunk objects; file.name whould be the sha1 of the content.
     chunks = []
     if request.FILES:
+        # "file" and "file_gzip" are both possible multi-value keys for uploading (with associated semantics each)
         chunks = request.FILES.getlist("file")
 
         # NOTE: we read the whole unzipped file into memory; we _could_ take an approach like bugsink/streams.py.
