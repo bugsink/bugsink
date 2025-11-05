@@ -25,6 +25,7 @@ from issues.factories import get_or_create_issue
 from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
 from issues.utils import get_values
 from bugsink.app_settings import override_settings
+from bugsink.streams import UnclosableBytesIO
 from compat.timestamp import format_timestamp
 from compat.dsn import get_header_value
 from bsmain.management.commands.send_json import Command as SendJsonCommand
@@ -631,7 +632,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b"line 0\nline 1\n"
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertFalse(at_eof)
@@ -644,7 +645,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b"lin"
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertFalse(at_eof)
@@ -657,7 +658,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b""
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertFalse(at_eof)
@@ -670,7 +671,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b""
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertTrue(at_eof)
@@ -683,7 +684,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b"lin"
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 1024)
 
         self.assertFalse(at_eof)
@@ -696,7 +697,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b"lin"
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, LengthFinder(10, "eof not ok"), output_stream, 3)
 
         self.assertFalse(at_eof)
@@ -709,7 +710,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b"lin"
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         with self.assertRaises(ParseError):
             remainder, at_eof = readuntil(input_stream, initial_chunk, LengthFinder(100, "EOF"), output_stream, 1000)
 

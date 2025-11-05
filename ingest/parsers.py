@@ -1,7 +1,7 @@
 import json
 import io
 
-from bugsink.streams import MaxDataWriter
+from bugsink.streams import MaxDataWriter, UnclosableBytesIO
 
 from .exceptions import ParseError
 from .header_validators import filter_valid_envelope_headers, filter_valid_item_headers
@@ -195,5 +195,5 @@ class StreamingEnvelopeParser:
     def get_items_directly(self):
         # this method is just convenience for testing
 
-        for item_headers, output_stream in self.get_items(lambda item_headers: io.BytesIO()):
+        for item_headers, output_stream in self.get_items(lambda item_headers: UnclosableBytesIO()):
             yield item_headers, output_stream.getvalue()
