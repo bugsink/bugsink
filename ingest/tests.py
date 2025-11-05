@@ -21,6 +21,7 @@ from projects.models import Project
 from events.factories import create_event_data, create_event
 from events.retention import evict_for_max_events
 from events.storage_registry import override_event_storages
+from events.models import Event
 from issues.factories import get_or_create_issue
 from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
 from issues.utils import get_values
@@ -293,38 +294,71 @@ class IngestViewTestCase(TransactionTestCase):
 
         sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
 
-        # first, we ingest many issues
-        command = SendJsonCommand()
-        command.stdout = io.StringIO()
-        command.stderr = io.StringIO()
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
+
+        filename = glob(SAMPLES_DIR + "/sentry/mobile1-xen.json")[0]  # pick a fixed one for reproducibility
+
+        for i, include_event_id in enumerate([True, False]):
+            with open(filename) as f:
+                data = json.loads(f.read())
+
+            data["event_id"] = uuid.uuid4().hex  # for good measure we reset this to avoid duplicates.
+
+            if "timestamp" not in data:
+                # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
+                data["timestamp"] = time.time()
+
+            event_id = data["event_id"]
+            if not include_event_id:
+                del data["event_id"]
+
+            data_bytes = json.dumps(data).encode("utf-8")
+            data_bytes = (
+                b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") + data_bytes)
+
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                    "X-BugSink-DebugInfo": filename,
+                },
+                data=data_bytes,
+            )
+            self.assertEqual(
+                200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+            self.assertEqual(1 + i, Event.objects.count())
+
+    @tag("samples")
+    def test_envelope_endpoint_reused_ids_different_exceptions(self):
+        # dirty copy/paste from test_envelope_endpoint,
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
 
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
 
-        event_samples = glob(SAMPLES_DIR + "/sentry/mobile1-xen.json")  # pick a fixed one for reproducibility
-        known_broken = [SAMPLES_DIR + "/" + s.strip() for s in _readlines(SAMPLES_DIR + "/KNOWN-BROKEN")]
+        filename = glob(SAMPLES_DIR + "/sentry/mobile1-xen.json")[0]  # this one has 'exception.values[0].type'
 
-        if len(event_samples) == 0:
-            raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
+        with open(filename) as f:
+            data = json.loads(f.read())
+        data["event_id"] = uuid.uuid4().hex  # we set it once, before the loop.
 
-        for include_event_id in [True, False]:
-            for filename in [sample for sample in event_samples if sample not in known_broken][:1]:  # one is enough
-                with open(filename) as f:
-                    data = json.loads(f.read())
+        for type_ in ["Foo", "Bar"]:  # forces different groupers, leading to separate Issue objects
+            data['exception']['values'][0]['type'] = type_
 
-                data["event_id"] = uuid.uuid4().hex  # for good measure we reset this to avoid duplicates.
+            if "timestamp" not in data:
+                # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
+                data["timestamp"] = time.time()
 
-                if "timestamp" not in data:
-                    # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
-                    data["timestamp"] = time.time()
+            event_id = data["event_id"]
 
-                event_id = data["event_id"]
-                if not include_event_id:
-                    del data["event_id"]
+            data_bytes = json.dumps(data).encode("utf-8")
+            data_bytes = (
+                b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") + data_bytes)
 
-                data_bytes = json.dumps(data).encode("utf-8")
-                data_bytes = (
-                    b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") + data_bytes)
-
+            def check():
                 response = self.client.post(
                     f"/api/{ project.id }/envelope/",
                     content_type="application/json",
@@ -337,62 +371,11 @@ class IngestViewTestCase(TransactionTestCase):
                 self.assertEqual(
                     200, response.status_code, response.content if response.status_code != 302 else response.url)
 
-    @tag("samples")
-    def test_envelope_endpoint_reused_ids_different_exceptions(self):
-        # dirty copy/paste from test_envelope_endpoint,
-        project = Project.objects.create(name="test")
-
-        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
-
-        # first, we ingest many issues
-        command = SendJsonCommand()
-        command.stdout = io.StringIO()
-        command.stderr = io.StringIO()
-
-        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
-
-        event_samples = glob(SAMPLES_DIR + "/sentry/mobile1-xen.json")  # this one has 'exception.values[0].type'
-        known_broken = [SAMPLES_DIR + "/" + s.strip() for s in _readlines(SAMPLES_DIR + "/KNOWN-BROKEN")]
-
-        if len(event_samples) == 0:
-            raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
-
-        for filename in [sample for sample in event_samples if sample not in known_broken][:1]:  # one is enough
-            with open(filename) as f:
-                data = json.loads(f.read())
-            data["event_id"] = uuid.uuid4().hex  # we set it once, before the loop.
-
-            for type_ in ["Foo", "Bar"]:  # forces different groupers, leading to separate Issue objects
-                data['exception']['values'][0]['type'] = type_
-
-                if "timestamp" not in data:
-                    # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
-                    data["timestamp"] = time.time()
-
-                event_id = data["event_id"]
-
-                data_bytes = json.dumps(data).encode("utf-8")
-                data_bytes = (
-                    b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") + data_bytes)
-
-                def check():
-                    response = self.client.post(
-                        f"/api/{ project.id }/envelope/",
-                        content_type="application/json",
-                        headers={
-                            "X-Sentry-Auth": sentry_auth_header,
-                            "X-BugSink-DebugInfo": filename,
-                        },
-                        data=data_bytes,
-                    )
-                    self.assertEqual(
-                        200, response.status_code, response.content if response.status_code != 302 else response.url)
-
-                if type_ == "Foo":
+            if type_ == "Foo":
+                check()
+            else:
+                with self.assertRaises(ViolatedExpectation):
                     check()
-                else:
-                    with self.assertRaises(ViolatedExpectation):
-                        check()
 
     @tag("samples")
     def test_filestore(self):
