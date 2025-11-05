@@ -503,30 +503,31 @@ class BaseIngestAPIView(View):
 class IngestEventAPIView(BaseIngestAPIView):
 
     def _post(self, request, project_pk=None):
+        # This endpoint is deprecated. Personally, I think it's the simpler (and given my goals therefore better) of the
+        # two, but fighting windmills and all... given that it's deprecated, I'm not going to give it quite as much love
+        # (at least for now).
+        #
+        # The main point of "inefficiency" is that the event data is parsed twice: once here (to get the event_id), and
+        # once in the actual digest.delay()
         ingested_at = datetime.now(timezone.utc)
         project = self.get_project_for_request(project_pk, request)
         if project.quota_exceeded_until is not None and ingested_at < project.quota_exceeded_until:
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
-        # This endpoint is deprecated. Personally, I think it's the simpler (and given my goals therefore better) of the
-        # two, but fighting windmills and all... given that it's deprecated, I'm not going to give it quite as much love
-        # (at least for now). Interfaces between the internal methods quite changed a bit recently, and this one did not
-        # keep up.
-        #
-        # In particular I'd like to just call process_event() here, but that takes both an event_id and an unparsed data
-        # stream, and we don't have an event_id here before parsing (and we don't want to parse twice). similarly,
-        # event_metadata construction requires the event_id.
-        #
-        # Instead, we just copy/pasted the relevant parts of process_event() here, and take only one branch (the one
-        # that digests immediately); i.e. we always digest immediately, independent of the setting.
+        event_data_bytes = MaxDataReader(
+            "MAX_EVENT_SIZE", content_encoding_reader(MaxDataReader("MAX_EVENT_COMPRESSED_SIZE", request))).read()
 
-        event_data = json.loads(
-            MaxDataReader("MAX_EVENT_SIZE", content_encoding_reader(
-                MaxDataReader("MAX_EVENT_COMPRESSED_SIZE", request))).read())
+        performance_logger.info("ingested event with %s bytes", len(event_data_bytes))
+
+        event_data = json.loads(event_data_bytes)
+        filename = get_filename_for_event_id(event_data["event_id"])
+        b108_makedirs(os.path.dirname(filename))
+        with open(filename, 'w') as f:
+            json.dump(event_data, f)
 
         event_metadata = self.get_event_meta(event_data["event_id"], ingested_at, request, project)
 
-        self.digest_event(event_metadata, event_data)
+        digest.delay(event_data["event_id"], event_metadata)
 
         return HttpResponse()
 
