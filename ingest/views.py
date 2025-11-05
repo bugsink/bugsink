@@ -285,6 +285,8 @@ class BaseIngestAPIView(View):
 
         if minidump_bytes is not None:
             # we merge after validation: validation is about what's provided _externally_, not our own merging.
+            # TODO error handling
+            # TODO should not be inside immediate_atomic if it turns out to be slow
             merge_minidump_event(event_data, minidump_bytes)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
