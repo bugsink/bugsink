@@ -25,7 +25,7 @@ services:
       - "8000:8000"
     environment:
       SECRET_KEY: django-insecure-RMLYThim9NybWgXiUGat32Aa0Qbgqscf4NPDQuZO2glcZPOiXn  # Change this (and remove django-insecure prefix), e.g. openssl rand -base64 50
-      CREATE_SUPERUSER: admin:admin  # Change this (or remove it and execute 'createsuperuser' against the running container)
+      CREATE_SUPERUSER: email:password  # Change this (or remove it and execute 'createsuperuser' against the running container)
       PORT: 8000
       DATABASE_URL: postgresql://bugsinkuser:your_super_secret_password@db:5432/bugsink # Change password to match POSTGRES_PASSWORD above
       BEHIND_HTTPS_PROXY: "false"  # Change this for setups behind a proxy w/ ssl enabled
