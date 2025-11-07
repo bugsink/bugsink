@@ -7,7 +7,7 @@ semver==3.0.*
 django-admin-autocomplete-filter==0.7.*
 pygments==2.19.*
 inotify_simple==2.0.*
-Brotli==1.1.*
+Brotli==1.2.*
 python-dateutil==2.9.*
 whitenoise==6.11.*
 requests==2.32.*

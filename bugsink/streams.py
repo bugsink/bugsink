@@ -3,7 +3,6 @@ import io
 import brotli
 
 from bugsink.app_settings import get_settings
-from bugsink.utils import assert_
 
 
 DEFAULT_CHUNK_SIZE = 8 * 1024
@@ -39,15 +38,21 @@ def zlib_generator(input_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
 
 def brotli_generator(input_stream, chunk_size=DEFAULT_CHUNK_SIZE):
     decompressor = brotli.Decompressor()
+    input_is_finished = False
 
-    while True:
-        compressed_chunk = input_stream.read(chunk_size)
-        if not compressed_chunk:
-            break
+    while not (decompressor.is_finished() and input_is_finished):
+        if decompressor.can_accept_more_data():
+            compressed_chunk = input_stream.read(chunk_size)
+            if not compressed_chunk:
+                input_is_finished = True
+                data = decompressor.process(b"", output_buffer_limit=chunk_size)  # b"": no input available, "drain"
+            else:
+                data = decompressor.process(compressed_chunk, output_buffer_limit=chunk_size)
+        else:
+            data = decompressor.process(b"", output_buffer_limit=chunk_size)  # b"" compressor cannot accept more input
 
-        yield decompressor.process(compressed_chunk)
-
-    assert_(decompressor.is_finished())
+        if data:
+            yield data
 
 
 class GeneratorReader:

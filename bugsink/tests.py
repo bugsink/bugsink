@@ -93,6 +93,23 @@ class StreamsTestCase(RegularTestCase):
 
         self.assertEqual(myself_times_ten, result)
 
+    def test_decompress_brotli_tiny_bomb(self):
+        # by picking something "sufficiently large" we can ensure all three code paths in brotli_generator are taken,
+        # in particular the "cannot accept more input" path. (for it to be taken, we need a "big thing" on the output
+        # side)
+        compressed_stream = io.BytesIO(brotli.compress(b"\x00" * 15_000_000))
+
+        result = b""
+        reader = GeneratorReader(brotli_generator(compressed_stream))
+
+        while True:
+            chunk = reader.read(3)
+            result += chunk
+            if chunk == b"":
+                break
+
+        self.assertEqual(b"\x00" * 15_000_000, result)
+
     def test_compress_decompress_read_none(self):
         with open(__file__, 'rb') as f:
             myself_times_ten = f.read() * 10
