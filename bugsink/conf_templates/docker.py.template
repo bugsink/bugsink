@@ -1,5 +1,6 @@
 import os
 from urllib.parse import urlparse
+from django.utils._os import safe_join
 
 from bugsink.conf_utils import deduce_allowed_hosts, eat_your_own_dogfood, deduce_script_name
 
@@ -68,7 +69,12 @@ SNAPPEA = {
 }
 
 # Not actually a "database", this is a (tmp to the container) message queue.
-DATABASES["snappea"]["NAME"] = '/tmp/snappea.sqlite3'
+if os.getenv("SNAPPEA_TMP_DIR"):
+    DATABASES["snappea"]["NAME"] = safe_join(os.getenv("SNAPPEA_TMP_DIR"), "tmp/snappea.sqlite3")
+    SNAPPEA["WAKEUP_CALLS_DIR"] = safe_join(os.getenv("SNAPPEA_TMP_DIR"), "snappea.wakeup")
+else:
+    DATABASES["snappea"]["NAME"] = "/tmp/snappea.sqlite3"
+    # SNAPPEA["WAKEUP_CALLS_DIR"] = "/tmp/snappea.wakeup"  # this is the default in snappea/settings.py
 
 
 if os.getenv("DATABASE_URL"):
