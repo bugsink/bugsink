@@ -56,30 +56,31 @@ def brotli_generator(input_stream, chunk_size=DEFAULT_CHUNK_SIZE):
 
 
 class GeneratorReader:
+    """Read from a generator as from a file-like object."""
 
     def __init__(self, generator):
         self.generator = generator
-        self.unread = b""
+        self.buffer = bytearray()
 
     def read(self, size=None):
         if size is None:
             for chunk in self.generator:
-                self.unread += chunk
-
-            result = self.unread
-            self.unread = b""
+                self.buffer.extend(chunk)
+            result = bytes(self.buffer)
+            self.buffer.clear()
             return result
 
-        while size > len(self.unread):
+        while len(self.buffer) < size:
             try:
                 chunk = next(self.generator)
-                if chunk == b"":
+                if not chunk:
                     break
-                self.unread += chunk
+                self.buffer.extend(chunk)
             except StopIteration:
                 break
 
-        self.unread, result = self.unread[size:], self.unread[:size]
+        result = bytes(self.buffer[:size])
+        del self.buffer[:size]
         return result
 
 
