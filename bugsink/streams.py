@@ -37,6 +37,10 @@ def zlib_generator(input_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
 
 
 def brotli_generator(input_stream, chunk_size=DEFAULT_CHUNK_SIZE):
+    # implementation notes: in principle chunk_size for input and output could be different, we keep them the same here.
+    # I've also seen that the actual output data may be quite a bit larger than the output_buffer_limit; a detail that
+    # I do not fully understand (but I understand that at least it's not _unboundedly_ larger).
+
     decompressor = brotli.Decompressor()
     input_is_finished = False
 
@@ -56,7 +60,7 @@ def brotli_generator(input_stream, chunk_size=DEFAULT_CHUNK_SIZE):
 
 
 class GeneratorReader:
-    """Read from a generator as from a file-like object."""
+    """Read from a generator (yielding bytes) as from a file-like object."""
 
     def __init__(self, generator):
         self.generator = generator
