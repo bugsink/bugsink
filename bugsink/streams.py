@@ -23,6 +23,15 @@ class MaxLengthExceeded(ValueError):
     pass
 
 
+class BrotliError(ValueError):
+    """similar to brotli.error, but separate from it, to clarify non-library failure"""
+
+
+def brotli_assert(condition, message):
+    if not condition:
+        raise BrotliError(message)
+
+
 def zlib_generator(input_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
     z = zlib.decompressobj(wbits=wbits)
 
@@ -41,19 +50,32 @@ def brotli_generator(input_stream, chunk_size=DEFAULT_CHUNK_SIZE):
     # I've also seen that the actual output data may be quite a bit larger than the output_buffer_limit; a detail that
     # I do not fully understand (but I understand that at least it's not _unboundedly_ larger).
 
+    # The brotli_assertions in the below are designed to guarantee that progress towards termination is made. In short:
+    # when no progress is made on the input_stream, either progress must be made on the output_stream or we must be in
+    # finished state.
     decompressor = brotli.Decompressor()
     input_is_finished = False
 
     while not (decompressor.is_finished() and input_is_finished):
         if decompressor.can_accept_more_data():
             compressed_chunk = input_stream.read(chunk_size)
-            if not compressed_chunk:
+            if compressed_chunk:
+                data = decompressor.process(compressed_chunk, output_buffer_limit=chunk_size)
+                # brotli_assert not needed: we made progress on the `input_stream` in any case (we cannot infinitely be
+                # in this branch because the input_stream is finite).
+
+            else:
                 input_is_finished = True
                 data = decompressor.process(b"", output_buffer_limit=chunk_size)  # b"": no input available, "drain"
-            else:
-                data = decompressor.process(compressed_chunk, output_buffer_limit=chunk_size)
+                brotli_assert(
+                    len(data) or decompressor.is_finished(),
+                    "Draining done -> decompressor finished; if not, something's off")
+
         else:
             data = decompressor.process(b"", output_buffer_limit=chunk_size)  # b"" compressor cannot accept more input
+            brotli_assert(
+                len(data) > 0,
+                "A brotli processor that cannot accept input _must_ be able to produce output or it would be stuck.")
 
         if data:
             yield data
