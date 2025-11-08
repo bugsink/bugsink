@@ -17,7 +17,7 @@ from .transaction import immediate_atomic
 from .volume_based_condition import VolumeBasedCondition
 from .streams import (
     compress_with_zlib, GeneratorReader, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE, MaxDataReader,
-    MaxDataWriter, zlib_generator, brotli_generator)
+    MaxDataWriter, zlib_generator, brotli_generator, BrotliError)
 
 User = get_user_model()
 
@@ -80,6 +80,15 @@ class StreamsTestCase(RegularTestCase):
         for chunk in generator:
             size += len(chunk)
         self.assertEqual(15_000_000, size)
+
+    def test_decompress_brotli_so_called_random(self):
+        compressed_stream = io.BytesIO(b"random")
+
+        generator = brotli_generator(compressed_stream)
+        size = 0
+        with self.assertRaises(BrotliError):
+            for chunk in generator:
+                size += len(chunk)
 
     def test_max_data_reader(self):
         stream = io.BytesIO(b"hello" * 100)
