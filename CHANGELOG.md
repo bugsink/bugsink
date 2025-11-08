@@ -1,5 +1,12 @@
 # Changes
 
+## 2.0.6 (8 November 2025)
+
+### Security
+
+Add a mitigation for another DOS attack using adverserial brotli payloads.
+Similar to, but distinct from, the fix in 2.0.5.
+
 ## 2.0.5 (8 November 2025)
 
 ### Security
