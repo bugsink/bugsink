@@ -52,7 +52,27 @@ class Command(BaseCommand):
         else:
             dsn = options['dsn']
 
+        if size == -1:
+            return self.send_random_data(dsn)
+
         self.send_to_server(dsn, size, compress)
+
+    def send_random_data(self, dsn):
+        # the string "random" is not actually random since it has emperically been determined to trigger a failing code
+        # path in brotli decompression in Bugsin 2.0.5.
+
+        headers = {
+            "Content-Encoding": "br",
+            "Content-Type": "application/json",
+        }
+        response = requests.post(
+            get_envelope_url(dsn),
+            headers=headers,
+            data=b"random",
+            timeout=100,
+        )
+        print("Server responded with status code %d" % response.status_code)
+        print("Response content: %s" % response.content)
 
     def construct_br_bomb(self, header, size):
         construction_chunk_size = min(100 * MiB, size // 10)
