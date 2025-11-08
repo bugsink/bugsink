@@ -50,8 +50,9 @@ def brotli_generator(input_stream, chunk_size=DEFAULT_CHUNK_SIZE):
     # I've also seen that the actual output data may be quite a bit larger than the output_buffer_limit; a detail that
     # I do not fully understand (but I understand that at least it's not _unboundedly_ larger).
 
-    # Peppered with assertions b/c the brotli package is ill-documented.
-
+    # The brotli_assertions in the below are designed to guarantee that progress towards termination is made. In short:
+    # when no progress is made on the input_stream, either progress must be made on the output_stream or we must be in
+    # finished state.
     decompressor = brotli.Decompressor()
     input_is_finished = False
 
@@ -60,9 +61,8 @@ def brotli_generator(input_stream, chunk_size=DEFAULT_CHUNK_SIZE):
             compressed_chunk = input_stream.read(chunk_size)
             if compressed_chunk:
                 data = decompressor.process(compressed_chunk, output_buffer_limit=chunk_size)
-                # assertion on data here? I'm not sure yet whether we actually hard-expect it. OK, you were ready to
-                # accept input, and you got it. Does it mean you have output per se? In the limit (a single compressed
-                # byte) one would say that the answer is "no".
+                # brotli_assert not needed: we made progress on the `input_stream` in any case (we cannot infinitely be
+                # in this branch because the input_stream is finite).
 
             else:
                 input_is_finished = True
