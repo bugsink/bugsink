@@ -51,7 +51,6 @@ def _digest_params(event_data, project, request, now=None):
             "event_id": event_data["event_id"],
             "project_id": project.id,
             "ingested_at": format_timestamp(now),
-            "debug_info": "",
         },
         "event_data": event_data,
         "digested_at": now,
@@ -321,7 +320,6 @@ class IngestViewTestCase(TransactionTestCase):
                 content_type="application/json",
                 headers={
                     "X-Sentry-Auth": sentry_auth_header,
-                    "X-BugSink-DebugInfo": filename,
                 },
                 data=data_bytes,
             )

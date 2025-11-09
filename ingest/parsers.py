@@ -185,7 +185,8 @@ class StreamingEnvelopeParser:
                     should_be_empty = io.BytesIO()
                     self.remainder, self.at_eof = readuntil(
                         self.input_stream, self.remainder, NewlineFinder(), should_be_empty, self.chunk_size)
-                    if should_be_empty.getvalue() != b"":
+                    should_be_empty_value = should_be_empty.getvalue()
+                    if should_be_empty_value != b"":
                         raise ParseError("Item with explicit length not terminated by newline/EOF")
             finally:
                 item_output_stream.close()

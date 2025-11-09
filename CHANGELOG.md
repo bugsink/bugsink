@@ -1,5 +1,38 @@
 # Changes
 
+## 2.0.6 (8 November 2025)
+
+### Security
+
+Add a mitigation for another DOS attack using adverserial brotli payloads.
+Similar to, but distinct from, the fix in 2.0.5.
+
+## 2.0.5 (8 November 2025)
+
+### Security
+
+Add a mitigation for certain DOS attacks using adverserial brotli payloads, see #266
+
+### Backwards incompatible changes
+
+Fail to start when using non-sqlite for snappea, See #252
+
+Since this was always recommended against, and probably broken anyway, this is not
+expected to be backwards incompatible _in practice_, but it is at least in prinicple.
+
+
+### Other changes
+
+* Markdown stacktrace: render with all frames, See 9cb89ecf46a7
+* Add database vendor, version and machine arch to phonehome message, see d8fef759cabc
+* Fix redirect on single-click actions when hosting at subdomain, Fix #250
+* 'poor mans's DB lock: lock the right DB; See e55c0eb417e2, and #252 for context
+* Add more warnings about using non-sqlite for snappea in the conf templates, See #252
+* `parse_timestamp`: _actually_ parse as UTC when timezone not provided, see 8ad7f9738085
+* Add debug setting for email-sending, Fix #86
+* docker-compose-sample.yaml: more clearly email:password, See #261
+* create snappea database on Docker start rather than image build, See #244
+
 ## 2.0.4 (9 October 2025)
 
 * `convert_mariadb_uuids` command to fix UUID column problems on MariaDB

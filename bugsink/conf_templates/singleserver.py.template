@@ -71,6 +71,10 @@ EMAIL_BACKEND = "bugsink.email_backends.QuietConsoleEmailBackend"  # instead of 
 # EMAIL_USE_TLS = ...
 # EMAIL_USE_SSL = ...
 
+# Uncomment the line below to show all sent emails in the logs
+# LOGGING['loggers']['bugsink.email']['level'] = "INFO"
+
+
 SERVER_EMAIL = DEFAULT_FROM_EMAIL = "Bugsink <bugsink@example.org>"
 
 # constants for "create by" (user/team/project) settings

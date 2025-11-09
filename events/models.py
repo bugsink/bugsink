@@ -117,9 +117,6 @@ class Event(models.Model):
     sdk_name = models.CharField(max_length=255, blank=True, null=False, default="")
     sdk_version = models.CharField(max_length=255, blank=True, null=False, default="")
 
-    # this is a temporary(?), bugsink-specific value;
-    debug_info = models.CharField(max_length=255, blank=True, null=False, default="")
-
     # denormalized/cached fields:
     calculated_type = models.CharField(max_length=128, blank=True, null=False, default="")
     calculated_value = models.TextField(max_length=1024, blank=True, null=False, default="")
@@ -238,8 +235,6 @@ class Event(models.Model):
 
                 sdk_name=maybe_empty(parsed_data.get("", {}).get("name", ""))[:255],
                 sdk_version=maybe_empty(parsed_data.get("", {}).get("version", ""))[:255],
-
-                debug_info=event_metadata["debug_info"][:255],
 
                 # just getting from the dict would be more precise, since we always add this info, but doing the .get()
                 # allows for backwards compatability (digesting events for which the info was not added on-ingest) so
