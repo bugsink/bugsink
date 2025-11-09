@@ -1,3 +1,5 @@
+from django.core.exceptions import BadRequest
+
 import zlib
 import io
 import brotli
@@ -82,13 +84,21 @@ def brotli_generator(input_stream, chunk_size=DEFAULT_CHUNK_SIZE):
 
 
 class GeneratorReader:
-    """Read from a generator (yielding bytes) as from a file-like object."""
+    """Read from a generator (yielding bytes) as from a file-like object. In practice: used by content_encoding_reader,
+    so it's grown to fit that use case (and we may later want to reflect that in the name)."""
 
-    def __init__(self, generator):
+    def __init__(self, generator, bad_request_exceptions=()):
         self.generator = generator
+        self.bad_request_exceptions = bad_request_exceptions
         self.buffer = bytearray()
 
     def read(self, size=None):
+        try:
+            return self._read(size)
+        except self.bad_request_exceptions as e:
+            raise BadRequest(str(e)) from e
+
+    def _read(self, size=None):
         if size is None:
             for chunk in self.generator:
                 self.buffer.extend(chunk)
@@ -114,13 +124,13 @@ def content_encoding_reader(request):
     encoding = request.META.get("HTTP_CONTENT_ENCODING", "").lower()
 
     if encoding == "gzip":
-        return GeneratorReader(zlib_generator(request, WBITS_PARAM_FOR_GZIP))
+        return GeneratorReader(zlib_generator(request, WBITS_PARAM_FOR_GZIP), bad_request_exceptions=(zlib.error,))
 
     if encoding == "deflate":
-        return GeneratorReader(zlib_generator(request, WBITS_PARAM_FOR_DEFLATE))
+        return GeneratorReader(zlib_generator(request, WBITS_PARAM_FOR_DEFLATE), bad_request_exceptions=(zlib.error,))
 
     if encoding == "br":
-        return GeneratorReader(brotli_generator(request))
+        return GeneratorReader(brotli_generator(request), bad_request_exceptions=(brotli.error, BrotliError))
 
     return request
 
