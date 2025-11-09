@@ -256,7 +256,7 @@ def difs_assemble(request, organization_slug, project_slug):
 
         file, _ = assemble_file(file_checksum, file_chunks, filename=file_info["name"])
         FileMetadata.objects.get_or_create(
-            debug_id=file_info["debug_id"],
+            debug_id=file_info.get("debug_id"),
             file_type="dif",  # I think? check!
             defaults={
                 "file": file,
