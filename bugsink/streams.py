@@ -3,7 +3,6 @@ import io
 import brotli
 
 from bugsink.app_settings import get_settings
-from bugsink.utils import assert_
 
 
 DEFAULT_CHUNK_SIZE = 8 * 1024
@@ -24,6 +23,15 @@ class MaxLengthExceeded(ValueError):
     pass
 
 
+class BrotliError(ValueError):
+    """similar to brotli.error, but separate from it, to clarify non-library failure"""
+
+
+def brotli_assert(condition, message):
+    if not condition:
+        raise BrotliError(message)
+
+
 def zlib_generator(input_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
     z = zlib.decompressobj(wbits=wbits)
 
@@ -38,43 +46,67 @@ def zlib_generator(input_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
 
 
 def brotli_generator(input_stream, chunk_size=DEFAULT_CHUNK_SIZE):
+    # implementation notes: in principle chunk_size for input and output could be different, we keep them the same here.
+    # I've also seen that the actual output data may be quite a bit larger than the output_buffer_limit; a detail that
+    # I do not fully understand (but I understand that at least it's not _unboundedly_ larger).
+
+    # The brotli_assertions in the below are designed to guarantee that progress towards termination is made. In short:
+    # when no progress is made on the input_stream, either progress must be made on the output_stream or we must be in
+    # finished state.
     decompressor = brotli.Decompressor()
+    input_is_finished = False
 
-    while True:
-        compressed_chunk = input_stream.read(chunk_size)
-        if not compressed_chunk:
-            break
+    while not (decompressor.is_finished() and input_is_finished):
+        if decompressor.can_accept_more_data():
+            compressed_chunk = input_stream.read(chunk_size)
+            if compressed_chunk:
+                data = decompressor.process(compressed_chunk, output_buffer_limit=chunk_size)
+                # brotli_assert not needed: we made progress on the `input_stream` in any case (we cannot infinitely be
+                # in this branch because the input_stream is finite).
 
-        yield decompressor.process(compressed_chunk)
+            else:
+                input_is_finished = True
+                data = decompressor.process(b"", output_buffer_limit=chunk_size)  # b"": no input available, "drain"
+                brotli_assert(
+                    len(data) or decompressor.is_finished(),
+                    "Draining done -> decompressor finished; if not, something's off")
 
-    assert_(decompressor.is_finished())
+        else:
+            data = decompressor.process(b"", output_buffer_limit=chunk_size)  # b"" compressor cannot accept more input
+            brotli_assert(
+                len(data) > 0,
+                "A brotli processor that cannot accept input _must_ be able to produce output or it would be stuck.")
+
+        if data:
+            yield data
 
 
 class GeneratorReader:
+    """Read from a generator (yielding bytes) as from a file-like object."""
 
     def __init__(self, generator):
         self.generator = generator
-        self.unread = b""
+        self.buffer = bytearray()
 
     def read(self, size=None):
         if size is None:
             for chunk in self.generator:
-                self.unread += chunk
-
-            result = self.unread
-            self.unread = b""
+                self.buffer.extend(chunk)
+            result = bytes(self.buffer)
+            self.buffer.clear()
             return result
 
-        while size > len(self.unread):
+        while len(self.buffer) < size:
             try:
                 chunk = next(self.generator)
-                if chunk == b"":
+                if not chunk:
                     break
-                self.unread += chunk
+                self.buffer.extend(chunk)
             except StopIteration:
                 break
 
-        self.unread, result = self.unread[size:], self.unread[:size]
+        result = bytes(self.buffer[:size])
+        del self.buffer[:size]
         return result
 
 
