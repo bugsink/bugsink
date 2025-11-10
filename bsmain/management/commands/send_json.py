@@ -66,7 +66,7 @@ class Command(BaseCommand):
                 dsn = os.environ["SENTRY_DSN"]
             else:
                 raise CommandError(
-                    "You must provide a DSN to send data to Sentry. Use --dsn or set SENTRY_DSN environment variable.")
+                    "You must provide a DSN. Use --dsn or set SENTRY_DSN environment variable.")
         else:
             dsn = options['dsn']
 
@@ -134,9 +134,6 @@ class Command(BaseCommand):
             headers = {
                 "Content-Type": "application/json",
                 "X-Sentry-Auth": get_header_value(dsn),
-                # as it stands we always send identifier here, even if it's not a filename. Whether that's useful or
-                # annoying is an open question, but no reason to change it for now
-                "X-BugSink-DebugInfo": identifier,
             }
 
             if options["x_forwarded_for"]:

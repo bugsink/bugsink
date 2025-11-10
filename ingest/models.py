@@ -10,7 +10,7 @@ logger = logging.getLogger("bugsink.ingest")
 
 class StoreEnvelope:
     def __init__(self, ingested_at, project_pk, request):
-        self._read = b""
+        self._read = bytearray()
 
         self._ingested_at = ingested_at
         self._project_pk = project_pk
@@ -20,7 +20,7 @@ class StoreEnvelope:
     def read(self, size):
         result = self.request.read(size)
         if result:
-            self._read += result
+            self._read.extend(result)
         return result
 
     def __getattr__(self, attr):
@@ -33,7 +33,7 @@ class StoreEnvelope:
     @immediate_atomic()
     def store(self):
         # read the rest of the request; the regular .ingest() method breaks early by design
-        self._read += self.request.read()
+        self._read.extend(self.request.read())
 
         if Envelope.objects.count() >= get_settings().KEEP_ENVELOPES:  # >= b/c about to add
             # -1 because 0-indexed; we delete including the boundary, so we'll have space for the new one
@@ -43,7 +43,7 @@ class StoreEnvelope:
         envelope = Envelope.objects.create(
             ingested_at=self._ingested_at,
             project_pk=self._project_pk,
-            data=self._read,
+            data=bytes(self._read),
         )
 
         # arguably "debug", but if you turned StoreEnvelope on, you probably want to use its results "soon", and I'd

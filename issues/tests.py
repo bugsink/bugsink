@@ -521,7 +521,6 @@ class IntegrationTest(TransactionTestCase):
                 content_type="application/json",
                 headers={
                     "X-Sentry-Auth": sentry_auth_header,
-                    "X-BugSink-DebugInfo": filename,
                 },
             )
             self.assertEqual(
@@ -554,7 +553,7 @@ class IntegrationTest(TransactionTestCase):
 
                 except Exception as e:
                     # we want to know _which_ event failed, hence the raise-from-e here
-                    raise AssertionError("Error rendering event %s" % event.debug_info) from e
+                    raise AssertionError("Error rendering event") from e
 
     def test_render_stacktrace_md(self):
         user = User.objects.create_user(username='test', password='test')
@@ -588,7 +587,6 @@ class IntegrationTest(TransactionTestCase):
             content_type="application/json",
             headers={
                 "X-Sentry-Auth": sentry_auth_header,
-                "X-BugSink-DebugInfo": filename,
             },
         )
         self.assertEqual(
