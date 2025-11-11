@@ -39,6 +39,7 @@ from alerts.tasks import send_new_issue_alert, send_regression_alert
 from compat.timestamp import format_timestamp, parse_timestamp
 from tags.models import digest_tags
 from bsmain.utils import b108_makedirs
+from sentry_sdk_extensions import capture_or_log_exception
 from sentry.minidump import merge_minidump_event
 
 from .parsers import StreamingEnvelopeParser, ParseError
@@ -735,12 +736,17 @@ class MinidumpAPIView(BaseIngestAPIView):
         project = self.get_project_for_request(project_pk, request)
 
         try:
-            minidump_bytes = request.FILES["upload_file_minidump"].read()
+            if "upload_file_minidump" not in request.FILES:
+                return JsonResponse({"detail": "upload_file_minidump not found"}, status=HTTP_400_BAD_REQUEST)
 
+            minidump_bytes = request.FILES["upload_file_minidump"].read()
             event_id = self.process_minidump(ingested_at, minidump_bytes, project, request)
 
             return JsonResponse({"id": event_id})
         except Exception as e:
+            # we're still figuring out what this endpoint should do; so we log errors to learn from them while saying
+            # to the client "400 Bad Request" if we can't handle their stuff.
+            capture_or_log_exception(e, logger)
             return JsonResponse({"detail": str(e)}, status=HTTP_400_BAD_REQUEST)
 
 
