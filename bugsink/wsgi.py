@@ -107,7 +107,7 @@ class CustomWSGIRequest(WSGIRequest):
             # For /health/ endpoints, we skip the ALLOWED_HOSTS validation (see #140).
             return self._get_raw_host()
 
-        # copied from HttpRequest.get_host() in Django 4.2, with modifications.
+        # copied from HttpRequest.get_host() in Django 5.2, with modifications.
 
         host = self._get_raw_host()
 
