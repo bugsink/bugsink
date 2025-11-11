@@ -13,6 +13,7 @@ from sentry.assemble import ChunkFileState
 
 from bugsink.app_settings import get_settings
 from bugsink.transaction import durable_atomic, immediate_atomic
+from bugsink.streams import handle_request_content_encoding
 from bsmain.models import AuthToken
 
 from .models import Chunk, File, FileMetadata
@@ -292,6 +293,8 @@ def api_catch_all(request, subpath):
     # the existance of this view (and the associated URL pattern) has the effect of `APPEND_SLASH=False` for our API
     # endpoints, which is a good thing: for API enpoints you generally don't want this kind of magic (explicit breakage
     # is desirable for APIs, and redirects don't even work for POST/PUT data)
+    MAX_API_CATCH_ALL_SIZE = 1_000_000  # security and usability meet at this value (or below)
+    handle_request_content_encoding(request, MAX_API_CATCH_ALL_SIZE)
 
     if not get_settings().API_LOG_UNIMPLEMENTED_CALLS:
         raise Http404("Unimplemented API endpoint: /api/" + subpath)
@@ -302,27 +305,44 @@ def api_catch_all(request, subpath):
         f"  Method: {request.method}",
     ]
 
+    interesting_meta_keys = ["CONTENT_TYPE", "CONTENT_LENGTH", "HTTP_TRANSFER_ENCODING"]
+    interesting_headers = {
+        k: request.META[k] for k in interesting_meta_keys if k in request.META
+    }
+
+    if interesting_headers:
+        lines.append("  Headers:")
+        for k, v in interesting_headers.items():
+            lines.append(f"    {k}: {v}")
+
     if request.GET:
         lines.append(f"  GET:    {request.GET.dict()}")
 
-    body = request.body  # note: must be above request.POST access to avoid "You cannot access body after reading ..."
-    if request.POST:
-        lines.append(f"  POST:   {request.POST.dict()}")
+    content_type = request.META.get("CONTENT_TYPE", "")
+    if content_type == "application/x-www-form-urlencoded" or content_type.startswith("multipart/form-data"):
+        if request.POST:
+            lines.append(f"  POST:   {request.POST.dict()}")
+        if request.FILES:
+            lines.append(f"  FILES:  {[f.name for f in request.FILES.values()]}")
 
-    if body:
-        try:
-            decoded = body.decode("utf-8", errors="replace").strip()
-            lines.append("  Body:")
-            lines.append(f"    {decoded[:500]}")
+    else:
+        body = request.read(MAX_API_CATCH_ALL_SIZE)
+        decoded = body.decode("utf-8", errors="replace").strip()
+
+        if content_type == "application/json":
+            shown_pretty = False
             try:
                 parsed = json.loads(decoded)
-                pretty = json.dumps(parsed, indent=2)[:10_000]
+                pretty = json.dumps(parsed, indent=2)
                 lines.append("  JSON body:")
                 lines.extend(f"    {line}" for line in pretty.splitlines())
+                shown_pretty = True
             except json.JSONDecodeError:
                 pass
-        except Exception as e:
-            lines.append(f"  Body: <decode error: {e}>")
+
+        if not shown_pretty:
+            lines.append("  Body:")
+            lines.append(f"    {body}")
 
     logger.info("\n".join(lines))
     raise Http404("Unimplemented API endpoint: /api/" + subpath)

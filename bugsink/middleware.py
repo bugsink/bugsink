@@ -32,6 +32,8 @@ class ContentEncodingCheckMiddleware:
         "ingest-store",
         "ingest-envelope",
         "ingest-minidump",
+
+        "api_catch_all",
     ]
 
     def __init__(self, get_response):

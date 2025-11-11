@@ -734,9 +734,8 @@ class MinidumpAPIView(BaseIngestAPIView):
     def post(self, request, project_pk=None):
         # not reusing the CORS stuff here; minidump-from-browser doesn't make sense.
 
-        # TODO: actually implement max (we just use Django defaults now, which will switch to write-to-tmp after 2.5M
-        # for the file, but this can still swamp your CPU/tmp dir.
-        handle_request_content_encoding(request)
+        # TODO: actually pick/configure max
+        handle_request_content_encoding(request, 50 * 1024 * 1024)
 
         ingested_at = datetime.now(timezone.utc)
         project = self.get_project_for_request(project_pk, request)

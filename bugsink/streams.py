@@ -165,7 +165,7 @@ def content_encoding_reader(request):
     return request
 
 
-def handle_request_content_encoding(request):
+def handle_request_content_encoding(request, max_length):
     """Turns a request w/ Content-Encoding into an unpacked equivalent; for further "regular" (POST, FILES) handling
     by Django.
     """
@@ -173,7 +173,7 @@ def handle_request_content_encoding(request):
     encoding = request.META.get("HTTP_CONTENT_ENCODING", "").lower()
     if encoding in ["gzip", "deflate", "br"]:
         assert_(not request._read_started)
-        request._stream = content_encoding_reader(request)
+        request._stream = MaxDataReader(max_length, content_encoding_reader(request))
 
         request.META["CONTENT_LENGTH"] = str(pow(2, 32) - 1)  # large enough (we can't predict the decompressed value)
         request.META.pop("HTTP_CONTENT_ENCODING")  # the resulting request is no longer encoded
