@@ -31,6 +31,7 @@ class ContentEncodingCheckMiddleware:
     SUPPORTED_VIEWS = [
         "ingest-store",
         "ingest-envelope",
+        "ingest-minidump",
     ]
 
     def __init__(self, get_response):

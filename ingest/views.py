@@ -29,7 +29,9 @@ from issues.regressions import issue_is_regression
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.exceptions import ViolatedExpectation
-from bugsink.streams import content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded
+from bugsink.streams import (
+    content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded,
+    handle_request_content_encoding)
 from bugsink.app_settings import get_settings
 
 from events.models import Event
@@ -731,6 +733,10 @@ class MinidumpAPIView(BaseIngestAPIView):
 
     def post(self, request, project_pk=None):
         # not reusing the CORS stuff here; minidump-from-browser doesn't make sense.
+
+        # TODO: actually implement max (we just use Django defaults now, which will switch to write-to-tmp after 2.5M
+        # for the file, but this can still swamp your CPU/tmp dir.
+        handle_request_content_encoding(request)
 
         ingested_at = datetime.now(timezone.utc)
         project = self.get_project_for_request(project_pk, request)

@@ -8,5 +8,5 @@ urlpatterns = [
     path("<int:project_pk>/envelope/", IngestEnvelopeAPIView.as_view(), name="ingest-envelope"),
 
     # is this "ingest"? it is at least in the sense that it matches the API schema and downstream auth etc.
-    path("<int:project_pk>/minidump/", MinidumpAPIView.as_view()),
+    path("<int:project_pk>/minidump/", MinidumpAPIView.as_view(), name="ingest-minidump"),
 ]

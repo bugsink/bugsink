@@ -5,6 +5,7 @@ import io
 import brotli
 
 from bugsink.app_settings import get_settings
+from bugsink.utils import assert_
 
 
 DEFAULT_CHUNK_SIZE = 8 * 1024
@@ -119,20 +120,63 @@ class GeneratorReader:
         del self.buffer[:size]
         return result
 
+    def readline(self, size=-1):
+        newline_index = self.buffer.find(b"\n")
+        while newline_index == -1:
+            chunk = self.read(DEFAULT_CHUNK_SIZE)
+            if not chunk:
+                break
+            self.buffer.extend(chunk)
+            newline_index = self.buffer.find(b"\n")
+
+        if newline_index != -1:
+            end = newline_index + 1
+        else:
+            end = len(self.buffer)
+
+        if size >= 0:
+            end = min(end, size)
+
+        result = bytes(self.buffer[:end])
+        del self.buffer[:end]
+        return result
+
 
 def content_encoding_reader(request):
     encoding = request.META.get("HTTP_CONTENT_ENCODING", "").lower()
-
     if encoding == "gzip":
-        return GeneratorReader(zlib_generator(request, WBITS_PARAM_FOR_GZIP), bad_request_exceptions=(zlib.error,))
+        return GeneratorReader(
+            zlib_generator(request._stream, WBITS_PARAM_FOR_GZIP),
+            bad_request_exceptions=(zlib.error,),
+        )
 
     if encoding == "deflate":
-        return GeneratorReader(zlib_generator(request, WBITS_PARAM_FOR_DEFLATE), bad_request_exceptions=(zlib.error,))
+        return GeneratorReader(
+            zlib_generator(request._stream, WBITS_PARAM_FOR_DEFLATE),
+            bad_request_exceptions=(zlib.error,)
+        )
 
     if encoding == "br":
-        return GeneratorReader(brotli_generator(request), bad_request_exceptions=(brotli.error, BrotliError))
+        return GeneratorReader(
+            brotli_generator(request._stream),
+            bad_request_exceptions=(brotli.error, BrotliError)
+        )
 
     return request
+
+
+def handle_request_content_encoding(request):
+    """Turns a request w/ Content-Encoding into an unpacked equivalent; for further "regular" (POST, FILES) handling
+    by Django.
+    """
+
+    encoding = request.META.get("HTTP_CONTENT_ENCODING", "").lower()
+    if encoding in ["gzip", "deflate", "br"]:
+        assert_(not request._read_started)
+        request._stream = content_encoding_reader(request)
+
+        request.META["CONTENT_LENGTH"] = str(pow(2, 32) - 1)  # large enough (we can't predict the decompressed value)
+        request.META.pop("HTTP_CONTENT_ENCODING")  # the resulting request is no longer encoded
 
 
 def compress_with_zlib(input_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
