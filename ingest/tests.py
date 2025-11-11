@@ -471,7 +471,7 @@ class IngestViewTestCase(TransactionTestCase):
         data_bytes = BROTLI_BOMB_4G
 
         t0 = time.time()
-        self.client.post(
+        response = self.client.post(
             f"/api/{ project.id }/envelope/",
             content_type="application/json",
             headers={
@@ -485,6 +485,9 @@ class IngestViewTestCase(TransactionTestCase):
             # in practice, locally: sub-second post-fix.
             # the failing version is well above 5s (I just stopped the process after ~30s)
             self.fail("Brotli bomb caused excessive processing time: %d seconds" % (time.time() - t0))
+
+        self.assertTrue(b"Max length" in response.content, response.content)
+        self.assertTrue(b"exceeded" in response.content, response.content)
 
     @tag("samples")
     def test_filestore(self):

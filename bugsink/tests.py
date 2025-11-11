@@ -401,6 +401,13 @@ class SetRemoteAddrMiddlewareTestCase(RegularTestCase):
             SetRemoteAddrMiddleware.parse_x_forwarded_for("123.123.123.123,1.2.3.4")
 
 
+class ContentEncodingCheckMiddlewareTestCase(DjangoTestCase):
+
+    def test_speak_brotli_with_arbitrary_view_fails(self):
+        response = self.client.post("/", headers={"Content-Encoding": "br"})
+        self.assertTrue(b"Content-Encoding handling is not supported for endpoint `home`" in response.content)
+
+
 class AllowedHostsMsgTestCase(DjangoTestCase):
 
     def test_allowed_hosts_error_message(self):

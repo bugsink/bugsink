@@ -9,9 +9,46 @@ from django.utils.translation import get_supported_language_variant
 from django.utils.translation.trans_real import parse_accept_lang_header
 from django.utils import translation
 from django.urls import get_script_prefix
+from django.http import HttpResponseBadRequest
 
 
 performance_logger = logging.getLogger("bugsink.performance.views")
+
+
+class ContentEncodingCheckMiddleware:
+    """
+    We don't just globally interpret Content-Encoding for all views since:
+
+    1. this increases our attack service (or forces us to reason about how it doesn't)
+    2. forces us to think about the interplay of Django's POST/FILES handling and maximums (DATA_UPLOAD_MAX_MEMORY_SIZE)
+       and our own maximums and handling.
+    3. the various maximums for reading from streaming requests are per-view (underlying data-type) anyway.
+
+    Instead, the only global thing we do is "fail explicitly".
+    """
+
+    # NOTE: once this list becomes long, we could switch to a per-view decorator (with the maximum bytes as a value)
+    SUPPORTED_VIEWS = [
+        "ingest-store",
+        "ingest-envelope",
+    ]
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        return self.get_response(request)
+
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        if request.resolver_match:
+            view_name = request.resolver_match.view_name
+        else:
+            view_name = "[unknown]"
+
+        if "HTTP_CONTENT_ENCODING" in request.META and view_name not in self.SUPPORTED_VIEWS:
+            return HttpResponseBadRequest(f"Content-Encoding handling is not supported for endpoint `{view_name}`")
+
+        return None  # proceed normally
 
 
 class DisallowChunkedMiddleware:
