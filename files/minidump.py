@@ -88,13 +88,13 @@ def _find_module_for_address(process_state, abs_addr: int):
 
 def event_threads_for_process_state(process_state):
     threads = []
-    for thread_index, thread in enumerate(process_state.threads()):
-        thread_frames = []
+    for thread_index, symbolic_thread in enumerate(process_state.threads()):
+        frames = []
 
-        for frame in thread.frames():
-            module = _find_module_for_address(process_state, frame.instruction)
-            fn = file = None
-            line = 0
+        for symbolic_frame in symbolic_thread.frames():
+            module = _find_module_for_address(process_state, symbolic_frame.instruction)
+
+            frame = {"instruction_addr": f"0x{symbolic_frame.instruction:x}"}
 
             if module and module.debug_id:
                 dashed_debug_id = symbolic.debuginfo.id_from_breakpad(module.debug_id)
@@ -104,40 +104,34 @@ def event_threads_for_process_state(process_state):
                     dif_bytes = file_metadata.file.data
 
                     archive = symbolic.debuginfo.Archive.from_bytes(dif_bytes)
-                    objects = list(archive.iter_objects())
-                    assert len(objects) == 1
-                    obj = objects[0]
+
+                    obj = get_single_object(archive)
 
                     symcache = obj.make_symcache()
 
-                    rel = frame.instruction - module.addr
-                    infos = symcache.lookup(rel) or symcache.lookup(rel - 1)  # "or -1" from ChatGPT... should we do it?
+                    rel = symbolic_frame.instruction - module.addr
+                    infos = symcache.lookup(rel)
                     if infos:
-                        li = infos[0]
-                        fn = li.function_name
-                        file = li.filename
-                        line = li.line
+                        # tentative understanding: lookup may give multiple results (e.g. inlined code). we just pick
+                        # the first arbitrarily which is "good enough for a PoC until proven otherwise"
+                        line_info = infos[0]
 
-                        # if we have line info, try source bundle
+                        frame["function"] = line_info.function_name
+                        if line_info.filename:
+                            frame["filename"] = line_info.filename
+                        frame["lineno"] = line_info.line
+
                         src_meta = FileMetadata.objects.filter(debug_id=dashed_debug_id, file_type="src").first()
-                        if src_meta and file and line:
-                            src_bytes = src_meta.file.data
-                            pre_ctx, ctx_line, post_ctx = extract_source_context(src_bytes, file, line)
+                        if src_meta and line_info.filename and line_info.line:
+                            frame["pre_context"], frame["context_line"], frame["post_context"] = extract_source_context(
+                                src_meta.file.data, line_info.filename, line_info.line)
 
-            thread_frames.append({
-                "instruction_addr": f"0x{frame.instruction:x}",
-                "function": fn or "<unknown>",
-                "filename": file,
-                "lineno": line,
-                "pre_context": pre_ctx,
-                "context_line": ctx_line,
-                "post_context": post_ctx,
-            })
+            frames.append(frame)
 
         threads.append({
-            "id": thread.thread_id,
+            "id": symbolic_thread.thread_id,
             "crashed": thread_index == process_state.requesting_thread,
-            "stacktrace": {"frames": thread_frames},
+            "stacktrace": {"frames": frames},
         })
 
     return threads
