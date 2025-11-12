@@ -22,6 +22,12 @@ logger = logging.getLogger("bugsink.email")
 def send_rendered_email(subject, base_template_name, recipient_list, context=None):
     from phonehome.models import Installation
 
+    # Clean up; Django will do the same: https://github.com/django/django/blob/main/django/core/mail/message.py#L354
+    # However, by doing the filter here we avoid logging something that is not reflective of what will actually happen.
+    recipient_list = [r for r in recipient_list if r]
+    if not recipient_list:
+        return
+
     if not Installation.check_and_inc_email_quota(timezone.now()):
         logger.warning(
             "Email quota exceeded; not sending email with subject '%s' to %s",

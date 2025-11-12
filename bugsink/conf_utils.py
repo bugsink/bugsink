@@ -91,6 +91,7 @@ def eat_your_own_dogfood(sentry_dsn, **kwargs):
             "ee",
             "ingest",
             "issues",
+            "files",
             "performance",
             "phonehome",
             "projects",

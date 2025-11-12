@@ -107,7 +107,8 @@ class Command(BaseCommand):
         return data_bytes
 
     def br_bomb(self, header, size):
-        filename = "/tmp/br-bomb-%d" % size
+        # no_bandit_expl utility-script for local consumtion only
+        filename = "/tmp/br-bomb-%d" % size  # nosec B108
         if os.path.exists(filename):
             with open(filename, "rb") as f:
                 data_bytes = f.read()
@@ -151,7 +152,7 @@ class Command(BaseCommand):
 
     def zlib_bomb(self, header, size, wbits):
         algo = "gzip" if wbits == WBITS_PARAM_FOR_GZIP else "deflate"
-        filename = "/tmp/%s-bomb-%d" % (algo, size)
+        filename = "/tmp/%s-bomb-%d" % (algo, size)  # nosec B108
 
         if os.path.exists(filename):
             with open(filename, "rb") as f:
