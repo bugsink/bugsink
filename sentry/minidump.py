@@ -12,11 +12,6 @@ def merge_minidump_event(data, minidump_bytes):
 
     data['level'] = 'fatal' if process_state.crashed else 'info'
 
-    exception_value = 'Assertion Error: %s' % process_state.assertion if process_state.assertion \
-        else 'Fatal Error: %s' % process_state.crash_reason
-    # NO_BANANA: data['message'] is not the right target
-    # data['message'] = exception_value
-
     if process_state.timestamp:
         data['timestamp'] = float(process_state.timestamp)
 
@@ -38,13 +33,18 @@ def merge_minidump_event(data, minidump_bytes):
     crashed_thread = threads[process_state.requesting_thread]
     crashed_thread['crashed'] = True
 
+    exception_value = 'Assertion Error: %s' % process_state.assertion if process_state.assertion \
+         else 'Fatal Error: %s' %process_state.crash_reason
+
     # Extract the crash reason and infos
     exception = {
         'value': exception_value,
         'thread_id': crashed_thread['id'],
         'type': process_state.crash_reason,
+
         # Move stacktrace here from crashed_thread (mutating!)
         'stacktrace': crashed_thread.pop('stacktrace'),
+        'value': exception_value,
     }
 
     for frame in exception['stacktrace']['frames']:
