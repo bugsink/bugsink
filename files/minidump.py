@@ -88,7 +88,7 @@ def _find_module_for_address(process_state, abs_addr: int):
 
 def event_threads_for_process_state(process_state):
     threads = []
-    for thread in process_state.threads():
+    for thread_index, thread in enumerate(process_state.threads()):
         thread_frames = []
 
         for frame in thread.frames():
@@ -136,7 +136,7 @@ def event_threads_for_process_state(process_state):
 
         threads.append({
             "id": thread.thread_id,
-            "crashed": (thread.thread_id == process_state.requesting_thread),
+            "crashed": thread_index == process_state.requesting_thread,
             "stacktrace": {"frames": thread_frames},
         })
 

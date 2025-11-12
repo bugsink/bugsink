@@ -29,34 +29,30 @@ def merge_minidump_event(data, minidump_bytes):
     threads = event_threads_for_process_state(process_state)
     data.setdefault("threads", {})["values"] = threads
 
-    # Mark the crashed thread and add its stacktrace to the exception
-    crashed_thread = threads[process_state.requesting_thread]
-    crashed_thread['crashed'] = True
+    if process_state.requesting_thread > -1:
+        crashed_thread = threads[process_state.requesting_thread]
 
-    exception_value = 'Assertion Error: %s' % process_state.assertion if process_state.assertion \
-         else 'Fatal Error: %s' %process_state.crash_reason
+        exception_value = 'Assertion Error: %s' % process_state.assertion if process_state.assertion \
+             else 'Fatal Error: %s' % process_state.crash_reason
 
-    # Extract the crash reason and infos
-    exception = {
-        'value': exception_value,
-        'thread_id': crashed_thread['id'],
-        'type': process_state.crash_reason,
+        exception = {
+            'value': exception_value,
+            'thread_id': crashed_thread['id'],
+            'type': process_state.crash_reason,
+            'stacktrace': crashed_thread.pop('stacktrace'),
+            'value': exception_value,
+        }
 
-        # Move stacktrace here from crashed_thread (mutating!)
-        'stacktrace': crashed_thread.pop('stacktrace'),
-        'value': exception_value,
-    }
+        for frame in exception['stacktrace']['frames']:
+            frame['in_app'] = True  # minidumps don't distinguish in_app frames; assume all are in_app
 
-    for frame in exception['stacktrace']['frames']:
-        frame['in_app'] = True  # minidumps don't distinguish in_app frames; assume all are in_app
+        exception['stacktrace']['frames'].reverse()  # "Frames should be sorted from oldest to newest."
+        # TODO we don't have display-info for threads yet, I think?
+        # we may need to revert the per-thread stacktraces above as well then
 
-    exception['stacktrace']['frames'].reverse()  # "Frames should be sorted from oldest to newest."
-    # TODO we don't have display-info for threads yet, I think?
-    # we may need to revert the per-thread stacktraces above as well then
-
-    data.setdefault('exception', {}) \
-        .setdefault('values', []) \
-        .append(exception)
+        data.setdefault('exception', {}) \
+            .setdefault('values', []) \
+            .append(exception)
 
     # Extract referenced (not all loaded) images
     images = [{
