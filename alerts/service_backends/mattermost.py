@@ -27,22 +27,23 @@ class MattermostConfigForm(forms.Form):
         required=False,
         help_text='Optional: Override channel (e.g., "town-square" or "@username" for DMs)',
     )
-    format_title = forms.CharField(
-        required=False,
-        max_length=200,
-        help_text='Title template using $variable syntax (e.g., "$alert_reason issue"). '
-        "Available: $alert_reason, $project, $issue_url, $issue_title, $unmute_reason, "
-        "$release, $environment. "
-        "Leave empty for default.",
-    )
-    format_text = forms.CharField(
-        required=False,
-        widget=forms.Textarea(attrs={"rows": 3}),
-        help_text='Text template using $variable syntax (e.g., "$project\\n$issue_url"). '
-        "Available: $alert_reason, $project, $issue_url, $issue_title, $unmute_reason, "
-        "$release, $environment. "
-        "Leave empty for default.",
-    )
+
+    # format_title = forms.CharField(
+    #     required=False,
+    #     max_length=200,
+    #     help_text='Title template using $variable syntax (e.g., "$alert_reason issue"). '
+    #     "Available: $alert_reason, $project, $issue_url, $issue_title, $unmute_reason, "
+    #     "$release, $environment. "
+    #     "Leave empty for default.",
+    # )
+    # format_text = forms.CharField(
+    #     required=False,
+    #     widget=forms.Textarea(attrs={"rows": 3}),
+    #     help_text='Text template using $variable syntax (e.g., "$project\\n$issue_url"). '
+    #     "Available: $alert_reason, $project, $issue_url, $issue_title, $unmute_reason, "
+    #     "$release, $environment. "
+    #     "Leave empty for default.",
+    # )
 
     def __init__(self, *args, **kwargs):
         config = kwargs.pop("config", None)
@@ -51,12 +52,12 @@ class MattermostConfigForm(forms.Form):
         if config:
             self.fields["webhook_url"].initial = config.get("webhook_url", "")
             self.fields["channel"].initial = config.get("channel", "")
-            self.fields["format_title"].initial = config.get(
-                "format_title", default_format_title()
-            )
-            self.fields["format_text"].initial = config.get(
-                "format_text", default_format_text()
-            )
+            # self.fields["format_title"].initial = config.get(
+            #     "format_title", default_format_title()
+            # )
+            # self.fields["format_text"].initial = config.get(
+            #     "format_text", default_format_text()
+            # )
 
     def get_config(self):
         config = {
@@ -65,12 +66,12 @@ class MattermostConfigForm(forms.Form):
         if self.cleaned_data.get("channel"):
             config["channel"] = self.cleaned_data.get("channel")
 
-        config["format_title"] = (
-            self.cleaned_data.get("format_title") or default_format_title()
-        )
-        config["format_text"] = (
-            self.cleaned_data.get("format_text") or default_format_text()
-        )
+        # config["format_title"] = (
+        #     self.cleaned_data.get("format_title") or default_format_title()
+        # )
+        # config["format_text"] = (
+        #     self.cleaned_data.get("format_text") or default_format_text()
+        # )
 
         return config
 
@@ -259,7 +260,9 @@ class MattermostBackend:
             alert_reason,
             self.service_config.id,
             channel=config.get("channel"),
-            format_title=config.get("format_title", default_format_title()),
-            format_text=config.get("format_text", default_format_text()),
+            format_title=default_format_title(),
+            format_text=default_format_text(),
+            # format_title=config.get("format_title", default_format_title()),
+            # format_text=config.get("format_text", default_format_text()),
             **kwargs,
         )
