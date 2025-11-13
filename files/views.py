@@ -212,8 +212,8 @@ def difs_assemble(request, organization_slug, project_slug):
     file_checksums = set(data.keys())
 
     existing_files = {
-        f.file.checksum: f
-        for f in FileMetadata.objects.filter(file__checksum__in=file_checksums)
+        file.checksum: file
+        for file in File.objects.filter(checksum__in=file_checksums)
     }
 
     all_requested_chunks = {
