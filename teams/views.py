@@ -25,7 +25,9 @@ User = get_user_model()
 @atomic_for_request_method
 def team_list(request, ownership_filter=None):
     my_memberships = TeamMembership.objects.filter(user=request.user)
-    my_teams = Team.objects.filter(teammembership__in=my_memberships)
+
+    # using `id__in` here to ensure the member_count later on is not restricted to our own memberships (at most 1)
+    my_teams = Team.objects.filter(id__in=TeamMembership.objects.filter(user=request.user).values('team_id'))
 
     if request.user.is_superuser:
         # superusers can see all teams, even hidden ones

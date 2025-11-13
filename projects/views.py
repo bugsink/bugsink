@@ -35,28 +35,30 @@ User = get_user_model()
 @atomic_for_request_method
 def project_list(request, ownership_filter=None):
     my_memberships = ProjectMembership.objects.filter(user=request.user)
-    my_team_memberships = TeamMembership.objects.filter(user=request.user)
 
+    # using `id__in` here to ensure the counts later on is not restricted to our own memberships (at most 1)
     my_projects = Project.objects.filter(
-        projectmembership__in=my_memberships, is_deleted=False).order_by('name').distinct()
+        id__in=ProjectMembership.objects.filter(user=request.user).values('project_id'), is_deleted=False) \
+        .order_by('name').distinct()
+
     my_teams_projects = \
         Project.objects \
-        .filter(team__teammembership__in=my_team_memberships, is_deleted=False) \
+        .filter(team_id__in=TeamMembership.objects.filter(user=request.user).values('team_id'), is_deleted=False) \
         .exclude(projectmembership__in=my_memberships) \
         .order_by('name').distinct()
 
     if request.user.is_superuser:
-        # superusers can see all project, even hidden ones
+        # superusers can see all projects, even hidden ones
         other_projects = Project.objects \
             .filter(is_deleted=False) \
-            .exclude(projectmembership__in=my_memberships) \
-            .exclude(team__teammembership__in=my_team_memberships) \
+            .exclude(id__in=ProjectMembership.objects.filter(user=request.user).values('project_id')) \
+            .exclude(team_id__in=TeamMembership.objects.filter(user=request.user).values('team_id')) \
             .order_by('name').distinct()
     else:
         other_projects = Project.objects \
             .filter(is_deleted=False) \
-            .exclude(projectmembership__in=my_memberships) \
-            .exclude(team__teammembership__in=my_team_memberships) \
+            .exclude(id__in=ProjectMembership.objects.filter(user=request.user).values('project_id')) \
+            .exclude(team_id__in=TeamMembership.objects.filter(user=request.user).values('team_id')) \
             .exclude(visibility=ProjectVisibility.TEAM_MEMBERS) \
             .order_by('name').distinct()
 

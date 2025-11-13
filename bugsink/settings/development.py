@@ -151,6 +151,10 @@ LOGGING["handlers"]["snappea"]["level"] = "DEBUG"
 LOGGING["loggers"]["snappea"]["level"] = "DEBUG"
 LOGGING["formatters"]["snappea"]["format"] = "{asctime} - {threadName} - {levelname:7} - {message}"
 
+# email logger: we mirror the advised logger from #86 here to debug that setting itself as well as get insight in email
+# sending during development
+LOGGING['loggers']['bugsink.email']['level'] = "INFO"
+
 ALLOWED_HOSTS = deduce_allowed_hosts(BUGSINK["BASE_URL"])
 
 # django-tailwind setting; the below allows for environment-variable overriding of the npm binary path.
