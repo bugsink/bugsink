@@ -233,7 +233,9 @@ def difs_assemble(request, organization_slug, project_slug):
             response[file_checksum] = {
                 "state": ChunkFileState.OK,
                 "missingChunks": [],
-                # "dif": serialize(existing_files[file_checksum]),  # TODO: figure out if this is required.
+                # if it is ever needed, we could add something akin to the below, but so far we've not seen client-side
+                # actually using this; let's add it on-demand.
+                # "dif": json_repr_with_key_info_about(existing_files[file_checksum]),
             }
             continue
 
