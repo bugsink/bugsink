@@ -270,6 +270,17 @@ class Event(models.Model):
             self.tags.all().select_related("value", "value__key").order_by("value__key__key")
         )
 
+    @cached_property
+    def get_blameref(self):
+        tag = (
+            self.tags.filter(value__key__key=self.project.blame_ref_tag)
+            .values("value__value")
+            .first()
+        )
+        if tag is not None:
+            return tag["value__value"]
+        return "main"
+
     def delete_deferred(self):
         """Schedules deletion of all related objects"""
         # NOTE: for such a small closure, I couldn't be bothered to have an .is_deleted field and deal with it. (the
