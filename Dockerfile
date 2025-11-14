@@ -43,6 +43,10 @@ RUN --mount=type=cache,target=/var/cache/buildkit/pip \
 COPY . /app/
 COPY bugsink/conf_templates/docker.py.template bugsink_conf.py
 
+
+ARG VERSION
+ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_BUGSINK=${VERSION}
+
 # Git is needed by setuptools_scm to get the version from the git tag
 RUN apt update && apt install -y git
 RUN pip install -e .
