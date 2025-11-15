@@ -179,6 +179,9 @@ BUGSINK = {
         os.getenv("MINIMIZE_INFORMATION_EXPOSURE", "false").lower() in ("true", "1", "yes"),
 
     "PHONEHOME": os.getenv("PHONEHOME", "true").lower() in ("true", "1", "yes"),
+
+    # Feature flags
+    "FEATURE_MINIDUMPS": os.getenv("PHONEHOME", "false").lower() in ("true", "1", "yes"),
 }
 
 
