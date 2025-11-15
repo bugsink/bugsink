@@ -205,6 +205,9 @@ def artifact_bundle_assemble(request, organization_slug):
 @csrf_exempt  # we're in API context here; this could potentially be pulled up to a higher level though
 @requires_auth_token
 def difs_assemble(request, organization_slug, project_slug):
+    if not get_settings().FEATURE_MINIDUMPS:
+        return JsonResponse({"detail": "minidumps not enabled"}, status=404)
+
     # TODO move to tasks.something.delay
     # TODO think about the right transaction around this
     data = json.loads(request.body)

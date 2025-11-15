@@ -53,6 +53,7 @@ from .models import StoreEnvelope, DontStoreEnvelope, Envelope
 
 HTTP_429_TOO_MANY_REQUESTS = 429
 HTTP_400_BAD_REQUEST = 400
+HTTP_404_NOT_FOUND = 404
 HTTP_501_NOT_IMPLEMENTED = 501
 
 
@@ -638,7 +639,10 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
             if ((type_ not in ["event", "attachment"]) or
                     (item_headers.get("type") == "attachment" and
-                     item_headers.get("attachment_type") != "event.minidump")):
+                     item_headers.get("attachment_type") != "event.minidump") or
+                    (item_headers.get("type") == "attachment" and
+                     item_headers.get("attachment_type") == "event.minidump" and
+                     not get_settings().FEATURE_MINIDUMPS)):
 
                 # non-event/minidumps can be discarded; (we don't check for individual size limits, because these differ
                 # per item type, we have the envelope limit to protect us, and we incur almost no cost (NullWriter))
@@ -732,6 +736,9 @@ class MinidumpAPIView(BaseIngestAPIView):
     # I'm not 100% sure whether "philosophically" the minidump endpoint is also "ingesting"; we'll see.
 
     def post(self, request, project_pk=None):
+        if not get_settings().FEATURE_MINIDUMPS:
+            return JsonResponse({"detail": "minidumps not enabled"}, status=HTTP_404_NOT_FOUND)
+
         # not reusing the CORS stuff here; minidump-from-browser doesn't make sense.
 
         # TODO: actually pick/configure max

@@ -109,6 +109,9 @@ BUGSINK = {
     "MAX_EMAILS_PER_MONTH": 10,  # for development: a thing to tune if you want to the the quota system
 
     "KEEP_ARTIFACT_BUNDLES": True,  # in development: useful to preserve sourcemap uploads
+
+    # in development we want optional features enabled to [1] play with them and [2] have the tests work
+    "FEATURE_MINIDUMPS": True,
 }
 
 
