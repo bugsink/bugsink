@@ -15,6 +15,8 @@ from compat.dsn import get_store_url, get_envelope_url, get_header_value
 from bugsink.streams import compress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE
 from bugsink.utils import nc_rnd
 
+from ..utils import random_for_RANDOM
+
 
 class Command(BaseCommand):
     help = "Send raw events to a sentry-compatible server; events can be sources from the filesystem or your DB."
@@ -125,6 +127,8 @@ class Command(BaseCommand):
             for tag in options["tag"]:
                 tag = tag[0]  # it's a list of lists... how to prevent this is not immediately clear
                 k, v = tag.split(":", 1)
+
+                v = random_for_RANDOM(k, v)
                 data["tags"][k] = v
 
         if options["valid_only"] and not self.is_valid(data, identifier):
