@@ -94,7 +94,9 @@ def deduce_tags(event_data):
         value = get_path(event_data, *lookup_path)
 
         # NOTE: we don't have some kind of "defaulting" mechanism here; if the value is None / non-existent, we simply
-        # don't add the tag.
+        # don't add the tag. NOTE also that this code implies that event_data values take precendence over explicitly
+        # provided tags; this is OK b/c explicitly provided tags are supposed to be for "custom"/"extra" tags; the SDK
+        # is supposed to just pick the right (non-tag) location for standard tags.
         if value not in [None, ""]:
             tags[tag_key] = _convert_non_strings(value)
 
@@ -151,10 +153,10 @@ def is_mostly_unique(key):
     if key.startswith("trace"):
         return True
 
-    if key in ["browser.version", "browser"]:
+    if key in ["browser.version", "browser"]:  # "browser" includes version info, hence "mostly unique"
         return True
 
-    if key in ["os.version", "os"]:
+    if key in ["os.version", "os"]:  # "os" includes version info, hence "mostly unique"
         return True
 
     return False

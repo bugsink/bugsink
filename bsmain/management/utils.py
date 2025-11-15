@@ -1,11 +1,12 @@
 from bugsink.utils import nc_rnd
+from tags.utils import EVENT_DATA_CONVERSION_TABLE, CONTEXT_CONVERSION_TABLE
 
 
 PRETTY_RANDOM_TAGS = {
-    "os": ["Windows", "Linux", "MacOS", "Android", "iOS"],
+    "os.name": ["Windows", "Linux", "MacOS", "Android", "iOS"],
     "os.version": ["10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"],
     "cpu": ["x86", "x64", "ARM", "ARM64", "MIPS"],
-    "browser": ["Chrome", "Firefox", "Safari", "Edge", "Opera"],
+    "browser.name": ["Chrome", "Firefox", "Safari", "Edge", "Opera"],
     "device": ["Desktop", "Laptop", "Tablet", "Smartphone"],
     "environment": ["production", "staging", "development", "testing"],
     "release": ["1.0.0", "1.1.0", "1.2.0", "2.0.0", "2.1.0"],
@@ -24,6 +25,33 @@ def random_postfix():
         unevenly_distributed_number = int(1 / random_number)
 
     return "".join([chr(ord("A") + int(c)) for c in str(unevenly_distributed_number)])
+
+
+def set_path(data, path, v):
+    d = data
+    for part in path[:-1]:
+        if part not in d:
+            d[part] = {}
+        d = d[part]
+    d[path[-1]] = v
+
+
+def handle_upload_tags(event_data, tags):
+    if "tags" not in event_data:
+        event_data["tags"] = {}
+
+    for k, v in tags.items():
+        v = random_for_RANDOM(k, v)
+
+        # push `tag` values into their proper location in event_data, if applicable
+        if k in EVENT_DATA_CONVERSION_TABLE or k in CONTEXT_CONVERSION_TABLE:
+            if k in EVENT_DATA_CONVERSION_TABLE:
+                lookup_path = EVENT_DATA_CONVERSION_TABLE[k]
+            else:
+                lookup_path = ("contexts",) + CONTEXT_CONVERSION_TABLE[k]
+            set_path(event_data, lookup_path, v)
+        else:
+            event_data["tags"][k] = v
 
 
 def random_for_RANDOM(k, v):
