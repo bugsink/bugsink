@@ -13,10 +13,12 @@ from sentry.assemble import ChunkFileState
 
 from bugsink.app_settings import get_settings
 from bugsink.transaction import durable_atomic, immediate_atomic
+from bugsink.streams import handle_request_content_encoding
 from bsmain.models import AuthToken
 
-from .models import Chunk, File
-from .tasks import assemble_artifact_bundle
+from .models import Chunk, File, FileMetadata
+from .tasks import assemble_artifact_bundle, assemble_file
+from .minidump import extract_dif_metadata
 
 logger = logging.getLogger("bugsink.api")
 
@@ -86,7 +88,8 @@ def get_chunk_upload_settings(request, organization_slug):
             # yet.
             "release_files",
 
-            # this would seem to be the "javascript sourcemaps" thing, but how exactly I did not check yet.
+            # on second reading I would say: this is "actual source code", but I did not check yet and "don't touch it"
+            # (even though we don't actually have an implementation for sources yet)
             "sources",
 
             # https://github.com/getsentry/sentry/discussions/46967
@@ -100,7 +103,7 @@ def get_chunk_upload_settings(request, organization_slug):
             # "artifact_bundles_v2",
 
             # the rest of the options are below:
-            # "debug_files",
+            "debug_files",
             # "release_files",
             # "pdbs",
             # "bcsymbolmaps",
@@ -151,6 +154,7 @@ def chunk_upload(request, organization_slug):
     # POST: upload (full-size) "chunks" and store them as Chunk objects; file.name whould be the sha1 of the content.
     chunks = []
     if request.FILES:
+        # "file" and "file_gzip" are both possible multi-value keys for uploading (with associated semantics each)
         chunks = request.FILES.getlist("file")
 
         # NOTE: we read the whole unzipped file into memory; we _could_ take an approach like bugsink/streams.py.
@@ -198,6 +202,86 @@ def artifact_bundle_assemble(request, organization_slug):
     return JsonResponse({"state": ChunkFileState.CREATED, "missingChunks": []})
 
 
+@csrf_exempt  # we're in API context here; this could potentially be pulled up to a higher level though
+@requires_auth_token
+def difs_assemble(request, organization_slug, project_slug):
+    if not get_settings().FEATURE_MINIDUMPS:
+        return JsonResponse({"detail": "minidumps not enabled"}, status=404)
+
+    # TODO move to tasks.something.delay
+    # TODO think about the right transaction around this
+    data = json.loads(request.body)
+
+    file_checksums = set(data.keys())
+
+    existing_files = {
+        file.checksum: file
+        for file in File.objects.filter(checksum__in=file_checksums)
+    }
+
+    all_requested_chunks = {
+        chunk
+        for file_info in data.values()
+        for chunk in file_info.get("chunks", [])
+    }
+
+    available_chunks = set(
+        Chunk.objects.filter(checksum__in=all_requested_chunks).values_list("checksum", flat=True)
+    )
+
+    response = {}
+
+    for file_checksum, file_info in data.items():
+        if file_checksum in existing_files:
+            response[file_checksum] = {
+                "state": ChunkFileState.OK,
+                "missingChunks": [],
+                # if it is ever needed, we could add something akin to the below, but so far we've not seen client-side
+                # actually using this; let's add it on-demand.
+                # "dif": json_repr_with_key_info_about(existing_files[file_checksum]),
+            }
+            continue
+
+        file_chunks = file_info.get("chunks", [])
+
+        # the sentry-cli sends an empty "chunks" list when just polling for file existence; since we already handled the
+        # case of existing files above, we can simply return NOT_FOUND here.
+        if not file_chunks:
+            response[file_checksum] = {
+                "state": ChunkFileState.NOT_FOUND,
+                "missingChunks": [],
+            }
+            continue
+
+        missing_chunks = [c for c in file_chunks if c not in available_chunks]
+        if missing_chunks:
+            response[file_checksum] = {
+                "state": ChunkFileState.NOT_FOUND,
+                "missingChunks": missing_chunks,
+            }
+            continue
+
+        file, _ = assemble_file(file_checksum, file_chunks, filename=file_info["name"])
+
+        symbolic_metadata = extract_dif_metadata(file.data)
+
+        FileMetadata.objects.get_or_create(
+            debug_id=file_info.get("debug_id"),  # TODO : .get implies "no debug_id", but in that case it's useless
+            file_type=symbolic_metadata["kind"],  # NOTE: symbolic's kind goes into file_type...
+            defaults={
+                "file": file,
+                "data": "{}",  # this is the "catch all" field but I don't think we have anything in this case.
+            }
+        )
+
+        response[file_checksum] = {
+            "state": ChunkFileState.OK,
+            "missingChunks": [],
+        }
+
+    return JsonResponse(response)
+
+
 @user_passes_test(lambda u: u.is_superuser)
 @durable_atomic
 def download_file(request, checksum):
@@ -218,6 +302,8 @@ def api_catch_all(request, subpath):
     # the existance of this view (and the associated URL pattern) has the effect of `APPEND_SLASH=False` for our API
     # endpoints, which is a good thing: for API enpoints you generally don't want this kind of magic (explicit breakage
     # is desirable for APIs, and redirects don't even work for POST/PUT data)
+    MAX_API_CATCH_ALL_SIZE = 1_000_000  # security and usability meet at this value (or below)
+    handle_request_content_encoding(request, MAX_API_CATCH_ALL_SIZE)
 
     if not get_settings().API_LOG_UNIMPLEMENTED_CALLS:
         raise Http404("Unimplemented API endpoint: /api/" + subpath)
@@ -228,27 +314,44 @@ def api_catch_all(request, subpath):
         f"  Method: {request.method}",
     ]
 
+    interesting_meta_keys = ["CONTENT_TYPE", "CONTENT_LENGTH", "HTTP_TRANSFER_ENCODING"]
+    interesting_headers = {
+        k: request.META[k] for k in interesting_meta_keys if k in request.META
+    }
+
+    if interesting_headers:
+        lines.append("  Headers:")
+        for k, v in interesting_headers.items():
+            lines.append(f"    {k}: {v}")
+
     if request.GET:
         lines.append(f"  GET:    {request.GET.dict()}")
 
-    if request.POST:
-        lines.append(f"  POST:   {request.POST.dict()}")
+    content_type = request.META.get("CONTENT_TYPE", "")
+    if content_type == "application/x-www-form-urlencoded" or content_type.startswith("multipart/form-data"):
+        if request.POST:
+            lines.append(f"  POST:   {request.POST.dict()}")
+        if request.FILES:
+            lines.append(f"  FILES:  {[f.name for f in request.FILES.values()]}")
 
-    body = request.body
-    if body:
-        try:
-            decoded = body.decode("utf-8", errors="replace").strip()
-            lines.append("  Body:")
-            lines.append(f"    {decoded[:500]}")
+    else:
+        body = request.read(MAX_API_CATCH_ALL_SIZE)
+        decoded = body.decode("utf-8", errors="replace").strip()
+
+        if content_type == "application/json":
+            shown_pretty = False
             try:
                 parsed = json.loads(decoded)
-                pretty = json.dumps(parsed, indent=2)[:10_000]
+                pretty = json.dumps(parsed, indent=2)
                 lines.append("  JSON body:")
                 lines.extend(f"    {line}" for line in pretty.splitlines())
+                shown_pretty = True
             except json.JSONDecodeError:
                 pass
-        except Exception as e:
-            lines.append(f"  Body: <decode error: {e}>")
+
+        if not shown_pretty:
+            lines.append("  Body:")
+            lines.append(f"    {body}")
 
     logger.info("\n".join(lines))
     raise Http404("Unimplemented API endpoint: /api/" + subpath)

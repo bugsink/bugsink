@@ -105,8 +105,8 @@ def assemble_file(checksum, chunk_checksums, filename):
 
     # NOTE: unimplemented checks/tricks
     # * total file-size v.s. some max
-    # * explicit check chunk availability (as it stands, our processing is synchronous, so no need)
-    # * skip-on-checksum-exists
+    # * explicit check chunk availability
+    # * skip this whole thing when the (whole-file) checksum exists
 
     chunks = Chunk.objects.filter(checksum__in=chunk_checksums)
     chunks_dicts = {chunk.checksum: chunk for chunk in chunks}
@@ -117,7 +117,7 @@ def assemble_file(checksum, chunk_checksums, filename):
     if sha1(data, usedforsecurity=False).hexdigest() != checksum:
         raise Exception("checksum mismatch")
 
-    result = File.objects.get_or_create(
+    file, created = File.objects.get_or_create(
         checksum=checksum,
         defaults={
             "size": len(data),
@@ -129,7 +129,7 @@ def assemble_file(checksum, chunk_checksums, filename):
     # be used in multiple files (which are still being assembled) but with chunksizes in the order of 1MiB, I'd say this
     # is unlikely.
     chunks.delete()
-    return result
+    return file, created
 
 
 @shared_task

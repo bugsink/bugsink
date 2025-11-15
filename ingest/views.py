@@ -1,8 +1,8 @@
+from collections import defaultdict
 import uuid
 import hashlib
 import os
 import logging
-import io
 from datetime import datetime, timezone
 import json
 import jsonschema
@@ -29,7 +29,9 @@ from issues.regressions import issue_is_regression
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.exceptions import ViolatedExpectation
-from bugsink.streams import content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded
+from bugsink.streams import (
+    content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded,
+    handle_request_content_encoding)
 from bugsink.app_settings import get_settings
 
 from events.models import Event
@@ -39,6 +41,8 @@ from alerts.tasks import send_new_issue_alert, send_regression_alert
 from compat.timestamp import format_timestamp, parse_timestamp
 from tags.models import digest_tags
 from bsmain.utils import b108_makedirs
+from sentry_sdk_extensions import capture_or_log_exception
+from sentry.minidump import merge_minidump_event
 
 from .parsers import StreamingEnvelopeParser, ParseError
 from .filestore import get_filename_for_event_id
@@ -49,6 +53,7 @@ from .models import StoreEnvelope, DontStoreEnvelope, Envelope
 
 HTTP_429_TOO_MANY_REQUESTS = 429
 HTTP_400_BAD_REQUEST = 400
+HTTP_404_NOT_FOUND = 404
 HTTP_501_NOT_IMPLEMENTED = 501
 
 
@@ -151,22 +156,32 @@ class BaseIngestAPIView(View):
         return cls.get_project(project_pk, sentry_key)
 
     @classmethod
-    def process_event(cls, ingested_at, event_id, event_data_stream, project, request):
-        event_metadata = cls.get_event_meta(event_id, ingested_at, request, project)
+    def process_minidump(cls, ingested_at, minidump_bytes, project, request):
+        # This is for the "pure" minidump case, i.e. no associated event data. TSTTCPW: convert the minidump data to an
+        # event and then proceed as usual.
 
-        if get_settings().DIGEST_IMMEDIATELY:
-            # in this case the stream will be an BytesIO object, so we can actually call .get_value() on it.
-            event_data_bytes = event_data_stream.getvalue()
-            event_data = json.loads(event_data_bytes.decode("utf-8"))
-            performance_logger.info("ingested event with %s bytes", len(event_data_bytes))
-            cls.digest_event(event_metadata, event_data)
-        else:
-            # In this case the stream will be a file that has been written the event's content to it.
-            # To ensure that the (possibly EAGER) handling of the digest has the file available, we flush it here:
-            event_data_stream.flush()
+        performance_logger.info("ingested minidump with %s bytes", len(minidump_bytes))
 
-            performance_logger.info("ingested event with %s bytes", event_data_stream.bytes_written)
-            digest.delay(event_id, event_metadata)
+        event_id = uuid.uuid4().hex
+        event_data = {
+            "event_id": event_id,
+            "platform": "native",
+            "extra": {},
+            "errors": [],
+        }
+
+        merge_minidump_event(event_data, minidump_bytes)
+
+        # write the event data to disk:
+        filename = get_filename_for_event_id(event_data["event_id"])
+        b108_makedirs(os.path.dirname(filename))
+        with open(filename, 'w') as f:
+            json.dump(event_data, f)
+
+        event_metadata = cls.get_event_meta(event_data["event_id"], ingested_at, request, project)
+        digest.delay(event_data["event_id"], event_metadata)
+
+        return event_id
 
     @classmethod
     def get_event_meta(cls, event_id, ingested_at, request, project):
@@ -237,7 +252,7 @@ class BaseIngestAPIView(View):
 
     @classmethod
     @immediate_atomic()
-    def digest_event(cls, event_metadata, event_data, digested_at=None):
+    def digest_event(cls, event_metadata, event_data, digested_at=None, minidump_bytes=None):
         # ingested_at is passed from the point-of-ingestion; digested_at is determined here. Because this happens inside
         # `immediate_atomic`, we know digestions are serialized, and assuming non-decreasing server clocks, not decrea-
         # sing. (no so for ingestion times: clock-watching happens outside the snappe transaction, and threading in the
@@ -266,6 +281,12 @@ class BaseIngestAPIView(View):
 
         if get_settings().VALIDATE_ON_DIGEST in ["warn", "strict"]:
             cls.validate_event_data(event_data, get_settings().VALIDATE_ON_DIGEST)
+
+        if minidump_bytes is not None:
+            # we merge after validation: validation is about what's provided _externally_, not our own merging.
+            # TODO error handling
+            # TODO should not be inside immediate_atomic if it turns out to be slow
+            merge_minidump_event(event_data, minidump_bytes)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
@@ -510,30 +531,31 @@ class BaseIngestAPIView(View):
 class IngestEventAPIView(BaseIngestAPIView):
 
     def _post(self, request, project_pk=None):
+        # This endpoint is deprecated. Personally, I think it's the simpler (and given my goals therefore better) of the
+        # two, but fighting windmills and all... given that it's deprecated, I'm not going to give it quite as much love
+        # (at least for now).
+        #
+        # The main point of "inefficiency" is that the event data is parsed twice: once here (to get the event_id), and
+        # once in the actual digest.delay()
         ingested_at = datetime.now(timezone.utc)
         project = self.get_project_for_request(project_pk, request)
         if project.quota_exceeded_until is not None and ingested_at < project.quota_exceeded_until:
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
-        # This endpoint is deprecated. Personally, I think it's the simpler (and given my goals therefore better) of the
-        # two, but fighting windmills and all... given that it's deprecated, I'm not going to give it quite as much love
-        # (at least for now). Interfaces between the internal methods quite changed a bit recently, and this one did not
-        # keep up.
-        #
-        # In particular I'd like to just call process_event() here, but that takes both an event_id and an unparsed data
-        # stream, and we don't have an event_id here before parsing (and we don't want to parse twice). similarly,
-        # event_metadata construction requires the event_id.
-        #
-        # Instead, we just copy/pasted the relevant parts of process_event() here, and take only one branch (the one
-        # that digests immediately); i.e. we always digest immediately, independent of the setting.
+        event_data_bytes = MaxDataReader(
+            "MAX_EVENT_SIZE", content_encoding_reader(MaxDataReader("MAX_EVENT_COMPRESSED_SIZE", request))).read()
 
-        event_data = json.loads(
-            MaxDataReader("MAX_EVENT_SIZE", content_encoding_reader(
-                MaxDataReader("MAX_EVENT_COMPRESSED_SIZE", request))).read())
+        performance_logger.info("ingested event with %s bytes", len(event_data_bytes))
+
+        event_data = json.loads(event_data_bytes)
+        filename = get_filename_for_event_id(event_data["event_id"])
+        b108_makedirs(os.path.dirname(filename))
+        with open(filename, 'w') as f:
+            json.dump(event_data, f)
 
         event_metadata = self.get_event_meta(event_data["event_id"], ingested_at, request, project)
 
-        self.digest_event(event_metadata, event_data)
+        digest.delay(event_data["event_id"], event_metadata)
 
         return HttpResponse()
 
@@ -613,47 +635,81 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         def factory(item_headers):
-            if item_headers.get("type") == "event":
-                if get_settings().DIGEST_IMMEDIATELY:
-                    return MaxDataWriter("MAX_EVENT_SIZE", io.BytesIO())
+            type_ = item_headers.get("type")
 
-                # envelope_headers["event_id"] is required when type=event per the spec (and takes precedence over the
-                # payload's event_id), so we can rely on it having been set.
-                if "event_id" not in envelope_headers:
-                    raise ParseError("event_id not found in envelope headers")
+            if ((type_ not in ["event", "attachment"]) or
+                    (item_headers.get("type") == "attachment" and
+                     item_headers.get("attachment_type") != "event.minidump") or
+                    (item_headers.get("type") == "attachment" and
+                     item_headers.get("attachment_type") == "event.minidump" and
+                     not get_settings().FEATURE_MINIDUMPS)):
 
-                try:
-                    # validate that the event_id is a valid UUID as per the spec (validate at the edge)
-                    uuid.UUID(envelope_headers["event_id"])
-                except ValueError:
-                    raise ParseError("event_id in envelope headers is not a valid UUID")
+                # non-event/minidumps can be discarded; (we don't check for individual size limits, because these differ
+                # per item type, we have the envelope limit to protect us, and we incur almost no cost (NullWriter))
+                return NullWriter()
 
-                filename = get_filename_for_event_id(envelope_headers["event_id"])
-                b108_makedirs(os.path.dirname(filename))
-                return MaxDataWriter("MAX_EVENT_SIZE", open(filename, 'wb'))
+            # envelope_headers["event_id"] is required when type in ["event", "attachment"] per the spec (and takes
+            # precedence over the payload's event_id), so we can rely on it having been set.
+            if "event_id" not in envelope_headers:
+                raise ParseError("event_id not found in envelope headers")
 
-            # everything else can be discarded; (we don't check for individual size limits, because these differ
-            # per item type, we have the envelope limit to protect us, and we incur almost no cost (NullWriter) anyway.
-            return NullWriter()
-
-        for item_headers, event_output_stream in parser.get_items(factory):
             try:
-                if item_headers.get("type") != "event":
-                    logger.info("skipping non-event item: %s", item_headers.get("type"))
+                # validate that the event_id is a valid UUID as per the spec (validate at the edge)
+                uuid.UUID(envelope_headers["event_id"])
+            except ValueError:
+                raise ParseError("event_id in envelope headers is not a valid UUID")
 
-                    if item_headers.get("type") == "transaction":
-                        # From the spec of type=event: This Item is mutually exclusive with `"transaction"` Items.
-                        # i.e. when we see a transaction, a regular event will not be present and we can stop.
-                        logger.info("discarding the rest of the envelope")
-                        break
+            filetype = "event" if type_ == "event" else "minidump"
+            filename = get_filename_for_event_id(envelope_headers["event_id"], filetype=filetype)
+            b108_makedirs(os.path.dirname(filename))
 
-                    continue
+            size_conf = "MAX_EVENT_SIZE" if type_ == "event" else "MAX_ATTACHMENT_SIZE"
+            return MaxDataWriter(size_conf, open(filename, 'wb'))
 
-                self.process_event(ingested_at, envelope_headers["event_id"], event_output_stream, project, request)
-                break  # From the spec of type=event: This Item may occur at most once per Envelope. once seen: done
+        # We ingest the whole envelope first and organize by type; this enables "digest once" across envelope-parts
+        items_by_type = defaultdict(list)
+        for item_headers, output_stream in parser.get_items(factory):
+            type_ = item_headers.get("type")
+            if type_ not in ["event", "attachment"]:
+                logger.info("skipping non-supported envelope item: %s", item_headers.get("type"))
+                continue
 
-            finally:
-                event_output_stream.close()
+            if type_ == "attachment" and item_headers.get("attachment_type") != "event.minidump":
+                logger.info("skipping non-supported attachment type: %s", item_headers.get("attachment_type"))
+                continue
+
+            performance_logger.info("ingested %s with %s bytes", type_, output_stream.bytes_written)
+            items_by_type[type_].append(output_stream)
+
+        event_count = len(items_by_type.get("event", []))
+        minidump_count = len(items_by_type.get("attachment", []))
+
+        if event_count > 1 or minidump_count > 1:
+            # TODO: we do 2 passes (one for storing, one for calling the right task), and we check certain conditions
+            # only on the second pass; this means that we may not clean up after ourselves yet.
+            # TODO we don't do any minidump files cleanup yet in any of the cases.
+
+            logger.info(
+                "can only deal with one event/minidump per envelope but found %s/%s, ignoring this envelope.",
+                event_count, minidump_count)
+            return HttpResponse()
+
+        event_metadata = self.get_event_meta(envelope_headers["event_id"], ingested_at, request, project)
+
+        if event_count == 1:
+            if minidump_count == 1:
+                event_metadata["has_minidump"] = True
+            digest.delay(envelope_headers["event_id"], event_metadata)
+
+        else:
+            # as it stands, we implement the minidump->event path for the minidump-only case on-ingest; we could push
+            # this to a task too if needed or for reasons of symmetry.
+            with open(get_filename_for_event_id(envelope_headers["event_id"], filetype="minidump"), 'rb') as f:
+                minidump_bytes = f.read()
+
+            # TODO: error handling
+            # NOTE "The file should start with the MDMP magic bytes." is not checked yet.
+            self.process_minidump(ingested_at, minidump_bytes, project, request)
 
         return HttpResponse()
 
@@ -673,6 +729,37 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 # more stuff that we don't care about (up to 20MiB compressed) whereas the max event size (uncompressed) is 1MiB.
 # Another advantage: this allows us to raise the relevant Header parsing and size limitation Exceptions to the SDKs.
 #
+
+
+class MinidumpAPIView(BaseIngestAPIView):
+    # A Base "Ingest" APIView in the sense that it reuses some key building blocks (auth).
+    # I'm not 100% sure whether "philosophically" the minidump endpoint is also "ingesting"; we'll see.
+
+    def post(self, request, project_pk=None):
+        if not get_settings().FEATURE_MINIDUMPS:
+            return JsonResponse({"detail": "minidumps not enabled"}, status=HTTP_404_NOT_FOUND)
+
+        # not reusing the CORS stuff here; minidump-from-browser doesn't make sense.
+
+        # TODO: actually pick/configure max
+        handle_request_content_encoding(request, 50 * 1024 * 1024)
+
+        ingested_at = datetime.now(timezone.utc)
+        project = self.get_project_for_request(project_pk, request)
+
+        try:
+            if "upload_file_minidump" not in request.FILES:
+                return JsonResponse({"detail": "upload_file_minidump not found"}, status=HTTP_400_BAD_REQUEST)
+
+            minidump_bytes = request.FILES["upload_file_minidump"].read()
+            event_id = self.process_minidump(ingested_at, minidump_bytes, project, request)
+
+            return JsonResponse({"id": event_id})
+        except Exception as e:
+            # we're still figuring out what this endpoint should do; so we log errors to learn from them while saying
+            # to the client "400 Bad Request" if we can't handle their stuff.
+            capture_or_log_exception(e, logger)
+            return JsonResponse({"detail": str(e)}, status=HTTP_400_BAD_REQUEST)
 
 
 @user_passes_test(lambda u: u.is_superuser)
