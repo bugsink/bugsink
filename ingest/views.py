@@ -188,9 +188,11 @@ class BaseIngestAPIView(View):
     def process_minidump(cls, ingested_at, minidump_bytes, project, request):
         # This is for the "pure" minidump case, i.e. full separate event (however: event data/extra data _can_ be
         # provided via POST). TSTTCPW: convert the minidump data to an event and then proceed as usual.
-
         performance_logger.info("ingested minidump with %s bytes", len(minidump_bytes))
 
+        # NOTE: the sentry-native SDK (at least when crashpad-powered) sends a 'guid' request.POST field; we don't use
+        # this yet and AFAICT Sentry doesn't either; AFAICT it's per-binary (not per-event), so the obvious target would
+        # be "user".
         event_id = uuid.uuid4().hex
         event_data = cls._minidump_post_data(request)
 
