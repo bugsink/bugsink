@@ -210,3 +210,10 @@ def assert_(condition, message=None):
         if message is None:
             raise AssertionError()
         raise AssertionError(message)
+
+
+def set_path(data, path, value):
+    d = data
+    for part in path[:-1]:
+        d = d.setdefault(part, {})
+    d[path[-1]] = value

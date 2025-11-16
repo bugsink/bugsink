@@ -33,6 +33,7 @@ from bugsink.streams import (
     content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded,
     handle_request_content_encoding)
 from bugsink.app_settings import get_settings
+from bugsink.utils import set_path
 
 from events.models import Event
 from events.retention import evict_for_max_events, should_evict, EvictionCounts
@@ -156,19 +157,46 @@ class BaseIngestAPIView(View):
         return cls.get_project(project_pk, sentry_key)
 
     @classmethod
+    def _minidump_post_data(cls, request):
+        event_data = {}
+        extra_data = {}
+
+        for key, value in request.POST.items():
+            # Additionally,  you can set all attributes corresponding to the Sentry event interface in a sentry field...
+            if key == "sentry":
+                # > This field either accepts JSON data...
+                try:
+                    payload = json.loads(value)
+                    event_data.update(payload)
+                except Exception as e:
+                    capture_or_log_exception(e, logger)
+
+            elif key.startswith("sentry[") and key.endswith("]"):
+                # > ... or its values can be flattened with the bracket syntax.
+                parts = key[len("sentry["):-1].split("][")
+                set_path(event_data, parts, value)
+            else:
+                # > fields to the upload HTTP request [..] will be collected in the "Extra Data" section
+                extra_data[key] = value
+
+        if extra_data:
+            event_data.setdefault("extra", {}).update(extra_data)
+
+        return event_data
+
+    @classmethod
     def process_minidump(cls, ingested_at, minidump_bytes, project, request):
-        # This is for the "pure" minidump case, i.e. no associated event data. TSTTCPW: convert the minidump data to an
-        # event and then proceed as usual.
+        # This is for the "pure" minidump case, i.e. full separate event (however: event data/extra data _can_ be
+        # provided via POST). TSTTCPW: convert the minidump data to an event and then proceed as usual.
 
         performance_logger.info("ingested minidump with %s bytes", len(minidump_bytes))
 
         event_id = uuid.uuid4().hex
-        event_data = {
-            "event_id": event_id,
-            "platform": "native",
-            "extra": {},
-            "errors": [],
-        }
+        event_data = cls._minidump_post_data(request)
+
+        event_data["event_id"] = event_id
+        event_data["platform"] = "native"
+        event_data["errors"] = []
 
         merge_minidump_event(event_data, minidump_bytes)
 

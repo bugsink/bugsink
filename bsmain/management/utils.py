@@ -1,4 +1,4 @@
-from bugsink.utils import nc_rnd
+from bugsink.utils import nc_rnd, set_path
 from tags.utils import EVENT_DATA_CONVERSION_TABLE, CONTEXT_CONVERSION_TABLE
 
 
@@ -25,15 +25,6 @@ def random_postfix():
         unevenly_distributed_number = int(1 / random_number)
 
     return "".join([chr(ord("A") + int(c)) for c in str(unevenly_distributed_number)])
-
-
-def set_path(data, path, v):
-    d = data
-    for part in path[:-1]:
-        if part not in d:
-            d[part] = {}
-        d = d[part]
-    d[path[-1]] = v
 
 
 def handle_upload_tags(event_data, tags):

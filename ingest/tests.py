@@ -31,7 +31,7 @@ from compat.timestamp import format_timestamp
 from compat.dsn import get_header_value
 from bsmain.management.commands.send_json import Command as SendJsonCommand
 
-from .views import BaseIngestAPIView
+from .views import BaseIngestAPIView, MinidumpAPIView
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 from .event_counter import check_for_thresholds
 from .header_validators import (
@@ -712,6 +712,38 @@ class IngestViewTestCase(TransactionTestCase):
         BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
         self.assertEqual(2, Issue.objects.get().stored_event_count)
         self.assertEqual(2, Project.objects.get(id=self.quiet_project.id).stored_event_count)
+
+
+class MinidumpAPIViewTestCase(TransactionTestCase):
+    # NOTE: no tests for the _actual_ minidump processing just yet.
+
+    def setUp(self):
+        super().setUp()
+        self.request_factory = RequestFactory()
+
+    def test_plain_extra_fields(self):
+        request = self.request_factory.post("ignored", data={"custom_field": "value"})
+        result = MinidumpAPIView._minidump_post_data(request)
+        self.assertEqual(result, {"extra": {"custom_field": "value"}})
+
+    def test_json_sentry_field(self):
+        request = self.request_factory.post(
+            "ignored",
+            data={"sentry": '{"release":"1.2.3","tags":{"a":"b"}}'}
+        )
+        result = MinidumpAPIView._minidump_post_data(request)
+        self.assertEqual(result, {"release": "1.2.3", "tags": {"a": "b"}})
+
+    def test_flattened_sentry_brackets(self):
+        request = self.request_factory.post(
+            "ignored",
+            data={
+                "sentry[release]": "1.2.3",
+                "sentry[tags][a]": "b",
+            },
+        )
+        result = MinidumpAPIView._minidump_post_data(request)
+        self.assertEqual(result, {"release": "1.2.3", "tags": {"a": "b"}})
 
 
 class TestParser(RegularTestCase):
