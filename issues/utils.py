@@ -120,7 +120,7 @@ def get_exception_type_and_value_for_exception(data):
     # From the sentry docs:
     # > An optional flag indicating that this error is synthetic. Synthetic errors are errors that carry little
     # > meaning by themselves.
-    # If this flag is set, we ignored the Exception's type and used the function name instead (if available).
+    # If this flag is set, we ignore the Exception's type and used the function name instead (if available).
     if get_path(exception, "mechanism", "synthetic"):
         _, function = get_crash_location(data)
         if function:

@@ -68,11 +68,6 @@ BUGSINK = {
     # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
     # "SITE_TITLE": "Bugsink",  
 
-    # When running locally, it is recommended to configure the Bugsink to digest events immediately. (This is basically
-    # implied by the "TASK_ALWAYS_EAGER" setting above, but setting DIGEST_IMMEDIATELY to True removes one more step
-    # from the process.)
-    "DIGEST_IMMEDIATELY": True,
-
     # You are licenced to run Bugsink locally in single-user mode. By changing the settings below, you may open the door
     # to more uses; make sure to buy a licence if you do.
     "SINGLE_USER": True,

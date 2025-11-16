@@ -489,6 +489,8 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
             for exception in exceptions:
                 if not exception.get('stacktrace'):
                     continue
+                if not exception.get('stacktrace').get('frames'):
+                    continue
                 exception['stacktrace']['frames'] = [f for f in reversed(exception['stacktrace']['frames'])]
 
     return render(request, "issues/stacktrace.html", {

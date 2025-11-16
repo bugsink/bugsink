@@ -10,9 +10,16 @@
 
         <div class="mb-6">
             {% for issuetag in issuetags %}
+
                 <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
                     <div class="w-2/3 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ issuetag.value.value }}</div>
-                    <div class="w-1/6 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ issuetag.pct }}%</div>
+                    <div class="w-1/6 pr-4 flex items-stretch {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">
+                        <div class="bg-slate-200 dark:bg-slate-600" style="width: {{ issuetag.pct }}%;">
+                             <span class="absolute pl-1 whitespace-nowrap">
+                              {{ issuetag.pct }}%
+                            </span>
+                        </div>
+                    </div>
                     <div class="w-1/6 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ issuetag.count }} events</div>
                 </div>
             {% endfor %}

@@ -15,6 +15,8 @@ from compat.dsn import get_store_url, get_envelope_url, get_header_value
 from bugsink.streams import compress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE
 from bugsink.utils import nc_rnd
 
+from ..utils import handle_upload_tags
+
 
 class Command(BaseCommand):
     help = "Send raw events to a sentry-compatible server; events can be sources from the filesystem or your DB."
@@ -119,13 +121,13 @@ class Command(BaseCommand):
             data["contexts"]["trace"]["trace_id"] = nc_rnd.getrandbits(128).to_bytes(16, byteorder='big').hex()
 
         if options["tag"]:
-            if "tags" not in data:
-                data["tags"] = {}
-
+            tags = {}
             for tag in options["tag"]:
-                tag = tag[0]  # it's a list of lists... how to prevent this is not immediately clear
+                # it's a list of lists... how to prevent this is not immediately clear
+                tag = tag[0]
                 k, v = tag.split(":", 1)
-                data["tags"][k] = v
+                tags[k] = v
+            handle_upload_tags(data, tags)
 
         if options["valid_only"] and not self.is_valid(data, identifier):
             return False
