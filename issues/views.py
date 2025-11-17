@@ -1,8 +1,10 @@
+import math
 from collections import namedtuple
 import json
 import sentry_sdk
 import logging
 
+from datetime import timedelta
 from django.db.models import Q
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
@@ -36,6 +38,7 @@ from .models import Issue, IssueQuerysetStateManager, IssueStateManager, Turning
 from .forms import CommentForm
 from .utils import get_values, get_main_exception
 from events.utils import annotate_with_meta, apply_sourcemaps, get_sourcemap_images
+from events.sparklines import get_event_sparkline_indexscan, get_x_labels, get_y_labels
 
 logger = logging.getLogger("bugsink.issues")
 
@@ -670,6 +673,17 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         # sourcemaps are still experimental; we don't want to fail on them, so we just log the error and move on.
         capture_or_log_exception(e, logger)
 
+    start, end, interval = get_buckets_range_input()
+    x_labels = get_x_labels(start, end)
+
+    buckets = get_buckets(start, end, interval, issue.id)
+    max_value = max(buckets) or 0
+    if max_value == 0:
+        bar_data = [0 for v in buckets]
+    else:
+        bar_data = [(v / max_value) * 100 for v in buckets]
+    y_labels = get_y_labels(max_value, 4)
+
     return render(request, "issues/event_details.html", {
         "tab": "event-details",
         "this_view": "event_details",
@@ -690,7 +704,39 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         "event_qs_count": _event_count(request, issue, event_x_qs) if request.GET.get("q") else None,
         "has_prev": event.digest_order > first_do,
         "has_next": event.digest_order < last_do,
+        "bar_data": bar_data,
+        "y_labels": y_labels,
+        "x_labels": x_labels,
     })
+
+
+def get_buckets_range_input():
+    # align on 4-hour boundary; round up from now
+
+    now = timezone.localtime()
+
+    hour_step = 4
+
+    # determine how many hours to add to get to the next 4-hour boundary
+    fraction = ((now.hour + now.minute / 60 + now.second / 3600) / (24 // hour_step))
+    boundary = math.ceil(fraction) * (24 // hour_step)
+    end = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=boundary)
+
+    # today_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    start = end - timedelta(days=28)
+    interval = timedelta(hours=hour_step)
+    return start, end, interval
+
+
+def get_buckets(start, end, interval, issue_id):
+    data = get_event_sparkline_indexscan(
+        start=start,
+        end=end,
+        interval=interval,
+        issue_id=issue_id,
+    )
+
+    return [row["count"] for row in data]
 
 
 @atomic_for_request_method
