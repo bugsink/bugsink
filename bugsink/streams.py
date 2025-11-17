@@ -5,6 +5,7 @@ import io
 import brotli
 
 from bugsink.app_settings import get_settings
+from bugsink.utils import assert_
 
 
 DEFAULT_CHUNK_SIZE = 8 * 1024
@@ -119,20 +120,63 @@ class GeneratorReader:
         del self.buffer[:size]
         return result
 
+    def readline(self, size=-1):
+        newline_index = self.buffer.find(b"\n")
+        while newline_index == -1:
+            chunk = self.read(DEFAULT_CHUNK_SIZE)
+            if not chunk:
+                break
+            self.buffer.extend(chunk)
+            newline_index = self.buffer.find(b"\n")
+
+        if newline_index != -1:
+            end = newline_index + 1
+        else:
+            end = len(self.buffer)
+
+        if size >= 0:
+            end = min(end, size)
+
+        result = bytes(self.buffer[:end])
+        del self.buffer[:end]
+        return result
+
 
 def content_encoding_reader(request):
     encoding = request.META.get("HTTP_CONTENT_ENCODING", "").lower()
-
     if encoding == "gzip":
-        return GeneratorReader(zlib_generator(request, WBITS_PARAM_FOR_GZIP), bad_request_exceptions=(zlib.error,))
+        return GeneratorReader(
+            zlib_generator(request._stream, WBITS_PARAM_FOR_GZIP),
+            bad_request_exceptions=(zlib.error,),
+        )
 
     if encoding == "deflate":
-        return GeneratorReader(zlib_generator(request, WBITS_PARAM_FOR_DEFLATE), bad_request_exceptions=(zlib.error,))
+        return GeneratorReader(
+            zlib_generator(request._stream, WBITS_PARAM_FOR_DEFLATE),
+            bad_request_exceptions=(zlib.error,)
+        )
 
     if encoding == "br":
-        return GeneratorReader(brotli_generator(request), bad_request_exceptions=(brotli.error, BrotliError))
+        return GeneratorReader(
+            brotli_generator(request._stream),
+            bad_request_exceptions=(brotli.error, BrotliError)
+        )
 
     return request
+
+
+def handle_request_content_encoding(request, max_length):
+    """Turns a request w/ Content-Encoding into an unpacked equivalent; for further "regular" (POST, FILES) handling
+    by Django.
+    """
+
+    encoding = request.META.get("HTTP_CONTENT_ENCODING", "").lower()
+    if encoding in ["gzip", "deflate", "br"]:
+        assert_(not request._read_started)
+        request._stream = MaxDataReader(max_length, content_encoding_reader(request))
+
+        request.META["CONTENT_LENGTH"] = str(pow(2, 32) - 1)  # large enough (we can't predict the decompressed value)
+        request.META.pop("HTTP_CONTENT_ENCODING")  # the resulting request is no longer encoded
 
 
 def compress_with_zlib(input_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
@@ -158,7 +202,7 @@ class MaxDataReader:
         self.bytes_read = 0
         self.stream = stream
 
-        if isinstance(max_length, str):  # reusing this is a bit of a hack, but leads to readable code at usage
+        if isinstance(max_length, str):  # support for settings-name max_length makes both the code and errors better
             self.max_length = get_settings()[max_length]
             self.reason = "%s: %s" % (max_length, self.max_length)
         else:
@@ -187,7 +231,7 @@ class MaxDataWriter:
         self.bytes_written = 0
         self.stream = stream
 
-        if isinstance(max_length, str):  # reusing this is a bit of a hack, but leads to readable code at usage
+        if isinstance(max_length, str):  # support for settings-name max_length makes both the code and errors better
             self.max_length = get_settings()[max_length]
             self.reason = "%s: %s" % (max_length, self.max_length)
         else:
@@ -209,6 +253,15 @@ class MaxDataWriter:
 class NullWriter:
     def write(self, data):
         pass
+
+    def close(self):
+        pass
+
+
+class UnclosableBytesIO(io.BytesIO):
+    """Intentionally does nothing on-close: BytesIO normally discards its buffer on .close(), breaking .getvalue(); this
+    overrides it so that we can use it in code that usually deals with real files (and calls .close()) while still using
+    the in-memory data afterwards. We just rely on the garbage collector for the actual cleanup."""
 
     def close(self):
         pass

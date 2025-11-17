@@ -38,6 +38,29 @@ def allowed_hosts_error_message(domain, allowed_hosts):
     return msg + "Add '%s' to ALLOWED_HOSTS or configure proxy to use 'Host: %s'." % (domain, proxy_suggestion)
 
 
+class NoopClose:
+    """Delegator: Gunicorn's Body doesn't implement .close(); Django calls that it in request.body's finally clause.
+    That .close() call in itself is slightly surprising to me (and I have not copied it in my own streaming reads) b/c
+    the [WSGI spec](https://peps.python.org/pep-3333/#input-and-error-streams) says:
+
+    > Applications conforming to this specification must not use any other methods or attributes of the input or errors
+    > objects. In particular, applications must not attempt to close these streams, even if they possess close()
+    > methods.
+
+    In the end, Django conforms to spec because LimitedStream _also_ drops the .close() (it's subclassing `io.IOBase`),
+    but one wonders why they call it in the first place. Anyway, just stub it and we're good.
+    """
+
+    def __init__(self, stream):
+        self._stream = stream
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+    def close(self):
+        return None
+
+
 class CustomWSGIRequest(WSGIRequest):
     """
     Custom WSQIRequest subclass with 3 fixes/changes:
@@ -62,7 +85,7 @@ class CustomWSGIRequest(WSGIRequest):
         super().__init__(environ)
 
         if "CONTENT_LENGTH" not in environ and "HTTP_TRANSFER_ENCODING" in environ:
-            self._stream = self.environ["wsgi.input"]
+            self._stream = NoopClose(self.environ["wsgi.input"])
 
     def get_host(self):
         """
@@ -75,7 +98,7 @@ class CustomWSGIRequest(WSGIRequest):
             # For /health/ endpoints, we skip the ALLOWED_HOSTS validation (see #140).
             return self._get_raw_host()
 
-        # copied from HttpRequest.get_host() in Django 4.2, with modifications.
+        # copied from HttpRequest.get_host() in Django 5.2, with modifications.
 
         host = self._get_raw_host()
 

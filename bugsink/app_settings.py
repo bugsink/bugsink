@@ -42,7 +42,6 @@ DEFAULTS = {
     "TEAM_CREATION": CB_MEMBERS,  # who can create new teams. default: members, which means "any member of the site"
 
     # System inner workings:
-    "DIGEST_IMMEDIATELY": True,
     "VALIDATE_ON_DIGEST": "none",  # other legal values are "warn" and "strict"
     "KEEP_ENVELOPES": 0,  # set to a number to store that many; 0 means "store none". This is for debugging.
     "API_LOG_UNIMPLEMENTED_CALLS": False,  # if True, log unimplemented API calls; see #153
@@ -50,6 +49,7 @@ DEFAULTS = {
 
     # MAX* below mirror the (current) values for the Sentry Relay
     "MAX_EVENT_SIZE": _MEBIBYTE,
+    "MAX_ATTACHMENT_SIZE": 100 * _MEBIBYTE,
     "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,  # Note: this only applies to the deprecated "store" endpoint.
     "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
     "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
@@ -73,6 +73,9 @@ DEFAULTS = {
     # Security:
     "MINIMIZE_INFORMATION_EXPOSURE": False,
     "PHONEHOME": True,
+
+    # Feature flags:
+    "FEATURE_MINIDUMPS": False,  # minidumps are experimental/early-stage and likely a DOS-magnet; disabled by default
 }
 
 

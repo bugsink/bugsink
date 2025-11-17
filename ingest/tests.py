@@ -21,15 +21,17 @@ from projects.models import Project
 from events.factories import create_event_data, create_event
 from events.retention import evict_for_max_events
 from events.storage_registry import override_event_storages
+from events.models import Event
 from issues.factories import get_or_create_issue
 from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
 from issues.utils import get_values
 from bugsink.app_settings import override_settings
+from bugsink.streams import UnclosableBytesIO
 from compat.timestamp import format_timestamp
 from compat.dsn import get_header_value
 from bsmain.management.commands.send_json import Command as SendJsonCommand
 
-from .views import BaseIngestAPIView
+from .views import BaseIngestAPIView, MinidumpAPIView
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 from .event_counter import check_for_thresholds
 from .header_validators import (
@@ -293,38 +295,158 @@ class IngestViewTestCase(TransactionTestCase):
 
         sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
 
-        # first, we ingest many issues
-        command = SendJsonCommand()
-        command.stdout = io.StringIO()
-        command.stderr = io.StringIO()
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
+
+        filename = glob(SAMPLES_DIR + "/bugsink/contexts.json")[0]  # pick a fixed one for reproducibility
+
+        for i, include_event_id in enumerate([True, False]):
+            with open(filename) as f:
+                data = json.loads(f.read())
+
+            data["event_id"] = uuid.uuid4().hex  # for good measure we reset this to avoid duplicates.
+
+            if "timestamp" not in data:
+                # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
+                data["timestamp"] = time.time()
+
+            event_id = data["event_id"]
+            if not include_event_id:
+                del data["event_id"]
+
+            data_bytes = json.dumps(data).encode("utf-8")
+            data_bytes = (
+                b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") + data_bytes)
+
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                },
+                data=data_bytes,
+            )
+            self.assertEqual(
+                200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+            self.assertEqual(1 + i, Event.objects.count())
+
+    @tag("samples")
+    def test_envelope_endpoint_event_and_minidump(self):
+        # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
 
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
 
-        event_samples = glob(SAMPLES_DIR + "/sentry/mobile1-xen.json")  # pick a fixed one for reproducibility
-        known_broken = [SAMPLES_DIR + "/" + s.strip() for s in _readlines(SAMPLES_DIR + "/KNOWN-BROKEN")]
+        filename = glob(SAMPLES_DIR + "/bugsink/contexts.json")[0]  # pick a fixed one for reproducibility
+        with open(filename) as f:
+            data = json.loads(f.read())
 
-        if len(event_samples) == 0:
-            raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
+        data["event_id"] = uuid.uuid4().hex  # for good measure we reset this to avoid duplicates.
 
-        for include_event_id in [True, False]:
-            for filename in [sample for sample in event_samples if sample not in known_broken][:1]:  # one is enough
-                with open(filename) as f:
-                    data = json.loads(f.read())
+        if "timestamp" not in data:
+            # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
+            data["timestamp"] = time.time()
 
-                data["event_id"] = uuid.uuid4().hex  # for good measure we reset this to avoid duplicates.
+        filename = glob(SAMPLES_DIR + "/minidumps/linux_overflow.dmp")[0]  # pick a fixed one for reproducibility
+        with open(filename, 'rb') as f:
+            minidump_bytes = f.read()
 
-                if "timestamp" not in data:
-                    # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
-                    data["timestamp"] = time.time()
+        event_id = data["event_id"]
 
-                event_id = data["event_id"]
-                if not include_event_id:
-                    del data["event_id"]
+        event_bytes = json.dumps(data).encode("utf-8")
+        data_bytes = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "event"}\n' + event_bytes + b"\n" +
+            b'{"type": "attachment", "attachment_type": "event.minidump", "length": %d}\n' % len(minidump_bytes) +
+            minidump_bytes
+            )
 
-                data_bytes = json.dumps(data).encode("utf-8")
-                data_bytes = (
-                    b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") + data_bytes)
+        response = self.client.post(
+            f"/api/{ project.id }/envelope/",
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+            },
+            data=data_bytes,
+        )
+        self.assertEqual(
+            200, response.status_code, response.content if response.status_code != 302 else response.url)
 
+        self.assertEqual(1, Event.objects.count())
+        event = Event.objects.get()
+        self.assertTrue("prod" in ([tag.value.value for tag in event.tags.all()]))  # from the sample event
+
+        self.assertEqual('SIGABRT: Fatal Error: SIGABRT', Event.objects.get().title())
+
+    @tag("samples")
+    def test_envelope_endpoint_minidump_only(self):
+        # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
+
+        filename = glob(SAMPLES_DIR + "/minidumps/linux_overflow.dmp")[0]  # pick a fixed one for reproducibility
+        with open(filename, 'rb') as f:
+            minidump_bytes = f.read()
+
+        event_id = uuid.uuid4().hex  # required at the envelope level so we provide it.
+
+        data_bytes = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "attachment", "attachment_type": "event.minidump", "length": %d}\n' % len(minidump_bytes) +
+            minidump_bytes
+            )
+
+        response = self.client.post(
+            f"/api/{ project.id }/envelope/",
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+            },
+            data=data_bytes,
+        )
+        self.assertEqual(
+            200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+        self.assertEqual(1, Event.objects.count())
+        event = Event.objects.get()
+        self.assertFalse("prod" in ([tag.value.value for tag in event.tags.all()]))  # no sample event, so False
+
+        self.assertEqual('SIGABRT: Fatal Error: SIGABRT', Event.objects.get().title())
+
+    @tag("samples")
+    def test_envelope_endpoint_reused_ids_different_exceptions(self):
+        # dirty copy/paste from test_envelope_endpoint,
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
+
+        filename = glob(SAMPLES_DIR + "/sentry/mobile1-xen.json")[0]  # this one has 'exception.values[0].type'
+
+        with open(filename) as f:
+            data = json.loads(f.read())
+        data["event_id"] = uuid.uuid4().hex  # we set it once, before the loop.
+
+        for type_ in ["Foo", "Bar"]:  # forces different groupers, leading to separate Issue objects
+            data['exception']['values'][0]['type'] = type_
+
+            if "timestamp" not in data:
+                # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
+                data["timestamp"] = time.time()
+
+            event_id = data["event_id"]
+
+            data_bytes = json.dumps(data).encode("utf-8")
+            data_bytes = (
+                b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") + data_bytes)
+
+            def check():
                 response = self.client.post(
                     f"/api/{ project.id }/envelope/",
                     content_type="application/json",
@@ -336,66 +458,11 @@ class IngestViewTestCase(TransactionTestCase):
                 self.assertEqual(
                     200, response.status_code, response.content if response.status_code != 302 else response.url)
 
-    @tag("samples")
-    def test_envelope_endpoint_reused_ids_different_exceptions(self):
-        # dirty copy/paste from test_envelope_endpoint,
-        project = Project.objects.create(name="test")
-
-        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
-
-        # first, we ingest many issues
-        command = SendJsonCommand()
-        command.stdout = io.StringIO()
-        command.stderr = io.StringIO()
-
-        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
-
-        event_samples = glob(SAMPLES_DIR + "/sentry/mobile1-xen.json")  # this one has 'exception.values[0].type'
-        known_broken = [SAMPLES_DIR + "/" + s.strip() for s in _readlines(SAMPLES_DIR + "/KNOWN-BROKEN")]
-
-        if len(event_samples) == 0:
-            raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
-
-        for filename in [sample for sample in event_samples if sample not in known_broken][:1]:  # one is enough
-            with open(filename) as f:
-                data = json.loads(f.read())
-            data["event_id"] = uuid.uuid4().hex  # we set it once, before the loop.
-
-            for type_ in ["Foo", "Bar"]:  # forces different groupers, leading to separate Issue objects
-                data['exception']['values'][0]['type'] = type_
-
-                if "timestamp" not in data:
-                    # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
-                    data["timestamp"] = time.time()
-
-                event_id = data["event_id"]
-
-                data_bytes = json.dumps(data).encode("utf-8")
-                data_bytes = (
-                    b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") + data_bytes)
-
-                def check():
-                    response = self.client.post(
-                        f"/api/{ project.id }/envelope/",
-                        content_type="application/json",
-                        headers={
-                            "X-Sentry-Auth": sentry_auth_header,
-                        },
-                        data=data_bytes,
-                    )
-                    self.assertEqual(
-                        200, response.status_code, response.content if response.status_code != 302 else response.url)
-
-                if type_ == "Foo":
+            if type_ == "Foo":
+                check()
+            else:
+                with self.assertRaises(ViolatedExpectation):
                     check()
-                else:
-                    with self.assertRaises(ViolatedExpectation):
-                        check()
-
-    @tag("samples")
-    def test_envelope_endpoint_digest_non_immediate(self):
-        with override_settings(DIGEST_IMMEDIATELY=False):
-            self.test_envelope_endpoint()
 
     def test_envelope_endpoint_brotli_bomb(self):
         project = Project.objects.create(name="test")
@@ -404,7 +471,7 @@ class IngestViewTestCase(TransactionTestCase):
         data_bytes = BROTLI_BOMB_4G
 
         t0 = time.time()
-        self.client.post(
+        response = self.client.post(
             f"/api/{ project.id }/envelope/",
             content_type="application/json",
             headers={
@@ -418,6 +485,9 @@ class IngestViewTestCase(TransactionTestCase):
             # in practice, locally: sub-second post-fix.
             # the failing version is well above 5s (I just stopped the process after ~30s)
             self.fail("Brotli bomb caused excessive processing time: %d seconds" % (time.time() - t0))
+
+        self.assertTrue(b"Max length" in response.content, response.content)
+        self.assertTrue(b"exceeded" in response.content, response.content)
 
     @tag("samples")
     def test_filestore(self):
@@ -644,6 +714,38 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(2, Project.objects.get(id=self.quiet_project.id).stored_event_count)
 
 
+class MinidumpAPIViewTestCase(TransactionTestCase):
+    # NOTE: no tests for the _actual_ minidump processing just yet.
+
+    def setUp(self):
+        super().setUp()
+        self.request_factory = RequestFactory()
+
+    def test_plain_extra_fields(self):
+        request = self.request_factory.post("ignored", data={"custom_field": "value"})
+        result = MinidumpAPIView._minidump_post_data(request)
+        self.assertEqual(result, {"extra": {"custom_field": "value"}})
+
+    def test_json_sentry_field(self):
+        request = self.request_factory.post(
+            "ignored",
+            data={"sentry": '{"release":"1.2.3","tags":{"a":"b"}}'}
+        )
+        result = MinidumpAPIView._minidump_post_data(request)
+        self.assertEqual(result, {"release": "1.2.3", "tags": {"a": "b"}})
+
+    def test_flattened_sentry_brackets(self):
+        request = self.request_factory.post(
+            "ignored",
+            data={
+                "sentry[release]": "1.2.3",
+                "sentry[tags][a]": "b",
+            },
+        )
+        result = MinidumpAPIView._minidump_post_data(request)
+        self.assertEqual(result, {"release": "1.2.3", "tags": {"a": "b"}})
+
+
 class TestParser(RegularTestCase):
 
     def test_readuntil_newline_everything_in_initial_chunk(self):
@@ -651,7 +753,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b"line 0\nline 1\n"
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertFalse(at_eof)
@@ -664,7 +766,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b"lin"
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertFalse(at_eof)
@@ -677,7 +779,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b""
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertFalse(at_eof)
@@ -690,7 +792,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b""
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertTrue(at_eof)
@@ -703,7 +805,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b"lin"
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 1024)
 
         self.assertFalse(at_eof)
@@ -716,7 +818,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b"lin"
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, LengthFinder(10, "eof not ok"), output_stream, 3)
 
         self.assertFalse(at_eof)
@@ -729,7 +831,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b"lin"
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         with self.assertRaises(ParseError):
             remainder, at_eof = readuntil(input_stream, initial_chunk, LengthFinder(100, "EOF"), output_stream, 1000)
 

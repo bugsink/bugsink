@@ -62,6 +62,7 @@ class TagValue(models.Model):
     project = models.ForeignKey(Project, blank=False, null=False, on_delete=models.DO_NOTHING)
     key = models.ForeignKey(TagKey, blank=False, null=False, on_delete=models.DO_NOTHING)
     value = models.CharField(max_length=200, blank=False, null=False, db_index=True)
+    # count = ... see https://github.com/bugsink/bugsink/issues/272
 
     class Meta:
         # This is the obvious constraint, which doubles as a lookup index for
