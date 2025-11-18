@@ -50,6 +50,9 @@ def merge_minidump_event(data, minidump_bytes):
         # TODO we don't have display-info for threads yet, I think?
         # we may need to revert the per-thread stacktraces above as well then
 
+        if len(exception['stacktrace']['frames']) > 1 and exception['stacktrace']['frames'][-1].get('function'):
+            exception["type"] = exception['stacktrace']['frames'][-1].get('function')
+
         data.setdefault('exception', {}) \
             .setdefault('values', []) \
             .append(exception)
