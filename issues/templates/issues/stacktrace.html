@@ -51,8 +51,103 @@
                 {% include "issues/_event_nav.html" %}
             </div>
         </div>
+
+
         {% endif %}
     </div>
+
+{% if forloop.counter0 == 0 %}
+<div class="mt-8 grid mb-8"
+     style="grid-template-columns: 2rem 1fr; grid-template-rows: auto auto; column-gap: 0.5rem;">
+
+    {# y-axis #}
+    <div class="flex flex-col justify-between h-24 {# h matches chart height #} mr-2 text-xs text-slate-700 dark:text-slate-200">
+    {# basic idea: first and last are half-cells, middle are full-width; this way the outermost labels are aligned with the outsides #}
+
+    {% for y_label in y_labels %}
+
+        {% if forloop.first %}
+            {#-- top half-cell #}
+            <div class="flex-[0.5] flex items-start justify-end pr-1 relative">
+                <span class="-translate-y-[35%]">
+                    {{ y_label }}
+                </span>
+            </div>
+
+        {% elif forloop.last %}
+            {# bottom half-cell #}
+            <div class="flex-[0.5] flex items-end justify-end pr-1 relative">
+                <span class="translate-y-[35%]">
+                    {{ y_label }}
+                </span>
+            </div>
+
+        {% else %}
+            {# full-width middle cells #}
+            <div class="flex-1 flex items-center justify-end pr-1">
+                {{ y_label }}
+            </div>
+
+        {% endif %}
+
+    {% endfor %}
+    </div>
+
+
+    {# Chart area #}
+    <div class="row-span-1">
+        {# bars #}
+        <div class="grid h-24"
+             style="grid-template-columns: repeat({{ bar_data|length }}, minmax(0,1fr)); gap: 2px;">
+            {% for pct in bar_data %}
+                <div class="flex items-end">
+                    <div class="bg-slate-400 dark:bg-slate-400 w-full"
+                         style="height: {{ pct }}%;">
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        {# baseline directly under bars #}
+        <div class="h-[1px] border-b border-slate-300 dark:border-slate-500"></div>
+
+        {# x-axis #}
+        <div class="mt-1 flex text-xs">
+            {# basic idea: as the y-axis, but without the float-out #}
+
+            {% for x_label in x_labels %}
+                {% if forloop.first %}
+                    <!-- Left half-cell -->
+                    <div class="flex-[0.5] flex justify-start">
+                        <span class="{#-ml-2 would float-out; ugly though #}">
+                            {{ x_label|date:"j M" }}
+                        </span>
+                    </div>
+
+                {% elif forloop.last %}
+                    <!-- Right half-cell -->
+                    <div class="flex-[0.5] flex justify-end">
+                        <span class="{#-mr-2 would float-out; ugly though #}text-right">
+                            {{ x_label|date:"j M" }}
+                        </span>
+                    </div>
+
+                {% else %}
+                    <!-- Full-width middle cells -->
+                    <div class="flex-1 flex justify-center">
+                        {{ x_label|date:"j M" }}
+                    </div>
+                {% endif %}
+
+            {% endfor %}
+        </div>
+    </div>
+
+    {# bottom-left stays empty #}
+    <div></div>
+
+</div>
+{% endif %}
 
     {% for frame in exception.stacktrace.frames %}
         {% with frame=frame|pygmentize:event.platform %}

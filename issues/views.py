@@ -496,6 +496,17 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
                     continue
                 exception['stacktrace']['frames'] = [f for f in reversed(exception['stacktrace']['frames'])]
 
+    start, end, interval = get_buckets_range_input()
+    x_labels = get_x_labels(start, end)
+
+    buckets = get_buckets(start, end, interval, issue.id)
+    max_value = max(buckets) or 0
+    if max_value == 0:
+        bar_data = [0 for v in buckets]
+    else:
+        bar_data = [(v / max_value) * 100 for v in buckets]
+    y_labels = get_y_labels(max_value, 4)
+
     return render(request, "issues/stacktrace.html", {
         "tab": "stacktrace",
         "this_view": "event_stacktrace",
@@ -513,6 +524,9 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
         "event_qs_count": _event_count(request, issue, event_x_qs) if request.GET.get("q") else None,
         "has_prev": event.digest_order > first_do,
         "has_next": event.digest_order < last_do,
+        "bar_data": bar_data,
+        "y_labels": y_labels,
+        "x_labels": x_labels,
     })
 
 
