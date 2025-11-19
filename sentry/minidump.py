@@ -47,8 +47,12 @@ def merge_minidump_event(data, minidump_bytes):
             frame['in_app'] = True  # minidumps don't distinguish in_app frames; assume all are in_app
 
         exception['stacktrace']['frames'].reverse()  # "Frames should be sorted from oldest to newest."
-        # TODO we don't have display-info for threads yet, I think?
-        # we may need to revert the per-thread stacktraces above as well then
+
+        if len(exception['stacktrace']['frames']) > 1 and exception['stacktrace']['frames'][-1].get('function'):
+            exception["type"] = exception['stacktrace']['frames'][-1].get('function')
+
+        # TODO our UI doesn't actually display threads yet.
+        # Whether it does or not, we may need to revert the per-thread stacktraces above as well.
 
         data.setdefault('exception', {}) \
             .setdefault('values', []) \
