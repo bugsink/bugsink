@@ -2,6 +2,15 @@ from django.db import models
 from projects.models import Project
 
 from .service_backends.slack import SlackBackend
+from .service_backends.mattermost import MattermostBackend
+
+
+def kind_choices():
+    # no 18n needed for no
+    return [
+        ("slack", "Slack"),
+        ("mattermost", "Mattermost"),
+    ]
 
 
 class MessagingServiceConfig(models.Model):
@@ -9,7 +18,7 @@ class MessagingServiceConfig(models.Model):
     display_name = models.CharField(max_length=100, blank=False,
                                     help_text='For display in the UI, e.g. "#general on company Slack"')
 
-    kind = models.CharField(choices=[("slack", "Slack (or compatible)"), ], max_length=20, default="slack")
+    kind = models.CharField(choices=kind_choices, max_length=20, default="slack")
 
     config = models.TextField(blank=False)
 
@@ -28,8 +37,12 @@ class MessagingServiceConfig(models.Model):
                                                   help_text="Error message from the exception")
 
     def get_backend(self):
-        # once we have multiple backends: lookup by kind.
-        return SlackBackend(self)
+        if self.kind == "slack":
+            return SlackBackend(self)
+        elif self.kind == "mattermost":
+            return MattermostBackend(self)
+        else:
+            raise ValueError(f"Unknown backend kind: {self.kind}")
 
     def clear_failure_status(self):
         """Clear all failure tracking fields on successful operation"""
