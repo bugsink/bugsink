@@ -10,15 +10,15 @@ updates:
       patterns:
         - "*"
   ignore:
-    # Let's keep Django at 4.2 until a new LTS comes along
+    # Upgrading Django: we'll time this ourselves
     - dependency-name: "django"
       versions:
-      - ">=5.0"
+      - ">=6.0"
 
-    # django-tailwind 3.7 and are broken on Python 3.9: https://github.com/timonweb/django-tailwind/issues/210
-    - dependency-name: "django-tailwind"
+    # 8.7.2. is the last version to support ProcessState (i.e. minidump parsing) which we need
+    - dependency-name: "symbolic"
       versions:
-      - ">3.6"
+      - ">8.7.2"
 
 # Turn off all pull requests for npm dependencies; we only use npm as a development-side
 # dependency (for tailwind, the results of which we simply commit into the repo).
