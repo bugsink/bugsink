@@ -1,9 +1,9 @@
 from django import forms
 from django.contrib.auth import get_user_model
-from django.template.defaultfilters import yesno
 from django.utils.translation import gettext_lazy as _
 
 from bugsink.utils import assert_
+from bsmain.utils import yesno
 from .models import TeamRole, TeamMembership, Team
 
 User = get_user_model()
