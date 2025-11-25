@@ -1,3 +1,4 @@
+from urllib.parse import urlparse
 import json
 import requests
 from django.utils import timezone
@@ -10,6 +11,16 @@ from bugsink.app_settings import get_settings
 from bugsink.transaction import immediate_atomic
 
 from issues.models import Issue
+
+
+def url_valid_according_to_discord(url):
+    # See https://github.com/bugsink/bugsink/issues/280 for "according to Discord"
+    parsed = urlparse(url)
+    return (
+        parsed.scheme in ("http", "https")
+        and parsed.hostname is not None
+        and "." in parsed.hostname
+    )
 
 
 class DiscordConfigForm(forms.Form):
@@ -139,11 +150,13 @@ def discord_backend_send_alert(
 
     embed = {
         "title": issue_title,
-        "url": issue_url,
         "description": f"{alert_reason} issue",
         "color": color,
         "fields": [{"name": "Project", "value": issue.project.name, "inline": True}],
     }
+
+    if url_valid_according_to_discord(issue_url):
+        embed["url"] = issue_url
 
     if unmute_reason:
         embed["fields"].append(
