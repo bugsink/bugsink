@@ -3,14 +3,16 @@ from projects.models import Project
 
 from .service_backends.slack import SlackBackend
 from .service_backends.mattermost import MattermostBackend
+from .service_backends.discord import DiscordBackend
 
 
 def kind_choices():
     # As a callable to avoid non-DB-affecting migrations for adding new kinds.
     # Messaging backends don't need translations since they are brand names.
     return [
-        ("slack", "Slack"),
+        ("discord", "Discord"),
         ("mattermost", "Mattermost"),
+        ("slack", "Slack"),
     ]
 
 
@@ -38,12 +40,13 @@ class MessagingServiceConfig(models.Model):
                                                   help_text="Error message from the exception")
 
     def get_backend(self):
+        if self.kind == "discord":
+            return DiscordBackend(self)
+        if self.kind == "mattermost":
+            return MattermostBackend(self)
         if self.kind == "slack":
             return SlackBackend(self)
-        elif self.kind == "mattermost":
-            return MattermostBackend(self)
-        else:
-            raise ValueError(f"Unknown backend kind: {self.kind}")
+        raise ValueError(f"Unknown backend kind: {self.kind}")
 
     def clear_failure_status(self):
         """Clear all failure tracking fields on successful operation"""
