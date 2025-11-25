@@ -1,17 +1,20 @@
 import json
-
 import requests
-from django import forms
-from django.template.defaultfilters import truncatechars
 from django.utils import timezone
 
+from django import forms
+from django.template.defaultfilters import truncatechars
+
+from snappea.decorators import shared_task
 from bugsink.app_settings import get_settings
 from bugsink.transaction import immediate_atomic
+
 from issues.models import Issue
-from snappea.decorators import shared_task
 
 
 class DiscordConfigForm(forms.Form):
+    # NOTE: As of yet this code isn't plugged into the UI (because it requires dynamic loading of the config-specific
+    # form)
     webhook_url = forms.URLField(required=True)
 
     def __init__(self, *args, **kwargs):
@@ -42,9 +45,7 @@ def _store_failure_info(service_config_id, exception, response=None):
             # Handle requests-specific errors
             if response is not None:
                 config.last_failure_status_code = response.status_code
-                config.last_failure_response_text = response.text[
-                    :2000
-                ]  # Limit response text size
+                config.last_failure_response_text = response.text[:2000]  # Limit response text size
 
                 # Check if response is JSON
                 try:
@@ -111,7 +112,7 @@ def discord_backend_send_test_message(
 
         _store_success_info(service_config_id)
     except requests.RequestException as e:
-        response = getattr(e, "response", None)
+        response = getattr(e, 'response', None)
         _store_failure_info(service_config_id, e, response)
 
     except Exception as e:
@@ -120,14 +121,7 @@ def discord_backend_send_test_message(
 
 @shared_task
 def discord_backend_send_alert(
-    webhook_url,
-    issue_id,
-    state_description,
-    alert_article,
-    alert_reason,
-    service_config_id,
-    unmute_reason=None,
-):
+        webhook_url, issue_id, state_description, alert_article, alert_reason, service_config_id, unmute_reason=None):
 
     issue = Issue.objects.get(id=issue_id)
 
@@ -184,7 +178,7 @@ def discord_backend_send_alert(
 
         _store_success_info(service_config_id)
     except requests.RequestException as e:
-        response = getattr(e, "response", None)
+        response = getattr(e, 'response', None)
         _store_failure_info(service_config_id, e, response)
 
     except Exception as e:
@@ -207,11 +201,10 @@ class DiscordBackend:
             self.service_config.id,
         )
 
-    def send_alert(
-        self, issue_id, state_description, alert_article, alert_reason, **kwargs
-    ):
+    def send_alert(self, issue_id, state_description, alert_article, alert_reason, **kwargs):
+        config = json.loads(self.service_config.config)
         discord_backend_send_alert.delay(
-            json.loads(self.service_config.config)["webhook_url"],
+            config["webhook_url"],
             issue_id,
             state_description,
             alert_article,
