@@ -151,6 +151,7 @@ def slack_backend_send_alert(
                     "type": "header",
                     "text": {
                         "type": "plain_text",
+                        # TODO arguably issue.title() should get this location; "later" because I don't have a test env.
                         "text": f"{alert_reason} issue",
                     },
                 },
@@ -218,7 +219,6 @@ def slack_backend_send_alert(
 
 
 class SlackBackend:
-
     def __init__(self, service_config):
         self.service_config = service_config
 
@@ -226,14 +226,22 @@ class SlackBackend:
         return SlackConfigForm
 
     def send_test_message(self):
+        config = json.loads(self.service_config.config)
         slack_backend_send_test_message.delay(
-            json.loads(self.service_config.config)["webhook_url"],
+            config["webhook_url"],
             self.service_config.project.name,
             self.service_config.display_name,
             self.service_config.id,
         )
 
     def send_alert(self, issue_id, state_description, alert_article, alert_reason, **kwargs):
+        config = json.loads(self.service_config.config)
         slack_backend_send_alert.delay(
-            json.loads(self.service_config.config)["webhook_url"],
-            issue_id, state_description, alert_article, alert_reason, self.service_config.id, **kwargs)
+            config["webhook_url"],
+            issue_id,
+            state_description,
+            alert_article,
+            alert_reason,
+            self.service_config.id,
+            **kwargs,
+        )

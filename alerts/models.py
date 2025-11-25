@@ -6,7 +6,8 @@ from .service_backends.mattermost import MattermostBackend
 
 
 def kind_choices():
-    # no 18n needed for no
+    # As a callable to avoid non-DB-affecting migrations for adding new kinds.
+    # Messaging backends don't need translations since they are brand names.
     return [
         ("slack", "Slack"),
         ("mattermost", "Mattermost"),
