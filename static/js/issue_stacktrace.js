@@ -88,7 +88,7 @@ function expandSection(element) {
 }
 
 function toggleFrameVisibility(frameHeader) {
-    console.log("toggling frame visibility");
+    // console.log("toggling frame visibility");
     const selection = window.getSelection().toString();
     if (selection.length > 0) {
         // don't toggle if the user is selecting text (which one might do to copy a
