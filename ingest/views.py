@@ -55,6 +55,7 @@ from .models import StoreEnvelope, DontStoreEnvelope, Envelope
 HTTP_429_TOO_MANY_REQUESTS = 429
 HTTP_400_BAD_REQUEST = 400
 HTTP_404_NOT_FOUND = 404
+HTTP_413_CONTENT_TOO_LARGE = 413
 HTTP_501_NOT_IMPLEMENTED = 501
 
 
@@ -115,7 +116,7 @@ class BaseIngestAPIView(View):
         try:
             return self._set_cors_headers(self._post(request, project_pk))
         except MaxLengthExceeded as e:
-            return self._set_cors_headers(JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST))
+            return self._set_cors_headers(JsonResponse({"message": str(e)}, status=HTTP_413_CONTENT_TOO_LARGE))
         except exceptions.ValidationError as e:
             return self._set_cors_headers(JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST))
 
