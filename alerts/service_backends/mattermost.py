@@ -13,9 +13,11 @@ from issues.models import Issue
 
 
 class MattermostConfigForm(forms.Form):
-    # NOTE: As of yet this code isn't plugged into the UI (because it requires dynamic loading of the config-specific
-    # form)
     webhook_url = forms.URLField(required=True)
+    channel = forms.CharField(
+        required=False,
+        help_text='Optional: Override channel (e.g., "town-square" or "@username" for DMs)',
+    )
 
     def __init__(self, *args, **kwargs):
         config = kwargs.pop("config", None)
@@ -23,10 +25,12 @@ class MattermostConfigForm(forms.Form):
         super().__init__(*args, **kwargs)
         if config:
             self.fields["webhook_url"].initial = config.get("webhook_url", "")
+            self.fields["channel"].initial = config.get("channel", "")
 
     def get_config(self):
         return {
             "webhook_url": self.cleaned_data.get("webhook_url"),
+            "channel": self.cleaned_data.get("channel"),
         }
 
 
@@ -85,7 +89,7 @@ def _store_success_info(service_config_id):
 
 
 @shared_task
-def mattermost_backend_send_test_message(webhook_url, project_name, display_name, service_config_id):
+def mattermost_backend_send_test_message(webhook_url, project_name, display_name, service_config_id, channel=None):
     # See https://developers.mattermost.com/integrate/reference/message-attachments/
 
     data = {"text": "### Test message by Bugsink to test the webhook setup.",
@@ -105,6 +109,9 @@ def mattermost_backend_send_test_message(webhook_url, project_name, display_name
                     ]
                 }
             ]}
+
+    if channel:
+        data["channel"] = channel
 
     try:
         result = requests.post(
@@ -127,7 +134,8 @@ def mattermost_backend_send_test_message(webhook_url, project_name, display_name
 
 @shared_task
 def mattermost_backend_send_alert(
-        webhook_url, issue_id, state_description, alert_article, alert_reason, service_config_id, unmute_reason=None):
+        webhook_url, issue_id, state_description, alert_article, alert_reason, service_config_id, unmute_reason=None,
+        channel=None):
 
     issue = Issue.objects.get(id=issue_id)
 
@@ -161,6 +169,9 @@ def mattermost_backend_send_alert(
     #     fields.append("title": "Environment", "value": _safe_markdown(event.environment)})
 
     data["attachments"][0]["fields"] += fields
+
+    if channel:
+        data["channel"] = channel
 
     try:
         result = requests.post(
@@ -196,6 +207,7 @@ class MattermostBackend:
             self.service_config.project.name,
             self.service_config.display_name,
             self.service_config.id,
+            channel=config.get("channel"),
         )
 
     def send_alert(self, issue_id, state_description, alert_article, alert_reason, **kwargs):
@@ -207,5 +219,6 @@ class MattermostBackend:
             alert_article,
             alert_reason,
             self.service_config.id,
+            channel=config.get("channel"),
             **kwargs,
         )

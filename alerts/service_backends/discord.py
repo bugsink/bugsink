@@ -24,8 +24,6 @@ def url_valid_according_to_discord(url):
 
 
 class DiscordConfigForm(forms.Form):
-    # NOTE: As of yet this code isn't plugged into the UI (because it requires dynamic loading of the config-specific
-    # form)
     webhook_url = forms.URLField(required=True)
 
     def __init__(self, *args, **kwargs):
