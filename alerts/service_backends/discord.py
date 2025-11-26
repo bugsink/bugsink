@@ -26,6 +26,10 @@ def url_valid_according_to_discord(url):
 class DiscordConfigForm(forms.Form):
     webhook_url = forms.URLField(required=True)
 
+    # Discord does not appear to support multi-channel webhooks; although this is not spelled out explicitly, the
+    # section at https://discord.com/developers/docs/resources/webhook#execute-webhook does not have an attr for
+    # "channel". (the word channel appears on that page, but that's for the _creation_ of new webhooks).
+
     def __init__(self, *args, **kwargs):
         config = kwargs.pop("config", None)
 
