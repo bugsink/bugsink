@@ -72,7 +72,7 @@ def brotli_generator(input_stream, chunk_size=DEFAULT_CHUNK_SIZE):
                 data = decompressor.process(b"", output_buffer_limit=chunk_size)  # b"": no input available, "drain"
                 brotli_assert(
                     len(data) or decompressor.is_finished(),
-                    "Draining done -> decompressor finished; if not, something's off")
+                    "'Draining done' should imply 'decompressor finished'; if not, something's off")
 
         else:
             data = decompressor.process(b"", output_buffer_limit=chunk_size)  # b"" compressor cannot accept more input
