@@ -15,6 +15,11 @@ from issues.models import Issue
 class SlackConfigForm(forms.Form):
     webhook_url = forms.URLField(required=True)
 
+    # Slack does not support multi-channel webhooks, as per the docs:
+    # > You cannot override the default channel (chosen by the user who installed your app), username, or icon when
+    # > you're using incoming webhooks to post messages. Instead, these values will always inherit from the associated
+    # > Slack app configuration.
+
     def __init__(self, *args, **kwargs):
         config = kwargs.pop("config", None)
 
