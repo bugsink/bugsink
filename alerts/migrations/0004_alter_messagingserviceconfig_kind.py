@@ -14,7 +14,7 @@ class Migration(migrations.Migration):
             model_name="messagingserviceconfig",
             name="kind",
             field=models.CharField(
-                choices=alerts.models.kind_choices, default="slack", max_length=20
+                choices=alerts.models.get_alert_service_kind_choices, default="slack", max_length=20
             ),
         ),
     ]

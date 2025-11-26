@@ -6,7 +6,7 @@ from .service_backends.mattermost import MattermostBackend
 from .service_backends.discord import DiscordBackend
 
 
-def kind_choices():
+def get_alert_service_kind_choices():
     # As a callable to avoid non-DB-affecting migrations for adding new kinds.
     # Messaging backends don't need translations since they are brand names.
     return [
@@ -16,12 +16,22 @@ def kind_choices():
     ]
 
 
+def get_alert_service_backend_class(kind):
+    if kind == "discord":
+        return DiscordBackend
+    if kind == "mattermost":
+        return MattermostBackend
+    if kind == "slack":
+        return SlackBackend
+    raise ValueError(f"Unknown backend kind: {kind}")
+
+
 class MessagingServiceConfig(models.Model):
     project = models.ForeignKey(Project, on_delete=models.DO_NOTHING, related_name="service_configs")
     display_name = models.CharField(max_length=100, blank=False,
                                     help_text='For display in the UI, e.g. "#general on company Slack"')
 
-    kind = models.CharField(choices=kind_choices, max_length=20, default="slack")
+    kind = models.CharField(choices=get_alert_service_kind_choices, max_length=20, default="slack")
 
     config = models.TextField(blank=False)
 
@@ -40,13 +50,7 @@ class MessagingServiceConfig(models.Model):
                                                   help_text="Error message from the exception")
 
     def get_backend(self):
-        if self.kind == "discord":
-            return DiscordBackend(self)
-        if self.kind == "mattermost":
-            return MattermostBackend(self)
-        if self.kind == "slack":
-            return SlackBackend(self)
-        raise ValueError(f"Unknown backend kind: {self.kind}")
+        return get_alert_service_backend_class(self.kind)(self)
 
     def clear_failure_status(self):
         """Clear all failure tracking fields on successful operation"""

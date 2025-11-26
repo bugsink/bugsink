@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% load static %}
+{% load tailwind_forms %}
+
+{% block title %}Messaging Service · {{ project.name }}  · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+<div class="flex items-center justify-center">
+
+    <div class="m-4 max-w-4xl flex-auto">
+        <form action="." method="post">
+        {% csrf_token %}
+
+        {% if messages %}
+        <ul>
+            {% for message in messages %}
+                {# if we introduce different levels we can use{% message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %} #}
+                <li class="bg-cyan-50 dark:bg-cyan-900 border-2 border-cyan-800 dark:border-cyan-400 p-4 rounded-lg">{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        <div>
+            <h1 class="text-4xl my-4 font-bold">Messaging Service | {{ project.name }}</h1>
+        </div>
+
+        {% for field in form %}
+            {% tailwind_formfield field %}
+        {% endfor %}
+
+        {% for config_form_kind, config_form in config_forms.items %}
+            <div
+                class="config-form-block {% if config_form_kind == selected_config_form_kind %}block{% else %}hidden{% endif %}" data-config-kind="{{ config_form_kind }}">
+
+                {% for field in config_form %}
+                    {% tailwind_formfield field %}
+                {% endfor %}
+            </div>
+        {% endfor %}
+
+
+        <button name="action" value="add" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">Save</button>
+        <a href="{% url "project_alerts_setup" project_pk=project.pk %}" class="font-bold text-slate-500 dark:text-slate-300 ml-4">Cancel</a>
+
+        </form>
+
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const kindSelect = document.querySelector('select[name="kind"]');
+    const blocks = document.querySelectorAll('.config-form-block');
+
+    function updateConfigForms() {
+        const selectedKind = kindSelect.value;
+
+        blocks.forEach(block => {
+            const blockKind = block.dataset.configKind;
+            const isActive = (blockKind === selectedKind);
+
+            block.classList.toggle('hidden', !isActive);
+            block.classList.toggle('block', isActive);
+            block.querySelectorAll('input, select, textarea, button').forEach(element => {
+                element.disabled = !isActive;
+            });
+        });
+    }
+
+    updateConfigForms();  // Initialize on page load
+
+    kindSelect.addEventListener('change', updateConfigForms);
+});
+</script>
+{% endblock %}

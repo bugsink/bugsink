@@ -3,7 +3,7 @@ from django.forms import ModelForm
 from .models import MessagingServiceConfig
 
 
-class MessagingServiceConfigForm(ModelForm):
+class MessagingServiceConfigNewForm(ModelForm):
 
     def __init__(self, project, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -19,3 +19,13 @@ class MessagingServiceConfigForm(ModelForm):
         if commit:
             instance.save()
         return instance
+
+
+class MessagingServiceConfigEditForm(ModelForm):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    class Meta:
+        model = MessagingServiceConfig
+        fields = ["display_name"]

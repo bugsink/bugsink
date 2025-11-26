@@ -203,7 +203,8 @@ class DiscordBackend:
     def __init__(self, service_config):
         self.service_config = service_config
 
-    def get_form_class(self):
+    @classmethod
+    def get_form_class(cls):
         return DiscordConfigForm
 
     def send_test_message(self):

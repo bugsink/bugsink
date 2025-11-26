@@ -20,9 +20,8 @@ from bugsink.app_settings import get_settings, CB_ANYBODY, CB_MEMBERS, CB_ADMINS
 from bugsink.decorators import login_exempt, atomic_for_request_method
 from bugsink.utils import assert_
 
-from alerts.models import MessagingServiceConfig
-from alerts.forms import MessagingServiceConfigForm
-from alerts.service_backends.slack import SlackConfigForm
+from alerts.models import MessagingServiceConfig, get_alert_service_backend_class, get_alert_service_kind_choices
+from alerts.forms import MessagingServiceConfigNewForm, MessagingServiceConfigEditForm
 
 from .models import Project, ProjectMembership, ProjectRole, ProjectVisibility
 from .forms import ProjectMembershipForm, MyProjectMembershipForm, ProjectMemberInviteForm, ProjectForm
@@ -457,26 +456,35 @@ def project_messaging_service_add(request, project_pk):
     project = Project.objects.get(id=project_pk, is_deleted=False)
     _check_project_admin(project, request.user)
 
+    config_forms = {
+        kind: get_alert_service_backend_class(kind).get_form_class()()
+        for (kind, _) in get_alert_service_kind_choices()
+    }
+
     if request.method == 'POST':
-        form = MessagingServiceConfigForm(project, request.POST)
-        config_form = SlackConfigForm(data=request.POST)
+        form = MessagingServiceConfigNewForm(project, request.POST)
+        kind = form.data.get('kind') or form.fields['kind'].initial
+        config_form = get_alert_service_backend_class(kind).get_form_class()(data=request.POST)
+        config_forms[kind] = config_form
 
-        if form.is_valid() and config_form.is_valid():
-            service = form.save(commit=False)
-            service.config = json.dumps(config_form.get_config())
-            service.save()
+        if form.is_valid():
+            if config_form.is_valid():
+                service = form.save(commit=False)
+                service.config = json.dumps(config_form.get_config())
+                service.save()
 
-            messages.success(request, "Messaging service added successfully.")
-            return redirect('project_alerts_setup', project_pk=project_pk)
+                messages.success(request, "Messaging service added successfully.")
+                return redirect('project_alerts_setup', project_pk=project_pk)
 
     else:
-        form = MessagingServiceConfigForm(project)
-        config_form = SlackConfigForm()
+        form = MessagingServiceConfigNewForm(project)
+        kind = form.fields['kind'].initial
 
-    return render(request, 'projects/project_messaging_service_edit.html', {
+    return render(request, 'projects/project_messaging_service_new.html', {
         'project': project,
         'form': form,
-        'config_form': config_form,
+        'config_forms': config_forms,
+        'selected_config_form_kind': kind,
     })
 
 
@@ -486,10 +494,14 @@ def project_messaging_service_edit(request, project_pk, service_pk):
     _check_project_admin(project, request.user)
 
     instance = project.service_configs.get(id=service_pk)
+    # for editing, we don't allow for changing the kind; although it's probably possible to implement it, it would raise
+    # questions on "how much are the various configs related (should data be transferred from one config to another).
+    # and even though "it's possible" simply disallowing greatly simplifies the implementation.
+    config_form_class = get_alert_service_backend_class(instance.kind).get_form_class()
 
     if request.method == 'POST':
-        form = MessagingServiceConfigForm(project, request.POST, instance=instance)
-        config_form = SlackConfigForm(data=request.POST)
+        form = MessagingServiceConfigEditForm(request.POST, instance=instance)
+        config_form = config_form_class(data=request.POST)
 
         if form.is_valid() and config_form.is_valid():
             service = form.save(commit=False)
@@ -500,8 +512,8 @@ def project_messaging_service_edit(request, project_pk, service_pk):
             return redirect('project_alerts_setup', project_pk=project_pk)
 
     else:
-        form = MessagingServiceConfigForm(project, instance=instance)
-        config_form = SlackConfigForm(config=json.loads(instance.config))
+        form = MessagingServiceConfigEditForm(instance=instance)
+        config_form = config_form_class(config=json.loads(instance.config))
 
     return render(request, 'projects/project_messaging_service_edit.html', {
         'project': project,
