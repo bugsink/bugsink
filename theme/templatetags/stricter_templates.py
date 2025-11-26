@@ -4,7 +4,7 @@ register = template.Library()
 
 @register.filter(name='items')
 def items(value):
-    """Just do value.items(); the reason to not just do value.items in the templatte that the latter will first do a
+    """Just do value.items(); the reason to not just do value.items in the template that the latter will first do a
     dictionary lookup; if the dictionary contains an item with the key 'items', that will be returned which is
     definitely not what we want here. """
     try:
