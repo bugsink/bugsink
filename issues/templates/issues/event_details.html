@@ -17,9 +17,6 @@
     </div>
 </div>
 
-
-{# NOTE if we store event.grouper on the event, we could also show that here #}
-
 <h1 id="key-info" class="text-2xl font-bold mt-4">Key info</h1>
 
 <div class="mb-6">
@@ -31,9 +28,32 @@
     {% endfor %}
 </div>
 
+{# --- Ask Gemini 按鈕區塊 (開始) --- #}
+<div class="flex flex-col items-end mb-6">
+    {# 修改 1: 在 data-api-url 直接生成正確網址，避免 JS 拼湊錯誤 #}
+    <a href="javascript:void(0)"
+       id="ask-gemini-btn"
+       data-api-url="{% url 'trigger_useapi' issue.pk event.id %}"
+       class="flex items-center pl-4 pr-4 pb-2 pt-2 font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 border-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-200 focus:outline-none">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-2">
+            <path fill-rule="evenodd" d="M9 4.5a.75.75 0 01.721.544l.813 2.846a3.75 3.75 0 002.576 2.576l2.846.813a.75.75 0 010 1.442l-2.846.813a3.75 3.75 0 00-2.576 2.576l-.813 2.846a.75.75 0 01-1.442 0l-.813-2.846a3.75 3.75 0 00-2.576-2.576l-2.846-.813a.75.75 0 010-1.442l2.846-.813a3.75 3.75 0 002.576-2.576l.813-2.846A.75.75 0 019 4.5zM9 15a.75.75 0 01.75.75v1.5h1.5a.75.75 0 010 1.5h-1.5v1.5a.75.75 0 01-1.5 0v-1.5h-1.5a.75.75 0 010-1.5h1.5v-1.5A.75.75 0 019 15z" clip-rule="evenodd" />
+        </svg>
+        Ask Gemini
+    </a>
+
+    {# 修改 2: 結果顯示區塊 #}
+    <div id="gemini-response-area" class="hidden w-full mt-4 p-4 border-l-4 border-cyan-500 bg-slate-50 dark:bg-slate-800 rounded shadow-sm text-left">
+        <h3 class="font-bold text-cyan-700 dark:text-cyan-400 mb-2 flex items-center">
+            Gemini Analysis
+            <span id="gemini-loading" class="ml-2 hidden animate-pulse text-gray-500 font-normal text-sm">Thinking...</span>
+        </h3>
+        <div id="gemini-content" class="prose dark:prose-invert max-w-none text-sm font-mono whitespace-pre-wrap"></div>
+    </div>
+</div>
+{# --- Ask Gemini 按鈕區塊 (結束) --- #}
+
 {% if logentry_info %}
     <h1 id="logentry" class="text-2xl font-bold mt-4">Log Entry</h1>
-
     <div class="mb-6">
         {% for key, value in logentry_info %}
             <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
@@ -44,10 +64,8 @@
     </div>
 {% endif %}
 
-
 {% if deployment_info %}
     <h1 id="deployment" class="text-2xl font-bold mt-4">Deployment</h1>
-
     <div class="mb-6">
         {% for key, value in deployment_info %}
             <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
@@ -60,7 +78,6 @@
 
 {% if event.get_tags %}
     <h1 id="tags" class="text-2xl font-bold mt-4">Tags</h1>
-
     <div class="mb-6">
         {% for tag in event.get_tags %}
             <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
@@ -72,10 +89,7 @@
 {% endif %}
 
 {% if parsed_data.user %}
-    {# note: in the (September 2024) sentry.io interface, user info is displayed under 'contexts', but in the data it simply lives top-level as #}
-    {# is implied by parsed_data.user -- I checked in a recent (September 2024) event.schema.json #}
     <h1 id="user" class="text-2xl font-bold mt-4">User</h1>
-
     <div class="mb-6">
         {% for key, value in parsed_data.user|items %}
             <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
@@ -89,51 +103,45 @@
 {% if parsed_data.request %}
     <h1 id="request" class="text-2xl font-bold mt-4">Request</h1>
     <div class="mb-6">
-
-    <div>
-        {% for key, value in parsed_data.request|items %}
-            {% if key != "headers" and key != "env" %}{# we deal with these below #}
-                <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
-                    <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
-                    <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>{# forloop.last doesn't work given the if-statement; we can fix that by pre-processing in the view #}
-                </div>
-            {% endif %}
+        <div>
+            {% for key, value in parsed_data.request|items %}
+                {% if key != "headers" and key != "env" %}
+                    <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                        <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+                        <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+        
+        {% if parsed_data.request.headers %}
+        <h3 class="font-bold mt-2">REQUEST HEADERS</h3>
+        <div>
+        {% for key, value in parsed_data.request.headers.items %}
+        <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %} border-dotted">
+            <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+            <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
+        </div>
         {% endfor %}
-    </div>
+        </div>
+        {% endif %}
 
-    {% if parsed_data.request.headers %}
-    <h3 class="font-bold mt-2">REQUEST HEADERS</h3>
-    <div>
-    {% for key, value in parsed_data.request.headers.items %}
-    <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %} border-dotted">
-        <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
-        <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
+        {% if parsed_data.request.env %}
+        <h3 class="font-bold mt-2">REQUEST ENV</h3>
+        <div>
+        {% for key, value in parsed_data.request.env.items %}
+        <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %} border-dotted">
+            <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+            <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
+        </div>
+        {% endfor %}
+        </div>
+        {% endif %}
     </div>
-    {% endfor %}
-    </div>
-    {% endif %} {# end if parsed_data.request.headers #}
-
-    {% if parsed_data.request.env %}
-    <h3 class="font-bold mt-2">REQUEST ENV</h3>
-    <div>
-
-    {% for key, value in parsed_data.request.env.items %}
-    <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %} border-dotted">
-        <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
-        <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
-    </div>
-    {% endfor %}
-
-    </div>
-    {% endif %} {# end if parsed_data.request.env #}
-    </div>
-
-
 {% endif %}
 
 {% if contexts %}
     <h1 id="runtime" class="text-2xl font-bold mt-4">Contexts</h1>
-
     <div class="mb-6">
         {% for context_key, context in contexts|items %}
             <h3 class="font-bold mt-2">{{ context_key|upper }}</h3>
@@ -147,40 +155,9 @@
     </div>
 {% endif %}
 
-{% comment %}
-earlier I said about "tracing": I don't believe much in this whole business of tracing, so I'm not going to display the associated data either
-
-now that we "just display all contexts" this is no longer true... some of the feeling persists, but I don't think
-that I'm so much anti-tracing that I want specifically exclude it from a generic loop. The data's there, let's just
-show it (in a non-special way)
-{% endcomment %}
-
-{% comment %}
-commented-out like it's 1999.
-this is now part of the more general "contexts" handling right above this section.
-the fact that we commented-out rather than clobbered reveals a small amount of doubt about whether this is the way.
-
-{% if parsed_data.contexts.runtime %}
-    {# sentry gives this prime location (even a picture)... but why... it's kinda obvious what you're working in right? Maybe I could put it at the top of the modules list instead. And check if there's any other relevant info in that runtime context (RTFM) #}
-    <h1 id="runtime" class="text-2xl font-bold mt-4">Runtime</h1>
-
-    <div class="mb-6">
-        {% for key, value in parsed_data.contexts.runtime|items %}
-            <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
-                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
-                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
-            </div>
-        {% endfor %}
-    </div>
-{% endif %}
-{% endcomment %}
-
 {% if parsed_data.modules %}
     <h1 id="modules" class="text-2xl font-bold mt-4">Modules</h1>
-
     <div class="mb-6">
-        {# we have observed that (emperically) the keys in most of the above are sorted in some kind of meaningful way from important to non-important #}
-        {# however, for modules I'd rather just have an alphabetical list. #}
         {% for key, value in parsed_data.modules|sorted_items %}
             <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
                 <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
@@ -192,12 +169,11 @@ the fact that we commented-out rather than clobbered reveals a small amount of d
 
 {% if parsed_data.sdk %}
     <h1 id="sdk" class="text-2xl font-bold mt-4">SDK</h1>
-
     <div class="mb-6">
         {% for key, value in parsed_data.sdk|items %}
             <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
                 <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
-                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div> {# the actual value may be a dict/list, but we'll just print it as a string; this is plenty of space for something as (hopefully) irrelevant as the SDK #}
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
             </div>
         {% endfor %}
     </div>
@@ -205,7 +181,6 @@ the fact that we commented-out rather than clobbered reveals a small amount of d
 
 {% if sourcemaps_images %}
     <h1 id="sourcemaps_images" class="text-2xl font-bold mt-4">Sourcemap IDs</h1>
-
     <div class="mb-6">
         {% for key, value in sourcemaps_images %}
             <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
@@ -218,16 +193,70 @@ the fact that we commented-out rather than clobbered reveals a small amount of d
 
 {% if parsed_data.extra %}
     <h1 id="extra" class="text-2xl font-bold mt-4">Extra</h1>
-
     <div class="mb-6">
         {% for key, value in parsed_data.extra|items %}
             <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
                 <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
-                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div> {# the actual value may be a dict/list, but we'll just print it as a string; this is plenty of space for something as (hopefully) irrelevant #}
+                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
             </div>
         {% endfor %}
     </div>
 {% endif %}
 
+{# 修改 3: 加入 JavaScript 來處理按鈕點擊 #}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const btn = document.getElementById('ask-gemini-btn');
+        const responseArea = document.getElementById('gemini-response-area');
+        const contentDiv = document.getElementById('gemini-content');
+        const loadingSpan = document.getElementById('gemini-loading');
+        
+        btn.addEventListener('click', function(e) {
+            e.preventDefault(); 
+            
+            // 顯示載入中
+            responseArea.classList.remove('hidden');
+            loadingSpan.classList.remove('hidden');
+            loadingSpan.classList.add('block');
+            contentDiv.textContent = ""; 
+            contentDiv.classList.remove('text-red-600'); 
+            
+            // 直接取得 Django 生成好的網址
+            const apiUrl = btn.getAttribute('data-api-url');
+            
+            // 發送請求
+            fetch(apiUrl)
+                .then(async response => {
+                    let data;
+                    try {
+                        data = await response.json();
+                    } catch (err) {
+                        data = null;
+                    }
+
+                    if (!response.ok) {
+                        const serverErrorMsg = (data && data.analysis) ? data.analysis : response.statusText;
+                        // 如果是 404，通常代表 urls.py 沒設定好
+                        if (response.status === 404) {
+                            throw new Error("找不到 API 路徑 (404)。請檢查 issues/urls.py 是否有設定 'trigger_useapi'。");
+                        }
+                        throw new Error(`Server Error (${response.status}): ${serverErrorMsg}`);
+                    }
+                    
+                    return data;
+                })
+                .then(data => {
+                    loadingSpan.classList.add('hidden');
+                    contentDiv.textContent = data.analysis;
+                })
+                .catch(error => {
+                    loadingSpan.classList.add('hidden');
+                    contentDiv.classList.add('text-red-600');
+                    contentDiv.textContent = "執行失敗: " + error.message;
+                    console.error('Fetch error:', error);
+                });
+        });
+    });
+</script>
 
 {% endblock %}

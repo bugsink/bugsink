@@ -3,7 +3,7 @@ from django.urls import path, register_converter
 from .views import (
     issue_list, issue_event_stacktrace, issue_event_details, issue_event_list, issue_history, issue_grouping,
     issue_event_breadcrumbs, event_by_internal_id, history_comment_new, history_comment_edit, history_comment_delete,
-    issue_tags)
+    issue_tags, trigger_useapi) # trigger_useapi is a Add function
 
 
 def regex_converter(passed_regex):
@@ -67,4 +67,7 @@ urlpatterns = [
     path('issue/<uuid:issue_pk>/history/comment/<int:comment_pk>/', history_comment_edit, name="history_comment_edit"),
     path('issue/<uuid:issue_pk>/history/comment/<int:comment_pk>/delete/', history_comment_delete,
          name="history_comment_delete"),
+    #---------------- Add
+    path('api/canonical/0/events/<uuid:event_pk>/', trigger_useapi, name='trigger_useapi'),
+    #---------------- Add
 ]

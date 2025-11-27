@@ -10,6 +10,10 @@ from django.http import HttpResponseRedirect, HttpResponseNotAllowed
 from django.urls import reverse
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
+#--------------- Add
+from django.http import JsonResponse
+from . import useAPI
+#--------------- Add
 from django.core.paginator import Paginator, Page
 from django.db.utils import OperationalError
 from django.conf import settings
@@ -584,7 +588,15 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
     except Event.DoesNotExist:
         return issue_event_404(request, issue, event_x_qs, "event-details", "event_details")
     parsed_data = event.get_parsed_data()
-
+    #----------------------- Add
+    try:
+        # 使用 'w' 模式：每次開啟都會清空檔案內容
+        with open('/data/id.txt', 'w') as f:
+            f.write(str(event.id))
+    except Exception as e:
+        # 簡單的錯誤捕捉，避免因為寫檔權限問題導致網頁崩潰
+        print(f"Error writing event ID to file: {e}")
+    #------------------------ Add
     key_info = [
         ("title", event.title()),
         ("transaction", issue.transaction),
@@ -838,3 +850,18 @@ def history_comment_delete(request, issue, comment_pk):
         return redirect(reverse(issue_history, kwargs={'issue_pk': issue.pk}))
 
     return HttpResponseNotAllowed(["POST"])
+#-------------------- Add
+def trigger_useapi(request, issue_pk, event_id):
+    """
+    不管發生什麼事，都直接呼叫 useAPI.process_task(event_id)。
+    View 不做任何資料庫查詢，只負責當傳聲筒。
+    """
+    try:
+        # 將 event_id 傳給 useAPI，所有的髒活累活都在那邊做
+        result_text = useAPI.process_task(event_id)
+
+        return JsonResponse({'analysis': result_text})
+
+    except Exception as e:
+        # 萬一 useAPI 爆掉了，回傳錯誤訊息
+        return JsonResponse({'analysis': f"執行發生錯誤: {str(e)}"}, status=500)
