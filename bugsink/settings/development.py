@@ -168,3 +168,12 @@ if FORCE_SCRIPT_NAME:
     # automatically, but I haven't been able to get that to work reliably, https://code.djangoproject.com/ticket/34028
     # so we'll just be explicit about it.
     STATIC_URL = f"{FORCE_SCRIPT_NAME}/static/"
+
+
+#For test only, not original code
+# 加入 development.py 底部
+SILENCED_SYSTEM_CHECKS.extend([
+    "security.W009",  # SECRET_KEY
+    "security.W012",  # SESSION_COOKIE_SECURE
+    "security.W018",  # DEBUG=True
+])

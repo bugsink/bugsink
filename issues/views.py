@@ -12,7 +12,8 @@ from django.core.exceptions import PermissionDenied
 from django.http import Http404
 #--------------- Add
 from django.http import JsonResponse
-from . import useAPI
+import traceback
+import uuid
 #--------------- Add
 from django.core.paginator import Paginator, Page
 from django.db.utils import OperationalError
@@ -853,15 +854,30 @@ def history_comment_delete(request, issue, comment_pk):
 #-------------------- Add
 def trigger_useapi(request, issue_pk, event_id):
     """
-    不管發生什麼事，都直接呼叫 useAPI.process_task(event_id)。
-    View 不做任何資料庫查詢，只負責當傳聲筒。
+    [除錯模式] 移除所有權限檢查與裝飾器，直接測試核心邏輯。
     """
     try:
-        # 將 event_id 傳給 useAPI，所有的髒活累活都在那邊做
-        result_text = useAPI.process_task(event_id)
+        # 1. 嘗試 import，放在這裡可以捕捉 Import 錯誤
+        try:
+            from . import useAPI
+        except ImportError as e:
+             return JsonResponse({'analysis': f"Import 失敗: {str(e)}"}, status=500)
 
+        # 2. 呼叫 useAPI
+        # 因為 URL 定義是 <uuid:event_id>，Django 傳進來的 event_id 是 UUID 物件
+        # 我們把它轉成字串再傳給 useAPI，比較保險
+        event_id_str = str(event_id)
+        
+        # 執行邏輯
+        result_text = useAPI.process_task(event_id_str)
+        
         return JsonResponse({'analysis': result_text})
 
     except Exception as e:
-        # 萬一 useAPI 爆掉了，回傳錯誤訊息
-        return JsonResponse({'analysis': f"執行發生錯誤: {str(e)}"}, status=500)
+        # 捕捉所有錯誤並回傳 JSON，這樣前端才能顯示詳細錯誤
+        error_details = traceback.format_exc()
+        print(f"!!! Ask Gemini Error !!!\n{error_details}") # 印在後台 Log
+
+        return JsonResponse({
+            'analysis': f"伺服器內部錯誤 (View Crash):\n{str(e)}\n\n詳細追蹤:\n{error_details}"
+        }, status=500)

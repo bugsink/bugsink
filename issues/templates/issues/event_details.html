@@ -30,18 +30,20 @@
 
 {# --- Ask Gemini 按鈕區塊 (開始) --- #}
 <div class="flex flex-col items-end mb-6">
-    {# 修改 1: 在 data-api-url 直接生成正確網址，避免 JS 拼湊錯誤 #}
-    <a href="javascript:void(0)"
+    {# 1. 按鈕: 樣式已改為 Resolve 風格 (Outline Gray) #}
+    {# 使用 data-api-url 自動生成正確網址 #}
+     <a href="javascript:void(0)"
        id="ask-gemini-btn"
        data-api-url="{% url 'trigger_useapi' issue.pk event.id %}"
-       class="flex items-center pl-4 pr-4 pb-2 pt-2 font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 border-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-200 focus:outline-none">
+       class="flex items-center px-4 py-2 text-sm font-bold text-white bg-cyan-600 hover:bg-cyan-700 rounded shadow-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500">
+        {# 星星圖示 #}
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-2">
             <path fill-rule="evenodd" d="M9 4.5a.75.75 0 01.721.544l.813 2.846a3.75 3.75 0 002.576 2.576l2.846.813a.75.75 0 010 1.442l-2.846.813a3.75 3.75 0 00-2.576 2.576l-.813 2.846a.75.75 0 01-1.442 0l-.813-2.846a3.75 3.75 0 00-2.576-2.576l-2.846-.813a.75.75 0 010-1.442l2.846-.813a3.75 3.75 0 002.576-2.576l.813-2.846A.75.75 0 019 4.5zM9 15a.75.75 0 01.75.75v1.5h1.5a.75.75 0 010 1.5h-1.5v1.5a.75.75 0 01-1.5 0v-1.5h-1.5a.75.75 0 010-1.5h1.5v-1.5A.75.75 0 019 15z" clip-rule="evenodd" />
         </svg>
         Ask Gemini
-    </a>
+    </a>  
 
-    {# 修改 2: 結果顯示區塊 #}
+    {# 2. 結果顯示區塊 (預設隱藏) #}
     <div id="gemini-response-area" class="hidden w-full mt-4 p-4 border-l-4 border-cyan-500 bg-slate-50 dark:bg-slate-800 rounded shadow-sm text-left">
         <h3 class="font-bold text-cyan-700 dark:text-cyan-400 mb-2 flex items-center">
             Gemini Analysis
@@ -214,35 +216,27 @@
         btn.addEventListener('click', function(e) {
             e.preventDefault(); 
             
-            // 顯示載入中
+            // UI 重置
             responseArea.classList.remove('hidden');
             loadingSpan.classList.remove('hidden');
-            loadingSpan.classList.add('block');
             contentDiv.textContent = ""; 
             contentDiv.classList.remove('text-red-600'); 
             
-            // 直接取得 Django 生成好的網址
             const apiUrl = btn.getAttribute('data-api-url');
             
-            // 發送請求
             fetch(apiUrl)
                 .then(async response => {
+                    // 嘗試解析 JSON，失敗則回傳 null (以便後續讀取純文字錯誤)
+                    const text = await response.text();
                     let data;
-                    try {
-                        data = await response.json();
-                    } catch (err) {
-                        data = null;
-                    }
+                    try { data = JSON.parse(text); } catch (e) { data = null; }
 
                     if (!response.ok) {
-                        const serverErrorMsg = (data && data.analysis) ? data.analysis : response.statusText;
-                        // 如果是 404，通常代表 urls.py 沒設定好
-                        if (response.status === 404) {
-                            throw new Error("找不到 API 路徑 (404)。請檢查 issues/urls.py 是否有設定 'trigger_useapi'。");
-                        }
-                        throw new Error(`Server Error (${response.status}): ${serverErrorMsg}`);
+                        let msg = response.statusText;
+                        if (data && data.analysis) msg = data.analysis;
+                        else if (text) msg = text.replace(/<[^>]*>/g, '').substring(0, 300); // 簡易過濾 HTML 標籤
+                        throw new Error(`Server Error (${response.status}): ${msg}`);
                     }
-                    
                     return data;
                 })
                 .then(data => {
@@ -253,10 +247,8 @@
                     loadingSpan.classList.add('hidden');
                     contentDiv.classList.add('text-red-600');
                     contentDiv.textContent = "執行失敗: " + error.message;
-                    console.error('Fetch error:', error);
                 });
         });
     });
 </script>
-
 {% endblock %}
