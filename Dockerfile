@@ -44,7 +44,8 @@ COPY . /app/
 COPY bugsink/conf_templates/docker.py.template bugsink_conf.py
 
 # Git is needed by setuptools_scm to get the version from the git tag
-RUN apt update && apt install -y git
+# Curl is added for this project
+RUN apt update && apt install -y git curl
 RUN pip install -e .
 
 RUN groupadd --gid 14237 bugsink \
