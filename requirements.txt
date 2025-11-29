@@ -19,3 +19,6 @@ ecma426>=0.2.0
 djangorestframework==3.16.*
 drf-spectacular[sidecar]
 symbolic==8.7.2  # the last version to support ProcessState (i.e. minidump parsing)
+python-dotenv==1.2.*
+google-genai==1.52.*
+
