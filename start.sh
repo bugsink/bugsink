@@ -11,9 +11,9 @@ else
     CREATE_SUPERUSER=${CREATE_SUPERUSER:-"admin:admin"}
     REPORT_HOST=${REPORT_HOST:-"localhost:8000"}
     PORT=${PORT:-8000}
-    DOCKER_PORT=${DOCKER_PORT:-9048}
-    IMAGE_NAME=${IMAGE_NAME:-"bugsink-v12"}
-    CONTAINER_NAME=${CONTAINER_NAME:-"bugsink-v12"}
+    DOCKER_PORT=${DOCKER_PORT:-8000}
+    IMAGE_NAME=${IMAGE_NAME:-"bugsink-v13"}
+    CONTAINER_NAME=${CONTAINER_NAME:-"bugsink-v13"}
 fi
 
 # ==========================================
@@ -35,73 +35,33 @@ sudo docker rm -f $CONTAINER_NAME 2>/dev/null
 
 echo "🚀 [3/6] 啟動 Bugsink Docker..."
 # 注意：
-# 1. -e DATABASE_PATH="/data/db.sqlite3" : 強制指定路徑
 # 2. -v $DATA_DIR:/data : 將本機目錄掛載進去
+
+DEV_FLAG=""
+VOLUME_FLAG=""
+
+while [ "$1" != "" ]; do
+    case $1 in
+        --dirty )
+            echo "Dirty mode activated."
+            VOLUME_FLAG="-v $DATA_DIR:/data"
+            ;;
+        --dev ) 
+            echo "Dev mode activated."
+	    DEV_FLAG="-v $(pwd)/issues:/app/issues"
+            ;;
+    esac
+    shift # Move to the next argument
+done
+
 sudo docker run -d \
     --name $CONTAINER_NAME \
     -e SECRET_KEY="$SECRET_KEY" \
     -e CREATE_SUPERUSER="$CREATE_SUPERUSER" \
     -e REPORT_HOST="$REPORT_HOST" \
-    -e DATABASE_PATH="/data/db.sqlite3" \
     -e PORT=$PORT \
     -p $DOCKER_PORT:$PORT \
-    -v $(pwd)/init_bugsink.py:/app/init_bugsink.py \
-    -v "$DATA_DIR":/data \
+    $VOLUME_FLAG \
+    $DEV_FLAG \
     $IMAGE_NAME
-
-# ==============================================================
-# [智慧等待] 檢查 Team 表格是否已由容器自動建立
-# 這取代了手動 migrate，我們等待容器自己完成工作
-# ==============================================================
-echo "⏳ [4/6] 等待容器內部自動初始化資料庫..."
-
-MAX_RETRIES=60 # 等待最多 120 秒 (因為初次啟動可能較慢)
-count=0
-DB_READY=0
-
-# Python 指令：嘗試查詢 teams_team 表格
-CHECK_CMD="python manage.py shell -c \"from django.db import connection; cursor = connection.cursor(); cursor.execute('SELECT 1 FROM teams_team LIMIT 1'); print('READY_TO_GO')\""
-
-while [ $count -lt $MAX_RETRIES ]; do
-    # 使用 2>/dev/null 隱藏 Python 的錯誤輸出 (例如 no such table)
-    # 我們只關心是否印出了 READY_TO_GO
-    if sudo docker exec $CONTAINER_NAME sh -c "$CHECK_CMD" 2>/dev/null | grep -q "READY_TO_GO"; then
-        echo "✅ 資料庫已就緒！(Found teams_team table)"
-        DB_READY=1
-        break
-    fi
-    
-    echo "   ...等待 Migration 中 ($count/$MAX_RETRIES)"
-    sleep 2
-    count=$((count+1))
-done
-
-if [ $DB_READY -eq 0 ]; then
-    echo "❌ 錯誤: 等待逾時，容器內部的 Migration 可能失敗或太慢。"
-    echo "   建議查看日誌: sudo docker logs $CONTAINER_NAME"
-    exit 1
-fi
-
-# ==========================================
-# 4. 執行初始化與匯出
-# ==========================================
-
-echo "🔧 [5/6] 寫入初始資料 (Admin, Team, Project)..."
-# 此時資料庫已保證存在，腳本一定會成功
-sudo docker exec -e REPORT_HOST="$REPORT_HOST" $CONTAINER_NAME sh -c "cat /app/init_bugsink.py | python manage.py shell"
-
-echo "📥 [6/6] 匯出 DSN..."
-sudo docker exec $CONTAINER_NAME cat dsn.txt > client_dsn.txt
-
-# 修正 DSN Host
-if [ -n "$REPORT_HOST" ]; then
-    sed -i "s/example.com/$REPORT_HOST/g" client_dsn.txt
-fi
-
-DSN=$(cat client_dsn.txt)
-echo ""
-echo "🎉 設定完成！"
-echo "---------------------------------------------------"
-echo "DSN: $DSN"
-echo "---------------------------------------------------"
-echo "您可以登入網頁檢查： http://localhost:$DOCKER_PORT"
+echo "啟動服務..."

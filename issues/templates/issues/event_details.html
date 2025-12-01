@@ -30,26 +30,27 @@
 
 {# --- Ask Gemini 按鈕區塊 (開始) --- #}
 <div class="flex flex-col items-end mb-6">
-    {# 1. 按鈕: 樣式已改為 Resolve 風格 (Outline Gray) #}
-    {# 使用 data-api-url 自動生成正確網址 #}
-     <a href="javascript:void(0)"
+    {# 1. 按鈕: 保持原本的樣式 #}
+    <a href="javascript:void(0)"
        id="ask-gemini-btn"
        data-api-url="{% url 'trigger_useapi' issue.pk event.id %}"
        class="flex items-center px-4 py-2 text-sm font-bold text-white bg-cyan-600 hover:bg-cyan-700 rounded shadow-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500">
-        {# 星星圖示 #}
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 mr-2">
             <path fill-rule="evenodd" d="M9 4.5a.75.75 0 01.721.544l.813 2.846a3.75 3.75 0 002.576 2.576l2.846.813a.75.75 0 010 1.442l-2.846.813a3.75 3.75 0 00-2.576 2.576l-.813 2.846a.75.75 0 01-1.442 0l-.813-2.846a3.75 3.75 0 00-2.576-2.576l-2.846-.813a.75.75 0 010-1.442l2.846-.813a3.75 3.75 0 002.576-2.576l.813-2.846A.75.75 0 019 4.5zM9 15a.75.75 0 01.75.75v1.5h1.5a.75.75 0 010 1.5h-1.5v1.5a.75.75 0 01-1.5 0v-1.5h-1.5a.75.75 0 010-1.5h1.5v-1.5A.75.75 0 019 15z" clip-rule="evenodd" />
         </svg>
         Ask Gemini
-    </a>  
+    </a>
 
     {# 2. 結果顯示區塊 (預設隱藏) #}
-    <div id="gemini-response-area" class="hidden w-full mt-4 p-4 border-l-4 border-cyan-500 bg-slate-50 dark:bg-slate-800 rounded shadow-sm text-left">
-        <h3 class="font-bold text-cyan-700 dark:text-cyan-400 mb-2 flex items-center">
+    {# [修改重點] 加入 'prose' 類別：這是 Tailwind 的排版外掛，專門用來讓 Markdown 轉出來的 HTML 變漂亮 #}
+    <div id="gemini-response-area" class="hidden w-full mt-4 p-6 border-l-4 border-cyan-500 bg-slate-50 dark:bg-slate-800 rounded shadow-sm text-left">
+        <h3 class="font-bold text-cyan-700 dark:text-cyan-400 mb-4 flex items-center text-lg">
             Gemini Analysis
             <span id="gemini-loading" class="ml-2 hidden animate-pulse text-gray-500 font-normal text-sm">Thinking...</span>
         </h3>
-        <div id="gemini-content" class="prose dark:prose-invert max-w-none text-sm font-mono whitespace-pre-wrap"></div>
+        {# [修改重點] 移除 whitespace-pre-wrap，因為轉換後的 HTML 會自己處理換行 #}
+        {# 加入 prose-sm 或 prose-base 控制字體大小，prose-slate 設定顏色風格 #}
+        <div id="gemini-content" class="prose prose-slate dark:prose-invert max-w-none text-sm leading-relaxed"></div>
     </div>
 </div>
 {# --- Ask Gemini 按鈕區塊 (結束) --- #}
@@ -206,6 +207,10 @@
 {% endif %}
 
 {# 修改 3: 加入 JavaScript 來處理按鈕點擊 #}
+{# [新增] 引入 Marked.js 解析庫 (透過 CDN) #}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+{# 3. JavaScript 邏輯 #}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const btn = document.getElementById('ask-gemini-btn');
@@ -219,14 +224,13 @@
             // UI 重置
             responseArea.classList.remove('hidden');
             loadingSpan.classList.remove('hidden');
-            contentDiv.textContent = ""; 
-            contentDiv.classList.remove('text-red-600'); 
+            loadingSpan.classList.add('block');
+            contentDiv.innerHTML = ""; // 清空內容
             
             const apiUrl = btn.getAttribute('data-api-url');
             
             fetch(apiUrl)
                 .then(async response => {
-                    // 嘗試解析 JSON，失敗則回傳 null (以便後續讀取純文字錯誤)
                     const text = await response.text();
                     let data;
                     try { data = JSON.parse(text); } catch (e) { data = null; }
@@ -234,21 +238,25 @@
                     if (!response.ok) {
                         let msg = response.statusText;
                         if (data && data.analysis) msg = data.analysis;
-                        else if (text) msg = text.replace(/<[^>]*>/g, '').substring(0, 300); // 簡易過濾 HTML 標籤
+                        else if (text) msg = text.replace(/<[^>]*>/g, '').substring(0, 300);
                         throw new Error(`Server Error (${response.status}): ${msg}`);
                     }
                     return data;
                 })
                 .then(data => {
                     loadingSpan.classList.add('hidden');
-                    contentDiv.textContent = data.analysis;
+                    
+                    // [關鍵修改] 使用 marked.parse 將 Markdown 轉為 HTML
+                    // 這會自動處理 **粗體**、*列表* 以及 \n 換行
+                    contentDiv.innerHTML = marked.parse(data.analysis);
                 })
                 .catch(error => {
                     loadingSpan.classList.add('hidden');
-                    contentDiv.classList.add('text-red-600');
-                    contentDiv.textContent = "執行失敗: " + error.message;
+                    // 錯誤訊息通常是純文字，我們簡單包裝一下
+                    contentDiv.innerHTML = `<div class="text-red-600 font-bold">執行失敗</div><div class="text-red-500">${error.message}</div>`;
                 });
         });
     });
 </script>
+
 {% endblock %}
