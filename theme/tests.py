@@ -1,4 +1,5 @@
 from unittest import TestCase as RegularTestCase
+from unittest.mock import patch
 
 from django.utils.safestring import SafeString
 from django.utils.html import conditional_escape
@@ -10,62 +11,84 @@ from .templatetags.issues import (
     _pygmentize_lines as actual_pygmentize_lines, format_var, pygmentize, timestamp_with_millis)
 
 
-def _pygmentize_lines(lines):
-    # since we exclusively care about line-counts, we just pick something for filename and platform here.
-    return actual_pygmentize_lines(lines, filename="a.py", platform="python")
-
-
 class TestPygmentizeLineLineCountHandling(RegularTestCase):
     # The focus of these tests is `len(input) == len(output)`, which is hard in the presence of emptyness.
     #
     # For failure we depend on the asserts inside the function, simply calling the function and the assert not blowing
     # up is what we're proving here.
 
+    def setUp(self):
+        super().setUp()
+        patcher = patch("theme.templatetags.issues.capture_stacktrace")
+        self.capture_mock = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _pygmentize_lines(self, lines):
+        # since we exclusively care about line-counts, we just pick something for filename and platform here.
+        result = actual_pygmentize_lines(lines, filename="a.py", platform="python")
+        self.capture_mock.assert_not_called()
+        return result
+
     def test_pygmentize_lines_empty(self):
-        _pygmentize_lines([])
+        self._pygmentize_lines([])
 
     def test_pygmentize_lines_single_empty_line(self):
-        _pygmentize_lines([""])
+        self._pygmentize_lines([""])
 
     def test_pygmentize_lines_single_space(self):
-        _pygmentize_lines([" "])
+        self._pygmentize_lines([" "])
 
     def test_pygmentize_lines_single_line(self):
-        _pygmentize_lines(["print('hello world')"])
+        self._pygmentize_lines(["print('hello world')"])
 
     def test_pygmentize_lines_leading_and_trailing_emptyness_0_1(self):
-        _pygmentize_lines(["print('hello world')", ""])
+        self._pygmentize_lines(["print('hello world')", ""])
 
     def test_pygmentize_lines_leading_and_trailing_emptyness_0_2(self):
-        _pygmentize_lines(["print('hello world')", "", ""])
+        self._pygmentize_lines(["print('hello world')", "", ""])
 
     def test_pygmentize_lines_leading_and_trailing_emptyness_2_0(self):
-        _pygmentize_lines(["", "", "print('hello world')"])
+        self._pygmentize_lines(["", "", "print('hello world')"])
 
     def test_pygmentize_lines_leading_and_trailing_emptyness_1_1(self):
-        _pygmentize_lines(["", "print('hello world')", ""])
+        self._pygmentize_lines(["", "print('hello world')", ""])
 
     def test_pygmentize_lines_leading_and_trailing_emptyness_2_1(self):
-        _pygmentize_lines(["", "", "print('hello world')", ""])
+        self._pygmentize_lines(["", "", "print('hello world')", ""])
 
     def test_pygmentize_lines_leading_and_trailing_emptyness_1_2(self):
-        _pygmentize_lines(["", "print('hello world')", "", ""])
+        self._pygmentize_lines(["", "print('hello world')", "", ""])
 
     def test_pygmentize_lines_leading_and_trailing_emptyness_2_2(self):
-        _pygmentize_lines(["", "", "print('hello world')", "", ""])
+        self._pygmentize_lines(["", "", "print('hello world')", "", ""])
 
     def test_pygmentize_lines_newlines_in_the_middle(self):
-        _pygmentize_lines(["print('hello world')", "", "", "print('goodbye')"])
+        self._pygmentize_lines(["print('hello world')", "", "", "print('goodbye')"])
 
     def test_pygmentize_lines_non_python(self):
         # not actually python
-        _pygmentize_lines(["<?= 'hello world' ?>"])
+        self._pygmentize_lines(["<?= 'hello world' ?>"])
 
     def test_pygmentize_lines_newline_in_code(self):
-        _pygmentize_lines(["print('hello world')\n"])
+        self._pygmentize_lines(["print('hello world')\n"])
 
     def test_pygmentize_lines_newline_on_otherwise_empty_line(self):
-        _pygmentize_lines(["\n", "\n", "\n"])
+        self._pygmentize_lines(["\n", "\n", "\n"])
+
+    def test_pygmentize_lines_ruby_regression(self):
+        # code taken from:
+        # https://github.com/rails/rails/blob/0f969a989c87/activerecord/lib/active_record/connection_adapters/postgresql_adapter.rb
+        code = """        #  - format_type includes the column size constraint, e.g. varchar(50)
+        #  - ::regclass is a function that gives the id for a table name
+        def column_definitions(table_name) #:nodoc:
+          exec_query(<<-end_sql, 'SCHEMA').rows
+              SELECT a.attname, format_type(a.atttypid, a.atttypmod),
+                     pg_get_expr(d.adbin, d.adrelid), a.attnotnull, a.atttypid, a.atttypmod
+                FROM pg_attribute a LEFT JOIN pg_attrdef d"""
+
+        code_as_list = code.splitlines()
+        actual_pygmentize_lines(code_as_list, filename="postgresql_adapter.rb", platform="ruby")
+        self.capture_mock.assert_called()  # https://github.com/pygments/pygments/issues/2998
 
 
 class TestChooseLexerForPattern(RegularTestCase):

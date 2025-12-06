@@ -10,6 +10,7 @@ from django.template.defaultfilters import date
 
 from compat.timestamp import parse_timestamp
 
+from sentry_sdk_extensions import capture_stacktrace
 from bugsink.utils import assert_
 from bugsink.pygments_extensions import guess_lexer_for_filename, lexer_for_platform
 
@@ -71,7 +72,10 @@ def _pygmentize_lines(lines, filename=None, platform=None):
 
     # [:-1] to remove the last empty line, a result of split()
     result = _core_pygments(code, filename=filename, platform=platform).split('\n')[:-1]
-    assert_(len(lines) == len(result), "%s != %s" % (len(lines), len(result)))
+    if len(lines) != len(result):
+        capture_stacktrace("Pygments line count mismatch, falling back to unformatted code")
+        result = lines
+
     return result
 
 
