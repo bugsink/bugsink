@@ -1,5 +1,6 @@
 gunicorn==23.0.*
 Django==5.2.*
+verbose_csrf_middleware==5.2.*
 sentry-sdk==2.*
 django-tailwind==4.2.*
 jsonschema==4.25.*
@@ -14,7 +15,6 @@ requests==2.32.*
 monofy==1.1.*
 user-agents==2.2.*
 fastjsonschema==2.21.*
-verbose_csrf_middleware==1.0.*
 ecma426>=0.2.0
 djangorestframework==3.16.*
 drf-spectacular[sidecar]
