@@ -12,8 +12,7 @@ from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.db.models import Max, F
 from django.views import View
-from django.core import exceptions
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, PermissionDenied
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -117,7 +116,7 @@ class BaseIngestAPIView(View):
             return self._set_cors_headers(self._post(request, project_pk))
         except MaxLengthExceeded as e:
             return self._set_cors_headers(JsonResponse({"message": str(e)}, status=HTTP_413_CONTENT_TOO_LARGE))
-        except exceptions.ValidationError as e:
+        except ValidationError as e:
             return self._set_cors_headers(JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST))
 
     @classmethod
@@ -135,7 +134,7 @@ class BaseIngestAPIView(View):
             auth_dict = parse_auth_header_value(request.META["HTTP_X_SENTRY_AUTH"])
             return auth_dict.get("sentry_key")
 
-        raise exceptions.PermissionDenied("Unable to find authentication information")
+        raise PermissionDenied("Unable to find authentication information")
 
     @classmethod
     def get_project(cls, project_pk, sentry_key):
@@ -150,7 +149,7 @@ class BaseIngestAPIView(View):
             # you want to show as a first step towards debugging issues with SDKs with faulty authentication (a rather
             # common scenario).
             dsn = build_dsn(str(get_settings().BASE_URL), project_pk, sentry_key)
-            raise exceptions.PermissionDenied("Project not found or key incorrect: %s" % dsn) from None
+            raise PermissionDenied("Project not found or key incorrect: %s" % dsn) from None
 
     @classmethod
     def get_project_for_request(cls, project_pk, request):
