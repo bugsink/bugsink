@@ -118,6 +118,8 @@ class BaseIngestAPIView(View):
             return self._set_cors_headers(JsonResponse({"message": str(e)}, status=HTTP_413_CONTENT_TOO_LARGE))
         except ValidationError as e:
             return self._set_cors_headers(JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST))
+        except ParseError as e:
+            return self._set_cors_headers(JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST))
 
     @classmethod
     def get_sentry_key_for_request(cls, request):
