@@ -7,4 +7,4 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         vacuum_files.delay()
-        self.stdout.write("Called vacuum_files.delay(); the task will run in the background (snapea).")
+        self.stdout.write("Called vacuum_files.delay(); the task will run in the background (snappea).")
