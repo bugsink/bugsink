@@ -459,6 +459,8 @@ class BaseIngestAPIView(View):
                     issue, triggering_event=event,
                     unmute_metadata={"mute_for": {"unmute_after": issue.unmute_after}})
 
+        cls.count_issue_periods_and_act_on_it(issue, event, digested_at)
+
         if event.never_evict:
             # as a sort of poor man's django-dirtyfields (which we haven't adopted for simplicity's sake) we simply do
             # this manually for a single field; we know that if never_evict has been set, it's always been set after the
@@ -469,8 +471,6 @@ class BaseIngestAPIView(View):
 
         if release.version + "\n" not in issue.events_at:
             issue.events_at += release.version + "\n"
-
-        cls.count_issue_periods_and_act_on_it(issue, event, digested_at)
 
         issue.save()
 
