@@ -716,6 +716,10 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         event_count = len(items_by_type.get("event", []))
         minidump_count = len(items_by_type.get("attachment", []))
 
+        if event_count + minidump_count == 0:
+            logger.info("no event or minidump found in envelope, ignoring this envelope.")
+            return HttpResponse()
+
         if event_count > 1 or minidump_count > 1:
             # TODO: we do 2 passes (one for storing, one for calling the right task), and we check certain conditions
             # only on the second pass; this means that we may not clean up after ourselves yet.

@@ -418,6 +418,59 @@ class IngestViewTestCase(TransactionTestCase):
 
         self.assertEqual('SIGABRT: Fatal Error: SIGABRT', Event.objects.get().title())
 
+    def test_envelope_endpoint_unsupported_type(self):
+        # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        for i, include_event_id in enumerate([True, False]):
+            data = {}
+            event_id = uuid.uuid4().hex
+
+            data_bytes = json.dumps(data).encode("utf-8")
+            data_bytes = (
+                b'{"event_id": "%s"}\n{"type": "unsupported_type"}\n' % event_id.encode("utf-8") + data_bytes)
+
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                },
+                data=data_bytes,
+            )
+            self.assertEqual(
+                200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+            self.assertEqual(0, Event.objects.count())
+
+    def test_envelope_endpoint_unsupported_type_without_event_id(self):
+        # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        for i, include_event_id in enumerate([True, False]):
+            data = {}
+
+            data_bytes = json.dumps(data).encode("utf-8")
+            data_bytes = (
+                b'{}\n{"type": "unsupported_type"}\n' + data_bytes)
+
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                },
+                data=data_bytes,
+            )
+            self.assertEqual(
+                200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+            self.assertEqual(0, Event.objects.count())
+
     @tag("samples")
     def test_envelope_endpoint_reused_ids_different_exceptions(self):
         # dirty copy/paste from test_envelope_endpoint,
