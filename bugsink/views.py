@@ -173,6 +173,7 @@ def settings_view(request):
 @user_passes_test(lambda u: u.is_superuser)
 @atomic_for_request_method  # get a consistent view (barring cached, which are marked as such)
 def counts(request):
+    # See also: modelcounts management command.
     interesting_apps = [
         # "admin",
         # "auth",
