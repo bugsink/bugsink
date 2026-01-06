@@ -676,9 +676,9 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
                      item_headers.get("attachment_type") == "event.minidump" and
                      not get_settings().FEATURE_MINIDUMPS)):
 
-                # non-event/minidumps can be discarded; (we don't check for individual size limits, because these differ
-                # per item type, we have the envelope limit to protect us, and we incur almost no cost (NullWriter))
-                return NullWriter()
+                # non-event/minidumps can be discarded; (the somewhat arbitrary size limit is no problem because we have
+                # the envelope limit to protect us, and we incur almost no cost (NullWriter))
+                return MaxDataWriter("MAX_ATTACHMENT_SIZE", NullWriter())
 
             # envelope_headers["event_id"] is required when type in ["event", "attachment"] per the spec (and takes
             # precedence over the payload's event_id), so we can rely on it having been set.
@@ -714,7 +714,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             items_by_type[type_].append(output_stream)
 
         event_count = len(items_by_type.get("event", []))
-        minidump_count = len(items_by_type.get("attachment", []))
+        minidump_count = len(items_by_type.get("attachment", [])) if get_settings().FEATURE_MINIDUMPS else 0
 
         if event_count + minidump_count == 0:
             logger.info("no event or minidump found in envelope, ignoring this envelope.")

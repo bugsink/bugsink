@@ -418,6 +418,41 @@ class IngestViewTestCase(TransactionTestCase):
 
         self.assertEqual('SIGABRT: Fatal Error: SIGABRT', Event.objects.get().title())
 
+    @tag("samples")
+    @override_settings(FEATURE_MINIDUMPS=False)
+    def test_envelope_endpoint_minidump_only_when_feature_off(self):
+        # dirty copy/paste from the "feature on" case, with different expectations.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
+
+        filename = glob(SAMPLES_DIR + "/minidumps/linux_overflow.dmp")[0]  # pick a fixed one for reproducibility
+        with open(filename, 'rb') as f:
+            minidump_bytes = f.read()
+
+        event_id = uuid.uuid4().hex  # required at the envelope level so we provide it.
+
+        data_bytes = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "attachment", "attachment_type": "event.minidump", "length": %d}\n' % len(minidump_bytes) +
+            minidump_bytes
+            )
+
+        response = self.client.post(
+            f"/api/{ project.id }/envelope/",
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+            },
+            data=data_bytes,
+        )
+        self.assertEqual(
+            200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+        self.assertEqual(0, Event.objects.count())
+
     def test_envelope_endpoint_unsupported_type(self):
         # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
         project = Project.objects.create(name="test")
