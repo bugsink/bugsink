@@ -1,5 +1,41 @@
 # Changes
 
+## 2.0.7 (6 January 2026)
+
+2.0.7 adds many bugfixes and tiny improvements:
+
+* Fix `never_evict` for the "conditional ummute" case, see #292
+* ingest ParseError: don't raise a 500; make this the SDK's problem (400), see 4fe8bd3fad44
+* Upgrade Verbose CSRF Middleware to match Django 5.2, see e3f1c92fd17f
+* Fix for pygements mishandling a weird case w/ ruby, see 4564131ff532
+* Raise 413 for the 'content too large' case
+* Slack alerts: issue title in message title, fix #283
+* Channel support for Mattermost message backend, see #281
+* Discord alert backend: send 'valid' URLs only, fix #280
+* Discord Alert Backend, see #279, #121
+* Mattermost Alert Backend, see #278, #253, #277
+* yesno filter: just don't return None ever, see 9b2acddf206b
+* tailwind update, see bddc2e8f640e
+* Link to 'all tags' in the 'tags' RHS box, see eeac2e750c05
+* 'files' is a bugsink module too; reflect in `eat_your_own_dogfood`, see 74a04f6ea1dc
+* Don't log emails to 0 recepients, see #86
+* Fix member counts on project/team list, they were at most 1, see a93f369ad749
+* Support request.body when doing Chuncked Transfer Encoding, see #9
+* Fix inefficient bytes concatenation when `KEEP_ENVELOPES` != 0, see 0432451e8e8b
+* Compression decoding errors: return 400 rather than 500, see 53bea102d911
+* Support Python 3.14, see #267
+
+### Minidump API Endpoint: _Experimental_
+
+This release contains _code_ that supports Minidumps, and which can be turned on with the
+feature-flag (setting) `FEATURE_MINIDUMPS`.
+
+However, as it stands, this code should be seen as development-only: it has not
+passed security-review yet, which means it opens your Bugsink-installation to DOS-like
+attacks.
+
+See #270, #82.
+
 ## 2.0.6 (8 November 2025)
 
 ### Security
