@@ -1,5 +1,5 @@
 import json
-from datetime import timedelta
+from datetime import timedelta, datetime, timezone as dt_timezone
 from collections import namedtuple
 
 from django.utils import timezone
@@ -10,6 +10,8 @@ from django.contrib.auth.models import AnonymousUser
 from django.db.utils import OperationalError
 from django.db.models import Sum
 from django.urls import get_script_prefix
+from django.utils.timezone import localtime
+from django.template.defaultfilters import date
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
 from bugsink.transaction import durable_atomic
@@ -129,6 +131,18 @@ def useful_settings_processor(request):
                 system_warnings.append(SystemWarning(
                     f"Bugsink has sent {this_month_usage} emails this month, which is the maximum. "
                     "No more emails will be sent until the 1st of next month.", None))
+
+        # copy pasted from project/models.py
+        now = datetime.now(dt_timezone.utc)
+        from ingest.views import BaseIngestAPIView
+        if BaseIngestAPIView.is_quota_still_exceeded(installation, now):
+            period_name, nr_of_periods, gte_threshold = json.loads(installation.quota_exceeded_reason)
+            # TODO i18n
+            per_fmt = "%s %ss" % (nr_of_periods, period_name) if nr_of_periods != 1 else period_name
+            date_fmt = date(localtime(installation.quota_exceeded_until), "j M G:i T")
+            system_warnings.append(SystemWarning(
+                "Event ingestion stopped until %s. Reason: project quota (%s events per %s) exceeded." % (
+                      date_fmt, gte_threshold, per_fmt), None))
 
         return system_warnings + get_snappea_warnings()
 
