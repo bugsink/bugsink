@@ -20,6 +20,11 @@ updates:
       versions:
       - ">=6.0"
 
+    # 4.2.0 is the last version to support Python 3.10, which Bugsink supports
+    - dependency-name: "django-tailwind"
+      versions:
+      - ">4.2.0"
+
     # 8.7.2. is the last version to support ProcessState (i.e. minidump parsing) which we need
     - dependency-name: "symbolic"
       versions:
