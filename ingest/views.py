@@ -498,8 +498,9 @@ class BaseIngestAPIView(View):
         # Copy/pasted from count_project_periods_and_act_on_it and adapted. Explaining comments from over there were not
         # kept; the comments below are specific to the adapations.
         thresholds = [(p, n, get_settings()[key]) for (p, n, key) in QUOTA_THRESHOLDS["Installation"]]
+        min_threshold = min([gte_threshold for (_, _, gte_threshold) in thresholds])
 
-        if installation.quota_exceeded_until is not None and now < installation.quota_exceeded_until:
+        if cls.is_quota_still_exceeded(installation, now):
             return False
 
         # We don't do per-event-digest bookkeeping on the installation because doing so would tie us in further into
@@ -508,14 +509,19 @@ class BaseIngestAPIView(View):
         # +1 because about-to-add and the installation-wide call precedes the per-project bookkeeping.
         digested_event_count = (Project.objects.aggregate(total=Sum("digested_event_count"))["total"] or 0) + 1
 
-        if digested_event_count >= installation.next_quota_check:
+        if ((digested_event_count >= installation.next_quota_check) or
+                (installation.next_quota_check - digested_event_count > min_threshold)):
+
             states = check_for_thresholds(Event.objects.all(), now, thresholds, 1)
 
-            until = max([below_from for (is_exceeded, below_from, _, _) in states if is_exceeded], default=None)
+            until, threshold_info = max(
+                [(below_from, ti) for (is_exceeded, below_from, _, ti) in states if is_exceeded],
+                default=(None, None))
 
             check_again_after = max(1, min([check_after for (_, _, check_after, _) in states], default=1))
 
             installation.quota_exceeded_until = until  # note: never reset to None, but the `now <` will still just work
+            installation.quota_exceeded_reason = json.dumps(threshold_info)
             installation.next_quota_check = digested_event_count + check_again_after
             installation.save()  # conditional in the if-statement because no per-digest bookkeeping on the installation
 
@@ -637,7 +643,7 @@ class IngestEventAPIView(BaseIngestAPIView):
         ingested_at = datetime.now(timezone.utc)
 
         installation = Installation.objects.get()
-        if installation.quota_exceeded_until is not None and ingested_at < installation.quota_exceeded_until:
+        if self.is_quota_still_exceeded(installation, ingested_at):
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         project = self.get_project_for_request(project_pk, request)
@@ -712,7 +718,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         #   added complexity (conditional transactions both here and in digest_event) is not worth it for modes that are
         #   non-production anyway.
         installation = Installation.objects.get()
-        if installation.quota_exceeded_until is not None and ingested_at < installation.quota_exceeded_until:
+        if self.is_quota_still_exceeded(installation, ingested_at):
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         if "dsn" in envelope_headers:

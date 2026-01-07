@@ -19,6 +19,7 @@ class Installation(models.Model):
     # ingestion/digestion quota
     email_quota_usage = models.TextField(null=False, default='{"per_month": {}}')
     quota_exceeded_until = models.DateTimeField(null=True, blank=True)
+    quota_exceeded_reason = models.CharField(max_length=255, null=False, default="null")
     next_quota_check = models.PositiveIntegerField(null=False, default=0)
 
     @classmethod
