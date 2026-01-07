@@ -66,7 +66,7 @@ QUOTA_THRESHOLDS = {
     ],
     "Project": [
         ("minute", 5, "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES"),
-        ("minute", 60, "MAX_EVENTS_PER_PROJECT_PER_HOUR",),
+        ("hour", 1, "MAX_EVENTS_PER_PROJECT_PER_HOUR",),
     ],
 }
 
