@@ -15,6 +15,11 @@ updates:
       versions:
       - ">=6.0"
 
+    # As per Django; for each django version we match the verbose_csrf_middleware
+    - dependency-name: "verbose_csrf_middleware"
+      versions:
+      - ">=6.0"
+
     # 8.7.2. is the last version to support ProcessState (i.e. minidump parsing) which we need
     - dependency-name: "symbolic"
       versions:
