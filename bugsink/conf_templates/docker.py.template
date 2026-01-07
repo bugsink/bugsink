@@ -1,7 +1,7 @@
 import os
 from urllib.parse import urlparse
 
-from bugsink.conf_utils import deduce_allowed_hosts, eat_your_own_dogfood, deduce_script_name
+from bugsink.conf_utils import deduce_allowed_hosts, eat_your_own_dogfood, deduce_script_name, int_or_none
 
 from bugsink.settings.default import *  # noqa
 from bugsink.settings.default import DATABASES
