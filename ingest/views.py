@@ -547,10 +547,7 @@ class BaseIngestAPIView(View):
 
             until = max([below_from for (is_exceeded, below_from, _, _) in states if is_exceeded], default=None)
 
-            # "at least 1" is a matter of taste; because the actual usage of `next_quota_check` is with a gte, leaving
-            # it out would result in the same behavior. But once we reach this point we know that digested_event_count
-            # will increase, so we know that a next check cannot happen before current + 1, we might as well be explicit
-            check_again_after = max(1, min([check_after for (_, _, check_after, _) in states], default=1))
+            check_again_after = min([check_after for (_, _, check_after, _) in states], default=1)
 
             project.quota_exceeded_until = until
 
