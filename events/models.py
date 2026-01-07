@@ -51,7 +51,7 @@ class Event(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, help_text="Bugsink-internal")
 
     ingested_at = models.DateTimeField(blank=False, null=False)
-    digested_at = models.DateTimeField(db_index=True, blank=False, null=False)
+    digested_at = models.DateTimeField(db_index=True, blank=False, null=False)  # index for installationwide quota-check
     remote_addr = models.GenericIPAddressField(blank=True, null=True, default=None)
 
     issue = models.ForeignKey("issues.Issue", blank=False, null=False, on_delete=models.DO_NOTHING)
@@ -157,10 +157,10 @@ class Event(models.Model):
     class Meta:
         unique_together = [
             ("project", "event_id"),
-            ("issue", "digest_order"),
+            ("issue", "digest_order"),  # uniqueness, but also: index for sorting (navigation through events per issue)
         ]
         indexes = [
-            models.Index(fields=["project", "never_evict", "digested_at", "irrelevance_for_retention"]),
+            models.Index(fields=["project", "never_evict", "digested_at", "irrelevance_for_retention"]),  # eviction
             models.Index(fields=["issue", "digested_at"]),
             models.Index(fields=["project", "digested_at"]),  # project-wide quota check
         ]
