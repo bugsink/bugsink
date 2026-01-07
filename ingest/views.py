@@ -60,6 +60,16 @@ HTTP_413_CONTENT_TOO_LARGE = 413
 HTTP_501_NOT_IMPLEMENTED = 501
 
 
+QUOTA_THRESHOLDS = {
+    "Installation": [
+        ("month", 1, "MAX_EVENTS_PER_MONTH"),
+    ],
+    "Project": [
+        ("minute", 5, "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES"),
+        ("minute", 60, "MAX_EVENTS_PER_PROJECT_PER_HOUR",),
+    ],
+}
+
 logger = logging.getLogger("bugsink.ingest")
 performance_logger = logging.getLogger("bugsink.performance.ingest")
 
@@ -487,10 +497,7 @@ class BaseIngestAPIView(View):
     def count_installation_periods_and_act_on_it(cls, installation, now):
         # Copy/pasted from count_project_periods_and_act_on_it and adapted. Explaining comments from over there were not
         # kept; the comments below are specific to the adapations.
-
-        thresholds = [
-            ("month", 1, get_settings().MAX_EVENTS_PER_MONTH),
-        ]
+        thresholds = [(p, n, get_settings()[key]) for (p, n, key) in QUOTA_THRESHOLDS["Installation"]]
 
         if installation.quota_exceeded_until is not None and now < installation.quota_exceeded_until:
             return False
@@ -515,15 +522,30 @@ class BaseIngestAPIView(View):
         return True
 
     @classmethod
+    def is_quota_still_exceeded(cls, obj, now):
+        if obj.quota_exceeded_until is None or now >= obj.quota_exceeded_until:
+            return False
+
+        # check if the setting has not been made more lax since the quota was tripped (an alternative would be: always
+        # reset these on snappea/server start)
+        period_name, nr_of_periods, gte_threshold = json.loads(obj.quota_exceeded_reason)
+        relevant_setting = [
+            k for (p, n, k) in QUOTA_THRESHOLDS[type(obj).__name__]
+            if p == period_name and n == nr_of_periods
+        ][0]
+        current_gte_threshold = get_settings()[relevant_setting]
+        if current_gte_threshold > gte_threshold:
+            return False
+
+        return True
+
+    @classmethod
     def count_project_periods_and_act_on_it(cls, project, now):
         # returns: True if any further processing should be done.
+        thresholds = [(p, n, get_settings()[key]) for (p, n, key) in QUOTA_THRESHOLDS["Project"]]
+        min_threshold = min([gte_threshold for (_, _, gte_threshold) in thresholds])
 
-        thresholds = [
-            ("minute", 5, get_settings().MAX_EVENTS_PER_PROJECT_PER_5_MINUTES),
-            ("minute", 60, get_settings().MAX_EVENTS_PER_PROJECT_PER_HOUR),
-        ]
-
-        if project.quota_exceeded_until is not None and now < project.quota_exceeded_until:
+        if cls.is_quota_still_exceeded(project, now):
             # This is the same check that we do on-ingest. Naively, one might think that it is superfluous. However,
             # because by design there is the potential for a digestion backlog to exist, it is possible that the update
             # of `project.quota_exceeded_until` happens only after any number of events have already passed through
@@ -534,7 +556,13 @@ class BaseIngestAPIView(View):
 
         project.digested_event_count += 1
 
-        if project.digested_event_count >= project.next_quota_check:
+        if ((project.digested_event_count >= project.next_quota_check) or
+                (project.next_quota_check - project.digested_event_count > min_threshold)):
+
+            # diff > min_threshold guards against shrunken thresholds (changed settings): if this condition holds, we've
+            # been able to detect the setting-change and trigger a recheck. (in the case it's not detectable, we may at
+            # worst get a "fresh quotum batch" of the new quotom size which is fine too).
+
             # check_for_thresholds is relatively expensive (SQL group by); we do it as little as possible
 
             # Notes on off-by-one:
@@ -546,10 +574,14 @@ class BaseIngestAPIView(View):
             states = check_for_thresholds(Event.objects.filter(project=project), now, thresholds, 1)
 
             until = max([below_from for (is_exceeded, below_from, _, _) in states if is_exceeded], default=None)
+            until, threshold_info = max(
+                [(below_from, ti) for (is_exceeded, below_from, _, ti) in states if is_exceeded],
+                default=(None, None))
 
             check_again_after = min([check_after for (_, _, check_after, _) in states], default=1)
 
             project.quota_exceeded_until = until
+            project.quota_exceeded_reason = json.dumps(threshold_info)
 
             # note on correction of `digested_event_count += 1`: as long as we don't do that between the check on
             # next_quota_check (the if-statement) and the setting (the statement below) we're good.
@@ -609,7 +641,7 @@ class IngestEventAPIView(BaseIngestAPIView):
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         project = self.get_project_for_request(project_pk, request)
-        if project.quota_exceeded_until is not None and ingested_at < project.quota_exceeded_until:
+        if self.is_quota_still_exceeded(project, ingested_at):
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         event_data_bytes = MaxDataReader(
@@ -690,7 +722,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         else:
             project = self.get_project_for_request(project_pk, request)
 
-        if project.quota_exceeded_until is not None and ingested_at < project.quota_exceeded_until:
+        if self.is_quota_still_exceeded(project, ingested_at):
             # Sentry has x-sentry-rate-limits, but for now 429 is just fine. Client-side this is implemented as a 60s
             # backoff.
             #

@@ -114,6 +114,7 @@ class Project(models.Model):
 
     # ingestion/digestion quota
     quota_exceeded_until = models.DateTimeField(null=True, blank=True)
+    quota_exceeded_reason = models.CharField(max_length=255, null=False, default="null")
     next_quota_check = models.PositiveIntegerField(null=False, default=0)
 
     # retention
