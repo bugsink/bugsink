@@ -509,7 +509,7 @@ class BaseIngestAPIView(View):
             #   and because of the previous bullet we know that it will always be digested.
             states = check_for_thresholds(Event.objects.filter(project=project), now, thresholds, 1)
 
-            until = max([below_from for (state, below_from, _, _) in states if state], default=None)
+            until = max([below_from for (is_exceeded, below_from, _, _) in states if is_exceeded], default=None)
 
             # "at least 1" is a matter of taste; because the actual usage of `next_quota_check` is with a gte, leaving
             # it out would result in the same behavior. But once we reach this point we know that digested_event_count
@@ -545,8 +545,8 @@ class BaseIngestAPIView(View):
 
             issue.next_unmute_check = issue.digested_event_count + check_again_after
 
-            for (state, until, _, (period_name, nr_of_periods, gte_threshold)) in states:
-                if not state:
+            for (is_exceeded, until, _, (period_name, nr_of_periods, gte_threshold)) in states:
+                if not is_exceeded:
                     continue
 
                 IssueStateManager.unmute(issue, triggering_event=event, unmute_metadata={"mute_until": {

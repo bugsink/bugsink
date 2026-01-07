@@ -34,11 +34,11 @@ def check_for_thresholds(qs, now, thresholds, add_for_current=0):
     states = []
 
     for (period_name, nr_of_periods, gte_threshold) in thresholds:
-        count = _filter_for_periods(qs, period_name, nr_of_periods, now).count() + add_for_current
-        state = count >= gte_threshold
+        qs_for_period = _filter_for_periods(qs, period_name, nr_of_periods, now)
+        count = qs_for_period.count() + add_for_current
+        exceeded = count >= gte_threshold
 
-        if state:
-
+        if exceeded:
             if period_name == "total":
                 # when counting the 'total', there will never be a time when the condition becomes false. We
                 # just pick an arbitrarily large date; we'll deal with it by the end of the myria-annum.
@@ -47,25 +47,25 @@ def check_for_thresholds(qs, now, thresholds, add_for_current=0):
 
             else:
                 # `below_threshold_from` is the first moment in time where the condition no longer applies. Assuming
-                # the present function is called "often enough" (i.e is called for the moment the switch to state=True
-                # happens, and not thereafter), there will be _excactly_ `gte_threshold` items in the qs (potentially
-                # with 1 implied one if `add_for_current` applies). Taking the min of those and adding the time period
-                # brings us to the point in time where the condition will become False again.
+                # the present function is called "often enough" (i.e is called for the moment the switch to
+                # threshold_exceeded happens, and not thereafter), there will be _excactly_ `gte_threshold` items in the
+                # qs. Taking the min of those and adding the time period brings us to the point in time where the
+                # condition will become False again.
                 #
                 # (The assumption of "often enough, and no more" holds for us because for quota we stop accepting events
                 # once the quota is met; for muted we remove the vbc once unmuted). For the "overshoot" case (see tests,
                 # not really expected) this has the consequence of seeing a result that is "too old", and hence going
                 # back to accepting too soon. But this is self-correcting, so no need to deal with it.
-                below_threshold_from = add_periods_to_datetime(
-                    _filter_for_periods(qs, period_name, nr_of_periods, now).aggregate(
-                        agg=Min('digested_at'))['agg'] or now,  # `or now` to handle funny `gte_threshold==0`
-                    nr_of_periods, period_name)
+                #
+                # `or now` to handle funny `gte_threshold==0`
+                observed_period_start = qs_for_period.aggregate(agg=Min('digested_at'))['agg'] or now
+                below_threshold_from = add_periods_to_datetime(observed_period_start, nr_of_periods, period_name)
 
         else:
             below_threshold_from = None
 
         check_again_after = gte_threshold - count
 
-        states.append((state, below_threshold_from, check_again_after, (period_name, nr_of_periods, gte_threshold)))
+        states.append((exceeded, below_threshold_from, check_again_after, (period_name, nr_of_periods, gte_threshold)))
 
     return states
