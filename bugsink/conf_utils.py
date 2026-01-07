@@ -53,6 +53,15 @@ def deduce_script_name(base_url):
     return path if path not in (None, "", "/") else None
 
 
+def int_or_none(value):
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
+
 def eat_your_own_dogfood(sentry_dsn, **kwargs):
     """
     Configures your Bugsink installation to send messages to some Bugsink-compatible installation.

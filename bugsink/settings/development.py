@@ -111,7 +111,10 @@ BUGSINK = {
     "MAX_EVENTS_PER_HOUR": 50_000_000,
     "MAX_EVENTS_PER_MONTH": 1_000_000_000,
 
-    "MAX_EMAILS_PER_MONTH": 10,  # for development: a thing to tune if you want to the the quota system
+    # for development: things to tune if you want to the the quota system
+    "MAX_RETENTION_PER_PROJECT_EVENT_COUNT": None,
+    "MAX_RETENTION_EVENT_COUNT": None,
+    "MAX_EMAILS_PER_MONTH": 10,
 
     "KEEP_ARTIFACT_BUNDLES": True,  # in development: useful to preserve sourcemap uploads
 

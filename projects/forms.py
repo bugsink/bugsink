@@ -3,8 +3,10 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.utils.html import format_html
+from django.db.models import Sum
 
 from bugsink.utils import assert_
+from bugsink.app_settings import get_settings
 from teams.models import TeamMembership
 from bsmain.utils import yesno
 
@@ -128,3 +130,24 @@ class ProjectForm(forms.ModelForm):
         # how Django does this (but it requires JQuery)
 
         # "alert_on_new_issue", "alert_on_regression", "alert_on_unmute" later
+
+    def clean_retention_max_event_count(self):
+        retention_max_event_count = self.cleaned_data['retention_max_event_count']
+
+        if get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT is not None:
+            if retention_max_event_count > get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT:
+                raise forms.ValidationError("The maximum allowed retention per project is %d events." %
+                                            get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT)
+
+        if get_settings().MAX_RETENTION_EVENT_COUNT is not None:
+            sum_of_others = Project.objects.exclude(pk=self.instance.pk).aggregate(
+                total=Sum('retention_max_event_count'))['total'] or 0
+            budget_left = get_settings().MAX_RETENTION_EVENT_COUNT - sum_of_others
+
+            if retention_max_event_count > budget_left:
+                raise forms.ValidationError("The maximum allowed retention for this project is %d events (based on the "
+                                            "installation-wide max of %d events)." % (
+                                                budget_left,
+                                                get_settings().MAX_RETENTION_EVENT_COUNT))
+
+        return retention_max_event_count
