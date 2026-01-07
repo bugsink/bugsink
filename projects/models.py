@@ -1,9 +1,12 @@
 import uuid
+import json
+from datetime import datetime, timezone
 
 from django.db import models
 from django.conf import settings
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _, pgettext_lazy
+from django.template.defaultfilters import date
 
 from bugsink.app_settings import get_settings
 from bugsink.transaction import delay_on_commit
@@ -169,6 +172,17 @@ class Project(models.Model):
 
     def is_discoverable(self):
         return self.visibility <= ProjectVisibility.DISCOVERABLE
+
+    def get_warnings(self):
+        now = datetime.now(timezone.utc)
+        from ingest.views import BaseIngestAPIView
+        if BaseIngestAPIView.is_quota_still_exceeded(self, now):
+            period_name, nr_of_periods, gte_threshold = json.loads(self.quota_exceeded_reason)
+            # TODO i18n
+            return ["Event ingestion stopped until %s. Reason: project quota (%s events per %s %ss) exceeded." % (
+                      date(self.quota_exceeded_until, "j M G:i"), gte_threshold, nr_of_periods, period_name)]
+
+        return []
 
     class Meta:
         indexes = [

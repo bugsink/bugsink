@@ -9,6 +9,15 @@
 {% block title %}{{ issue.title }} · {{ block.super }}{% endblock %}
 
 {% block content %}
+
+{% for warning in issue.project.get_warnings %}
+<div class="flex p-4 bg-yellow-100 dark:bg-amber-800 border-b-2 border-yellow-200 dark:border-amber-900">
+    <div class="text-slate-800 dark:text-slate-100">
+        {{ warning }}
+    </div>
+</div>
+{% endfor %}
+
 <div class="m-4 flex flex-col lg:flex-row-reverse"><!-- container for the white bit (issue title, buttons) at the top of the page -->
 
     <div class="ml-auto flex-none pb-4 lg:pb-0"><!-- top, RHS (buttons) -->

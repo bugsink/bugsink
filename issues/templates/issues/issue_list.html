@@ -26,9 +26,17 @@
     </div>
 </div>
 
+{% for warning in project.get_warnings %}
+<div class="flex p-4 bg-yellow-100 dark:bg-amber-800 border-b-2 border-yellow-200 dark:border-amber-900">
+    <div class="text-slate-800 dark:text-slate-100">
+        {{ warning }}
+    </div>
+</div>
+{% endfor %}
 
 <div class="m-4">
 <h1 class="text-4xl mt-4 font-bold">{{ project.name }} - {% translate "Issues" %}</h1>
+
 
 {% if unapplied_issue_ids %}
 <div class="bg-red-100 w-full mt-2 mb-2 p-4 border-red-800 border-2">
