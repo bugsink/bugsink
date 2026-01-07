@@ -35,8 +35,8 @@ def check_for_thresholds(qs, now, thresholds, add_for_current=0):
 
     for (period_name, nr_of_periods, gte_threshold) in thresholds:
         qs_for_period = _filter_for_periods(qs, period_name, nr_of_periods, now)
-        count = qs_for_period.count() + add_for_current
-        exceeded = count >= gte_threshold
+        total_events_in_period = qs_for_period.count() + add_for_current
+        exceeded = total_events_in_period >= gte_threshold
 
         if exceeded:
             if period_name == "total":
@@ -64,7 +64,7 @@ def check_for_thresholds(qs, now, thresholds, add_for_current=0):
         else:
             below_threshold_from = None
 
-        check_again_after = gte_threshold - count
+        check_again_after = gte_threshold - total_events_in_period
 
         states.append((exceeded, below_threshold_from, check_again_after, (period_name, nr_of_periods, gte_threshold)))
 
