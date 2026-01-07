@@ -1,9 +1,9 @@
 gunicorn==23.0.*
 Django==5.2.*
-verbose_csrf_middleware==5.2.*
+verbose_csrf_middleware==6.0.*
 sentry-sdk==2.*
-django-tailwind==4.2.*
-jsonschema==4.25.*
+django-tailwind==4.4.*
+jsonschema==4.26.*
 semver==3.0.*
 django-admin-autocomplete-filter==0.7.*
 pygments==2.19.*
