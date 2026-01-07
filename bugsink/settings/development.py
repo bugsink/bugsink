@@ -105,6 +105,10 @@ BUGSINK = {
     # set MAX_EVENTS* very high to be able to do serious performance testing (which I do often in my dev environment)
     "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": 1_000_000,
     "MAX_EVENTS_PER_PROJECT_PER_HOUR": 50_000_000,
+    "MAX_EVENTS_PER_PROJECT_PER_MONTH": 1_000_000_000,
+
+    "MAX_EVENTS_PER_5_MINUTES": 1_000_000,
+    "MAX_EVENTS_PER_HOUR": 50_000_000,
     "MAX_EVENTS_PER_MONTH": 1_000_000_000,
 
     "MAX_EMAILS_PER_MONTH": 10,  # for development: a thing to tune if you want to the the quota system

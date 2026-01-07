@@ -59,6 +59,10 @@ DEFAULTS = {
     # of 50/s (ingestion) on low-grade hardware that I measured.
     "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": 1_000,
     "MAX_EVENTS_PER_PROJECT_PER_HOUR": 5_000,
+    "MAX_EVENTS_PER_PROJECT_PER_MONTH": 1_000_000,
+
+    "MAX_EVENTS_PER_5_MINUTES": 1_000,
+    "MAX_EVENTS_PER_HOUR": 5_000,
     "MAX_EVENTS_PER_MONTH": 1_000_000,
 
     "MAX_EMAILS_PER_MONTH": None,  # None means "no limit"; for non-None values, the quota is per calendar month

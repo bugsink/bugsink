@@ -62,11 +62,14 @@ HTTP_501_NOT_IMPLEMENTED = 501
 
 QUOTA_THRESHOLDS = {
     "Installation": [
+        ("minute", 5, "MAX_EVENTS_PER_5_MINUTES"),
+        ("hour", 1, "MAX_EVENTS_PER_HOUR",),
         ("month", 1, "MAX_EVENTS_PER_MONTH"),
     ],
     "Project": [
         ("minute", 5, "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES"),
         ("hour", 1, "MAX_EVENTS_PER_PROJECT_PER_HOUR",),
+        ("month", 1, "MAX_EVENTS_PER_PROJECT_PER_MONTH"),
     ],
 }
 
