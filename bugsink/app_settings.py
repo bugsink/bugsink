@@ -78,6 +78,7 @@ DEFAULTS = {
     # Security:
     "MINIMIZE_INFORMATION_EXPOSURE": False,
     "PHONEHOME": True,
+    "USE_ADMIN": False,
 
     # Feature flags:
     "FEATURE_MINIDUMPS": False,  # minidumps are experimental/early-stage and likely a DOS-magnet; disabled by default
