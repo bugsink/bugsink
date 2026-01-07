@@ -91,8 +91,8 @@ BUGSINK = {
     "BASE_URL": "http://bugsink:8000",  # no trailing slash
     "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 
-    # undocumented feature: this enables links to the admin interface in the header/footer. I'm not sure where the admin
-    # will fit in the final version, so that's why it's not documented.
+    # undocumented feature: this enables the admin interface. I'm not sure where the admin will fit in the final
+    # version, so that's why it's not documented.
     "USE_ADMIN": True,
 
     # In development, I want to be able to upload broken events, so I can test their downstream rendering/processing.

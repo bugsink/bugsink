@@ -139,6 +139,7 @@ MIDDLEWARE = [
     'verbose_csrf_middleware.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
 
+    'bugsink.middleware.AdminRequiresSettingMiddleware',
     'bugsink.middleware.LoginRequiredMiddleware',
 
     # note on ordering: we need request.user, so after AuthenticationMiddleware; and we're not tied to "before
