@@ -55,10 +55,11 @@ DEFAULTS = {
     "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
 
     # Bugsink-specific limits:
-    # The default values are 1_000 and 5_000 respectively; which corresponds to ~6% and ~2.7% of the total capacity of
-    # 50 requests/s (ingestion) on low-grade hardware that I measured, and with 50% of the default value for retention.
+    # The default values are 1_000, 5_000, 1M respectively; which corresponds to ~6%, ~2.7%, .8% of the total capacity
+    # of 50/s (ingestion) on low-grade hardware that I measured.
     "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": 1_000,
     "MAX_EVENTS_PER_PROJECT_PER_HOUR": 5_000,
+    "MAX_EVENTS_PER_MONTH": 1_000_000,
 
     "MAX_EMAILS_PER_MONTH": None,  # None means "no limit"; for non-None values, the quota is per calendar month
 

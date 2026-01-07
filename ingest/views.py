@@ -10,7 +10,7 @@ import fastjsonschema
 
 from django.conf import settings
 from django.shortcuts import get_object_or_404
-from django.db.models import Max, F
+from django.db.models import Max, F, Sum
 from django.views import View
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.http import HttpResponse, JsonResponse
@@ -41,6 +41,8 @@ from alerts.tasks import send_new_issue_alert, send_regression_alert
 from compat.timestamp import format_timestamp, parse_timestamp
 from tags.models import digest_tags
 from bsmain.utils import b108_makedirs
+from phonehome.models import Installation
+
 from sentry_sdk_extensions import capture_or_log_exception
 from sentry.minidump import merge_minidump_event
 
@@ -308,7 +310,10 @@ class BaseIngestAPIView(View):
             # (covers both "deletion in progress (is_deleted=True)" and "fully deleted").
             return
 
-        if not cls.count_project_periods_and_act_on_it(project, digested_at):
+        installation = Installation.objects.get()
+        if (not cls.count_installation_periods_and_act_on_it(installation, digested_at)
+                or not cls.count_project_periods_and_act_on_it(project, digested_at)):
+
             return  # if over-quota: just return (any cleanup is done calling-side)
 
         if get_settings().VALIDATE_ON_DIGEST in ["warn", "strict"]:
@@ -479,6 +484,37 @@ class BaseIngestAPIView(View):
         digest_tags(event_data, event, issue)
 
     @classmethod
+    def count_installation_periods_and_act_on_it(cls, installation, now):
+        # Copy/pasted from count_project_periods_and_act_on_it and adapted. Explaining comments from over there were not
+        # kept; the comments below are specific to the adapations.
+
+        thresholds = [
+            ("month", 1, get_settings().MAX_EVENTS_PER_MONTH),
+        ]
+
+        if installation.quota_exceeded_until is not None and now < installation.quota_exceeded_until:
+            return False
+
+        # We don't do per-event-digest bookkeeping on the installation because doing so would tie us in further into
+        # "global locking"; the assumption is that a group by over (a few) projects is still quite cheap. The per-exceed
+        # bookkeeping _is_ done on the installation level (moments of exceeding are quite rare; cost is amortized).
+        # +1 because about-to-add and the installation-wide call precedes the per-project bookkeeping.
+        digested_event_count = (Project.objects.aggregate(total=Sum("digested_event_count"))["total"] or 0) + 1
+
+        if digested_event_count >= installation.next_quota_check:
+            states = check_for_thresholds(Event.objects.all(), now, thresholds, 1)
+
+            until = max([below_from for (is_exceeded, below_from, _, _) in states if is_exceeded], default=None)
+
+            check_again_after = max(1, min([check_after for (_, _, check_after, _) in states], default=1))
+
+            installation.quota_exceeded_until = until  # note: never reset to None, but the `now <` will still just work
+            installation.next_quota_check = digested_event_count + check_again_after
+            installation.save()  # conditional in the if-statement because no per-digest bookkeeping on the installation
+
+        return True
+
+    @classmethod
     def count_project_periods_and_act_on_it(cls, project, now):
         # returns: True if any further processing should be done.
 
@@ -570,6 +606,11 @@ class IngestEventAPIView(BaseIngestAPIView):
         # The main point of "inefficiency" is that the event data is parsed twice: once here (to get the event_id), and
         # once in the actual digest.delay()
         ingested_at = datetime.now(timezone.utc)
+
+        installation = Installation.objects.get()
+        if installation.quota_exceeded_until is not None and ingested_at < installation.quota_exceeded_until:
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
+
         project = self.get_project_for_request(project_pk, request)
         if project.quota_exceeded_until is not None and ingested_at < project.quota_exceeded_until:
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
@@ -627,8 +668,8 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
         envelope_headers = parser.get_envelope_headers()
 
-        # Getting the project is the only DB-touching (a read) we do before we (only in IMMEDIATE/EAGER modes), start
-        # start read/writing in digest_event. Notes on transactions:
+        # Getting the installation & project is the only DB-touching (a read) we do before we (only in IMMEDIATE/EAGER
+        # modes), start start read/writing in digest_event. Notes on transactions:
         #
         # * we could add `durable_atomic` here for explicitness / if we ever do more than one read (for consistent
         #   snapshots. As it stands, not needed. (I believe this is implicit due to Django or even sqlite itself)
@@ -641,6 +682,10 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         #   only modes where this would make sense). This allows for passing of project between the 2 methods, but the
         #   added complexity (conditional transactions both here and in digest_event) is not worth it for modes that are
         #   non-production anyway.
+        installation = Installation.objects.get()
+        if installation.quota_exceeded_until is not None and ingested_at < installation.quota_exceeded_until:
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
+
         if "dsn" in envelope_headers:
             # as in get_sentry_key_for_request, we don't verify that the DSN contains the project_pk, for the same
             # reason ("reasons unconvincing")

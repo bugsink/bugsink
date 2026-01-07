@@ -16,7 +16,10 @@ class Installation(models.Model):
 
     silence_email_system_warning = models.BooleanField(default=False)
 
+    # ingestion/digestion quota
     email_quota_usage = models.TextField(null=False, default='{"per_month": {}}')
+    quota_exceeded_until = models.DateTimeField(null=True, blank=True)
+    next_quota_check = models.PositiveIntegerField(null=False, default=0)
 
     @classmethod
     @immediate_atomic(only_if_needed=True)  # minimalize write-lock-hogging (while being callable within atomic blocks)
