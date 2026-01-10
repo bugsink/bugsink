@@ -174,7 +174,7 @@ BUGSINK = {
     "MAX_EVENTS_PER_MONTH": int(os.getenv("MAX_EVENTS_PER_MONTH", 1_000_000)),
 
     "MAX_RETENTION_PER_PROJECT_EVENT_COUNT": int_or_none(os.getenv("MAX_RETENTION_PER_PROJECT_EVENT_COUNT", None)),
-    "MAX_RETENTION_EVENT_COUNT": int_or_none(os.getenv("MAX_RETENTION_EVENT_COUNT"), None),
+    "MAX_RETENTION_EVENT_COUNT": int_or_none(os.getenv("MAX_RETENTION_EVENT_COUNT", None)),
 
     # Settings that help with debugging and development ("why isn't Bugsink doing what I expect?")
     "VALIDATE_ON_DIGEST": os.getenv("VALIDATE_ON_DIGEST", "none").lower(),  # other legal values are "warn" and "strict"
