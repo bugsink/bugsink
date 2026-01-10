@@ -76,7 +76,12 @@ def eat_your_own_dogfood(sentry_dsn, **kwargs):
 
     default_kwargs = {
         "dsn": sentry_dsn,
+
+        # Don't event types which are not supported by Bugsink:
         "traces_sample_rate": 0,
+        "send_client_reports": False,
+        "auto_session_tracking": False,
+
         "send_default_pii": True,
 
         # see (e.g.) https://github.com/getsentry/sentry-python/issues/377 for why this is necessary; I really really
