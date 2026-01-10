@@ -1,5 +1,18 @@
 # Changes
 
+## 2.0.8 (10 January 2026)
+
+* Improve default Sentry SDK settings for Python, Fix #298
+* Fix background of event search inputs in dark mode, see #300
+* Add missing tailwindcss dependencies (for development)
+* `MAX_RETENTION[_PER_PROJECT]` as a setting
+* More fully disable the admin when `USE_ADMIN=False`, See #131
+* quota exceeded: show a message
+* Project quota: pick up on settings-changes
+* Setting & check for site-wide per-month event ingestion maximum
+* Add modelcounts command; useful in the context of housekeeping when servers are down
+* Fix exception for unsupported envelope items / when minidump feature is off. See #293
+
 ## 2.0.7 (6 January 2026)
 
 ### New & Improved Alert backends
