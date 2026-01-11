@@ -91,14 +91,6 @@ bugsink-manage test -v2
 bugsink-manage test alerts api events issues
 ```
 
-To run tests with coverage:
-
-```bash
-coverage run --source='.' bugsink-manage test
-coverage report
-coverage html  # Generate HTML coverage report
-```
-
 #### Linting and code quality
 
 ##### Flake8
