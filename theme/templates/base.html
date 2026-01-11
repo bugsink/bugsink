@@ -53,6 +53,7 @@
                 {% if logged_in_user.is_anonymous %}
                     <a href="{{ script_prefix }}/accounts/login/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Login" %}</div></a>  {# I don't think this is actually ever shown in practice, because you must always be logged in #}
                 {% else %}
+                    <a href="{{ script_prefix }}/api/canonical/0/schema/swagger-ui/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "OpenAPI" %}</div></a>
                     <a href="{{ script_prefix }}/accounts/preferences/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Preferences" %}</div></a>
                     <div class="px-4 py-2 my-2 mr-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl"><form id="logout-form" method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">{% translate "Log out" %}</button></form></div>
                 {% endif %}
