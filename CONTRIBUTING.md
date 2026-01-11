@@ -12,6 +12,123 @@ There are many ways to help contribute to Bugsink. Here are a few:
 
 Code contributions are welcome! We use the GitHub PR process to review and merge code changes.
 
+#### Local development setup
+
+##### Prerequisites
+
+* Python 3.10 or higher (3.10, 3.11, 3.12, 3.13, or 3.14)
+* Git
+* Optional: MySQL or PostgreSQL (SQLite works for local development)
+
+##### Setting up your development environment
+
+1. **Clone the repository**
+
+```bash
+git clone https://github.com/bugsink/bugsink.git
+
+# event-samples repository for sample event data
+git clone https://github.com/bugsink/event-samples.git
+
+cd bugsink
+```
+
+2. **Create and activate a virtual environment**
+
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. **Install dependencies**
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Install development dependencies
+pip install -r requirements.development.txt
+```
+
+4. **Set environment variable**
+
+```bash
+export DJANGO_SETTINGS_MODULE="bugsink.settings.development"
+```
+
+5. **Run database migrations**
+
+```bash
+python manage.py migrate
+```
+
+6. **Create a superuser**
+
+```bash
+python manage.py createsuperuser
+```
+
+7. **Run the development server**
+
+```bash
+python manage.py runserver  
+```
+
+Visit [http://localhost:8000](http://localhost:8000) to see your local Bugsink instance.
+
+#### Running tests
+
+Bugsink uses Django's built-in test framework. To run the test suite:
+
+```bash
+# Run all tests
+bugsink-manage test
+
+# Run tests with verbose output
+bugsink-manage test -v2
+
+# Run tests for specific apps (replace with actual app names)
+bugsink-manage test alerts api events issues
+```
+
+To run tests with coverage:
+
+```bash
+coverage run --source='.' bugsink-manage test
+coverage report
+coverage html  # Generate HTML coverage report
+```
+
+#### Linting and code quality
+
+##### Flake8
+
+Bugsink uses flake8 for linting. Configuration is in `tox.ini`.
+
+```bash
+# Install flake8
+pip install flake8
+
+# Run flake8 on all Python files
+flake8 --extend-ignore=E127,E741,E501,E731 `git ls-files | grep py$`
+```
+
+Rules and exceptions:
+* Max line length: 120 characters
+* Ignored errors: E127, E741, E501, E731
+* Excludes: venv, .venv, sentry/**, bugsink/event_schema.py
+* Migration files ignore E501 (line length)
+
+##### Bandit (security linting)
+
+```bash
+# Install bandit
+pip install bandit spoils
+
+# Run bandit on Python files
+git ls-files | grep '\.py$' | xargs bandit -q --ini .bandit
+```
+
 #### Style guidance
 
 * Bugsink uses flake8, with rules/exceptions documented in tox.ini
