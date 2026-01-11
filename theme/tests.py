@@ -1,12 +1,11 @@
-from contextlib import contextmanager
 from unittest import TestCase as RegularTestCase
 from unittest.mock import patch
 
-from django.test import TestCase as DjangoTestCase
 from django.contrib.auth import get_user_model
 from django.utils.safestring import SafeString
 from django.utils.html import conditional_escape
 from bugsink.pygments_extensions import choose_lexer_for_pattern, get_all_lexers
+from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 
 from events.utils import IncompleteList, IncompleteDict
 
@@ -14,12 +13,6 @@ from .templatetags.issues import (
     _pygmentize_lines as actual_pygmentize_lines, format_var, pygmentize, timestamp_with_millis)
 
 User = get_user_model()
-
-
-@contextmanager
-def _mock_durable_atomic(*args, **kwargs):
-    """Mock durable_atomic to avoid nesting issues in tests."""
-    yield
 
 
 class TestPygmentizeLineLineCountHandling(RegularTestCase):
@@ -232,12 +225,10 @@ class TimestampWithMillisTagTest(RegularTestCase):
         self.assertFalse(isinstance(timestamp_with_millis(ts), SafeString))
 
 
-class NavigationLinksTestCase(DjangoTestCase):
+class NavigationLinksTestCase(TransactionTestCase):
     """Tests for navigation links in base.html template."""
 
-    @patch('bugsink.decorators.durable_atomic', _mock_durable_atomic)
-    @patch('bugsink.views._phone_home')
-    def test_superuser_sees_admin_and_normal_links(self, mock_phone_home):
+    def test_superuser_sees_admin_and_normal_links(self):
         """Superusers should see all links in the navigation."""
         superuser = User.objects.create_superuser(username='admin', password='admin', email='admin@test.com')
         self.client.force_login(superuser)
@@ -258,9 +249,7 @@ class NavigationLinksTestCase(DjangoTestCase):
         self.assertContains(response, '/bsmain/auth_tokens/')
         self.assertContains(response, 'Tokens')
 
-    @patch('bugsink.decorators.durable_atomic', _mock_durable_atomic)
-    @patch('bugsink.views._phone_home')
-    def test_user_sees_only_normal_links(self, mock_phone_home):
+    def test_user_sees_only_normal_links(self):
         """Users should see limited links in the navigation."""
         user = User.objects.create_user(username='user', password='user', email='user@test.com')
         self.client.force_login(user)
@@ -281,9 +270,7 @@ class NavigationLinksTestCase(DjangoTestCase):
         self.assertNotContains(response, '/bsmain/auth_tokens/')
         self.assertNotContains(response, 'Tokens')
 
-    @patch('bugsink.decorators.durable_atomic', _mock_durable_atomic)
-    @patch('bugsink.views._phone_home')
-    def test_anonymous_user_sees_no_links(self, mock_phone_home):
+    def test_anonymous_user_sees_no_links(self):
         """Anonymous users should see no links in the navigation."""
 
         response = self.client.get('/', follow=True)
@@ -300,4 +287,4 @@ class NavigationLinksTestCase(DjangoTestCase):
         self.assertNotContains(response, '/users/')
         self.assertNotContains(response, 'Users')
         self.assertNotContains(response, '/bsmain/auth_tokens/')
-        self.assertNotContains(response, 'Tokens')        
+        self.assertNotContains(response, 'Tokens')
