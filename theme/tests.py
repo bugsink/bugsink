@@ -1,6 +1,8 @@
 from unittest import TestCase as RegularTestCase
 from unittest.mock import patch
 
+from django.test import TestCase as DjangoTestCase
+from django.contrib.auth import get_user_model
 from django.utils.safestring import SafeString
 from django.utils.html import conditional_escape
 from bugsink.pygments_extensions import choose_lexer_for_pattern, get_all_lexers
@@ -9,6 +11,8 @@ from events.utils import IncompleteList, IncompleteDict
 
 from .templatetags.issues import (
     _pygmentize_lines as actual_pygmentize_lines, format_var, pygmentize, timestamp_with_millis)
+
+User = get_user_model()
 
 
 class TestPygmentizeLineLineCountHandling(RegularTestCase):
@@ -219,3 +223,40 @@ class TimestampWithMillisTagTest(RegularTestCase):
             conditional_escape(timestamp_with_millis(ts)))
 
         self.assertFalse(isinstance(timestamp_with_millis(ts), SafeString))
+
+
+class NavigationLinksTestCase(DjangoTestCase):
+    """Tests for navigation links in base.html template."""
+
+    def test_superuser_sees_openapi_link(self):
+        """Superusers should see the OpenAPI link in the navigation."""
+        superuser = User.objects.create_superuser(username='admin', password='admin', email='admin@test.com')
+        self.client.force_login(superuser)
+
+        response = self.client.get('/')
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, '/api/canonical/0/schema/swagger-ui/')
+        self.assertContains(response, 'OpenAPI')
+
+    def test_superuser_sees_users_and_tokens_links(self):
+        """Superusers should see Users and Tokens links in the navigation."""
+        superuser = User.objects.create_superuser(username='admin', password='admin', email='admin@test.com')
+        self.client.force_login(superuser)
+
+        response = self.client.get('/')
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, '/users/')
+        self.assertContains(response, 'Users')
+        self.assertContains(response, '/bsmain/auth_tokens/')
+        self.assertContains(response, 'Tokens')
+
+    def test_regular_user_does_not_see_superuser_links(self):
+        """Regular users should not see superuser-only navigation links."""
+        regular_user = User.objects.create_user(username='user', password='user')
+        self.client.force_login(regular_user)
+
+        response = self.client.get('/')
+        self.assertEqual(200, response.status_code)
+        self.assertNotContains(response, '/api/canonical/0/schema/swagger-ui/')
+        self.assertNotContains(response, '/users/')
+        self.assertNotContains(response, '/bsmain/auth_tokens/')

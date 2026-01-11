@@ -48,6 +48,7 @@
                 {% if user.is_superuser %}
                 <a href="{{ script_prefix }}/users/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Users" %}</div></a>
                 <a href="{{ script_prefix }}/bsmain/auth_tokens/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Tokens" %}</div></a>
+                <a href="{{ script_prefix }}/api/canonical/0/schema/swagger-ui/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "OpenAPI" %}</div></a>
                 {% endif %}
 
                 {% if logged_in_user.is_anonymous %}
