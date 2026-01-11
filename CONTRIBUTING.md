@@ -103,35 +103,15 @@ coverage html  # Generate HTML coverage report
 
 ##### Flake8
 
-Bugsink uses flake8 for linting. Configuration is in `tox.ini`.
+* Bugsink uses flake8, with rules/exceptions documented in tox.ini
 
 ```bash
 # Install flake8
 pip install flake8
 
 # Run flake8 on all Python files
-flake8 --extend-ignore=E127,E741,E501,E731 `git ls-files | grep py$`
+flake8 
 ```
-
-Rules and exceptions:
-* Max line length: 120 characters
-* Ignored errors: E127, E741, E501, E731
-* Excludes: venv, .venv, sentry/**, bugsink/event_schema.py
-* Migration files ignore E501 (line length)
-
-##### Bandit (security linting)
-
-```bash
-# Install bandit
-pip install bandit spoils
-
-# Run bandit on Python files
-git ls-files | grep '\.py$' | xargs bandit -q --ini .bandit
-```
-
-#### Style guidance
-
-* Bugsink uses flake8, with rules/exceptions documented in tox.ini
 
 #### Tailwind
 
