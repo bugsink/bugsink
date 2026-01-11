@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from unittest import TestCase as RegularTestCase
 from unittest.mock import patch
 
@@ -13,6 +14,12 @@ from .templatetags.issues import (
     _pygmentize_lines as actual_pygmentize_lines, format_var, pygmentize, timestamp_with_millis)
 
 User = get_user_model()
+
+
+@contextmanager
+def _mock_durable_atomic(*args, **kwargs):
+    """Mock durable_atomic to avoid nesting issues in tests."""
+    yield
 
 
 class TestPygmentizeLineLineCountHandling(RegularTestCase):
@@ -228,35 +235,69 @@ class TimestampWithMillisTagTest(RegularTestCase):
 class NavigationLinksTestCase(DjangoTestCase):
     """Tests for navigation links in base.html template."""
 
-    def test_superuser_sees_openapi_link(self):
-        """Superusers should see the OpenAPI link in the navigation."""
+    @patch('bugsink.decorators.durable_atomic', _mock_durable_atomic)
+    @patch('bugsink.views._phone_home')
+    def test_superuser_sees_admin_and_normal_links(self, mock_phone_home):
+        """Superusers should see all links in the navigation."""
         superuser = User.objects.create_superuser(username='admin', password='admin', email='admin@test.com')
         self.client.force_login(superuser)
 
-        response = self.client.get('/')
+        response = self.client.get('/', follow=True)
         self.assertEqual(200, response.status_code)
+
+        self.assertContains(response, '/preferences/')
+        self.assertContains(response, 'Preferences')
         self.assertContains(response, '/api/canonical/0/schema/swagger-ui/')
         self.assertContains(response, 'OpenAPI')
 
-    def test_superuser_sees_users_and_tokens_links(self):
-        """Superusers should see Users and Tokens links in the navigation."""
-        superuser = User.objects.create_superuser(username='admin', password='admin', email='admin@test.com')
-        self.client.force_login(superuser)
-
-        response = self.client.get('/')
-        self.assertEqual(200, response.status_code)
+        # Admin only
+        self.assertContains(response, '/admin/')
+        self.assertContains(response, 'Admin')
         self.assertContains(response, '/users/')
         self.assertContains(response, 'Users')
         self.assertContains(response, '/bsmain/auth_tokens/')
         self.assertContains(response, 'Tokens')
 
-    def test_regular_user_does_not_see_superuser_links(self):
-        """Regular users should not see superuser-only navigation links."""
-        regular_user = User.objects.create_user(username='user', password='user')
-        self.client.force_login(regular_user)
+    @patch('bugsink.decorators.durable_atomic', _mock_durable_atomic)
+    @patch('bugsink.views._phone_home')
+    def test_user_sees_only_normal_links(self, mock_phone_home):
+        """Users should see limited links in the navigation."""
+        user = User.objects.create_user(username='user', password='user', email='user@test.com')
+        self.client.force_login(user)
 
-        response = self.client.get('/')
+        response = self.client.get('/', follow=True)
         self.assertEqual(200, response.status_code)
-        self.assertNotContains(response, '/api/canonical/0/schema/swagger-ui/')
+
+        self.assertContains(response, '/preferences/')
+        self.assertContains(response, 'Preferences')
+        self.assertContains(response, '/api/canonical/0/schema/swagger-ui/')
+        self.assertContains(response, 'OpenAPI')
+
+        # Admin only. Not visible
+        self.assertNotContains(response, '/admin/')
+        self.assertNotContains(response, 'Admin')
         self.assertNotContains(response, '/users/')
+        self.assertNotContains(response, 'Users')
         self.assertNotContains(response, '/bsmain/auth_tokens/')
+        self.assertNotContains(response, 'Tokens')
+
+    @patch('bugsink.decorators.durable_atomic', _mock_durable_atomic)
+    @patch('bugsink.views._phone_home')
+    def test_anonymous_user_sees_no_links(self, mock_phone_home):
+        """Anonymous users should see no links in the navigation."""
+
+        response = self.client.get('/', follow=True)
+        self.assertEqual(200, response.status_code)
+
+        self.assertNotContains(response, '/preferences/')
+        self.assertNotContains(response, 'Preferences')
+        self.assertNotContains(response, '/api/canonical/0/schema/swagger-ui/')
+        self.assertNotContains(response, 'OpenAPI')
+
+        # Admin only. Not visible
+        self.assertNotContains(response, '/admin/')
+        self.assertNotContains(response, 'Admin')
+        self.assertNotContains(response, '/users/')
+        self.assertNotContains(response, 'Users')
+        self.assertNotContains(response, '/bsmain/auth_tokens/')
+        self.assertNotContains(response, 'Tokens')        
