@@ -156,7 +156,7 @@ class Event(models.Model):
 
     class Meta:
         unique_together = [
-            ("project", "event_id"),
+            ("project", "event_id"),  # our main uniqueness constraint as per digestion.
             ("issue", "digest_order"),  # uniqueness, but also: index for sorting (navigation through events per issue)
         ]
         indexes = [

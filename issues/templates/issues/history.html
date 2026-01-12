@@ -151,7 +151,7 @@
 
                 {% if turningpoint.triggering_event_id %}
                 <div class="mt-4">
-                    <a href="{% url "event_by_internal_id" event_pk=turningpoint.triggering_event_id %}" class="underline decoration-dotted font-bold text-slate-500 dark:text-slate-300">Triggering event</a>
+                    <a href="{% url "event_by_id" event_pk=turningpoint.triggering_event_id %}" class="underline decoration-dotted font-bold text-slate-500 dark:text-slate-300">Triggering event</a>
                 </div>
                 {% endif %}
 

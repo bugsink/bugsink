@@ -343,11 +343,24 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
     })
 
 
-def event_by_internal_id(request, event_pk):
-    # a view that allows to link straight to an event by (internal) id. This comes with the cost of a bunch more queries
-    # and a Http redirect when actually clicked, but has the advantage of not needing that event's issue id when
-    # rendering the link. Note that no Auth is needed here because nothing is actually shown.
-    event = get_object_or_404(Event, id=event_pk)
+def event_by_id(request, event_pk):
+    # a view that allows to link straight to an event by (internal or external) id. This comes with the cost of a bunch
+    # more queries and a Http redirect when actually visited, but [a] for internal id, it has the advantage of not
+    # needing that event's issue id when rendering the link, and [b] For external id, it's a useful way to construct
+    # links: the external id is all that's known SDK-side and may show up in a log or be stored in a DB.
+    # Note that no Auth is needed here because nothing is actually shown.
+    try:
+        event = Event.objects.get(pk=event_pk)
+    except Event.DoesNotExist:
+        # .first() because, it's possible at least in theory (or in development) to send the same (external, presumably
+        # not-straight-from-the-SDK) ID to multiple projects, and we don't have project_id to guarantee uniqueness. In
+        # that weird case we just do the "robust" thing of picking one.
+        # NOTE: no index on `event_id`; (it's easy to add in principle, but I refuse to do so without measuring impact,
+        # and the present view-function is presumably little-used since it was added only in 2026).
+        event = Event.objects.filter(event_id=event_pk).first()
+        if event is None:
+            raise Http404("No event with id %s" % event_pk)
+
     issue = event.issue
     return redirect(issue_event_stacktrace, issue_pk=issue.pk, event_pk=event.pk)
 
@@ -405,11 +418,9 @@ def _get_event(qs, issue, event_pk, digest_order, nav, bounds):
         try:
             return Event.objects.get(pk=event_pk)
         except Event.DoesNotExist:
-            # we match on external id "for user ergonomics" (presumed); i.e. in the (unchecked) presumption that people
-            # may sometimes copy/paste the SDK-generated UUID for whatever reason straight into the URL bar. However:
-            # [1] the below is not guaranteed unique and [2] it's not indexed as such so may be slow (project_id is a
-            # prefix in the index) so YMMV.
-            return Event.objects.get(event_id=event_pk)
+            # we match on external id "for user ergonomics"; notes as in `event_by_id` apply, except for the fact that
+            # in this case we have project availab, guaranteeing uniqueness & fast lookup.
+            return Event.objects.get(project=issue.project, event_id=event_pk)
 
     elif digest_order is not None:
         return Event.objects.get(digest_order=digest_order)
