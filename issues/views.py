@@ -423,7 +423,8 @@ def _get_event(qs, issue, event_pk, digest_order, nav, bounds):
             return Event.objects.get(project=issue.project, event_id=event_pk)
 
     elif digest_order is not None:
-        return Event.objects.get(digest_order=digest_order)
+        # "ergonomics" when people type this in the URL bar
+        return qs.get(digest_order=digest_order)
     else:
         raise Http404("Either event_pk, nav, or digest_order must be provided")
 
