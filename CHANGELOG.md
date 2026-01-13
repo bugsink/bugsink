@@ -1,5 +1,11 @@
 # Changes
 
+## 2.0.9 (13 January 2026)
+
+* Add event URL for the "external" (SDK-provided) ID, see #291
+* Add OpenAPI link to navigation bar, see #302 / #301
+* Adding info to contributing guidelines, see #303
+
 ## 2.0.8 (10 January 2026)
 
 * Improve default Sentry SDK settings for Python, Fix #298
