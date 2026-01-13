@@ -155,7 +155,7 @@ else:
     LOGGING['loggers']['bugsink.performance']["handlers"] = ["look_below_in_stream"]
 
 
-# snappea development settings: see all details, and include timestamps (we have no sytemd journal here)
+# snappea development settings: see all details, and include timestamps (we have no systemd journal here)
 LOGGING["handlers"]["snappea"]["level"] = "DEBUG"
 LOGGING["loggers"]["snappea"]["level"] = "DEBUG"
 LOGGING["formatters"]["snappea"]["format"] = "{asctime} - {threadName} - {levelname:7} - {message}"
