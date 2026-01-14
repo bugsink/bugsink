@@ -601,6 +601,27 @@ class IngestViewTestCase(TransactionTestCase):
                 self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
 
     @tag("samples")
+    def test_filestore_get_basepath(self):
+        # exact copy of test_filestore but using get_basepath option variant
+        with tempfile.TemporaryDirectory() as tempdir:
+            with override_event_storages({"local_flat_files": {
+                        "STORAGE": "events.storage.FileEventStorage",
+                        "OPTIONS": {
+                            "get_basepath": lambda: tempdir,
+                        },
+                        "USE_FOR_WRITE": True,
+                    },
+                    }):
+                self.test_envelope_endpoint()
+                self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
+
+                project = Project.objects.get(name="test")
+                project.retention_max_event_count = 1
+                evict_for_max_events(project, timezone.now(), stored_event_count=2)
+
+                self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
+
+    @tag("samples")
     def test_ingest_eviction(self):
         # dirty copy/paste from the test_envelope_endpoint, but with a focus on the eviction part.
         # ("the simplest copy/pasta that could prove a problem")

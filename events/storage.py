@@ -33,13 +33,16 @@ class EventStorage(object):
 
 class FileEventStorage(EventStorage):
 
-    def __init__(self, name, basepath=None):
+    def __init__(self, name, basepath=None, get_basepath=None):
         super().__init__(name)
 
-        if basepath is None:
-            raise ValueError("Basepath must be provided")
+        if (basepath is None) == (get_basepath is None):
+            raise ValueError("Provide exactly one of basepath or get_basepath")
 
-        self.basepath = basepath
+        if get_basepath is not None:
+            self.get_basepath = get_basepath
+        else:
+            self.get_basepath = lambda: basepath
 
     def _event_path(self, event_id):
         # the dashes in uuid are preserved in the filename for readability; since their location is consistent, this is
@@ -50,7 +53,7 @@ class FileEventStorage(EventStorage):
         if not isinstance(event_id, uuid.UUID):
             raise ValueError("event_id must be a UUID")
 
-        return safe_join(self.basepath, str(event_id) + ".json")
+        return safe_join(self.get_basepath(), str(event_id) + ".json")
 
     @contextlib.contextmanager
     def open(self, event_id, mode='r'):
@@ -59,10 +62,10 @@ class FileEventStorage(EventStorage):
             # strict about what we allow; we further imply "text mode" and "utf-8 encoding" given the JSON context.
             raise ValueError("EventStorage.open() mode must be 'r' or 'w'")
 
-        if mode == 'w' and not os.path.exists(self.basepath):
-            # only if we're writing does this make sense (when reading, a newly created directoy won't have files in it,
+        if mode == 'w' and not os.path.exists(self.get_basepath()):
+            # only if we're writing does this make sense (when reading, a newly created directory won't have files in it
             # and fail in the next step)
-            Path(self.basepath).mkdir(parents=True, exist_ok=True)
+            Path(self.get_basepath()).mkdir(parents=True, exist_ok=True)
 
         # We open with utf-8 encoding explicitly to pre-empt the future of pep-0686 (it's also the only thing that makes
         # sense in the context of JSON)
@@ -83,6 +86,6 @@ class FileEventStorage(EventStorage):
 
         return (
             p.name[:-5]  # strip the ".json" suffix
-            for p in os.scandir(self.basepath)
+            for p in os.scandir(self.get_basepath())
             if p.name.endswith(".json")
         )
