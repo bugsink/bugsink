@@ -1,5 +1,9 @@
 # Changes
 
+## 2.0.10 (14 January 2026)
+
+* FileStorage: basepath configurable using `get_basepath` (callable), 2561f5602a7b
+
 ## 2.0.9 (13 January 2026)
 
 * Add event URL for the "external" (SDK-provided) ID, see #291
