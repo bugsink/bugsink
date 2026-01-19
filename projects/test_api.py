@@ -2,6 +2,7 @@ from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
+from bugsink.app_settings import override_settings
 from bsmain.models import AuthToken
 from teams.models import Team
 from projects.models import Project
@@ -58,6 +59,16 @@ class ProjectApiTests(TransactionTestCase):
         self.assertEqual(body["name"], "Core")
         self.assertEqual(body["visibility"], "team_members")
         self.assertIn("dsn", body)  # read-only; present on detail
+
+    @override_settings(MAX_RETENTION_PER_PROJECT_EVENT_COUNT=1)
+    def test_create_validations(self):
+        r = self.client.post(
+            reverse("api:project-list"),
+            {"team": str(self.team.id), "name": "Core", "visibility": "team_members", "retention_max_event_count": 5},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertTrue("retention_max_event_count" in r.json())
 
     def test_patch_minimal(self):
         p = Project.objects.create(team=self.team, name="Old")
