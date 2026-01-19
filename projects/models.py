@@ -140,6 +140,14 @@ class Project(models.Model):
             self._latest_release = list(ordered_releases(project=self))[-1]
         return self._latest_release
 
+    def get_retention_max_event_count(self):
+        # apply global maximum if set (allows for meaningfully decreasing max retention after the fact). (note that
+        # down-adjusting the cross-project max will not automatically affect per-project; implementing that would
+        # require some kind of fractional/relative adjustment which seems more complex than it's worth).
+        if get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT is not None:
+            return min(self.retention_max_event_count, get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT)
+        return self.retention_max_event_count
+
     def save(self, *args, **kwargs):
         if self.slug in [None, ""]:
             # we don't want to have empty slugs, so we'll generate a unique one
