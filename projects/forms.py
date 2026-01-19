@@ -146,7 +146,7 @@ class ProjectForm(forms.ModelForm):
         if get_settings().MAX_RETENTION_EVENT_COUNT is not None:
             sum_of_others = Project.objects.exclude(pk=self.instance.pk).aggregate(
                 total=Sum('retention_max_event_count'))['total'] or 0
-            budget_left = get_settings().MAX_RETENTION_EVENT_COUNT - sum_of_others
+            budget_left = max(get_settings().MAX_RETENTION_EVENT_COUNT - sum_of_others, 0)
 
             if retention_max_event_count > budget_left:
                 raise forms.ValidationError("The maximum allowed retention for this project is %d events (based on the "
