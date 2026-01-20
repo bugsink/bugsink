@@ -1,5 +1,13 @@
 # Changes
 
+## 2.0.11 (20 January 2026)
+
+* Add brotli and gzip filestorages, see 5b345e0535c9
+* Apply max retention from settings even if stored project value is higher, see 1f1b06b74dd0
+* Max retention event count: guard the API, see d3beed517217
+* Max event retention: don't mention a negative budget, see 0a39ce16f487
+* New project: suggest no more than the legal retention, see 0cdb6c0afdab
+
 ## 2.0.10 (14 January 2026)
 
 * FileStorage: basepath configurable using `get_basepath` (callable), 2561f5602a7b
