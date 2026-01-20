@@ -592,6 +592,7 @@ class IngestViewTestCase(TransactionTestCase):
                     },
                     }):
                 self.test_envelope_endpoint()
+                [e.get_parsed_data() for e in Event.objects.all()]  # force reading from filestore
                 self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
 
                 project = Project.objects.get(name="test")
@@ -613,6 +614,55 @@ class IngestViewTestCase(TransactionTestCase):
                     },
                     }):
                 self.test_envelope_endpoint()
+                [e.get_parsed_data() for e in Event.objects.all()]  # force reading from filestore
+                self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
+
+                project = Project.objects.get(name="test")
+                project.retention_max_event_count = 1
+                evict_for_max_events(project, timezone.now(), stored_event_count=2)
+
+                self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
+
+    @tag("samples")
+    def test_filestore_br(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            # exact copy of test_filestore but using brotli compression
+            with override_event_storages({"local_flat_files": {
+                        "STORAGE": "events.storage.FileEventStorage",
+                        "OPTIONS": {
+                            "basepath": tempdir,
+                            "compression_algorithm": "br",
+                            "compression_level": 7,
+                        },
+                        "USE_FOR_WRITE": True,
+                    },
+                    }):
+                self.test_envelope_endpoint()
+                [e.get_parsed_data() for e in Event.objects.all()]  # force reading from filestore
+                self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
+
+                project = Project.objects.get(name="test")
+                project.retention_max_event_count = 1
+                evict_for_max_events(project, timezone.now(), stored_event_count=2)
+
+                self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
+
+    @tag("samples")
+    def test_filestore_gzip(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            # exact copy of test_filestore but using gzip compression
+            with override_event_storages({"local_flat_files": {
+                        "STORAGE": "events.storage.FileEventStorage",
+                        "OPTIONS": {
+                            "basepath": tempdir,
+                            "compression_algorithm": "gzip",
+                            "compression_level": 7,
+                        },
+                        "USE_FOR_WRITE": True,
+                    },
+                    }):
+                self.test_envelope_endpoint()
+                [e.get_parsed_data() for e in Event.objects.all()]  # force reading from filestore
                 self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
 
                 project = Project.objects.get(name="test")

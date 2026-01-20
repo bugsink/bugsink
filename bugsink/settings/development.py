@@ -130,6 +130,13 @@ if not I_AM_RUNNING == "TEST":
             "OPTIONS": {
                 "basepath": safe_join(BASE_DIR, "filestorage"),
             },
+        },
+        "local_flat_files_br": {
+            "STORAGE": "events.storage.FileEventStorage",
+            "OPTIONS": {
+                "basepath": safe_join(BASE_DIR, "filestorage"),
+                "compression_algorithm": "br",
+            },
             "USE_FOR_WRITE": True,
         },
     }

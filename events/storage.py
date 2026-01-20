@@ -2,8 +2,12 @@ import uuid
 import contextlib
 import os.path
 from pathlib import Path
+from io import TextIOWrapper
 
 from django.utils._os import safe_join
+
+from bugsink.streams import (
+    brotli_generator, zlib_generator, GeneratorReader, WBITS_PARAM_FOR_GZIP, BrotliStreamWriter, ZlibStreamWriter)
 
 
 class EventStorage(object):
@@ -31,18 +35,68 @@ class EventStorage(object):
     # not worth it, so we only support "pass through application layer" (where the auth stuff is) models of usage.
 
 
+class NoCompression:
+    suffix = ".json"
+
+    @contextlib.contextmanager
+    def open_wrapper(self, raw_file, mode):
+        yield raw_file
+
+
+class BrotliCompression:
+    suffix = ".json.br"
+
+    def __init__(self, quality):
+        self.quality = quality
+
+    @contextlib.contextmanager
+    def open_wrapper(self, raw, mode):
+        if mode.startswith('r'):
+            yield GeneratorReader(brotli_generator(raw))
+        else:
+            writer = BrotliStreamWriter(raw, self.quality)
+            try:
+                yield writer
+            finally:
+                writer.close()
+
+
+class GzipCompression:
+    suffix = ".json.gz"
+
+    def __init__(self, level):
+        self.level = level
+
+    @contextlib.contextmanager
+    def open_wrapper(self, raw, mode):
+        if mode.startswith('r'):
+            yield GeneratorReader(zlib_generator(raw, WBITS_PARAM_FOR_GZIP))
+        else:
+            writer = ZlibStreamWriter(raw, self.level, WBITS_PARAM_FOR_GZIP)
+            try:
+                yield writer
+            finally:
+                writer.close()
+
+
 class FileEventStorage(EventStorage):
 
-    def __init__(self, name, basepath=None, get_basepath=None):
+    def __init__(self, name, basepath=None, get_basepath=None, compression_algorithm=None, compression_level=None):
         super().__init__(name)
 
         if (basepath is None) == (get_basepath is None):
             raise ValueError("Provide exactly one of basepath or get_basepath")
-
         if get_basepath is not None:
             self.get_basepath = get_basepath
         else:
             self.get_basepath = lambda: basepath
+
+        if compression_algorithm is None:
+            self.compression = NoCompression()
+        elif compression_algorithm == "br":
+            self.compression = BrotliCompression(quality=compression_level or 11)
+        elif compression_algorithm == "gzip":
+            self.compression = GzipCompression(level=compression_level or 9)
 
     def _event_path(self, event_id):
         # the dashes in uuid are preserved in the filename for readability; since their location is consistent, this is
@@ -53,7 +107,7 @@ class FileEventStorage(EventStorage):
         if not isinstance(event_id, uuid.UUID):
             raise ValueError("event_id must be a UUID")
 
-        return safe_join(self.get_basepath(), str(event_id) + ".json")
+        return safe_join(self.get_basepath(), str(event_id) + self.compression.suffix)
 
     @contextlib.contextmanager
     def open(self, event_id, mode='r'):
@@ -69,8 +123,10 @@ class FileEventStorage(EventStorage):
 
         # We open with utf-8 encoding explicitly to pre-empt the future of pep-0686 (it's also the only thing that makes
         # sense in the context of JSON)
-        with open(self._event_path(event_id), mode, encoding="utf-8") as f:
-            yield f
+        with open(self._event_path(event_id), mode + "b") as raw_file:
+            with self.compression.open_wrapper(raw_file, mode) as wrapped_file:
+                with TextIOWrapper(wrapped_file, encoding='utf-8') as text_file:
+                    yield text_file
 
     def exists(self, event_id):
         return os.path.exists(self._event_path(event_id))
@@ -85,7 +141,7 @@ class FileEventStorage(EventStorage):
         # is it using os.scandir(): https://github.com/python/cpython/commit/30f0643e36d2c9a5849c76ca0b27b748448d0567
 
         return (
-            p.name[:-5]  # strip the ".json" suffix
+            p.name[:-1 * len(self.compression.suffix)]  # strip the ".json" (or similar) suffix
             for p in os.scandir(self.get_basepath())
-            if p.name.endswith(".json")
+            if p.name.endswith(self.compression.suffix)
         )

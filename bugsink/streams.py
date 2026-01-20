@@ -88,10 +88,15 @@ class GeneratorReader:
     """Read from a generator (yielding bytes) as from a file-like object. In practice: used by content_encoding_reader,
     so it's grown to fit that use case (and we may later want to reflect that in the name)."""
 
+    readable = lambda self: True
+    writable = lambda self: False
+    seekable = lambda self: False
+
     def __init__(self, generator, bad_request_exceptions=()):
         self.generator = generator
         self.bad_request_exceptions = bad_request_exceptions
         self.buffer = bytearray()
+        self.closed = False
 
     def read(self, size=None):
         try:
@@ -140,6 +145,13 @@ class GeneratorReader:
         result = bytes(self.buffer[:end])
         del self.buffer[:end]
         return result
+
+    def flush(self):
+        pass  # no-op for interface compatibility
+
+    def close(self):
+        # no-op for interface compatibility
+        self.closed = True
 
 
 def content_encoding_reader(request):
@@ -248,6 +260,65 @@ class MaxDataWriter:
 
     def __getattr__(self, attr):
         return getattr(self.stream, attr)
+
+
+class Writer:
+    writable = lambda self: True
+    readable = lambda self: False
+    seekable = lambda self: False
+
+
+class BrotliStreamWriter(Writer):
+    def __init__(self, stream, quality, chunk_size=DEFAULT_CHUNK_SIZE):
+        self.stream = stream
+        self.compressor = brotli.Compressor(quality=quality)
+        self.chunk_size = chunk_size
+        self.closed = False
+
+    def write(self, data):
+        out = self.compressor.process(data)
+        if out:
+            self.stream.write(out)
+
+    def flush(self):
+        out = self.compressor.finish()
+        if out:
+            self.stream.write(out)
+
+    def close(self):
+        if self.closed:
+            return
+        try:
+            self.flush()
+        finally:
+            self.closed = True
+
+
+class ZlibStreamWriter(Writer):
+    def __init__(self, stream, level, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
+        self.stream = stream
+        self.compressor = zlib.compressobj(level=level, wbits=wbits)
+        self.chunk_size = chunk_size
+        self.closed = False
+
+    def write(self, data):
+        out = self.compressor.compress(data)
+        if out:
+            self.stream.write(out)
+
+    def flush(self):
+        pass
+
+    def close(self):
+        if self.closed:
+            return
+
+        try:
+            out = self.compressor.flush()
+            if out:
+                self.stream.write(out)
+        finally:
+            self.closed = True
 
 
 class NullWriter:
