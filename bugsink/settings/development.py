@@ -136,6 +136,7 @@ if not I_AM_RUNNING == "TEST":
             "OPTIONS": {
                 "basepath": safe_join(BASE_DIR, "filestorage"),
                 "compression_algorithm": "br",
+                "future_kwarg": "added here for testing",
             },
             "USE_FOR_WRITE": True,
         },

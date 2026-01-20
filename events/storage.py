@@ -1,3 +1,4 @@
+import logging
 import uuid
 import contextlib
 import os.path
@@ -8,6 +9,9 @@ from django.utils._os import safe_join
 
 from bugsink.streams import (
     brotli_generator, zlib_generator, GeneratorReader, WBITS_PARAM_FOR_GZIP, BrotliStreamWriter, ZlibStreamWriter)
+
+
+logger = logging.getLogger("bugsink.eventstorage")
 
 
 class EventStorage(object):
@@ -81,7 +85,9 @@ class GzipCompression:
 
 class FileEventStorage(EventStorage):
 
-    def __init__(self, name, basepath=None, get_basepath=None, compression_algorithm=None, compression_level=None):
+    def __init__(
+            self, name, basepath=None, get_basepath=None, compression_algorithm=None, compression_level=None, **kwargs):
+
         super().__init__(name)
 
         if (basepath is None) == (get_basepath is None):
@@ -97,6 +103,10 @@ class FileEventStorage(EventStorage):
             self.compression = BrotliCompression(quality=compression_level or 11)
         elif compression_algorithm == "gzip":
             self.compression = GzipCompression(level=compression_level or 9)
+
+        if kwargs:
+            # for forward-compatibility
+            logger.warn("FileEventStorage ignored unexpected arguments: %s", ', '.join(kwargs.keys()))
 
     def _event_path(self, event_id):
         # the dashes in uuid are preserved in the filename for readability; since their location is consistent, this is
