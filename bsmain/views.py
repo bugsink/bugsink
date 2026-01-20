@@ -15,7 +15,6 @@ def auth_token_list(request):
     auth_tokens = AuthToken.objects.all()
 
     if request.method == 'POST':
-        # DIT KOMT ZO WEL
         full_action_str = request.POST.get('action')
         action, pk = full_action_str.split(":", 1)
         if action == "delete":
