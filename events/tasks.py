@@ -1,3 +1,4 @@
+from django.db.models import Count
 from snappea.decorators import shared_task
 
 from bugsink.utils import get_model_topography, delete_deps_with_budget
@@ -52,3 +53,60 @@ def delete_event_deps(project_id, event_id):
             # functionality). we might refactor this at some point.
             issue.stored_event_count -= 1
             issue.save(update_fields=["stored_event_count"])
+
+
+@shared_task
+def delete_by_age_until_under_retention_max(project_id):
+    # quick and dirty copy/paste from various sources, mainly based on events/retention.py (eviction). _however_, I
+    # found that for a 250K event project, the eviction algorithm took ~120s per 500 events deleted (hogging the DB).
+    # the present command is much simpler; and runs in ~1s per 500 events deleted on the same VM/dataset.
+
+    from .models import Event   # avoid circular import
+    from tags.models import EventTag
+    from projects.models import Project
+    from issues.models import TurningPoint
+
+    with immediate_atomic():
+        project = Project.objects.get(pk=project_id)
+
+        how_many_too_many = max(project.stored_event_count - project.get_retention_max_event_count(), 0)
+        if how_many_too_many == 0:
+            return
+
+        max_event_count = min(how_many_too_many, 500)
+
+        pks_to_delete = list(Event.objects.filter(
+            project_id=project_id).order_by("digested_at")[:max_event_count].values_list("id", flat=True))
+
+        # section lifted from events/retention.py
+        from events.retention import cleanup_events_on_storage, EvictionCounts
+
+        # we assume "include_never_evict" here; we'll just take the blunt approach for this task/command
+        TurningPoint.objects.filter(triggering_event_id__in=pks_to_delete).update(triggering_event=None)
+
+        # this block is verbatim
+        if len(pks_to_delete) > 0:
+            cleanup_events_on_storage(
+                Event.objects.filter(pk__in=pks_to_delete).exclude(storage_backend=None)
+                .values_list("id", "storage_backend")
+            )
+            deletions_per_issue = {
+                d['issue_id']: d['count'] for d in
+                Event.objects.filter(pk__in=pks_to_delete).values("issue_id").annotate(count=Count("issue_id"))}
+
+            EventTag.objects.filter(event_id__in=pks_to_delete).delete()
+            nr_of_deletions = Event.objects.filter(pk__in=pks_to_delete).delete()[1].get("events.Event", 0)
+        else:
+            nr_of_deletions = 0
+            deletions_per_issue = {}
+
+        evicted = EvictionCounts(nr_of_deletions, deletions_per_issue)
+
+        # based on ingest/views.py
+        from ingest.views import update_issue_counts
+        update_issue_counts(evicted.per_issue)
+        project.stored_event_count = project.stored_event_count - evicted.total
+        project.save()
+
+        # no conditional here; we just rely on the check at the start
+        delay_on_commit(delete_by_age_until_under_retention_max, project_id)
