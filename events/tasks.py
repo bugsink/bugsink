@@ -46,8 +46,9 @@ def delete_event_deps(project_id, event_id):
 
             Event.objects.filter(pk=event_id).delete()
 
-            # manual (outside of delete_deps_with_budget) b/c the special-case in that function is (ATM) specific to
-            # project (it was built around Issue-deletion initially, so Issue outliving the event-deletion was not
-            # part of that functionality). we might refactor this at some point.
+            # issue.stored_event_count is manually decremented here instead of via delete_deps_with_budget's internal
+            # do_pre_delete mechanism because the counter updating there only decs project.stored_event_count.
+            # (it was built around Issue-deletion initially, so Issue outliving the event-deletion was not part of that
+            # functionality). we might refactor this at some point.
             issue.stored_event_count -= 1
             issue.save(update_fields=["stored_event_count"])
