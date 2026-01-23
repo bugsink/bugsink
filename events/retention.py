@@ -1,5 +1,7 @@
+from functools import partial
 import logging
 from django.db.models import Q, Min, Max, Count
+from django.db import transaction
 
 from datetime import timezone, datetime
 
@@ -393,6 +395,10 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_eve
 
 
 def cleanup_events_on_storage(todos):
+    transaction.on_commit(partial(_cleanup_events_on_storage, todos))
+
+
+def _cleanup_events_on_storage(todos):
     for event_id, storage_backend in todos:
         try:
             get_storage(storage_backend).delete(event_id)
