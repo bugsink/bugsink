@@ -1,4 +1,3 @@
-import contextlib
 import os
 import logging
 import json
@@ -15,15 +14,16 @@ logger = logging.getLogger("bugsink.ingest")
 @shared_task
 def digest(event_id, event_metadata):
     from .views import BaseIngestAPIView
+    ingestion_id = event_metadata["ingestion_id"]
 
-    with open(get_filename_for_event_id(event_id), "rb") as f:
+    with open(get_filename_for_event_id(ingestion_id), "rb") as f:
         event_data = json.loads(f.read().decode("utf-8"))
-        opened = [get_filename_for_event_id(event_id)]
+        opened = [get_filename_for_event_id(ingestion_id)]
 
     if event_metadata.get("has_minidump"):
-        with open(get_filename_for_event_id(event_id, filetype="minidump"), "rb") as f:
+        with open(get_filename_for_event_id(ingestion_id, filetype="minidump"), "rb") as f:
             minidump_bytes = f.read()
-            opened += [get_filename_for_event_id(event_id, filetype="minidump")]
+            opened += [get_filename_for_event_id(ingestion_id, filetype="minidump")]
     else:
         minidump_bytes = None
 
@@ -32,10 +32,12 @@ def digest(event_id, event_metadata):
     except ValidationError as e:
         logger.warning("ValidationError in digest_event", exc_info=e)
     finally:
-        # NOTE: if an SDK misbehaves, and sends the same event_id multiple times in quick succession, the os.unlink
-        # below will trigger a FileNotFoundError on the second attempt to delete the file (the events also overwrite
-        # each other on-ingest, but that's separately dealt with, showing a "ValidationError in digest_event". We're
-        # just catching those and ignoring them (bubble-up is not desirable because it hinders follow-up cleanups)
+        # "Robustly" remove all opened files (don't stop on failure), but still report any errors at the end
+        errors = []
         for filename in opened:
-            with contextlib.suppress(FileNotFoundError):
+            try:
                 os.unlink(filename)
+            except FileNotFoundError as e:
+                errors.append(e)
+        if errors:
+            raise Exception(errors)

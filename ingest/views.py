@@ -202,7 +202,7 @@ class BaseIngestAPIView(View):
         return event_data
 
     @classmethod
-    def process_minidump(cls, ingested_at, minidump_bytes, project, request):
+    def process_minidump(cls, ingested_at, ingestion_id, minidump_bytes, project, request):
         # This is for the "pure" minidump case, i.e. full separate event (however: event data/extra data _can_ be
         # provided via POST). TSTTCPW: convert the minidump data to an event and then proceed as usual.
         performance_logger.info("ingested minidump with %s bytes", len(minidump_bytes))
@@ -220,18 +220,18 @@ class BaseIngestAPIView(View):
         merge_minidump_event(event_data, minidump_bytes)
 
         # write the event data to disk:
-        filename = get_filename_for_event_id(event_data["event_id"])
+        filename = get_filename_for_event_id(ingestion_id)
         b108_makedirs(os.path.dirname(filename))
         with open(filename, 'w') as f:
             json.dump(event_data, f)
 
-        event_metadata = cls.get_event_meta(event_data["event_id"], ingested_at, request, project)
+        event_metadata = cls.get_event_meta(event_data["event_id"], ingested_at, ingestion_id, request, project)
         digest.delay(event_data["event_id"], event_metadata)
 
         return event_id
 
     @classmethod
-    def get_event_meta(cls, event_id, ingested_at, request, project):
+    def get_event_meta(cls, event_id, ingested_at, ingestion_id, request, project):
         # .get(..) -- don't want to crash on this and it's non-trivial to find a source that tells me with certainty
         # that the REMOTE_ADDR is always in request.META (it probably is in practice)
         remote_addr = request.META.get("REMOTE_ADDR")
@@ -240,6 +240,7 @@ class BaseIngestAPIView(View):
             "event_id": event_id,
             "project_id": project.id,
             "ingested_at": format_timestamp(ingested_at),
+            "ingestion_id": ingestion_id,
             "remote_addr": remote_addr,
         }
 
@@ -646,6 +647,7 @@ class IngestEventAPIView(BaseIngestAPIView):
         # The main point of "inefficiency" is that the event data is parsed twice: once here (to get the event_id), and
         # once in the actual digest.delay()
         ingested_at = datetime.now(timezone.utc)
+        ingestion_id = str(uuid.uuid4())
 
         installation = Installation.objects.get()
         if self.is_quota_still_exceeded(installation, ingested_at):
@@ -661,12 +663,12 @@ class IngestEventAPIView(BaseIngestAPIView):
         performance_logger.info("ingested event with %s bytes", len(event_data_bytes))
 
         event_data = json.loads(event_data_bytes)
-        filename = get_filename_for_event_id(event_data["event_id"])
+        filename = get_filename_for_event_id(ingestion_id)
         b108_makedirs(os.path.dirname(filename))
         with open(filename, 'w') as f:
             json.dump(event_data, f)
 
-        event_metadata = self.get_event_meta(event_data["event_id"], ingested_at, request, project)
+        event_metadata = self.get_event_meta(event_data["event_id"], ingested_at, ingestion_id, request, project)
 
         digest.delay(event_data["event_id"], event_metadata)
 
@@ -677,6 +679,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
     def _post(self, request, project_pk=None):
         ingested_at = datetime.now(timezone.utc)
+        ingestion_id = str(uuid.uuid4())
 
         input_stream = MaxDataReader("MAX_ENVELOPE_SIZE", content_encoding_reader(
             MaxDataReader("MAX_ENVELOPE_COMPRESSED_SIZE", request)))
@@ -686,7 +689,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             else DontStoreEnvelope(input_stream)
 
         try:
-            return self._post2(request, input_stream, ingested_at, project_pk)
+            return self._post2(request, input_stream, ingested_at, ingestion_id, project_pk)
         finally:
             # storing stuff in the DB on-ingest (rather than on digest-only) is not "as architected"; it's only
             # acceptible because this is a debug-only thing which is turned off by default; but even for me and other
@@ -700,7 +703,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             # transaction" in the DB).
             input_stream.store()
 
-    def _post2(self, request, input_stream, ingested_at, project_pk=None):
+    def _post2(self, request, input_stream, ingested_at, ingestion_id, project_pk=None):
         # Note: wrapping the COMPRESSES_SIZE checks arount request makes it so that when clients do not compress their
         # requests, they are still subject to the (smaller) maximums that apply pre-uncompress. This is exactly what we
         # want.
@@ -777,7 +780,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
                 raise ParseError("event_id in envelope headers is not a valid UUID")
 
             filetype = "event" if type_ == "event" else "minidump"
-            filename = get_filename_for_event_id(envelope_headers["event_id"], filetype=filetype)
+            filename = get_filename_for_event_id(ingestion_id, filetype=filetype)
             b108_makedirs(os.path.dirname(filename))
 
             size_conf = "MAX_EVENT_SIZE" if type_ == "event" else "MAX_ATTACHMENT_SIZE"
@@ -815,7 +818,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
                 event_count, minidump_count)
             return HttpResponse()
 
-        event_metadata = self.get_event_meta(envelope_headers["event_id"], ingested_at, request, project)
+        event_metadata = self.get_event_meta(envelope_headers["event_id"], ingested_at, ingestion_id, request, project)
 
         if event_count == 1:
             if minidump_count == 1:
@@ -825,12 +828,12 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         else:
             # as it stands, we implement the minidump->event path for the minidump-only case on-ingest; we could push
             # this to a task too if needed or for reasons of symmetry.
-            with open(get_filename_for_event_id(envelope_headers["event_id"], filetype="minidump"), 'rb') as f:
+            with open(get_filename_for_event_id(ingestion_id, filetype="minidump"), 'rb') as f:
                 minidump_bytes = f.read()
 
             # TODO: error handling
             # NOTE "The file should start with the MDMP magic bytes." is not checked yet.
-            self.process_minidump(ingested_at, minidump_bytes, project, request)
+            self.process_minidump(ingested_at, ingestion_id, minidump_bytes, project, request)
 
         return HttpResponse()
 
