@@ -433,6 +433,8 @@ class BaseIngestAPIView(View):
             # Validating by letting the DB raise an exception, and only after taking some other actions already, is not
             # "by the book" (some book), but it's the most efficient way of doing it when your basic expectation is that
             # multiple events with the same event_id "don't happen" (i.e. are the result of badly misbehaving clients)
+            # Note: given the ordering here this may hit after an eviction; that was not imagined (but will still work,
+            # albeit with considerable wasted work in that scenario).
             raise ValidationError("Event already exists", code="event_already_exists")
 
         release, _ = create_release_if_needed(project, event.release, event.ingested_at, issue)
