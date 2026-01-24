@@ -19,9 +19,6 @@ class EventStorage(object):
     def __init__(self, name, **options):
         self.name = name
 
-    def save(self):
-        raise NotImplementedError()
-
     def exists(self, event_id):
         raise NotImplementedError()
 
