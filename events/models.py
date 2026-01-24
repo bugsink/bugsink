@@ -35,6 +35,11 @@ def write_to_storage(event_id, parsed_data):
     event_id means event.id, i.e. the internal one. This saves us from thinking about the security implications of
     using an externally provided ID across storage backends.
     """
+    # NOTE: we write to the storage backend in the middle of our transaction. In any case, writing before commit is
+    # good, because it means we always have event-data for Event objects. In principle this leaves "dangling" data
+    # behind; we take that as the better of two evils. I thought briefly about at least pushing the write to near the
+    # end of the transaction, but [a] Django has no before_commit hook and [b] most validation actually happens as part
+    # of the commit anyway, so it wouldn't help much.
     with get_write_storage().open(event_id, "w") as f:
         json.dump(parsed_data, f)
 
