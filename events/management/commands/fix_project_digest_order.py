@@ -2,6 +2,7 @@ import datetime
 from django.core.management.base import BaseCommand
 
 from bugsink.transaction import immediate_atomic, durable_atomic
+from bugsink.utils import assert_
 
 from projects.models import Project
 from events.models import Event
@@ -46,7 +47,7 @@ class Command(BaseCommand):
                 by_issue_going_up[d["issue_id"]] = 0
 
             delta = d["digest_order"] - by_issue_going_up[d["issue_id"]]
-            assert delta >= 1
+            assert_(delta >= 1)
             by_issue_going_up[d["issue_id"]] = d["digest_order"]
 
             current += delta
@@ -64,7 +65,7 @@ class Command(BaseCommand):
                 by_issue_going_down[d["issue_id"]] = d["digest_order"] + 1  # +1 for "the next unseen"
 
             delta = d["digest_order"] - by_issue_going_down[d["issue_id"]]
-            assert delta <= -1
+            assert_(delta <= -1)
             by_issue_going_down[d["issue_id"]] = d["digest_order"]
 
             current += delta
@@ -84,7 +85,7 @@ class Command(BaseCommand):
 
             picked = max(picked, prev + 1)  # weighting trick should never result in non-monotonic values
             prev = picked
-            assert picked >= lo and picked <= hi, (lo, hi, picked)
+            assert_(picked >= lo and picked <= hi, f"{lo}, {hi}, {picked}")
 
             if not dry_run:
                 Event.objects.filter(id=k).update(project_digest_order=picked)
