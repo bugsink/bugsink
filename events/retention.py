@@ -395,6 +395,7 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_eve
 
 
 def cleanup_events_on_storage(todos):
+    todos = list(todos)  # force evaluation now
     transaction.on_commit(partial(_cleanup_events_on_storage, todos))
 
 
