@@ -5,10 +5,7 @@ updates:
   schedule:
     interval: daily
     time: "15:00"
-  groups:
-    python-packages:
-      patterns:
-        - "*"
+
   ignore:
     # Upgrading Django: we'll time this ourselves
     - dependency-name: "django"
