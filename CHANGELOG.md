@@ -1,5 +1,27 @@
 # Changes
 
+## 2.0.12 (26 January 2026)
+
+### Fixes:
+
+* Quota checks: don't get confused (so much) by eviction, see c157827a3050
+* `cleanup_eventstorage` command: don't fail when no storage initialized, see 45dc85a38288
+* `EventStorage.list` must return UUIDs for usage in .delete, see c8457ed9bd45
+* Don't rely on SDK-provided `event_id` for ingest-digest handover, see 6ab3fa56200e, and 9e8f59ebc1b1
+* `cleanup_events` (after delete): push out of transaction, see 4130cd240205 and 7f726cad8fc9
+* Add simple command to delete the oldest events until under retention max, see 941490605355
+* `FileEventStorage` config forward-compatible, see 5099d697493f
+* `migrate_to_current_eventstorage` command: don't crash when there are 'very many' events, see 34cf7dc868f5
+
+### Upgrading
+
+The optional management command `fix_project_digest_order` can be run in
+addition to migrations; this will make rate-limiting quota work more
+correctly immediately.
+
+(if you don't care, this will become eventually correct as the old data
+fades away).
+
 ## 2.0.11 (20 January 2026)
 
 * Add brotli and gzip filestorages, see 5b345e0535c9
