@@ -147,6 +147,9 @@ class FileEventStorage(EventStorage):
         # worse, sorts it. "Some people" point to pathlib.Path.iterdir() as a better alternative, but only since 3.12
         # is it using os.scandir(): https://github.com/python/cpython/commit/30f0643e36d2c9a5849c76ca0b27b748448d0567
 
+        if not os.path.exists(self.get_basepath()):  # be robust for non-initialized storage
+            return []
+
         return (
             uuid.UUID(p.name[:-1 * len(self.compression.suffix)])  # strip the ".json" (or similar) suffix
             for p in os.scandir(self.get_basepath())
