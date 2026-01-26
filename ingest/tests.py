@@ -17,6 +17,7 @@ from django.test.client import RequestFactory
 from django.core.exceptions import ValidationError
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
+from bugsink.transaction import immediate_atomic
 from projects.models import Project
 from events.factories import create_event_data, create_event
 from events.retention import evict_for_max_events
@@ -595,9 +596,10 @@ class IngestViewTestCase(TransactionTestCase):
                 [e.get_parsed_data() for e in Event.objects.all()]  # force reading from filestore
                 self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
 
-                project = Project.objects.get(name="test")
-                project.retention_max_event_count = 1
-                evict_for_max_events(project, timezone.now(), stored_event_count=2)
+                with immediate_atomic():
+                    project = Project.objects.get(name="test")
+                    project.retention_max_event_count = 1
+                    evict_for_max_events(project, timezone.now(), stored_event_count=2)
 
                 self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
 
@@ -617,9 +619,10 @@ class IngestViewTestCase(TransactionTestCase):
                 [e.get_parsed_data() for e in Event.objects.all()]  # force reading from filestore
                 self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
 
-                project = Project.objects.get(name="test")
-                project.retention_max_event_count = 1
-                evict_for_max_events(project, timezone.now(), stored_event_count=2)
+                with immediate_atomic():
+                    project = Project.objects.get(name="test")
+                    project.retention_max_event_count = 1
+                    evict_for_max_events(project, timezone.now(), stored_event_count=2)
 
                 self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
 
@@ -641,9 +644,10 @@ class IngestViewTestCase(TransactionTestCase):
                 [e.get_parsed_data() for e in Event.objects.all()]  # force reading from filestore
                 self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
 
-                project = Project.objects.get(name="test")
-                project.retention_max_event_count = 1
-                evict_for_max_events(project, timezone.now(), stored_event_count=2)
+                with immediate_atomic():
+                    project = Project.objects.get(name="test")
+                    project.retention_max_event_count = 1
+                    evict_for_max_events(project, timezone.now(), stored_event_count=2)
 
                 self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
 
@@ -665,9 +669,10 @@ class IngestViewTestCase(TransactionTestCase):
                 [e.get_parsed_data() for e in Event.objects.all()]  # force reading from filestore
                 self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
 
-                project = Project.objects.get(name="test")
-                project.retention_max_event_count = 1
-                evict_for_max_events(project, timezone.now(), stored_event_count=2)
+                with immediate_atomic():
+                    project = Project.objects.get(name="test")
+                    project.retention_max_event_count = 1
+                    evict_for_max_events(project, timezone.now(), stored_event_count=2)
 
                 self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
 
