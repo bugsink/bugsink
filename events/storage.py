@@ -142,13 +142,13 @@ class FileEventStorage(EventStorage):
         os.remove(self._event_path(event_id))
 
     def list(self):
-        # returns the event IDs (as strings) of all events in the storage. Useful for "cleanup" operations.
+        # returns the event IDs of all events in the storage. Useful for "cleanup" operations.
         # impl.: we use os.scandir() because it doesn't load the entire directory into memory (unlike os.listdir()), or
         # worse, sorts it. "Some people" point to pathlib.Path.iterdir() as a better alternative, but only since 3.12
         # is it using os.scandir(): https://github.com/python/cpython/commit/30f0643e36d2c9a5849c76ca0b27b748448d0567
 
         return (
-            p.name[:-1 * len(self.compression.suffix)]  # strip the ".json" (or similar) suffix
+            uuid.UUID(p.name[:-1 * len(self.compression.suffix)])  # strip the ".json" (or similar) suffix
             for p in os.scandir(self.get_basepath())
             if p.name.endswith(self.compression.suffix)
         )
