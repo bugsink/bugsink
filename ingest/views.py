@@ -415,6 +415,7 @@ class BaseIngestAPIView(View):
             event_metadata,
             digested_at,
             issue.digested_event_count,
+            project.digested_event_count,
             issue.stored_event_count,
             issue,
             grouping,

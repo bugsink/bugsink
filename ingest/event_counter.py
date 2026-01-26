@@ -17,8 +17,8 @@ def check_for_thresholds(qs, now, thresholds, add_for_current=0):
     # thresholds :: [(period_name, nr_of_periods, gte_threshold), ...]
     # returns [(state, below_threshold_from, check_again_after, (period_name, nr_of_periods, gte_threshold)), ...]
 
-    # This function does aggregation, so it's reasonably expensive (I haven't measured exactly, but it seems to be at
-    # least as expensive per-call as the whole of the rest of digestion). We solve this by not calling it often, using
+    # This function does (or did) aggregation, so it might be expensive (haven't measured exactly, but it was previously
+    # at least as expensive as the whole of the rest of digestion). We solve this by not calling it often, using
     # the `check_again_after` mechanism (which relies on simple counting, and the fact that a threshold for any given
     # period of time will certainly not be crossed sooner than that the number of observations over _any_ time period
     # exceeds the given threshold. The amorization then happens over the difference between the threshold and the
@@ -28,6 +28,11 @@ def check_for_thresholds(qs, now, thresholds, add_for_current=0):
     # anyway) this means the cost will be amortized away. (e.g. quota of 1_000; a check every 100 events in a bad case).
     # The only relevant cost that this mechanism thus adds is the per-project counting of digested events.
 
+    # This function looks at event.project_digest_order to determine how many events have been seen in a given period.
+    # This is, in the light of evictions (and deletions), an approximation only. We'll leave the proof of why and how
+    # much better than counting events this is as an exercise to the reader. If we ever want to go even more precise,
+    # we'll have to move to a bucketing counting scheme rather than rolling counters.
+
     # we only allow UTC, and we generally use Django model fields, which are UTC, so this should be good:
     assert_(now.tzinfo == timezone.utc)
 
@@ -35,7 +40,25 @@ def check_for_thresholds(qs, now, thresholds, add_for_current=0):
 
     for (period_name, nr_of_periods, gte_threshold) in thresholds:
         qs_for_period = _filter_for_periods(qs, period_name, nr_of_periods, now)
-        total_events_in_period = qs_for_period.count() + add_for_current
+
+        # Hits index: (project, digested_at); project_digest_order is the tie-breaker and makes tests make sense.
+        first_in_period = (
+            qs_for_period.exclude(project_digest_order__isnull=True)
+            .order_by('digested_at', 'project_digest_order').first())
+
+        if first_in_period is None:
+            total_events_in_period = add_for_current
+        elif first_in_period.project_digest_order is None:
+            # Fall back to the pre-project_digest_order behavior.
+            total_events_in_period = qs_for_period.count() + add_for_current
+        else:
+            # will exist (implied by 'first'), and will have a project_digest_order (because only _older_ might not)
+            last_in_period = (qs_for_period.exclude(project_digest_order__isnull=True)
+                              .order_by('-digested_at', '-project_digest_order').first())
+
+            total_events_in_period = (last_in_period.project_digest_order - first_in_period.project_digest_order
+                                      + 1 + add_for_current)  # +1: not the difference, but the count incl. both ends
+
         exceeded = total_events_in_period >= gte_threshold
 
         if exceeded:

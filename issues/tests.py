@@ -367,7 +367,7 @@ class MuteUnmuteTestCase(TransactionTestCase):
         issue.is_muted = True
         issue.save()
 
-        event = create_event(project, issue)
+        event = create_event(project, issue, project_digest_order=1)
         BaseIngestAPIView.count_issue_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
         issue.save()
 
@@ -389,7 +389,7 @@ class MuteUnmuteTestCase(TransactionTestCase):
         issue.is_muted = True
         issue.save()
 
-        event = create_event(project, issue)
+        event = create_event(project, issue, project_digest_order=1)
         BaseIngestAPIView.count_issue_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
         issue.save()
 
@@ -408,7 +408,7 @@ class ViewTests(TransactionTestCase):
         self.project = Project.objects.create()
         ProjectMembership.objects.create(project=self.project, user=self.user)
         self.issue, _ = get_or_create_issue(self.project)
-        self.event = create_event(self.project, self.issue)
+        self.event = create_event(self.project, self.issue, project_digest_order=1)
         self.client.force_login(self.user)
 
     def test_issue_list_view(self):
@@ -766,7 +766,7 @@ class IssueDeletionTestCase(TransactionTestCase):
         super().setUp()
         self.project = Project.objects.create(name="Test Project", stored_event_count=1)  # 1, in prep. of the below
         self.issue, _ = get_or_create_issue(self.project)
-        self.event = create_event(self.project, issue=self.issue)
+        self.event = create_event(self.project, issue=self.issue, project_digest_order=1)
 
         TurningPoint.objects.create(
             project=self.project,

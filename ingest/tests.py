@@ -770,7 +770,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertIsNone(project.quota_exceeded_until)
         self.assertEqual(1, patched_check_for_thresholds.call_count)
 
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=1)  # result was True, proceed accordingly
 
         # second call
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
@@ -780,7 +780,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertIsNone(project.quota_exceeded_until)
         self.assertEqual(1, patched_check_for_thresholds.call_count)  # no new call to the expensive check is done
 
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=2)  # result was True, proceed accordingly
 
         # third call (equals but does not exceed quota, so this event should still be accepted, but the door should be
         # closed right after it)
@@ -791,7 +791,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(now + relativedelta(minutes=5), project.quota_exceeded_until)
         self.assertEqual(2, patched_check_for_thresholds.call_count)  # the check was done right at the lower bound
 
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=3)  # result was True, proceed accordingly
 
         # fourth call
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
@@ -819,10 +819,10 @@ class IngestViewTestCase(TransactionTestCase):
 
         # first and second call as in "simple_case" test
         BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=1)  # result was True, proceed accordingly
 
         BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=2)  # result was True, proceed accordingly
 
         # third call must trigger the check; if it happens outside of the 5-minute period the result should be OK though
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now + relativedelta(minutes=6))
@@ -846,7 +846,7 @@ class IngestViewTestCase(TransactionTestCase):
 
         # first call (assertions implied, as in simple_case)
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=1)  # result was True, proceed accordingly
 
         with override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=1):
             # the path described in this test only works if the next_quota_check are simultaneously reset

@@ -8,7 +8,7 @@ from issues.factories import get_or_create_issue
 from .models import Event
 
 
-def create_event(project=None, issue=None, timestamp=None, event_data=None):
+def create_event(project=None, issue=None, timestamp=None, event_data=None, **kwargs):
     if issue is None:
         issue, _ = get_or_create_issue(project, event_data)
 
@@ -40,6 +40,7 @@ def create_event(project=None, issue=None, timestamp=None, event_data=None):
         data=json.dumps(event_data),
         digest_order=issue_digest_order,
         irrelevance_for_retention=0,
+        **kwargs,
     )
 
 

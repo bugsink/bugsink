@@ -130,9 +130,10 @@ class Event(models.Model):
     last_frame_module = models.CharField(max_length=255, blank=True, null=False, default="")
     last_frame_function = models.CharField(max_length=255, blank=True, null=False, default="")
 
-    # 1-based, because this is for human consumption only, and using 0-based internally when we don't actually do
+    # 1-based, because this is mostly for human consumption, and using 0-based internally when we don't actually do
     # anything with this value other than showing it to humans is super-confusing. Sorry Dijkstra!
     digest_order = models.PositiveIntegerField(blank=False, null=False)
+    project_digest_order = models.PositiveIntegerField(null=True)
 
     # irrelevance_for_retention is set on-ingest based on the number of available events for an issue; it is combined
     # with age-based-irrelevance to determine which events will be evicted when retention quota are met.
@@ -201,8 +202,8 @@ class Event(models.Model):
         return get_title_for_exception_type_and_value(self.calculated_type, self.calculated_value)
 
     @classmethod
-    def from_ingested(cls, event_metadata, digested_at, digest_order, stored_event_count, issue, grouping, parsed_data,
-                      denormalized_fields):
+    def from_ingested(cls, event_metadata, digested_at, digest_order, project_digest_order, stored_event_count, issue,
+                      grouping, parsed_data, denormalized_fields):
 
         # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
@@ -248,6 +249,7 @@ class Event(models.Model):
                 remote_addr=event_metadata.get("remote_addr"),
 
                 digest_order=digest_order,
+                project_digest_order=project_digest_order,
                 irrelevance_for_retention=irrelevance_for_retention,
 
                 **denormalized_fields,
