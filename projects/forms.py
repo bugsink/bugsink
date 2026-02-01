@@ -87,8 +87,14 @@ class ProjectForm(forms.ModelForm):
 
         self.fields["retention_max_event_count"].help_text = _("The maximum number of events to store before evicting.")
 
+        maxes = []
         if get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT is not None:
-            self.fields["retention_max_event_count"].initial = get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT
+            maxes.append(get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT)
+        if get_settings().MAX_RETENTION_EVENT_COUNT is not None:
+            # pick an initial value that will leave some room for other projects
+            maxes.append(get_settings().MAX_RETENTION_EVENT_COUNT // 5)
+        if maxes:
+            self.fields["retention_max_event_count"].initial = min(maxes)
 
         if self.instance is not None and self.instance.pk is not None:
             # for editing, we disallow changing the team. consideration: it's somewhat hard to see what the consequences
