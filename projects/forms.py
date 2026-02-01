@@ -138,17 +138,25 @@ class ProjectForm(forms.ModelForm):
     def clean_retention_max_event_count(self):
         retention_max_event_count = self.cleaned_data['retention_max_event_count']
 
+        if self.instance and self.instance.pk:
+            # skip validation / have better error message when the value is unchanged or decreased; otherwise one would
+            # get "stuck" (have no more allowed edits, even for other values) after a budget decrease.
+            grace = self.instance.retention_max_event_count
+        else:
+            grace = 0
+
         if get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT is not None:
-            if retention_max_event_count > get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT:
+            if retention_max_event_count > max(get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT, grace):
                 raise forms.ValidationError("The maximum allowed retention per project is %d events." %
                                             get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT)
 
         if get_settings().MAX_RETENTION_EVENT_COUNT is not None:
             sum_of_others = Project.objects.exclude(pk=self.instance.pk).aggregate(
                 total=Sum('retention_max_event_count'))['total'] or 0
-            budget_left = max(get_settings().MAX_RETENTION_EVENT_COUNT - sum_of_others, 0)
+            budget_left = max(get_settings().MAX_RETENTION_EVENT_COUNT - sum_of_others, 0, grace)
 
             if retention_max_event_count > budget_left:
+                # grace not mentioned explicitly here as a reason for "why so high" but that's ok.
                 raise forms.ValidationError("The maximum allowed retention for this project is %d events (based on the "
                                             "installation-wide max of %d events)." % (
                                                 budget_left,
