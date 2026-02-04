@@ -76,7 +76,8 @@ class WebhookConfigForm(forms.Form):
             self.fields["http_method"].initial = config.get("http_method", "POST")
             self.fields["secret_header"].initial = config.get("secret_header", "")
             self.fields["secret_value"].initial = config.get("secret_value", "")
-            self.fields["custom_headers"].initial = json.dumps(config.get("custom_headers", {})) if config.get("custom_headers") else ""
+            custom_hdrs = config.get("custom_headers", {})
+            self.fields["custom_headers"].initial = json.dumps(custom_hdrs) if custom_hdrs else ""
             self.fields["include_full_payload"].initial = config.get("include_full_payload", True)
 
     def clean_custom_headers(self):

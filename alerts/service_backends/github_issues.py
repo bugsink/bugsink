@@ -199,7 +199,8 @@ def github_issues_send_alert(repository, access_token, labels, assignees,
 
 | First Seen | Last Seen | Event Count |
 |------------|-----------|-------------|
-| {issue.first_seen.isoformat() if issue.first_seen else 'Unknown'} | {issue.last_seen.isoformat() if issue.last_seen else 'Unknown'} | {issue.digested_event_count} |
+| {issue.first_seen.isoformat() if issue.first_seen else 'Unknown'} | \
+{issue.last_seen.isoformat() if issue.last_seen else 'Unknown'} | {issue.digested_event_count} |
 
 ## Context
 
