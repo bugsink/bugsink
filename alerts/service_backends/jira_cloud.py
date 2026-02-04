@@ -77,16 +77,14 @@ class JiraCloudConfigForm(forms.Form):
         help_text="Comma-separated labels to add, e.g., 'bugsink,production'",
         required=False,
     )
-    only_new_issues = forms.BooleanField(
-        label="Only New Issues",
-        help_text="Create tickets only for NEW issues (recommended to avoid duplicates).",
-        initial=True,
-        required=False,
-        widget=forms.CheckboxInput(attrs={
-            "class": "!w-auto !p-0 dark:bg-slate-900 checked:dark:bg-cyan-500 border-cyan-800 "
-                     "dark:border-cyan-400 text-cyan-500 dark:text-cyan-300 focus:ring-cyan-200 "
-                     "dark:focus:ring-cyan-700 cursor-pointer h-5 w-5"
-        }),
+    alert_filter = forms.ChoiceField(
+        label="Create Tickets For",
+        help_text="Which alerts should create Jira tickets",
+        choices=[
+            ("new_only", "Only NEW issues (recommended)"),
+            ("all", "All alerts (NEW, regression, unmute)"),
+        ],
+        initial="new_only",
     )
 
     def __init__(self, *args, **kwargs):
@@ -99,7 +97,13 @@ class JiraCloudConfigForm(forms.Form):
             self.fields["project_key"].initial = config.get("project_key", "PROJ")
             self.fields["issue_type"].initial = config.get("issue_type", "Bug")
             self.fields["labels"].initial = ",".join(config.get("labels", []))
-            self.fields["only_new_issues"].initial = config.get("only_new_issues", True)
+            # Support both old boolean and new choice format
+            if "alert_filter" in config:
+                self.fields["alert_filter"].initial = config.get("alert_filter", "new_only")
+            elif config.get("only_new_issues", True):
+                self.fields["alert_filter"].initial = "new_only"
+            else:
+                self.fields["alert_filter"].initial = "all"
 
     def get_config(self):
         return {
@@ -109,7 +113,7 @@ class JiraCloudConfigForm(forms.Form):
             "project_key": self.cleaned_data["project_key"],
             "issue_type": self.cleaned_data["issue_type"],
             "labels": [label.strip() for label in self.cleaned_data.get("labels", "").split(",") if label.strip()],
-            "only_new_issues": self.cleaned_data.get("only_new_issues", True),
+            "alert_filter": self.cleaned_data.get("alert_filter", "new_only"),
         }
 
 
@@ -321,8 +325,12 @@ class JiraCloudBackend:
     def send_alert(self, issue_id, state_description, alert_article, alert_reason, **kwargs):
         config = json.loads(self.service_config.config)
 
-        # Check if we should only create tickets for NEW issues
-        if config.get("only_new_issues", True) and state_description != "NEW":
+        # Check alert filter - support both old and new config format
+        alert_filter = config.get("alert_filter", "new_only")
+        # Backwards compatibility with old boolean format
+        if "only_new_issues" in config and "alert_filter" not in config:
+            alert_filter = "new_only" if config.get("only_new_issues", True) else "all"
+        if alert_filter == "new_only" and state_description != "NEW":
             return
 
         jira_cloud_backend_send_alert.delay(

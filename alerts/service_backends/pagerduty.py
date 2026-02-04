@@ -61,16 +61,14 @@ class PagerDutyConfigForm(forms.Form):
         initial="Bugsink",
         required=False,
     )
-    include_link = forms.BooleanField(
+    include_link = forms.ChoiceField(
         label="Include Issue Link",
         help_text="Add a link to the Bugsink issue in the incident",
-        initial=True,
-        required=False,
-        widget=forms.CheckboxInput(attrs={
-            "class": "!w-auto !p-0 dark:bg-slate-900 checked:dark:bg-cyan-500 border-cyan-800 "
-                     "dark:border-cyan-400 text-cyan-500 dark:text-cyan-300 focus:ring-cyan-200 "
-                     "dark:focus:ring-cyan-700 cursor-pointer h-5 w-5"
-        }),
+        choices=[
+            ("yes", "Yes - Include link to Bugsink"),
+            ("no", "No - Don't include link"),
+        ],
+        initial="yes",
     )
 
     def __init__(self, *args, **kwargs):
@@ -80,14 +78,19 @@ class PagerDutyConfigForm(forms.Form):
             self.fields["routing_key"].initial = config.get("routing_key", "")
             self.fields["default_severity"].initial = config.get("default_severity", "error")
             self.fields["service_name"].initial = config.get("service_name", "Bugsink")
-            self.fields["include_link"].initial = config.get("include_link", True)
+            # Support both old boolean and new choice format
+            include_link = config.get("include_link", True)
+            if isinstance(include_link, bool):
+                self.fields["include_link"].initial = "yes" if include_link else "no"
+            else:
+                self.fields["include_link"].initial = include_link
 
     def get_config(self):
         return {
             "routing_key": self.cleaned_data["routing_key"],
             "default_severity": self.cleaned_data["default_severity"],
             "service_name": self.cleaned_data.get("service_name", "Bugsink") or "Bugsink",
-            "include_link": self.cleaned_data.get("include_link", True),
+            "include_link": self.cleaned_data.get("include_link", "yes"),
         }
 
 
@@ -210,7 +213,9 @@ def pagerduty_send_alert(routing_key, default_severity, service_name, include_li
         }
     }
 
-    if include_link:
+    # Support both old boolean and new string format
+    should_include_link = include_link if isinstance(include_link, bool) else (include_link == "yes")
+    if should_include_link:
         payload["links"] = [{"href": issue_url, "text": "View in Bugsink"}]
 
     try:

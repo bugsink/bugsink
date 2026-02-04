@@ -61,16 +61,14 @@ class WebhookConfigForm(forms.Form):
         widget=forms.Textarea(attrs={"rows": 2, "placeholder": '{"X-Custom-Header": "value"}'}),
         required=False,
     )
-    include_full_payload = forms.BooleanField(
-        label="Include Full Payload",
-        help_text="Include all available issue details in the webhook payload",
-        initial=True,
-        required=False,
-        widget=forms.CheckboxInput(attrs={
-            "class": "!w-auto !p-0 dark:bg-slate-900 checked:dark:bg-cyan-500 border-cyan-800 "
-                     "dark:border-cyan-400 text-cyan-500 dark:text-cyan-300 focus:ring-cyan-200 "
-                     "dark:focus:ring-cyan-700 cursor-pointer h-5 w-5"
-        }),
+    payload_type = forms.ChoiceField(
+        label="Payload Type",
+        help_text="How much data to include in the webhook",
+        choices=[
+            ("full", "Full payload (all issue details)"),
+            ("minimal", "Minimal payload (summary + issue ID only)"),
+        ],
+        initial="full",
     )
 
     def __init__(self, *args, **kwargs):
@@ -83,7 +81,12 @@ class WebhookConfigForm(forms.Form):
             self.fields["secret_value"].initial = config.get("secret_value", "")
             custom_hdrs = config.get("custom_headers", {})
             self.fields["custom_headers"].initial = json.dumps(custom_hdrs) if custom_hdrs else ""
-            self.fields["include_full_payload"].initial = config.get("include_full_payload", True)
+            # Support both old boolean and new choice format
+            if "payload_type" in config:
+                self.fields["payload_type"].initial = config.get("payload_type", "full")
+            else:
+                include_full = config.get("include_full_payload", True)
+                self.fields["payload_type"].initial = "full" if include_full else "minimal"
 
     def clean_custom_headers(self):
         value = self.cleaned_data.get("custom_headers", "").strip()
@@ -104,7 +107,7 @@ class WebhookConfigForm(forms.Form):
             "secret_header": self.cleaned_data.get("secret_header", ""),
             "secret_value": self.cleaned_data.get("secret_value", ""),
             "custom_headers": self.cleaned_data.get("custom_headers", {}),
-            "include_full_payload": self.cleaned_data.get("include_full_payload", True),
+            "payload_type": self.cleaned_data.get("payload_type", "full"),
         }
 
 
@@ -282,6 +285,12 @@ class WebhookBackend:
     def get_form_class(cls):
         return WebhookConfigForm
 
+    def _get_include_full_payload(self, config):
+        """Convert payload_type to boolean for backwards compatibility."""
+        if "payload_type" in config:
+            return config["payload_type"] == "full"
+        return config.get("include_full_payload", True)
+
     def send_test_message(self):
         config = json.loads(self.service_config.config)
         webhook_send_test_message.delay(
@@ -290,7 +299,7 @@ class WebhookBackend:
             config.get("secret_header", ""),
             config.get("secret_value", ""),
             config.get("custom_headers", {}),
-            config.get("include_full_payload", True),
+            self._get_include_full_payload(config),
             self.service_config.project.name,
             self.service_config.display_name,
             self.service_config.id,
@@ -305,7 +314,7 @@ class WebhookBackend:
             config.get("secret_header", ""),
             config.get("secret_value", ""),
             config.get("custom_headers", {}),
-            config.get("include_full_payload", True),
+            self._get_include_full_payload(config),
             issue_id,
             state_description,
             alert_article,
