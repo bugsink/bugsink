@@ -7,7 +7,19 @@ Creates issues in a GitHub repository when errors occur in Bugsink.
 Requirements:
     - GitHub repository with Issues enabled
     - Personal Access Token with 'issues:write' scope
-    - Create token at: https://github.com/settings/tokens
+
+Setup (Classic Token):
+    1. Go to: https://github.com/settings/tokens
+    2. Click "Generate new token (classic)"
+    3. Select scope: "repo" (for private repos) or "public_repo" (for public repos)
+    4. Generate and copy the token
+
+Setup (Fine-grained Token - Recommended):
+    1. Go to: https://github.com/settings/tokens?type=beta
+    2. Click "Generate new token"
+    3. Select the repository
+    4. Under "Repository permissions", set "Issues" to "Read and write"
+    5. Generate and copy the token
 """
 
 import json

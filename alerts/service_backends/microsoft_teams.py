@@ -6,7 +6,20 @@ Sends alerts to Microsoft Teams channels via Webhooks.
 Uses Adaptive Cards for rich formatting with direct links to issues.
 
 Requirements:
-    - Microsoft Teams Webhook URL (Workflows or legacy Incoming Webhook)
+    - Microsoft Teams Webhook URL (one of the following methods):
+
+    Method 1 - Workflows (Recommended, new):
+        1. Open Teams channel > "..." menu > "Workflows"
+        2. Search for "Post to a channel when a webhook request is received"
+        3. Configure the workflow and copy the webhook URL
+        URL format: https://xxx.webhook.office.com/webhookb2/...
+
+    Method 2 - Legacy Incoming Webhook (deprecated, retiring 2026):
+        1. Channel Settings > Connectors > Incoming Webhook
+        URL format: https://outlook.office.com/webhook/...
+
+Note: Both URL formats are supported. Microsoft is retiring legacy
+Office 365 Connectors by March 2026 - migrate to Workflows.
 """
 
 import json

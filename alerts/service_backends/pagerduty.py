@@ -7,7 +7,12 @@ Creates incidents in PagerDuty for on-call alerting and incident management.
 Requirements:
     - PagerDuty account with Events API v2 access
     - Integration Key (Routing Key) from a PagerDuty service
-    - Create at: Service > Integrations > Add Integration > Events API v2
+
+Setup:
+    1. Go to your PagerDuty service
+    2. Navigate to: Integrations > Add Integration
+    3. Select "Events API v2"
+    4. Copy the 32-character Integration Key (Routing Key)
 """
 
 import json

@@ -6,8 +6,15 @@ Creates bug tickets in Jira Cloud when issues occur in Bugsink.
 
 Requirements:
     - Jira Cloud instance with API access
-    - API Token (create at: https://id.atlassian.com/manage-profile/security/api-tokens)
     - User email associated with the API token
+    - API Token with project write permissions
+
+Setup:
+    1. Go to: https://id.atlassian.com/manage-profile/security/api-tokens
+    2. Click "Create API token"
+    3. Give it a label (e.g., "Bugsink Integration")
+    4. Copy the generated token (you won't see it again)
+    5. Use your Atlassian account email as the User Email
 """
 
 import json
