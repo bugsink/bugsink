@@ -81,12 +81,7 @@ class WebhookConfigForm(forms.Form):
             self.fields["secret_value"].initial = config.get("secret_value", "")
             custom_hdrs = config.get("custom_headers", {})
             self.fields["custom_headers"].initial = json.dumps(custom_hdrs) if custom_hdrs else ""
-            # Support both old boolean and new choice format
-            if "payload_type" in config:
-                self.fields["payload_type"].initial = config.get("payload_type", "full")
-            else:
-                include_full = config.get("include_full_payload", True)
-                self.fields["payload_type"].initial = "full" if include_full else "minimal"
+            self.fields["payload_type"].initial = config.get("payload_type", "full")
 
     def clean_custom_headers(self):
         value = self.cleaned_data.get("custom_headers", "").strip()
@@ -194,7 +189,7 @@ def webhook_send_test_message(webhook_url, http_method, secret_header, secret_va
             webhook_url,
             data=json.dumps(payload),
             headers=headers,
-            timeout=30,
+            timeout=5,
         )
         result.raise_for_status()
         _store_success_info(service_config_id)
@@ -262,7 +257,7 @@ def webhook_send_alert(webhook_url, http_method, secret_header, secret_value,
             webhook_url,
             data=json.dumps(payload),
             headers=headers,
-            timeout=30,
+            timeout=5,
         )
         result.raise_for_status()
         _store_success_info(service_config_id)
@@ -286,10 +281,8 @@ class WebhookBackend:
         return WebhookConfigForm
 
     def _get_include_full_payload(self, config):
-        """Convert payload_type to boolean for backwards compatibility."""
-        if "payload_type" in config:
-            return config["payload_type"] == "full"
-        return config.get("include_full_payload", True)
+        """Convert payload_type to boolean."""
+        return config.get("payload_type", "full") == "full"
 
     def send_test_message(self):
         config = json.loads(self.service_config.config)

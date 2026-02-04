@@ -78,12 +78,7 @@ class PagerDutyConfigForm(forms.Form):
             self.fields["routing_key"].initial = config.get("routing_key", "")
             self.fields["default_severity"].initial = config.get("default_severity", "error")
             self.fields["service_name"].initial = config.get("service_name", "Bugsink")
-            # Support both old boolean and new choice format
-            include_link = config.get("include_link", True)
-            if isinstance(include_link, bool):
-                self.fields["include_link"].initial = "yes" if include_link else "no"
-            else:
-                self.fields["include_link"].initial = include_link
+            self.fields["include_link"].initial = config.get("include_link", "yes")
 
     def get_config(self):
         return {
@@ -164,7 +159,7 @@ def pagerduty_send_test_message(routing_key, default_severity, service_name, inc
             PAGERDUTY_EVENTS_URL,
             data=json.dumps(payload),
             headers={"Content-Type": "application/json"},
-            timeout=30,
+            timeout=5,
         )
         result.raise_for_status()
         _store_success_info(service_config_id)
@@ -213,9 +208,7 @@ def pagerduty_send_alert(routing_key, default_severity, service_name, include_li
         }
     }
 
-    # Support both old boolean and new string format
-    should_include_link = include_link if isinstance(include_link, bool) else (include_link == "yes")
-    if should_include_link:
+    if include_link == "yes":
         payload["links"] = [{"href": issue_url, "text": "View in Bugsink"}]
 
     try:
@@ -223,7 +216,7 @@ def pagerduty_send_alert(routing_key, default_severity, service_name, include_li
             PAGERDUTY_EVENTS_URL,
             data=json.dumps(payload),
             headers={"Content-Type": "application/json"},
-            timeout=30,
+            timeout=5,
         )
         result.raise_for_status()
         _store_success_info(service_config_id)

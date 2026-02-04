@@ -74,20 +74,7 @@ class MicrosoftTeamsConfigForm(forms.Form):
             self.fields["webhook_url"].initial = config.get("webhook_url", "")
             self.fields["channel_name"].initial = config.get("channel_name", "")
             self.fields["mention_users"].initial = ",".join(config.get("mention_users", []))
-            # Support both old theme_color and new title_color format
-            if "title_color" in config:
-                self.fields["title_color"].initial = config.get("title_color", "attention")
-            else:
-                # Map old hex colors to new keywords
-                old_color = config.get("theme_color", "d63333")
-                if old_color in ("d63333", "ff0000", "dc3545"):
-                    self.fields["title_color"].initial = "attention"
-                elif old_color in ("ffc107", "ffcc00"):
-                    self.fields["title_color"].initial = "warning"
-                elif old_color in ("28a745", "00ff00"):
-                    self.fields["title_color"].initial = "good"
-                else:
-                    self.fields["title_color"].initial = "accent"
+            self.fields["title_color"].initial = config.get("title_color", "attention")
 
     def get_config(self):
         return {
@@ -254,7 +241,7 @@ def microsoft_teams_send_test_message(webhook_url, channel_name, mention_users, 
             webhook_url,
             data=json.dumps(payload),
             headers={"Content-Type": "application/json"},
-            timeout=30,
+            timeout=5,
         )
         result.raise_for_status()
         _store_success_info(service_config_id)
@@ -304,7 +291,7 @@ def microsoft_teams_send_alert(webhook_url, channel_name, mention_users, title_c
             webhook_url,
             data=json.dumps(payload),
             headers={"Content-Type": "application/json"},
-            timeout=30,
+            timeout=5,
         )
         result.raise_for_status()
         _store_success_info(service_config_id)
@@ -328,18 +315,8 @@ class MicrosoftTeamsBackend:
         return MicrosoftTeamsConfigForm
 
     def _get_title_color(self, config):
-        """Get title_color with backwards compatibility for theme_color."""
-        if "title_color" in config:
-            return config["title_color"]
-        # Map old hex theme_color to new keyword
-        old_color = config.get("theme_color", "d63333")
-        if old_color in ("d63333", "ff0000", "dc3545"):
-            return "attention"
-        elif old_color in ("ffc107", "ffcc00"):
-            return "warning"
-        elif old_color in ("28a745", "00ff00"):
-            return "good"
-        return "accent"
+        """Get title_color from config."""
+        return config.get("title_color", "attention")
 
     def send_test_message(self):
         config = json.loads(self.service_config.config)

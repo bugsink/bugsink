@@ -80,13 +80,7 @@ class GitHubIssuesConfigForm(forms.Form):
             self.fields["access_token"].initial = config.get("access_token", "")
             self.fields["labels"].initial = ",".join(config.get("labels", []))
             self.fields["assignees"].initial = ",".join(config.get("assignees", []))
-            # Support both old boolean and new choice format
-            if "alert_filter" in config:
-                self.fields["alert_filter"].initial = config.get("alert_filter", "new_only")
-            elif config.get("only_new_issues", True):
-                self.fields["alert_filter"].initial = "new_only"
-            else:
-                self.fields["alert_filter"].initial = "all"
+            self.fields["alert_filter"].initial = config.get("alert_filter", "new_only")
 
     def clean_repository(self):
         repo = self.cleaned_data["repository"].strip()
@@ -186,7 +180,7 @@ def github_issues_send_test_message(repository, access_token, labels, assignees,
                 "Content-Type": "application/json",
                 "X-GitHub-Api-Version": "2022-11-28",
             },
-            timeout=30,
+            timeout=5,
         )
         result.raise_for_status()
         _store_success_info(service_config_id)
@@ -257,7 +251,7 @@ def github_issues_send_alert(repository, access_token, labels, assignees,
                 "Content-Type": "application/json",
                 "X-GitHub-Api-Version": "2022-11-28",
             },
-            timeout=30,
+            timeout=5,
         )
         result.raise_for_status()
         _store_success_info(service_config_id)
@@ -295,11 +289,8 @@ class GitHubIssuesBackend:
     def send_alert(self, issue_id, state_description, alert_article, alert_reason, **kwargs):
         config = json.loads(self.service_config.config)
 
-        # Check alert filter - support both old and new config format
-        alert_filter = config.get("alert_filter", "new_only")
-        if "only_new_issues" in config and "alert_filter" not in config:
-            alert_filter = "new_only" if config.get("only_new_issues", True) else "all"
-        if alert_filter == "new_only" and state_description != "NEW":
+        # Check alert filter
+        if config.get("alert_filter", "new_only") == "new_only" and state_description != "NEW":
             return
 
         github_issues_send_alert.delay(

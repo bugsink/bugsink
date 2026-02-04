@@ -97,13 +97,7 @@ class JiraCloudConfigForm(forms.Form):
             self.fields["project_key"].initial = config.get("project_key", "PROJ")
             self.fields["issue_type"].initial = config.get("issue_type", "Bug")
             self.fields["labels"].initial = ",".join(config.get("labels", []))
-            # Support both old boolean and new choice format
-            if "alert_filter" in config:
-                self.fields["alert_filter"].initial = config.get("alert_filter", "new_only")
-            elif config.get("only_new_issues", True):
-                self.fields["alert_filter"].initial = "new_only"
-            else:
-                self.fields["alert_filter"].initial = "all"
+            self.fields["alert_filter"].initial = config.get("alert_filter", "new_only")
 
     def get_config(self):
         return {
@@ -211,7 +205,7 @@ def jira_cloud_backend_send_test_message(jira_url, user_email, api_token, projec
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             },
-            timeout=30,
+            timeout=5,
         )
         result.raise_for_status()
         _store_success_info(service_config_id)
@@ -285,7 +279,7 @@ def jira_cloud_backend_send_alert(jira_url, user_email, api_token, project_key,
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             },
-            timeout=30,
+            timeout=5,
         )
         result.raise_for_status()
         _store_success_info(service_config_id)
@@ -325,12 +319,8 @@ class JiraCloudBackend:
     def send_alert(self, issue_id, state_description, alert_article, alert_reason, **kwargs):
         config = json.loads(self.service_config.config)
 
-        # Check alert filter - support both old and new config format
-        alert_filter = config.get("alert_filter", "new_only")
-        # Backwards compatibility with old boolean format
-        if "only_new_issues" in config and "alert_filter" not in config:
-            alert_filter = "new_only" if config.get("only_new_issues", True) else "all"
-        if alert_filter == "new_only" and state_description != "NEW":
+        # Check alert filter
+        if config.get("alert_filter", "new_only") == "new_only" and state_description != "NEW":
             return
 
         jira_cloud_backend_send_alert.delay(
