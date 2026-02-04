@@ -50,7 +50,7 @@ Creates bug tickets in Jira Cloud when Bugsink detects issues.
 - `project_key` - Target project key (e.g., `BUG`, `PROJ`)
 - `issue_type` - Issue type to create (Bug, Task, Story, etc.)
 - `labels` - Comma-separated labels to apply
-- `only_new_issues` - Create tickets only for NEW issues (prevents duplicates)
+- `alert_filter` - Which alerts create tickets: `new_only` (recommended) or `all`
 
 **Features:**
 - Uses Atlassian Document Format (ADF) for rich descriptions
@@ -75,7 +75,7 @@ Creates issues in GitHub repositories when errors occur.
 - `access_token` - GitHub Personal Access Token with `issues:write` scope
 - `labels` - Comma-separated labels (e.g., `bug,production`)
 - `assignees` - Comma-separated GitHub usernames to assign
-- `only_new_issues` - Create issues only for NEW errors
+- `alert_filter` - Which alerts create issues: `new_only` (recommended) or `all`
 
 **Features:**
 - GitHub-flavored Markdown formatting
@@ -106,7 +106,7 @@ Sends alerts to Microsoft Teams channels via webhooks.
 - `webhook_url` - Teams Webhook URL (Workflows or legacy connector)
 - `channel_name` - Display name for reference (optional)
 - `mention_users` - Comma-separated emails to @mention
-- `theme_color` - Hex color for card accent
+- `title_color` - Color for alert title: `attention` (red), `warning` (yellow), `good` (green), `accent` (blue), `default`
 
 **Features:**
 - Adaptive Cards for rich formatting
@@ -138,7 +138,7 @@ Creates incidents in PagerDuty for on-call alerting.
 - `routing_key` - PagerDuty Events API v2 Integration Key (32 chars)
 - `default_severity` - Incident severity (critical, error, warning, info)
 - `service_name` - Custom source name (defaults to "Bugsink")
-- `include_link` - Include link to Bugsink issue
+- `include_link` - Include link to Bugsink issue: `yes` or `no`
 
 **Features:**
 - Events API v2 integration
@@ -164,7 +164,7 @@ Sends alerts to any HTTP endpoint as JSON payloads.
 - `secret_header` - Header name for authentication (optional)
 - `secret_value` - Secret value for the header
 - `custom_headers` - Additional headers as JSON
-- `include_full_payload` - Include all available issue details
+- `payload_type` - Payload size: `full` (all details) or `minimal` (summary + ID only)
 
 **Features:**
 - Flexible HTTP method selection
@@ -202,7 +202,7 @@ The new backends use the `requests` library, consistent with Bugsink's existing 
 
 - Consistency across all notification backends
 - Uses the same error handling patterns (`requests.RequestException`)
-- Provides consistent timeout handling (30 seconds)
+- Provides consistent timeout handling (5 seconds)
 
 ### Error Handling
 

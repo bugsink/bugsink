@@ -129,7 +129,7 @@ def _store_failure_info(service_config_id, exception, response=None):
 
             config.save()
         except MessagingServiceConfig.DoesNotExist:
-            pass
+            pass  # Config was deleted, nothing to update
 
 
 def _store_success_info(service_config_id):
@@ -142,7 +142,7 @@ def _store_success_info(service_config_id):
             config.clear_failure_status()
             config.save()
         except MessagingServiceConfig.DoesNotExist:
-            pass
+            pass  # Config was deleted, nothing to update
 
 
 @shared_task
