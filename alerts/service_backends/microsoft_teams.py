@@ -54,12 +54,17 @@ class MicrosoftTeamsConfigForm(forms.Form):
         help_text="Comma-separated user emails to mention, e.g., 'user@company.com'",
         required=False,
     )
-    theme_color = forms.CharField(
-        label="Theme Color",
-        help_text="Hex color for the card accent (without #)",
-        max_length=6,
-        initial="d63333",
-        required=False,
+    title_color = forms.ChoiceField(
+        label="Title Color",
+        help_text="Color for the alert title in Teams",
+        choices=[
+            ("attention", "Red (Attention) - for errors"),
+            ("warning", "Yellow (Warning)"),
+            ("good", "Green (Good)"),
+            ("accent", "Blue (Accent)"),
+            ("default", "Default"),
+        ],
+        initial="attention",
     )
 
     def __init__(self, *args, **kwargs):
@@ -69,14 +74,27 @@ class MicrosoftTeamsConfigForm(forms.Form):
             self.fields["webhook_url"].initial = config.get("webhook_url", "")
             self.fields["channel_name"].initial = config.get("channel_name", "")
             self.fields["mention_users"].initial = ",".join(config.get("mention_users", []))
-            self.fields["theme_color"].initial = config.get("theme_color", "d63333")
+            # Support both old theme_color and new title_color format
+            if "title_color" in config:
+                self.fields["title_color"].initial = config.get("title_color", "attention")
+            else:
+                # Map old hex colors to new keywords
+                old_color = config.get("theme_color", "d63333")
+                if old_color in ("d63333", "ff0000", "dc3545"):
+                    self.fields["title_color"].initial = "attention"
+                elif old_color in ("ffc107", "ffcc00"):
+                    self.fields["title_color"].initial = "warning"
+                elif old_color in ("28a745", "00ff00"):
+                    self.fields["title_color"].initial = "good"
+                else:
+                    self.fields["title_color"].initial = "accent"
 
     def get_config(self):
         return {
             "webhook_url": self.cleaned_data["webhook_url"],
             "channel_name": self.cleaned_data.get("channel_name", ""),
             "mention_users": [u.strip() for u in self.cleaned_data.get("mention_users", "").split(",") if u.strip()],
-            "theme_color": self.cleaned_data.get("theme_color", "d63333"),
+            "title_color": self.cleaned_data.get("title_color", "attention"),
         }
 
 
@@ -124,9 +142,27 @@ def _store_success_info(service_config_id):
             pass
 
 
-def _build_adaptive_card(title, facts, theme_color, issue_url=None, mention_users=None):
-    """Build a Microsoft Teams Adaptive Card payload."""
+def _build_adaptive_card(title, facts, title_color, issue_url=None, mention_users=None):
+    """Build a Microsoft Teams Adaptive Card payload.
+
+    Args:
+        title: The card title text
+        facts: List of (key, value) tuples for the fact set
+        title_color: Adaptive Card color keyword (attention, warning, good, accent, default)
+        issue_url: Optional URL for the "View Issue" button
+        mention_users: Optional list of user emails to mention
+    """
     fact_items = [{"title": k, "value": v} for k, v in facts]
+
+    # Map lowercase config value to Adaptive Card color (capitalize first letter)
+    color_map = {
+        "attention": "Attention",
+        "warning": "Warning",
+        "good": "Good",
+        "accent": "Accent",
+        "default": "Default",
+    }
+    card_color = color_map.get(title_color, "Attention")
 
     body = [
         {
@@ -135,7 +171,7 @@ def _build_adaptive_card(title, facts, theme_color, issue_url=None, mention_user
             "weight": "Bolder",
             "text": title,
             "wrap": True,
-            "color": "Attention"
+            "color": card_color
         },
         {
             "type": "FactSet",
@@ -197,7 +233,7 @@ def _build_adaptive_card(title, facts, theme_color, issue_url=None, mention_user
 
 
 @shared_task
-def microsoft_teams_send_test_message(webhook_url, channel_name, mention_users, theme_color,
+def microsoft_teams_send_test_message(webhook_url, channel_name, mention_users, title_color,
                                        project_name, display_name, service_config_id):
     """Send a test message to verify Teams configuration."""
     facts = [
@@ -209,7 +245,7 @@ def microsoft_teams_send_test_message(webhook_url, channel_name, mention_users, 
     payload = _build_adaptive_card(
         title="Bugsink Test Message",
         facts=facts,
-        theme_color=theme_color,
+        title_color=title_color,
         mention_users=mention_users if mention_users else None
     )
 
@@ -232,7 +268,7 @@ def microsoft_teams_send_test_message(webhook_url, channel_name, mention_users, 
 
 
 @shared_task
-def microsoft_teams_send_alert(webhook_url, channel_name, mention_users, theme_color,
+def microsoft_teams_send_alert(webhook_url, channel_name, mention_users, title_color,
                                 issue_id, state_description, alert_article, alert_reason,
                                 service_config_id, unmute_reason=None):
     """Send an alert to Microsoft Teams."""
@@ -258,7 +294,7 @@ def microsoft_teams_send_alert(webhook_url, channel_name, mention_users, theme_c
     payload = _build_adaptive_card(
         title=title,
         facts=facts,
-        theme_color=theme_color,
+        title_color=title_color,
         issue_url=issue_url,
         mention_users=mention_users if mention_users else None
     )
@@ -291,13 +327,27 @@ class MicrosoftTeamsBackend:
     def get_form_class(cls):
         return MicrosoftTeamsConfigForm
 
+    def _get_title_color(self, config):
+        """Get title_color with backwards compatibility for theme_color."""
+        if "title_color" in config:
+            return config["title_color"]
+        # Map old hex theme_color to new keyword
+        old_color = config.get("theme_color", "d63333")
+        if old_color in ("d63333", "ff0000", "dc3545"):
+            return "attention"
+        elif old_color in ("ffc107", "ffcc00"):
+            return "warning"
+        elif old_color in ("28a745", "00ff00"):
+            return "good"
+        return "accent"
+
     def send_test_message(self):
         config = json.loads(self.service_config.config)
         microsoft_teams_send_test_message.delay(
             config["webhook_url"],
             config.get("channel_name", ""),
             config.get("mention_users", []),
-            config.get("theme_color", "d63333"),
+            self._get_title_color(config),
             self.service_config.project.name,
             self.service_config.display_name,
             self.service_config.id,
@@ -310,7 +360,7 @@ class MicrosoftTeamsBackend:
             config["webhook_url"],
             config.get("channel_name", ""),
             config.get("mention_users", []),
-            config.get("theme_color", "d63333"),
+            self._get_title_color(config),
             issue_id,
             state_description,
             alert_article,
