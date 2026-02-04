@@ -5,41 +5,21 @@ Bugsink Messaging Backend: Microsoft Teams
 Sends alerts to Microsoft Teams channels via Webhooks.
 Uses Adaptive Cards for rich formatting with direct links to issues.
 
-Compatible with Bugsink v2.
-
-Installation:
-    Copy to: /app/alerts/service_backends/microsoft_teams.py
-    Register in: /app/alerts/models.py
-
 Requirements:
-    - Microsoft Teams Webhook URL (one of the following methods):
-
-    Method 1 - Workflows (Recommended, new):
-        1. Open Teams channel > "..." menu > "Workflows"
-        2. Search for "Post to a channel when a webhook request is received"
-        3. Configure the workflow and copy the webhook URL
-        URL format: https://xxx.webhook.office.com/webhookb2/...
-
-    Method 2 - Legacy Incoming Webhook (deprecated, retiring 2026):
-        1. Channel Settings > Connectors > Incoming Webhook
-        URL format: https://outlook.office.com/webhook/...
-
-Note: Both URL formats are supported. Microsoft is retiring legacy
-Office 365 Connectors by March 2026 - migrate to Workflows.
+    - Microsoft Teams Webhook URL (Workflows or legacy Incoming Webhook)
 """
 
 import json
-import logging
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError, URLError
+import requests
 
 from django import forms
 from django.utils import timezone
 
 from snappea.decorators import shared_task
+from bugsink.app_settings import get_settings
 from bugsink.transaction import immediate_atomic
 
-logger = logging.getLogger(__name__)
+from issues.models import Issue
 
 
 class MicrosoftTeamsConfigForm(forms.Form):
@@ -70,7 +50,6 @@ class MicrosoftTeamsConfigForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
-        """Initialize form with existing config if provided."""
         config = kwargs.pop("config", None)
         super().__init__(*args, **kwargs)
         if config:
@@ -80,7 +59,6 @@ class MicrosoftTeamsConfigForm(forms.Form):
             self.fields["theme_color"].initial = config.get("theme_color", "d63333")
 
     def get_config(self):
-        """Return configuration as dictionary for storage."""
         return {
             "webhook_url": self.cleaned_data["webhook_url"],
             "channel_name": self.cleaned_data.get("channel_name", ""),
@@ -90,35 +68,26 @@ class MicrosoftTeamsConfigForm(forms.Form):
 
 
 def _store_failure_info(service_config_id, exception, response=None):
-    """Store failure info in MessagingServiceConfig using individual fields."""
+    """Store failure information in the MessagingServiceConfig."""
     from alerts.models import MessagingServiceConfig
 
     with immediate_atomic(only_if_needed=True):
         try:
             config = MessagingServiceConfig.objects.get(id=service_config_id)
+
             config.last_failure_timestamp = timezone.now()
             config.last_failure_error_type = type(exception).__name__
-            config.last_failure_error_message = str(exception)[:2000]
+            config.last_failure_error_message = str(exception)
 
             if response is not None:
-                if hasattr(response, 'status'):
-                    config.last_failure_status_code = response.status
-                elif hasattr(response, 'code'):
-                    config.last_failure_status_code = response.code
-                else:
-                    config.last_failure_status_code = None
+                config.last_failure_status_code = response.status_code
+                config.last_failure_response_text = response.text[:2000]
 
-                response_text = getattr(response, 'text', None)
-                if response_text:
-                    config.last_failure_response_text = response_text[:2000]
-                    try:
-                        json.loads(response_text)
-                        config.last_failure_is_json = True
-                    except (json.JSONDecodeError, ValueError):
-                        config.last_failure_is_json = False
-                else:
-                    config.last_failure_response_text = None
-                    config.last_failure_is_json = None
+                try:
+                    json.loads(response.text)
+                    config.last_failure_is_json = True
+                except (json.JSONDecodeError, ValueError):
+                    config.last_failure_is_json = False
             else:
                 config.last_failure_status_code = None
                 config.last_failure_response_text = None
@@ -126,11 +95,11 @@ def _store_failure_info(service_config_id, exception, response=None):
 
             config.save()
         except MessagingServiceConfig.DoesNotExist:
-            logger.warning(f"MessagingServiceConfig {service_config_id} not found for failure tracking")
+            pass
 
 
 def _store_success_info(service_config_id):
-    """Clear failure info on successful operation."""
+    """Clear failure information on successful operation."""
     from alerts.models import MessagingServiceConfig
 
     with immediate_atomic(only_if_needed=True):
@@ -142,10 +111,8 @@ def _store_success_info(service_config_id):
             pass
 
 
-def _build_adaptive_card(title: str, facts: list, theme_color: str, issue_url: str = None, mention_users: list = None):
+def _build_adaptive_card(title, facts, theme_color, issue_url=None, mention_users=None):
     """Build a Microsoft Teams Adaptive Card payload."""
-
-    # Build facts for the FactSet
     fact_items = [{"title": k, "value": v} for k, v in facts]
 
     body = [
@@ -163,7 +130,6 @@ def _build_adaptive_card(title: str, facts: list, theme_color: str, issue_url: s
         }
     ]
 
-    # Add mentions if configured
     if mention_users:
         mention_text = " ".join([f"<at>{email}</at>" for email in mention_users])
         body.append({
@@ -201,7 +167,6 @@ def _build_adaptive_card(title: str, facts: list, theme_color: str, issue_url: s
         ]
     }
 
-    # Add entity mentions for @mentions to work
     if mention_users:
         card["attachments"][0]["content"]["msteams"]["entities"] = [
             {
@@ -218,28 +183,10 @@ def _build_adaptive_card(title: str, facts: list, theme_color: str, issue_url: s
     return card
 
 
-def _send_to_teams(webhook_url: str, payload: dict):
-    """Send payload to Microsoft Teams webhook."""
-    headers = {
-        "Content-Type": "application/json",
-    }
-
-    request = Request(
-        webhook_url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers=headers,
-        method="POST"
-    )
-
-    with urlopen(request, timeout=30) as response:
-        return response.read().decode("utf-8")
-
-
 @shared_task
 def microsoft_teams_send_test_message(webhook_url, channel_name, mention_users, theme_color,
                                        project_name, display_name, service_config_id):
     """Send a test message to verify Teams configuration."""
-
     facts = [
         ("Project", project_name),
         ("Service", display_name or "Microsoft Teams"),
@@ -254,72 +201,46 @@ def microsoft_teams_send_test_message(webhook_url, channel_name, mention_users, 
     )
 
     try:
-        _send_to_teams(webhook_url, payload)
+        result = requests.post(
+            webhook_url,
+            data=json.dumps(payload),
+            headers={"Content-Type": "application/json"},
+            timeout=30,
+        )
+        result.raise_for_status()
         _store_success_info(service_config_id)
-        logger.info(f"Teams test message sent successfully to {channel_name or 'webhook'}")
 
-    except HTTPError as e:
-        response_body = e.read().decode("utf-8") if e.fp else ""
-        logger.error(f"Teams API error: {e.code} - {response_body}")
-
-        class ResponseWrapper:
-            def __init__(self, code, text):
-                self.code = code
-                self.status = code
-                self.text = text
-
-        _store_failure_info(service_config_id, e, ResponseWrapper(e.code, response_body))
-
-    except URLError as e:
-        logger.error(f"Teams connection error: {e.reason}")
-        _store_failure_info(service_config_id, e)
+    except requests.RequestException as e:
+        response = getattr(e, 'response', None)
+        _store_failure_info(service_config_id, e, response)
 
     except Exception as e:
-        logger.exception(f"Unexpected error sending to Teams: {e}")
         _store_failure_info(service_config_id, e)
 
 
 @shared_task
 def microsoft_teams_send_alert(webhook_url, channel_name, mention_users, theme_color,
                                 issue_id, state_description, alert_article, alert_reason,
-                                service_config_id, bugsink_base_url=None, unmute_reason=None):
+                                service_config_id, unmute_reason=None):
     """Send an alert to Microsoft Teams."""
-    from issues.models import Issue
+    issue = Issue.objects.get(id=issue_id)
+    issue_url = get_settings().BASE_URL + issue.get_absolute_url()
 
-    try:
-        issue = Issue.objects.select_related("project").get(pk=issue_id)
+    title = f"[{state_description}] {issue.calculated_type or 'Error'}: {issue.calculated_value or 'Unknown'}"
 
-        title = f"[{state_description}] {issue.calculated_type or 'Error'}: {issue.calculated_value or 'Unknown'}"
+    facts = [
+        ("Error Type", issue.calculated_type or "Unknown"),
+        ("Message", (issue.calculated_value or "No message")[:200]),
+        ("Project", issue.project.name),
+        ("First Seen", issue.first_seen.strftime("%Y-%m-%d %H:%M") if issue.first_seen else "Unknown"),
+        ("Last Seen", issue.last_seen.strftime("%Y-%m-%d %H:%M") if issue.last_seen else "Unknown"),
+        ("Event Count", str(issue.digested_event_count)),
+        ("Alert Type", state_description),
+        ("Reason", alert_reason),
+    ]
 
-        facts = [
-            ("Error Type", issue.calculated_type or "Unknown"),
-            ("Message", (issue.calculated_value or "No message")[:200]),
-            ("Project", issue.project.name if issue.project else "Unknown"),
-            ("First Seen", issue.first_seen.strftime("%Y-%m-%d %H:%M") if issue.first_seen else "Unknown"),
-            ("Last Seen", issue.last_seen.strftime("%Y-%m-%d %H:%M") if issue.last_seen else "Unknown"),
-            ("Event Count", str(issue.digested_event_count)),
-            ("Alert Type", state_description),
-            ("Reason", alert_reason),
-        ]
-
-        if unmute_reason:
-            facts.append(("Unmute Reason", unmute_reason))
-
-        # Build issue URL using the issue's get_absolute_url method (same as Slack backend)
-        issue_url = None
-        if bugsink_base_url:
-            issue_url = f"{bugsink_base_url.rstrip('/')}/issues/issue/{issue_id}/event/last/"
-
-    except Issue.DoesNotExist:
-        title = f"[{state_description}] Issue {issue_id}"
-        facts = [
-            ("Issue ID", str(issue_id)),
-            ("Alert Type", state_description),
-            ("Reason", alert_reason),
-        ]
-        issue_url = None
-        if bugsink_base_url:
-            issue_url = f"{bugsink_base_url.rstrip('/')}/issues/issue/{issue_id}/event/last/"
+    if unmute_reason:
+        facts.append(("Unmute Reason", unmute_reason))
 
     payload = _build_adaptive_card(
         title=title,
@@ -330,47 +251,34 @@ def microsoft_teams_send_alert(webhook_url, channel_name, mention_users, theme_c
     )
 
     try:
-        _send_to_teams(webhook_url, payload)
+        result = requests.post(
+            webhook_url,
+            data=json.dumps(payload),
+            headers={"Content-Type": "application/json"},
+            timeout=30,
+        )
+        result.raise_for_status()
         _store_success_info(service_config_id)
-        logger.info(f"Teams alert sent for issue {issue_id}")
 
-    except HTTPError as e:
-        response_body = e.read().decode("utf-8") if e.fp else ""
-        logger.error(f"Teams API error: {e.code} - {response_body}")
-
-        class ResponseWrapper:
-            def __init__(self, code, text):
-                self.code = code
-                self.status = code
-                self.text = text
-
-        _store_failure_info(service_config_id, e, ResponseWrapper(e.code, response_body))
-
-    except URLError as e:
-        logger.error(f"Teams connection error: {e.reason}")
-        _store_failure_info(service_config_id, e)
+    except requests.RequestException as e:
+        response = getattr(e, 'response', None)
+        _store_failure_info(service_config_id, e, response)
 
     except Exception as e:
-        logger.exception(f"Unexpected error sending to Teams: {e}")
         _store_failure_info(service_config_id, e)
 
 
 class MicrosoftTeamsBackend:
-    """Backend class for Microsoft Teams integration.
-
-    Compatible with Bugsink v2 backend interface.
-    """
+    """Backend class for Microsoft Teams integration."""
 
     def __init__(self, service_config):
         self.service_config = service_config
 
     @classmethod
     def get_form_class(cls):
-        """Return the configuration form class."""
         return MicrosoftTeamsConfigForm
 
     def send_test_message(self):
-        """Dispatch test message task."""
         config = json.loads(self.service_config.config)
         microsoft_teams_send_test_message.delay(
             config["webhook_url"],
@@ -383,12 +291,7 @@ class MicrosoftTeamsBackend:
         )
 
     def send_alert(self, issue_id, state_description, alert_article, alert_reason, **kwargs):
-        """Dispatch alert task."""
-        from bugsink.app_settings import get_settings
         config = json.loads(self.service_config.config)
-
-        # Get base URL from Bugsink settings (same as Slack backend)
-        bugsink_base_url = get_settings().BASE_URL
 
         microsoft_teams_send_alert.delay(
             config["webhook_url"],
@@ -400,6 +303,5 @@ class MicrosoftTeamsBackend:
             alert_article,
             alert_reason,
             self.service_config.id,
-            bugsink_base_url=bugsink_base_url,
             **kwargs,
         )

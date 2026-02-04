@@ -5,30 +5,23 @@ Bugsink Messaging Backend: Generic Webhook
 Sends alerts to any HTTP endpoint as JSON payloads.
 Flexible for custom integrations, home automation, or third-party services.
 
-Compatible with Bugsink v2.
-
-Installation:
-    Copy to: /app/alerts/service_backends/webhook.py
-    Register in: /app/alerts/models.py
-
 Requirements:
     - HTTP(S) endpoint that accepts POST requests with JSON body
 """
 
 import json
-import logging
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError, URLError
+import requests
 
 from django import forms
 from django.utils import timezone
 
 from snappea.decorators import shared_task
+from bugsink.app_settings import get_settings
 from bugsink.transaction import immediate_atomic
 
-logger = logging.getLogger(__name__)
+from issues.models import Issue
 
-# HTTP Method choices
+
 HTTP_METHOD_CHOICES = [
     ("POST", "POST"),
     ("PUT", "PUT"),
@@ -64,7 +57,7 @@ class WebhookConfigForm(forms.Form):
     )
     custom_headers = forms.CharField(
         label="Custom Headers (optional)",
-        help_text="Additional headers as JSON, e.g., {\"X-Custom\": \"value\"}",
+        help_text='Additional headers as JSON, e.g., {"X-Custom": "value"}',
         widget=forms.Textarea(attrs={"rows": 2, "placeholder": '{"X-Custom-Header": "value"}'}),
         required=False,
     )
@@ -76,7 +69,6 @@ class WebhookConfigForm(forms.Form):
     )
 
     def __init__(self, *args, **kwargs):
-        """Initialize form with existing config if provided."""
         config = kwargs.pop("config", None)
         super().__init__(*args, **kwargs)
         if config:
@@ -88,7 +80,6 @@ class WebhookConfigForm(forms.Form):
             self.fields["include_full_payload"].initial = config.get("include_full_payload", True)
 
     def clean_custom_headers(self):
-        """Validate custom headers as valid JSON."""
         value = self.cleaned_data.get("custom_headers", "").strip()
         if not value:
             return {}
@@ -101,7 +92,6 @@ class WebhookConfigForm(forms.Form):
             raise forms.ValidationError(f"Invalid JSON: {e}")
 
     def get_config(self):
-        """Return configuration as dictionary for storage."""
         return {
             "webhook_url": self.cleaned_data["webhook_url"],
             "http_method": self.cleaned_data["http_method"],
@@ -113,35 +103,26 @@ class WebhookConfigForm(forms.Form):
 
 
 def _store_failure_info(service_config_id, exception, response=None):
-    """Store failure info in MessagingServiceConfig using individual fields."""
+    """Store failure information in the MessagingServiceConfig."""
     from alerts.models import MessagingServiceConfig
 
     with immediate_atomic(only_if_needed=True):
         try:
             config = MessagingServiceConfig.objects.get(id=service_config_id)
+
             config.last_failure_timestamp = timezone.now()
             config.last_failure_error_type = type(exception).__name__
-            config.last_failure_error_message = str(exception)[:2000]
+            config.last_failure_error_message = str(exception)
 
             if response is not None:
-                if hasattr(response, 'status'):
-                    config.last_failure_status_code = response.status
-                elif hasattr(response, 'code'):
-                    config.last_failure_status_code = response.code
-                else:
-                    config.last_failure_status_code = None
+                config.last_failure_status_code = response.status_code
+                config.last_failure_response_text = response.text[:2000]
 
-                response_text = getattr(response, 'text', None)
-                if response_text:
-                    config.last_failure_response_text = response_text[:2000]
-                    try:
-                        json.loads(response_text)
-                        config.last_failure_is_json = True
-                    except (json.JSONDecodeError, ValueError):
-                        config.last_failure_is_json = False
-                else:
-                    config.last_failure_response_text = None
-                    config.last_failure_is_json = None
+                try:
+                    json.loads(response.text)
+                    config.last_failure_is_json = True
+                except (json.JSONDecodeError, ValueError):
+                    config.last_failure_is_json = False
             else:
                 config.last_failure_status_code = None
                 config.last_failure_response_text = None
@@ -149,11 +130,11 @@ def _store_failure_info(service_config_id, exception, response=None):
 
             config.save()
         except MessagingServiceConfig.DoesNotExist:
-            logger.warning(f"MessagingServiceConfig {service_config_id} not found for failure tracking")
+            pass
 
 
 def _store_success_info(service_config_id):
-    """Clear failure info on successful operation."""
+    """Clear failure information on successful operation."""
     from alerts.models import MessagingServiceConfig
 
     with immediate_atomic(only_if_needed=True):
@@ -165,99 +146,55 @@ def _store_success_info(service_config_id):
             pass
 
 
-def _send_webhook(url: str, method: str, payload: dict, secret_header: str = None,
-                  secret_value: str = None, custom_headers: dict = None) -> str:
-    """Send payload to webhook endpoint."""
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": "Bugsink-Webhook/1.0",
-    }
-
-    # Add secret header if configured
-    if secret_header and secret_value:
-        headers[secret_header] = secret_value
-
-    # Add custom headers
-    if custom_headers:
-        headers.update(custom_headers)
-
-    request = Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers=headers,
-        method=method
-    )
-
-    with urlopen(request, timeout=30) as response:
-        return response.read().decode("utf-8")
-
-
-def _build_payload(event_type: str, data: dict, include_full: bool = True) -> dict:
-    """Build a standardized webhook payload."""
-    payload = {
-        "event_type": event_type,
-        "timestamp": timezone.now().isoformat(),
-        "source": "bugsink",
-    }
-
-    if include_full:
-        payload["data"] = data
-    else:
-        # Minimal payload
-        payload["summary"] = data.get("summary", "")
-        payload["issue_id"] = data.get("issue_id")
-
-    return payload
-
-
 @shared_task
 def webhook_send_test_message(webhook_url, http_method, secret_header, secret_value,
                                custom_headers, include_full_payload,
                                project_name, display_name, service_config_id):
     """Send a test webhook to verify configuration."""
+    payload = {
+        "event_type": "test",
+        "timestamp": timezone.now().isoformat(),
+        "source": "bugsink",
+    }
 
-    payload = _build_payload(
-        event_type="test",
-        data={
+    if include_full_payload:
+        payload["data"] = {
             "summary": f"Test webhook from Bugsink - {project_name}",
             "project": project_name,
             "service": display_name or "Webhook",
             "message": "This is a test webhook. Configuration is working correctly.",
             "test": True,
-        },
-        include_full=include_full_payload,
-    )
+        }
+    else:
+        payload["summary"] = f"Test webhook from Bugsink - {project_name}"
+
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Bugsink-Webhook/1.0",
+    }
+
+    if secret_header and secret_value:
+        headers[secret_header] = secret_value
+
+    if custom_headers:
+        headers.update(custom_headers)
 
     try:
-        _send_webhook(
-            url=webhook_url,
-            method=http_method,
-            payload=payload,
-            secret_header=secret_header,
-            secret_value=secret_value,
-            custom_headers=custom_headers,
+        result = requests.request(
+            http_method,
+            webhook_url,
+            data=json.dumps(payload),
+            headers=headers,
+            timeout=30,
         )
+        result.raise_for_status()
         _store_success_info(service_config_id)
-        logger.info(f"Webhook test sent successfully to {webhook_url}")
 
-    except HTTPError as e:
-        response_body = e.read().decode("utf-8") if e.fp else ""
-        logger.error(f"Webhook error: {e.code} - {response_body}")
-
-        class ResponseWrapper:
-            def __init__(self, code, text):
-                self.code = code
-                self.status = code
-                self.text = text
-
-        _store_failure_info(service_config_id, e, ResponseWrapper(e.code, response_body))
-
-    except URLError as e:
-        logger.error(f"Webhook connection error: {e.reason}")
-        _store_failure_info(service_config_id, e)
+    except requests.RequestException as e:
+        response = getattr(e, 'response', None)
+        _store_failure_info(service_config_id, e, response)
 
     except Exception as e:
-        logger.exception(f"Unexpected error sending webhook: {e}")
         _store_failure_info(service_config_id, e)
 
 
@@ -265,102 +202,81 @@ def webhook_send_test_message(webhook_url, http_method, secret_header, secret_va
 def webhook_send_alert(webhook_url, http_method, secret_header, secret_value,
                         custom_headers, include_full_payload,
                         issue_id, state_description, alert_article, alert_reason,
-                        service_config_id, bugsink_base_url=None, unmute_reason=None):
+                        service_config_id, unmute_reason=None):
     """Send an alert webhook."""
-    from issues.models import Issue
+    issue = Issue.objects.get(id=issue_id)
+    issue_url = get_settings().BASE_URL + issue.get_absolute_url()
+
+    payload = {
+        "event_type": "alert",
+        "timestamp": timezone.now().isoformat(),
+        "source": "bugsink",
+    }
+
+    data = {
+        "issue_id": str(issue_id),
+        "issue_url": issue_url,
+        "summary": f"[{state_description}] {issue.calculated_type or 'Error'}: {issue.calculated_value or 'Unknown'}",
+        "error_type": issue.calculated_type or "Unknown",
+        "error_message": issue.calculated_value or "No message",
+        "project": issue.project.name,
+        "first_seen": issue.first_seen.isoformat() if issue.first_seen else None,
+        "last_seen": issue.last_seen.isoformat() if issue.last_seen else None,
+        "event_count": issue.digested_event_count,
+        "alert_type": state_description,
+        "alert_reason": alert_reason,
+    }
+
+    if unmute_reason:
+        data["unmute_reason"] = unmute_reason
+
+    if include_full_payload:
+        payload["data"] = data
+    else:
+        payload["summary"] = data["summary"]
+        payload["issue_id"] = data["issue_id"]
+
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Bugsink-Webhook/1.0",
+    }
+
+    if secret_header and secret_value:
+        headers[secret_header] = secret_value
+
+    if custom_headers:
+        headers.update(custom_headers)
 
     try:
-        issue = Issue.objects.select_related("project").get(pk=issue_id)
-
-        # Build issue URL using same path as Slack backend
-        issue_url = None
-        if bugsink_base_url:
-            issue_url = f"{bugsink_base_url.rstrip('/')}/issues/issue/{issue_id}/event/last/"
-
-        data = {
-            "issue_id": str(issue_id),
-            "issue_url": issue_url,
-            "summary": f"[{state_description}] {issue.calculated_type or 'Error'}: {issue.calculated_value or 'Unknown'}",
-            "error_type": issue.calculated_type or "Unknown",
-            "error_message": issue.calculated_value or "No message",
-            "project": issue.project.name if issue.project else "Unknown",
-            "first_seen": issue.first_seen.isoformat() if issue.first_seen else None,
-            "last_seen": issue.last_seen.isoformat() if issue.last_seen else None,
-            "event_count": issue.digested_event_count,
-            "alert_type": state_description,
-            "alert_reason": alert_reason,
-        }
-
-        if unmute_reason:
-            data["unmute_reason"] = unmute_reason
-
-    except Issue.DoesNotExist:
-        issue_url = None
-        if bugsink_base_url:
-            issue_url = f"{bugsink_base_url.rstrip('/')}/issues/issue/{issue_id}/event/last/"
-        data = {
-            "issue_id": str(issue_id),
-            "issue_url": issue_url,
-            "summary": f"[{state_description}] Issue {issue_id}",
-            "alert_type": state_description,
-            "alert_reason": alert_reason,
-        }
-
-    payload = _build_payload(
-        event_type="alert",
-        data=data,
-        include_full=include_full_payload,
-    )
-
-    try:
-        _send_webhook(
-            url=webhook_url,
-            method=http_method,
-            payload=payload,
-            secret_header=secret_header,
-            secret_value=secret_value,
-            custom_headers=custom_headers,
+        result = requests.request(
+            http_method,
+            webhook_url,
+            data=json.dumps(payload),
+            headers=headers,
+            timeout=30,
         )
+        result.raise_for_status()
         _store_success_info(service_config_id)
-        logger.info(f"Webhook alert sent for issue {issue_id}")
 
-    except HTTPError as e:
-        response_body = e.read().decode("utf-8") if e.fp else ""
-        logger.error(f"Webhook error: {e.code} - {response_body}")
-
-        class ResponseWrapper:
-            def __init__(self, code, text):
-                self.code = code
-                self.status = code
-                self.text = text
-
-        _store_failure_info(service_config_id, e, ResponseWrapper(e.code, response_body))
-
-    except URLError as e:
-        logger.error(f"Webhook connection error: {e.reason}")
-        _store_failure_info(service_config_id, e)
+    except requests.RequestException as e:
+        response = getattr(e, 'response', None)
+        _store_failure_info(service_config_id, e, response)
 
     except Exception as e:
-        logger.exception(f"Unexpected error sending webhook: {e}")
         _store_failure_info(service_config_id, e)
 
 
 class WebhookBackend:
-    """Backend class for Generic Webhook integration.
-
-    Compatible with Bugsink v2 backend interface.
-    """
+    """Backend class for Generic Webhook integration."""
 
     def __init__(self, service_config):
         self.service_config = service_config
 
     @classmethod
     def get_form_class(cls):
-        """Return the configuration form class."""
         return WebhookConfigForm
 
     def send_test_message(self):
-        """Dispatch test message task."""
         config = json.loads(self.service_config.config)
         webhook_send_test_message.delay(
             config["webhook_url"],
@@ -375,12 +291,7 @@ class WebhookBackend:
         )
 
     def send_alert(self, issue_id, state_description, alert_article, alert_reason, **kwargs):
-        """Dispatch alert task."""
-        from bugsink.app_settings import get_settings
         config = json.loads(self.service_config.config)
-
-        # Get base URL from Bugsink settings (same as Slack backend)
-        bugsink_base_url = get_settings().BASE_URL
 
         webhook_send_alert.delay(
             config["webhook_url"],
@@ -394,6 +305,5 @@ class WebhookBackend:
             alert_article,
             alert_reason,
             self.service_config.id,
-            bugsink_base_url=bugsink_base_url,
             **kwargs,
         )
