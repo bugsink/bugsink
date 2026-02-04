@@ -82,6 +82,11 @@ class JiraCloudConfigForm(forms.Form):
         help_text="Create tickets only for NEW issues (recommended to avoid duplicates).",
         initial=True,
         required=False,
+        widget=forms.CheckboxInput(attrs={
+            "class": "!w-auto !p-0 dark:bg-slate-900 checked:dark:bg-cyan-500 border-cyan-800 "
+                     "dark:border-cyan-400 text-cyan-500 dark:text-cyan-300 focus:ring-cyan-200 "
+                     "dark:focus:ring-cyan-700 cursor-pointer h-5 w-5"
+        }),
     )
 
     def __init__(self, *args, **kwargs):
