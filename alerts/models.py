@@ -4,6 +4,11 @@ from projects.models import Project
 from .service_backends.slack import SlackBackend
 from .service_backends.mattermost import MattermostBackend
 from .service_backends.discord import DiscordBackend
+from .service_backends.jira_cloud import JiraCloudBackend
+from .service_backends.github_issues import GitHubIssuesBackend
+from .service_backends.microsoft_teams import MicrosoftTeamsBackend
+from .service_backends.pagerduty import PagerDutyBackend
+from .service_backends.webhook import WebhookBackend
 
 
 def get_alert_service_kind_choices():
@@ -11,18 +16,33 @@ def get_alert_service_kind_choices():
     # Messaging backends don't need translations since they are brand names.
     return [
         ("discord", "Discord"),
+        ("github_issues", "GitHub Issues"),
+        ("jira_cloud", "Jira Cloud"),
         ("mattermost", "Mattermost"),
+        ("microsoft_teams", "Microsoft Teams"),
+        ("pagerduty", "PagerDuty"),
         ("slack", "Slack"),
+        ("webhook", "Webhook (Generic)"),
     ]
 
 
 def get_alert_service_backend_class(kind):
     if kind == "discord":
         return DiscordBackend
+    if kind == "github_issues":
+        return GitHubIssuesBackend
+    if kind == "jira_cloud":
+        return JiraCloudBackend
     if kind == "mattermost":
         return MattermostBackend
+    if kind == "microsoft_teams":
+        return MicrosoftTeamsBackend
+    if kind == "pagerduty":
+        return PagerDutyBackend
     if kind == "slack":
         return SlackBackend
+    if kind == "webhook":
+        return WebhookBackend
     raise ValueError(f"Unknown backend kind: {kind}")
 
 
