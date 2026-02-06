@@ -47,7 +47,7 @@
                     <div>
                         {{ auth_token.token }}
                     </div>
-                    <div class="mt-2" id="description-view-{{ auth_token.id }}">
+                    <div class="mt-1" id="description-view-{{ auth_token.id }}">
                         {% if auth_token.description %}
                         <span class="text-slate-600 dark:text-slate-400 text-sm">{{ auth_token.description }}</span>
                         <button type="button" onclick="showEditDescription({{ auth_token.id }})" class="ml-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 text-sm underline">{% translate "Edit" %}</button>
@@ -55,7 +55,7 @@
                         <button type="button" onclick="showEditDescription({{ auth_token.id }})" class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 text-sm underline">{% translate "Add description" %}</button>
                         {% endif %}
                     </div>
-                    <div class="mt-2 hidden" id="description-edit-{{ auth_token.id }}">
+                    <div class="mt-1 hidden" id="description-edit-{{ auth_token.id }}">
                         <input type="text" name="description" value="{{ auth_token.description }}" maxlength="255" class="border-2 border-slate-300 dark:border-slate-600 rounded-md px-2 py-1 text-sm w-80 dark:bg-slate-800 dark:text-slate-100" id="description-input-{{ auth_token.id }}">
                         <button type="submit" name="action" value="update_description:{{ auth_token.id }}" class="inline-block ml-2 text-sm font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 px-3 py-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md">{% translate "Save" %}</button>
                         <button type="button" onclick="hideEditDescription({{ auth_token.id }})" class="inline-block ml-2 text-sm font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 px-3 py-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md">{% translate "Cancel" %}</button>
