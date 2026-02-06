@@ -809,6 +809,43 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertIsNone(project.quota_exceeded_until)
         self.assertEqual(3, patched_check_for_thresholds.call_count)  # the check is done on "re-enter"
 
+    @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=100)
+    @patch("ingest.views.check_for_thresholds")
+    def test_count_project_periods_and_act_on_it_in_face_of_evication(self, patched_check_for_thresholds):
+        patched_check_for_thresholds.side_effect = check_for_thresholds  # the patch is only there to count calls
+        now = timezone.now()
+
+        project = Project.objects.create(name="test")
+
+        # first call
+        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+
+        self.assertEqual(True, result)
+        self.assertEqual(1, project.digested_event_count)
+        self.assertIsNone(project.quota_exceeded_until)
+        self.assertEqual(1, patched_check_for_thresholds.call_count)
+        create_event(project, timestamp=now, project_digest_order=1)  # result was True, proceed accordingly
+
+        # calls 2 - 98 are eluded here; this mimicks eviction; we do manually update project.digested_event_count though
+        project.digested_event_count = 98
+        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+
+        self.assertEqual(True, result)
+        self.assertEqual(99, project.digested_event_count)
+        self.assertIsNone(project.quota_exceeded_until)
+
+        create_event(project, timestamp=now, project_digest_order=99)  # result was True, proceed accordingly
+
+        # 100th call (equals but does not exceed quota, so this event should still be accepted, but the door should be
+        # closed right after it)
+        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+
+        self.assertEqual(True, result)
+        self.assertEqual(100, project.digested_event_count)
+        self.assertEqual(now + relativedelta(minutes=5), project.quota_exceeded_until)
+
+        create_event(project, timestamp=now, project_digest_order=100)  # result was True, proceed accordingly
+
     @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=3)
     @patch("ingest.views.check_for_thresholds")
     def test_count_project_periods_and_act_on_it_new_check_done_but_below_threshold(self, patched_check_for_thresholds):
