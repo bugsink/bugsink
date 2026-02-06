@@ -23,6 +23,14 @@ def auth_token_list(request):
             messages.success(request, _('Token deleted'))
             return redirect('auth_token_list')
 
+        elif action == "update_description":
+            auth_token = AuthToken.objects.get(pk=pk)
+            auth_token.description = request.POST.get('description', '')[:255]
+            auth_token.save()
+
+            messages.success(request, _('Description updated'))
+            return redirect('auth_token_list')
+
     return render(request, 'bsmain/auth_token_list.html', {
         'auth_tokens': auth_tokens,
     })
