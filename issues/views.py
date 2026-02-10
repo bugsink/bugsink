@@ -123,7 +123,9 @@ def _request_repr(parsed_data):
     if "request" not in parsed_data:
         return ""
 
-    return parsed_data["request"].get("method", "") + " " + parsed_data["request"].get("url", "")
+    method = parsed_data["request"].get("method", "") or ""
+    url = parsed_data["request"].get("url", "") or ""
+    return method + " " + url
 
 
 def _is_valid_action(action, issue):
