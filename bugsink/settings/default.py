@@ -247,7 +247,9 @@ DATABASES = {
 }
 
 
-DATABASE_ROUTERS = ("bugsink.dbrouters.SeparateSnappeaDBRouter",)
+DATABASE_ROUTERS = (
+    "snappea.dbrouters.SeparateSnappeaDBRouter",
+)
 
 # This is the default, but we're being explicit. In our recommended setup (sqlite) we assume a low cost for reconnecting
 # to the DB, but a potential high cost ("checkpoint starvation") for keeping connections open.
