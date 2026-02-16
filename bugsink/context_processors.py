@@ -160,3 +160,8 @@ def logged_in_user_processor(request):
         # getattr, because if there's a failure "very early" in the request handling, we don't have an AnonymousUser
         'logged_in_user': getattr(request, "user", AnonymousUser()),
     }
+
+def oauth2_settings(request):
+    return {
+        'oauth_enabled': getattr(settings, 'OAUTH_ENABLED', False),
+    }

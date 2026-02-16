@@ -42,6 +42,13 @@
             <div class="mt-4">
                 <a href="{% url 'request_reset_password' %}" class="text-slate-800 dark:text-slate-100">{% translate "Forgot password?" %}</a>
                 {% if registration_enabled %}<a href="{% url 'signup' %}" class="float-right text-slate-800 dark:text-slate-100">{% translate "Create an account" %}</a>{% endif %}
+                {% if oauth_enabled %}
+                <hr>
+                <p>Oder:</p>
+                <a href="{% url 'social:begin' 'oidc' %}" class="btn btn-primary">
+                    Mit OAuth2 anmelden
+                </a>
+                {% endif %}
             </div>
         </div>
 

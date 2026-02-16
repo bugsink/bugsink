@@ -45,6 +45,8 @@ urlpatterns = [
 
     path("health/ready", health_check_ready, name="health_check_ready"),
 
+    path('oauth/', include('social_django.urls', namespace='social')),
+
     path("accounts/signup/", signup, name="signup"),
     path("accounts/resend-confirmation/", resend_confirmation, name="resend_confirmation"),
     path("accounts/confirm-email/<str:token>/", confirm_email, name="confirm_email"),

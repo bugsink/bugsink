@@ -65,6 +65,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_spectacular',
     'drf_spectacular_sidecar',  # this brings the swagger-ui
+
+    'social_django',
 ]
 
 REST_FRAMEWORK = {
@@ -138,6 +140,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'verbose_csrf_middleware.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'social_django.middleware.SocialAuthExceptionMiddleware',
 
     'bugsink.middleware.AdminRequiresSettingMiddleware',
     'bugsink.middleware.LoginRequiredMiddleware',
@@ -154,6 +157,21 @@ MIDDLEWARE = [
     # useful in such contexts too, so I'm not going to put it behind a conditional.
     'bugsink.middleware.PerformanceStatsMiddleware',
 ]
+
+AUTHENTICATION_BACKENDS = (
+    'social_core.backends.open_id_connect.OpenIdConnectAuth',
+    'django.contrib.auth.backends.ModelBackend',
+)
+
+SOCIAL_AUTH_OIDC_OIDC_ENDPOINT = 'https://sso.XXXXXX/realms/master'
+SOCIAL_AUTH_OIDC_KEY = 'XXXXX'
+SOCIAL_AUTH_OIDC_SECRET = 'XXXXX'
+SOCIAL_AUTH_OIDC_SCOPE = ['openid', 'profile', 'email']
+SOCIAL_AUTH_LOGIN_REDIRECT_URL = 'home'
+SOCIAL_AUTH_OIDC_ID_TOKEN_DECRYPTION_KEY = False
+SOCIAL_AUTH_OIDC_JWT_LEEWAY = 300
+
+OAUTH_ENABLED = True
 
 # Config of verbose_csrf_middleware.CsrfViewMiddleware: For Bugsink, there's never any intentional cross-scheme POSTing
 # going on. In that case "wrong scheme" always just means "Django's confused about is_secure", and we want to point
@@ -181,6 +199,11 @@ TEMPLATES = [
                 'bugsink.context_processors.useful_settings_processor',
                 'bugsink.context_processors.logged_in_user_processor',
                 'projects.context_processors.user_projects_processor',
+
+                'social_django.context_processors.backends',
+                'social_django.context_processors.login_redirect',
+
+                'bugsink.context_processors.oauth2_settings'
             ],
             # This is the thing that used to be called "TEMPLATE_DEBUG". We set it to True to have the template code
             # context (filename in the stacktrace, offending and surrounding lines) available in our stacktraces when
@@ -261,6 +284,7 @@ CONN_MAX_AGE = 0
 
 LOGIN_REDIRECT_URL = "home"
 LOGIN_URL = "login"
+SOCIAL_AUTH_LOGIN_REDIRECT_URL = "home"
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
