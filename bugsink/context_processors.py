@@ -163,5 +163,6 @@ def logged_in_user_processor(request):
 
 def oauth2_settings(request):
     return {
-        'oauth_enabled': getattr(settings, 'OAUTH_ENABLED', False),
+        'oauth_enabled': getattr(settings, 'SOCIAL_AUTH_ENABLED', False),
+        'oauth_provider': getattr(settings, 'SOCIAL_AUTH_TYPE', 'none'),
     }

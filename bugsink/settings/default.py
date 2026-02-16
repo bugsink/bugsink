@@ -1,7 +1,6 @@
-from copy import deepcopy
 import os
 import sys
-
+from copy import deepcopy
 from pathlib import Path
 
 from django.utils.log import DEFAULT_LOGGING
@@ -22,13 +21,11 @@ elif [s.endswith("gunicorn") for s in sys.argv[:1]] == [True]:
 else:
     I_AM_RUNNING = "OTHER"
 
-
 # Used for reporting / debugging purposes. The default docker conf template overrides this accordingly.
 IS_DOCKER = False
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-
 
 # To allow using this file without any bugsink_conf.py overrides, we get some variables from the environment. Because
 # the expected use-case of this file is using the `from bugsink.settings.default import *` idiom, which implies that
@@ -45,7 +42,6 @@ DEBUG_CSRF = "USE_DEBUG"  # i.e. use the value of DEBUG for this setting (useful
 USE_X_REAL_IP = False
 USE_X_FORWARDED_FOR = False
 X_FORWARDED_FOR_PROXY_COUNT = 0
-
 
 # Replacing "*" with your actual hostname forms an extra layer of security if your proxy/webserver is misconfigured.
 # The default (production) create-conf template does this for you.
@@ -66,6 +62,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'drf_spectacular_sidecar',  # this brings the swagger-ui
 
+    # enables social auth database stuff. Should always create migration for this, so we dont enable it dynamically.
     'social_django',
 ]
 
@@ -140,7 +137,6 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'verbose_csrf_middleware.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'social_django.middleware.SocialAuthExceptionMiddleware',
 
     'bugsink.middleware.AdminRequiresSettingMiddleware',
     'bugsink.middleware.LoginRequiredMiddleware',
@@ -158,27 +154,15 @@ MIDDLEWARE = [
     'bugsink.middleware.PerformanceStatsMiddleware',
 ]
 
-AUTHENTICATION_BACKENDS = (
-    'social_core.backends.open_id_connect.OpenIdConnectAuth',
+AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
-)
-
-SOCIAL_AUTH_OIDC_OIDC_ENDPOINT = 'https://sso.XXXXXX/realms/master'
-SOCIAL_AUTH_OIDC_KEY = 'XXXXX'
-SOCIAL_AUTH_OIDC_SECRET = 'XXXXX'
-SOCIAL_AUTH_OIDC_SCOPE = ['openid', 'profile', 'email']
-SOCIAL_AUTH_LOGIN_REDIRECT_URL = 'home'
-SOCIAL_AUTH_OIDC_ID_TOKEN_DECRYPTION_KEY = False
-SOCIAL_AUTH_OIDC_JWT_LEEWAY = 300
-
-OAUTH_ENABLED = True
+]
 
 # Config of verbose_csrf_middleware.CsrfViewMiddleware: For Bugsink, there's never any intentional cross-scheme POSTing
 # going on. In that case "wrong scheme" always just means "Django's confused about is_secure", and we want to point
 # people in the right direction (i.e. fix your proxy's X-Forwarded-Proto)
 VERBOSE_CSRF_REASON_SCHEME_MISMATCH = \
     "(wrong scheme); fix your proxy's X-Forwarded-Proto and/or the settings SECURE_PROXY_SSL_HEADER/BEHIND_HTTPS_PROXY"
-
 
 ROOT_URLCONF = 'bugsink.urls'
 
@@ -199,11 +183,6 @@ TEMPLATES = [
                 'bugsink.context_processors.useful_settings_processor',
                 'bugsink.context_processors.logged_in_user_processor',
                 'projects.context_processors.user_projects_processor',
-
-                'social_django.context_processors.backends',
-                'social_django.context_processors.login_redirect',
-
-                'bugsink.context_processors.oauth2_settings'
             ],
             # This is the thing that used to be called "TEMPLATE_DEBUG". We set it to True to have the template code
             # context (filename in the stacktrace, offending and surrounding lines) available in our stacktraces when
@@ -218,6 +197,46 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'bugsink.wsgi.application'
 
+SOCIAL_AUTH_TYPE = os.getenv("SOCIAL_AUTH_TYPE", "none")
+SOCIAL_AUTH_ENABLED = SOCIAL_AUTH_TYPE != "none" or os.getenv("SOCIAL_AUTH_ENABLED", "false").lower() == "true"
+
+if SOCIAL_AUTH_ENABLED:
+    TEMPLATES[0]['OPTIONS']['context_processors'].append('social_django.context_processors.backends')
+    TEMPLATES[0]['OPTIONS']['context_processors'].append('social_django.context_processors.login_redirect')
+    TEMPLATES[0]['OPTIONS']['context_processors'].append('bugsink.context_processors.oauth2_settings')
+    MIDDLEWARE.append('social_django.middleware.SocialAuthExceptionMiddleware')
+
+    if SOCIAL_AUTH_TYPE.lower() == 'oidc':
+        AUTHENTICATION_BACKENDS.insert(0, 'social_core.backends.open_id_connect.OpenIdConnectAuth')
+        SOCIAL_AUTH_OIDC_KEY = os.getenv('SOCIAL_AUTH_OIDC_CLIENT_ID')
+        SOCIAL_AUTH_OIDC_SECRET = os.getenv('SOCIAL_AUTH_OIDC_CLIENT_SECRET')
+        SOCIAL_AUTH_OIDC_SCOPE = os.getenv('SOCIAL_AUTH_OIDC_ADDITIONAL_SCOPE', '').split(',') + ['openid', 'profile', 'email']
+        SOCIAL_AUTH_OIDC_ID_TOKEN_DECRYPTION_KEY = os.getenv('SOCIAL_AUTH_OIDC_ID_TOKEN_DECRYPTION_KEY', 'false').lower() == 'true'
+        SOCIAL_AUTH_OIDC_JWT_LEEWAY = int(os.getenv('SOCIAL_AUTH_OIDC_JWT_LEEWAY', '30'))
+    elif SOCIAL_AUTH_TYPE.lower() == 'github':
+        AUTHENTICATION_BACKENDS.insert(0, 'social_core.backends.github.GithubOAuth2')
+        SOCIAL_AUTH_GITHUB_KEY = os.getenv('SOCIAL_AUTH_GITHUB_CLIENT_ID')
+        SOCIAL_AUTH_GITHUB_SECRET = os.getenv('SOCIAL_AUTH_GITHUB_CLIENT_SECRET')
+    elif SOCIAL_AUTH_TYPE.lower() == 'google':
+        AUTHENTICATION_BACKENDS.insert(0, 'social_core.backends.github.GoogleOAuth2')
+        SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = os.getenv('SOCIAL_AUTH_GOOGLE_CLIENT_ID')
+        SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = os.getenv('SOCIAL_AUTH_GOOGLE_CLIENT_SECRET')
+    elif SOCIAL_AUTH_TYPE.lower() == 'gitlab':
+        AUTHENTICATION_BACKENDS.insert(0, 'social_core.backends.github.GitLabOAuth2')
+        SOCIAL_AUTH_GITLAB_KEY = os.getenv('SOCIAL_AUTH_GITLAB_CLIENT_ID')
+        SOCIAL_AUTH_GITLAB_SECRET = os.getenv('SOCIAL_AUTH_GITLAB_CLIENT_SECRET')
+        SOCIAL_AUTH_GITLAB_API_URL = os.getenv('SOCIAL_AUTH_GITLAB_API_URL', None)
+    elif SOCIAL_AUTH_TYPE.lower() == 'atlassian':
+        AUTHENTICATION_BACKENDS.insert(0, 'social_core.backends.github.AtlassianOAuth2')
+        SOCIAL_AUTH_ATLASSIAN_KEY = os.getenv('SOCIAL_AUTH_GITLAB_CLIENT_ID')
+        SOCIAL_AUTH_ATLASSIAN_SECRET = os.getenv('SOCIAL_AUTH_GITLAB_CLIENT_SECRET')
+    elif SOCIAL_AUTH_TYPE.lower() == 'discord':
+        AUTHENTICATION_BACKENDS.insert(0, 'social_core.backends.github.DiscordOAuth2')
+        SOCIAL_AUTH_DISCORD_KEY = os.getenv('SOCIAL_AUTH_DISCORD_CLIENT_ID')
+        SOCIAL_AUTH_DISCORD_SECRET = os.getenv('SOCIAL_AUTH_DISCORD_CLIENT_SECRET')
+        SOCIAL_AUTH_DISCORD_SCOPE = os.getenv('SOCIAL_AUTH_DISCORD_SCOPE', '').split(',') + ['identify']
+    else:
+        raise Exception(f'SOCIAL_AUTH_TYPE >{SOCIAL_AUTH_TYPE}< is not supported')
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
@@ -269,7 +288,6 @@ DATABASES = {
     },
 }
 
-
 DATABASE_ROUTERS = (
     "snappea.dbrouters.SeparateSnappeaDBRouter",
 )
@@ -280,7 +298,6 @@ DATABASE_ROUTERS = (
 # For not-as-recommended setups (mysql) we're OK with "one connection per request" too, even though the arguments laid
 # out in the above don't apply as much. (This might change after research)
 CONN_MAX_AGE = 0
-
 
 LOGIN_REDIRECT_URL = "home"
 LOGIN_URL = "login"
@@ -321,7 +338,6 @@ LANGUAGES = (
 
 USE_TZ = True
 
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 STATIC_URL = 'static/'
@@ -348,7 +364,6 @@ WHITENOISE_USE_FINDERS = True
 # no support for uuid in this setting yet (https://code.djangoproject.com/ticket/32577) so we leave it as-is
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-
 SILENCED_SYSTEM_CHECKS = [
     "security.W003",  # Complaint about lack of "django.middleware.csrf.CsrfViewMiddleware", but we have our own version
 
@@ -360,7 +375,6 @@ SILENCED_SYSTEM_CHECKS = [
 # Specifies a timeout in seconds for blocking operations like the connection attempt. We set this to 5 seconds to avoid
 # hanging the entire application (or snappea when the workers fill up) when the SMTP server is down/unreachable.
 EMAIL_TIMEOUT = 5
-
 
 LOGGING = deepcopy(DEFAULT_LOGGING)
 
@@ -407,7 +421,6 @@ LOGGING['loggers']['snappea'] = {
     "level": "INFO",
     "handlers": ["snappea"],
 }
-
 
 if I_AM_RUNNING == "SNAPPEA":
     # We set all handlers to the snappea handler in this case: this way the things that are logged inside individual
