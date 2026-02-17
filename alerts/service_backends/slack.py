@@ -149,7 +149,7 @@ def slack_backend_send_alert(
     issue = Issue.objects.get(id=issue_id)
 
     issue_url = get_settings().BASE_URL + issue.get_absolute_url()
-    title = truncatechars(issue.title().replace("|", ""), 200)
+    title = truncatechars(issue.title().replace("|", ""), 150)
     link = f"<{issue_url}|view on Bugsink>"
 
     sections = [
