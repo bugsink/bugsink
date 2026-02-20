@@ -79,10 +79,12 @@ def annotate_var_with_meta(var, meta_var):
     if isinstance(var, list):
         Incomplete = IncompleteList
         at = lambda k: int(k)  # noqa; (for some reason the meta_k for list lookups is stored as a string)
+        isinvar = lambda k: 0 <= int(k) < len(var)  # noqa
 
     elif isinstance(var, dict):
         Incomplete = IncompleteDict
         at = lambda k: k  # noqa
+        isinvar = lambda k: k in var  # noqa
 
     else:  # str
         # The case I've seen: var == '[Filtered]' and meta_var == {"": {"rem": [["!config", "s"]]}}
@@ -91,8 +93,12 @@ def annotate_var_with_meta(var, meta_var):
 
     for meta_k, meta_v in meta_var.items():
         if meta_k == "":
+            # meta_k == "" means the var (dict or list) itself was trimmed, so we add-in the incompleteness info for it
             var = Incomplete(var, meta_v["len"] - len(var))
+        elif not isinvar(meta_k):
+            pass  # the meta describes something that's not in the actual var; skip it.
         else:
+            # recusrse
             var[at(meta_k)] = annotate_var_with_meta(var[at(meta_k)], meta_v)
 
     return var
