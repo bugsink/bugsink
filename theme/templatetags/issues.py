@@ -74,7 +74,7 @@ def _pygmentize_lines(lines, filename=None, platform=None):
     result = _core_pygments(code, filename=filename, platform=platform).split('\n')[:-1]
     if len(lines) != len(result):
         capture_stacktrace("Pygments line count mismatch, falling back to unformatted code")
-        result = lines
+        result = [escape(l) for l in lines]
 
     return result
 

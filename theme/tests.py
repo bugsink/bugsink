@@ -80,6 +80,8 @@ class TestPygmentizeLineLineCountHandling(RegularTestCase):
         self._pygmentize_lines(["\n", "\n", "\n"])
 
     def test_pygmentize_lines_ruby_regression(self):
+        # deal with https://github.com/pygments/pygments/issues/2998
+
         # code taken from:
         # https://github.com/rails/rails/blob/0f969a989c87/activerecord/lib/active_record/connection_adapters/postgresql_adapter.rb
         code = """        #  - format_type includes the column size constraint, e.g. varchar(50)
@@ -91,8 +93,10 @@ class TestPygmentizeLineLineCountHandling(RegularTestCase):
                 FROM pg_attribute a LEFT JOIN pg_attrdef d"""
 
         code_as_list = code.splitlines()
-        actual_pygmentize_lines(code_as_list, filename="postgresql_adapter.rb", platform="ruby")
-        self.capture_mock.assert_called()  # https://github.com/pygments/pygments/issues/2998
+        result = actual_pygmentize_lines(code_as_list, filename="postgresql_adapter.rb", platform="ruby")
+        self.assertEqual(len(code_as_list), len(result))
+        self.assertTrue("exec_query(&lt;&lt;-end_sql" in result[3], result[3])
+        self.capture_mock.assert_called()
 
 
 class TestChooseLexerForPattern(RegularTestCase):
