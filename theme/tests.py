@@ -95,8 +95,10 @@ class TestPygmentizeLineLineCountHandling(RegularTestCase):
         code_as_list = code.splitlines()
         result = actual_pygmentize_lines(code_as_list, filename="postgresql_adapter.rb", platform="ruby")
         self.assertEqual(len(code_as_list), len(result))
-        self.assertTrue("exec_query(&lt;&lt;-end_sql" in result[3], result[3])
         self.capture_mock.assert_called()
+        for line in result:
+            # we can't rely on pygments in this case, so the string must not be marked as safe.
+            self.assertNotIsInstance(line, SafeString)
 
 
 class TestChooseLexerForPattern(RegularTestCase):

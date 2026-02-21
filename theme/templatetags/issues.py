@@ -70,11 +70,15 @@ def _pygmentize_lines(lines, filename=None, platform=None):
     lines = [" " if line == "" else line for line in [l.replace("\n", "") for l in lines]]
     code = "\n".join(lines)
 
+    resulting_code = _core_pygments(code, filename=filename, platform=platform)
     # [:-1] to remove the last empty line, a result of split()
-    result = _core_pygments(code, filename=filename, platform=platform).split('\n')[:-1]
+    result = resulting_code.split('\n')[:-1]
+    # no_bandit_expl: we just passed through _core_pygments constructs html by design; also see TestPygmentizeEscape
+    result = [mark_safe(s) for s in result]  # nosec B703, B308
+
     if len(lines) != len(result):
         capture_stacktrace("Pygments line count mismatch, falling back to unformatted code")
-        result = [escape(l) for l in lines]
+        result = lines  # no mark_safe here, template-formatting will deal with it (this is from the event data)
 
     return result
 
@@ -107,10 +111,9 @@ def pygmentize(value, platform):
 
     pre_context, context_lines, post_context = _split(lines, lengths)
 
-    # no_bandit_expl: see tests.TestPygmentizeEscape
-    value['pre_context'] = [mark_safe(s) for s in pre_context]  # nosec B703, B308
-    value['context_line'] = mark_safe(context_lines[0])  # nosec B703, B308
-    value['post_context'] = [mark_safe(s) for s in post_context]  # nosec B703, B308
+    value['pre_context'] = pre_context
+    value['context_line'] = context_lines[0]
+    value['post_context'] = post_context
 
     return value
 
