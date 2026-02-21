@@ -1,5 +1,7 @@
 # Changes
 
+## 2.0.13 (21 February 20206)
+
 ### Security
 
 Fix: escape output for pygments fallback.
