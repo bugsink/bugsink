@@ -199,10 +199,8 @@ def artifact_bundle_assemble(request, organization_slug):
     # an empty list causes sentry-cli 3.x to skip uploading, and the subsequent assembly fails with a KeyError.
 
     if File.objects.filter(checksum=checksum).exists():
+        # short-circuit if the file already exists; nothing to do
         return JsonResponse({"state": ChunkFileState.OK, "missingChunks": []})
-
-    if not chunk_checksums:
-        return JsonResponse({"state": ChunkFileState.NOT_FOUND, "missingChunks": []})
 
     available_checksums = set(
         Chunk.objects.filter(checksum__in=chunk_checksums).values_list("checksum", flat=True)
@@ -212,6 +210,8 @@ def artifact_bundle_assemble(request, organization_slug):
         return JsonResponse({"state": ChunkFileState.NOT_FOUND, "missingChunks": missing_chunks})
 
     assemble_artifact_bundle.delay(checksum, chunk_checksums)
+    # In the ALWAYS_EAGER setup, we process the bundle inline, so arguably we could return "OK" here too; "CREATED" is
+    # what sentry returns though, so for faithful mimicking it's the safest bet.
     return JsonResponse({"state": ChunkFileState.CREATED, "missingChunks": []})
 
 
