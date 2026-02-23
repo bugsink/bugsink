@@ -163,7 +163,7 @@ def vacuum_files(chunk_max_days=1, file_max_days=90):
         num_deleted = 0
 
         for model, field_name, max_days in [
-            (Chunk, 'created_at', chunk_max_days,),  # 1 is already quite long... Chunks are used immediately, or not at all.
+            (Chunk, 'created_at', chunk_max_days,),
             (File, 'accessed_at', file_max_days),
             # for FileMetadata we rely on cascading from File (which will always happen "eventually")
                 ]:

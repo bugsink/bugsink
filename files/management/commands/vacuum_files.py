@@ -6,9 +6,11 @@ class Command(BaseCommand):
     help = "Kick off (sourcemaps-)files cleanup by vacuuming old entries."
 
     def add_arguments(self, parser):
+        # default of chunk_max_days=1 is already quite long... Chunks are used immediately, or not at all.
         parser.add_argument(
             '--chunk-max-days', type=int, default=1,
             help="Delete Chunk objects older than this many days (default: 1).")
+
         parser.add_argument(
             '--file-max-days', type=int, default=90,
             help="Delete File objects not accessed for more than this many days (default: 90).")
