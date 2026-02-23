@@ -316,6 +316,11 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
         self.assertTrue(File.objects.filter(filename="captureException.js.map").exists())
         self.assertTrue(File.objects.filter(filename__endswith=".zip").exists())
 
+        # > When using sentry-cli or [..] Debug IDs are deterministically generated based on the source file contents.
+        self.assertEqual(
+            UUID('9b40e0f3-8084-5931-94d4-8d941780a177'),
+            FileMetadata.objects.get(file__filename="captureException.js.map").debug_id)
+
 
 MINIMAL_JS = """\
 function bar() {
