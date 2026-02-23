@@ -254,7 +254,7 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
         # propagate exceptions so that we get the errors "from inside the server" instead of just sentry-cli reporting
         # about a 500 error (the setting just makes it end up on the output, it does not actually "escape" in such a
         # way that it fails the test itself (but sentry-cli will fail so we get both).
-        self.enterContext(override_settings(DEBUG=True, DEBUG_PROPAGATE_EXCEPTIONS=True))
+        self.enterContext(override_settings(DEBUG_PROPAGATE_EXCEPTIONS=True))
         self.tempdir = self.enterContext(tempfile.TemporaryDirectory())
 
     def _run(self, args):
