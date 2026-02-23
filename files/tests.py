@@ -312,7 +312,7 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
             str(map_path),
         ])
 
-        self.assertEquals(2, File.objects.count())
+        self.assertEqual(2, File.objects.count())
         self.assertTrue(File.objects.filter(filename="captureException.js.map").exists())
         self.assertTrue(File.objects.filter(filename__endswith=".zip").exists())
 
