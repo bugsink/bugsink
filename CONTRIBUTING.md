@@ -71,7 +71,7 @@ python manage.py createsuperuser
 7. **Run the development server**
 
 ```bash
-python manage.py runserver  
+python manage.py runserver
 ```
 
 Visit [http://localhost:8000](http://localhost:8000) to see your local Bugsink instance.
@@ -102,7 +102,7 @@ bugsink-manage test alerts api events issues
 pip install flake8
 
 # Run flake8 on all Python files
-flake8 
+flake8
 ```
 
 #### Tailwind

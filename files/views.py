@@ -191,14 +191,27 @@ def artifact_bundle_assemble(request, organization_slug):
     # (not worth the trouble of extracting right now, since our /sentry dir contains BSD-3 licensed code (2019 version)
 
     data = json.loads(request.body)
-    assemble_artifact_bundle.delay(data["checksum"], data["chunks"])
+    checksum = data["checksum"]
+    chunk_checksums = data["chunks"]
 
-    # NOTE sentry & glitchtip _always_ return an empty list for "missingChunks" in this view; I don't really understand
-    # what's being achieved with that, but it seems to be the expected behavior. Working hypothesis: this was introduced
-    # for DIF uploads, and the present endpoint doesn't use it at all. Not even for "v2", surprisingly.
+    # sentry-cli >= 3.x calls this endpoint before uploading chunks (to learn which ones are missing), then uploads
+    # only the missing chunks, and then polls this endpoint again. We must return the actual missing chunks; returning
+    # an empty list causes sentry-cli 3.x to skip uploading, and the subsequent assembly fails with a KeyError.
 
-    # In the ALWAYS_EAGER setup, we process the bundle inline, so arguably we could return "OK" here too; "CREATED" is
-    # what sentry returns though, so for faithful mimicking it's the safest bet.
+    if File.objects.filter(checksum=checksum).exists():
+        return JsonResponse({"state": ChunkFileState.OK, "missingChunks": []})
+
+    if not chunk_checksums:
+        return JsonResponse({"state": ChunkFileState.NOT_FOUND, "missingChunks": []})
+
+    available_checksums = set(
+        Chunk.objects.filter(checksum__in=chunk_checksums).values_list("checksum", flat=True)
+    )
+    missing_chunks = [c for c in chunk_checksums if c not in available_checksums]
+    if missing_chunks:
+        return JsonResponse({"state": ChunkFileState.NOT_FOUND, "missingChunks": missing_chunks})
+
+    assemble_artifact_bundle.delay(checksum, chunk_checksums)
     return JsonResponse({"state": ChunkFileState.CREATED, "missingChunks": []})
 
 
