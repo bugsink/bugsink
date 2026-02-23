@@ -1,2 +1,3 @@
 # testing/development only:
 coverage
+sentry-cli==2.*
