@@ -154,7 +154,7 @@ def record_file_accesses(metadata_ids, accessed_at):
 
 
 @shared_task
-def vacuum_files():
+def vacuum_files(chunk_max_days=1, file_max_days=90):
     now = timezone.now()
     with immediate_atomic():
         # budget is not yet tuned; reasons for high values: we're dealing with "leaves in the model-dep-tree here";
@@ -163,8 +163,8 @@ def vacuum_files():
         num_deleted = 0
 
         for model, field_name, max_days in [
-            (Chunk, 'created_at', 1,),  # 1 is already quite long... Chunks are used immediately, or not at all.
-            (File, 'accessed_at', 90),
+            (Chunk, 'created_at', chunk_max_days,),
+            (File, 'accessed_at', file_max_days),
             # for FileMetadata we rely on cascading from File (which will always happen "eventually")
                 ]:
 
@@ -180,4 +180,4 @@ def vacuum_files():
 
         if num_deleted == budget:
             # budget exhausted but possibly more to delete, so we re-schedule the task
-            delay_on_commit(vacuum_files)
+            delay_on_commit(vacuum_files, chunk_max_days=chunk_max_days, file_max_days=file_max_days)
