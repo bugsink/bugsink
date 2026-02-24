@@ -167,8 +167,9 @@ class Event(models.Model):
         ]
         indexes = [
             models.Index(fields=["project", "never_evict", "digested_at", "irrelevance_for_retention"]),  # eviction
-            models.Index(fields=["issue", "digested_at"]),
+            models.Index(fields=["issue", "digested_at"]),  # issue-based check_for_thresholds
             models.Index(fields=["project", "digested_at"]),  # project-wide quota check
+            models.Index(fields=["digested_at", "digest_order"]),  # check_for_thresholds, see #322
         ]
 
     def get_raw_data(self):
