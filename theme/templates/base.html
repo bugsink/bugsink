@@ -26,7 +26,56 @@
 
 	<body class="dark:bg-slate-700 dark:text-slate-100">
         <div id="content">
-            <div class="flex pl-4 bg-slate-200 dark:bg-slate-800">
+
+            {# MOBILE HEADER #}
+            <header class="w-full bg-slate-200 dark:bg-slate-800 md:hidden">
+
+              <input type="checkbox" id="nav-toggle" class="peer hidden">
+
+              <nav class="flex items-center justify-between px-4 py-2">
+
+                <a href="{{ script_prefix }}/" class="font-bold">
+                  {{ site_title }}
+                </a>
+
+                <label for="nav-toggle" class="cursor-pointer">
+                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <path d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                </label>
+              </nav>
+
+              {# PUSH-DOWN MENU #}
+              <div class="hidden peer-checked:block px-4 pb-4">
+                <div class="flex flex-col gap-3 text-right">
+
+                  {% if not app_settings.SINGLE_TEAM %}
+                  <a href="{% url "team_list" %}">Teams</a>
+                  {% endif %}
+
+                  <a href="{% url "project_list" %}">Projects</a>
+
+                  {% if project %}
+                  <a href="{% url "issue_list_open" project_pk=project.pk %}{% current_qs %}">
+                    Issues ({{ project.name }})
+                  </a>
+                  {% endif %}
+
+                  <a href="{{ script_prefix }}/accounts/preferences/">Preferences</a>
+
+                  <form method="post" action="{% url 'logout' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="text-right w-full">
+                      Log out
+                    </button>
+                  </form>
+
+                </div>
+              </div>
+            </header>
+
+            {# DESKTOP HEADER #}
+            <header class="hidden md:flex pl-4 bg-slate-200 dark:bg-slate-800 items-center">
                 <a href="{{ script_prefix }}/"><img src="{% static 'images/bugsink-logo.png' %}" class="p-2 h-12 w-12 dark:hidden block" alt="Bugsink logo"><img src="{% static 'images/bugsink-logo-dark.png' %}" class="p-2 h-12 w-12 hidden dark:block" alt="Bugsink logo"></a>
                 <a href="{{ script_prefix }}/"><div class="px-2 py-2 my-2 font-bold hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{{ site_title }}</div></a>
 
@@ -58,7 +107,7 @@
                     <div class="px-4 py-2 my-2 mr-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl"><form id="logout-form" method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">{% translate "Log out" %}</button></form></div>
                 {% endif %}
                 </div>
-            </div>
+            </header>
 
             {% for system_warning in system_warnings %}
             <div class="flex p-4 bg-yellow-100 dark:bg-amber-800 border-b-2 border-yellow-200 dark:border-amber-900">
