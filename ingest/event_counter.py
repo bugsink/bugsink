@@ -41,7 +41,8 @@ def check_for_thresholds(qs, now, thresholds, add_for_current=0):
     for (period_name, nr_of_periods, gte_threshold) in thresholds:
         qs_for_period = _filter_for_periods(qs, period_name, nr_of_periods, now)
 
-        # Hits index: (project, digested_at); project_digest_order is the tie-breaker and makes tests make sense.
+        # Hits index: (project, digested_at), (issue, digested_at, project_digest_order) or
+        # (digested_at, project_digest_order) depending on how qs is filtered.
         first_in_period = (
             qs_for_period.exclude(project_digest_order__isnull=True)
             .order_by('digested_at', 'project_digest_order').first())
