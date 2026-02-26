@@ -1,5 +1,4 @@
 import json
-import requests
 from django.utils import timezone
 
 from django import forms
@@ -124,6 +123,7 @@ def slack_backend_send_test_message(webhook_url, project_name, display_name, ser
             ]}
 
     try:
+        import requests
         result = requests.post(
             webhook_url,
             data=json.dumps(data),
@@ -211,6 +211,7 @@ def slack_backend_send_alert(
     data = {"text": sections[0]["text"]["text"], "blocks": sections}
 
     try:
+        import requests
         result = requests.post(
             webhook_url,
             data=json.dumps(data),

@@ -1,5 +1,4 @@
 import json
-import requests
 from django.utils import timezone
 
 from django import forms
@@ -114,6 +113,7 @@ def mattermost_backend_send_test_message(webhook_url, project_name, display_name
         data["channel"] = channel
 
     try:
+        import requests
         result = requests.post(
             webhook_url,
             data=json.dumps(data),
@@ -174,6 +174,7 @@ def mattermost_backend_send_alert(
         data["channel"] = channel
 
     try:
+        import requests
         result = requests.post(
             webhook_url,
             data=json.dumps(data),

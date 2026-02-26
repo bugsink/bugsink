@@ -5,7 +5,6 @@ import os
 import logging
 from datetime import datetime, timezone
 import json
-import jsonschema
 import fastjsonschema
 
 from django.conf import settings
@@ -268,6 +267,7 @@ class BaseIngestAPIView(View):
                 # fastjsonchema's exceptions provide almost no information (in the case of many anyOfs), so we just fall
                 # back to jsonschema for that. Slow (and double cost), but failing is the rare case, so we don't care.
                 # https://github.com/horejsek/python-fastjsonschema/issues/72 and 37 for some context
+                import jsonschema  # lazy: only needed for better error messages on invalid input
                 try:
                     jsonschema.validate(data_to_validate, get_schema())
                 except jsonschema.ValidationError as inner_e:

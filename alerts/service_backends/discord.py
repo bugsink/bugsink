@@ -1,6 +1,5 @@
 from urllib.parse import urlparse
 import json
-import requests
 from django.utils import timezone
 
 from django import forms
@@ -114,6 +113,7 @@ def discord_backend_send_test_message(
     }
 
     try:
+        import requests
         result = requests.post(
             webhook_url,
             data=json.dumps(data),
@@ -182,6 +182,7 @@ def discord_backend_send_alert(
     data = {"embeds": [embed]}
 
     try:
+        import requests
         result = requests.post(
             webhook_url,
             data=json.dumps(data),
