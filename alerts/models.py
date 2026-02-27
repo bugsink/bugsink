@@ -2,6 +2,7 @@ from django.db import models
 from projects.models import Project
 
 from .service_backends.slack import SlackBackend
+from .service_backends.teams import TeamsBackend
 from .service_backends.mattermost import MattermostBackend
 from .service_backends.discord import DiscordBackend
 
@@ -12,6 +13,7 @@ def get_alert_service_kind_choices():
     return [
         ("discord", "Discord"),
         ("mattermost", "Mattermost"),
+        ("teams", "Microsoft Teams"),
         ("slack", "Slack"),
     ]
 
@@ -23,6 +25,8 @@ def get_alert_service_backend_class(kind):
         return MattermostBackend
     if kind == "slack":
         return SlackBackend
+    if kind == "teams":
+        return TeamsBackend
     raise ValueError(f"Unknown backend kind: {kind}")
 
 
