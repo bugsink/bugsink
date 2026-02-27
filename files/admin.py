@@ -27,6 +27,10 @@ class FileAdmin(admin.ModelAdmin):
 
 @admin.register(FileMetadata)
 class FileMetadataAdmin(admin.ModelAdmin):
-    list_display = ('debug_id', 'file_type', 'file', 'created_at')
+    list_display = ('debug_id', 'file_type', 'file', 'show_synthetic', 'created_at')
     search_fields = ('file__checksum', 'debug_id', 'file_type')
-    readonly_fields = ('file', 'debug_id', 'file_type', 'data', 'created_at')
+    readonly_fields = ('file', 'debug_id', 'file_type', 'data', 'synthetic', 'created_at')
+
+    @admin.display(description='Synthetic?')
+    def show_synthetic(self, obj):
+        return "Synthetic" if obj.synthetic else ""

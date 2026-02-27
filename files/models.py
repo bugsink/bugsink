@@ -39,6 +39,7 @@ class FileMetadata(models.Model):
     debug_id = models.UUIDField(max_length=40, null=True, blank=True)
     file_type = models.CharField(max_length=255, null=True, blank=True)
     data = models.TextField()  # we just dump the rest in here; let's see how much we really need.
+    synthetic = models.BooleanField(default=False)  # is this created by Bugsink itself as a "hack" (#157)?
     created_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
 
     def __str__(self):
