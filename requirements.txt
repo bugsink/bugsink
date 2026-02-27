@@ -10,7 +10,7 @@ pygments==2.19.*
 inotify_simple==2.0.*
 Brotli==1.2.*
 python-dateutil==2.9.*
-whitenoise==6.11.*
+whitenoise==6.12.*
 requests==2.32.*
 monofy==1.1.*
 user-agents==2.2.*
