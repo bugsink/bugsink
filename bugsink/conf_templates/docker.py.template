@@ -189,7 +189,7 @@ BUGSINK = {
     "PHONEHOME": os.getenv("PHONEHOME", "true").lower() in ("true", "1", "yes"),
 
     # Feature flags
-    "FEATURE_MINIDUMPS": os.getenv("PHONEHOME", "false").lower() in ("true", "1", "yes"),
+    "FEATURE_MINIDUMPS": os.getenv("FEATURE_MINIDUMPS", "false").lower() in ("true", "1", "yes"),
 }
 
 
