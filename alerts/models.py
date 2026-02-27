@@ -5,6 +5,7 @@ from .service_backends.slack import SlackBackend
 from .service_backends.mattermost import MattermostBackend
 from .service_backends.discord import DiscordBackend
 from .service_backends.telegram import TelegramBackend
+from .service_backends.google_chat import GoogleChatBackend
 from .service_backends.custom import CustomBackend
 from .service_backends.msteams import MsTeamsBackend
 
@@ -14,6 +15,7 @@ def get_alert_service_kind_choices():
     # Messaging backends don't need translations since they are brand names.
     return [
         ("discord", "Discord"),
+        ("google_chat", "Google Chat"),
         ("mattermost", "Mattermost"),
         ("msteams", "Microsoft Teams"),
         ("slack", "Slack"),
@@ -25,6 +27,8 @@ def get_alert_service_kind_choices():
 def get_alert_service_backend_class(kind):
     if kind == "discord":
         return DiscordBackend
+    if kind == "google_chat":
+        return GoogleChatBackend
     if kind == "mattermost":
         return MattermostBackend
     if kind == "msteams":
