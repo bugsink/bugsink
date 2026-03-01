@@ -22,6 +22,7 @@ from issues.api_views import IssueViewSet
 from projects.api_views import ProjectViewSet
 from releases.api_views import ReleaseViewSet
 from teams.api_views import TeamViewSet
+from .settings.default import SOCIAL_AUTH_ENABLED
 
 from .views import home, trigger_error, favicon, settings_view, silence_email_system_warning, counts, health_check_ready
 from .debug_views import csrf_debug
@@ -105,6 +106,11 @@ urlpatterns = [
     path("favicon.ico", favicon),
     path("robots.txt", login_exempt(TemplateView.as_view(template_name="robots.txt", content_type="text/plain"))),
 ]
+
+if SOCIAL_AUTH_ENABLED:
+    urlpatterns += [
+        path('oauth/', include('social_django.urls', namespace='social')),
+    ]
 
 if settings.DEBUG:
     urlpatterns += [
