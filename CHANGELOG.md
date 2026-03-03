@@ -1,5 +1,16 @@
 # Changes
 
+## 2.0.14 (3 March 2026)
+
+* sourcemaps upload now works for sentry-cli >= 3.0.0, See #290
+* Add `chunk_max_days` and `file_max_days parameters` to `vacuum_files` command and task
+
+* Update whitenoise requirement from ==6.11.* to ==6.12.*
+* Fix `FEATURE_MINIDUMPS` env-parsing in docker template
+* mobile menu: somewhat workable, See #120
+* Add index on `(digested_at, digest_order)` Fix #322
+* Move `mark_safe` closer to actual escaping
+
 ## 2.0.13 (21 February 20206)
 
 ### Security
