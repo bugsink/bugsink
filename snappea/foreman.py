@@ -145,8 +145,7 @@ class Foreman:
             # as per the above: not bullet proof, and non-critical, hence also: not a reason to crash on this.
             logger.error("Startup: Ignored Error while checking PID file", exc_info=e)
 
-        # Note: no b108_makedirs here yet, because we can't assume a self-owned containing directory (see #195)
-        os.makedirs(os.path.dirname(self.settings.PID_FILE), exist_ok=True)
+        b108_makedirs(os.path.dirname(self.settings.PID_FILE))
         with open(self.settings.PID_FILE, "w") as f:
             f.write(str(pid))
 
