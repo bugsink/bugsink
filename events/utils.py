@@ -156,12 +156,20 @@ def apply_sourcemaps(event_data):
 
     for exception in get_values(event_data.get("exception", {})):
         for frame in exception.get("stacktrace", {}).get("frames", []):
-            # NOTE: try/except in the loop would allow us to selectively skip frames that we fail to process
-
             if frame.get("filename") in sourcemap_for_filename:
                 sm = sourcemap_for_filename[frame["filename"]]
-
-                mapping = sm.lookup_left(frame["lineno"] + FROM_DISPLAY, frame["colno"])
+                generated_line = frame["lineno"] + FROM_DISPLAY
+                generated_column = frame["colno"]
+                try:
+                    mapping = sm.lookup_left(generated_line, generated_column)
+                except (IndexError, KeyError):
+                    # Some source maps simply have no mapping for the generated line/column in the frame.
+                    # We skip sourcemap enrichment for that frame and leave the original frame data intact.
+                    frame["debug_id"] = str(debug_id_for_filename[frame["filename"]])
+                    frame["sourcemap_error"] = (
+                        f"Error mapping ({generated_line}, {generated_column}) into sourcemap ({frame['debug_id']})"
+                    )
+                    continue
 
                 if mapping.source in source_for_filename:
                     lines = source_for_filename[mapping.source]
