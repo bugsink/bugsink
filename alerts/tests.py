@@ -2,6 +2,7 @@ from django.test import TestCase as DjangoTestCase
 from unittest.mock import patch, Mock
 import json
 import requests
+from socket import gaierror
 
 from django.core import mail
 from django.contrib.auth import get_user_model
@@ -16,8 +17,10 @@ from teams.models import Team, TeamMembership
 from .models import MessagingServiceConfig
 from .service_backends.slack import slack_backend_send_test_message, slack_backend_send_alert
 from .service_backends.discord import discord_backend_send_test_message, discord_backend_send_alert
+from .service_backends.webhook_security import validate_webhook_url
 from .tasks import send_new_issue_alert, send_regression_alert, send_unmute_alert, _get_users_for_email_alert
 from .views import DEBUG_CONTEXTS
+from bugsink.app_settings import override_settings as override_bugsink_settings
 
 User = get_user_model()
 
@@ -151,7 +154,7 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
             config=json.dumps({"webhook_url": "https://hooks.slack.com/test"}),
         )
 
-    @patch('alerts.service_backends.slack.requests.post')
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
     def test_slack_test_message_success_clears_failure_status(self, mock_post):
         # Set up existing failure status
         self.config.last_failure_timestamp = timezone.now()
@@ -179,7 +182,7 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
         self.assertIsNone(self.config.last_failure_status_code)
         self.assertIsNone(self.config.last_failure_response_text)
 
-    @patch('alerts.service_backends.slack.requests.post')
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
     def test_slack_test_message_http_error_stores_failure(self, mock_post):
         # Mock HTTP error response
         mock_response = Mock()
@@ -209,7 +212,7 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
         self.assertTrue(self.config.last_failure_is_json)
         self.assertEqual(self.config.last_failure_error_type, "HTTPError")
 
-    @patch('alerts.service_backends.slack.requests.post')
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
     def test_slack_test_message_non_json_error_stores_failure(self, mock_post):
         # Mock HTTP error response with non-JSON text
         mock_response = Mock()
@@ -238,7 +241,7 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
         self.assertEqual(self.config.last_failure_response_text, 'Internal Server Error')
         self.assertFalse(self.config.last_failure_is_json)
 
-    @patch('alerts.service_backends.slack.requests.post')
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
     def test_slack_test_message_connection_error_stores_failure(self, mock_post):
         # Mock connection error
         mock_post.side_effect = requests.ConnectionError("Connection failed")
@@ -260,7 +263,7 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
         self.assertEqual(self.config.last_failure_error_type, "ConnectionError")
         self.assertEqual(self.config.last_failure_error_message, "Connection failed")
 
-    @patch('alerts.service_backends.slack.requests.post')
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
     def test_slack_alert_message_success_clears_failure_status(self, mock_post):
         # Set up existing failure status
         self.config.last_failure_timestamp = timezone.now()
@@ -290,6 +293,20 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
         self.config.refresh_from_db()
         self.assertIsNone(self.config.last_failure_timestamp)
 
+    @patch('alerts.service_backends.base.requests.post')
+    def test_slack_test_message_blocked_target_stores_failure_without_network_call(self, mock_post):
+        slack_backend_send_test_message(
+            "http://10.0.0.42/hooks/test",
+            "Test project",
+            "Test Slack",
+            self.config.id,
+        )
+
+        mock_post.assert_not_called()
+        self.config.refresh_from_db()
+        self.assertEqual(self.config.last_failure_error_type, "ValueError")
+        self.assertIn("non-global IP address", self.config.last_failure_error_message)
+
     def test_has_recent_failure_method(self):
         # Initially no failure
         self.assertFalse(self.config.has_recent_failure())
@@ -315,7 +332,8 @@ class TestDiscordBackendErrorHandling(DjangoTestCase):
             config=json.dumps({"webhook_url": "https://discord.com/api/webhooks/test"}),
         )
 
-    @patch('alerts.service_backends.discord.requests.post')
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
     def test_discord_test_message_success_clears_failure_status(self, mock_post):
         # Set up existing failure status
         self.config.last_failure_timestamp = timezone.now()
@@ -343,7 +361,7 @@ class TestDiscordBackendErrorHandling(DjangoTestCase):
         self.assertIsNone(self.config.last_failure_status_code)
         self.assertIsNone(self.config.last_failure_response_text)
 
-    @patch('alerts.service_backends.discord.requests.post')
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
     def test_discord_test_message_http_error_stores_failure(self, mock_post):
         # Mock HTTP error response
         mock_response = Mock()
@@ -373,7 +391,7 @@ class TestDiscordBackendErrorHandling(DjangoTestCase):
         self.assertTrue(self.config.last_failure_is_json)
         self.assertEqual(self.config.last_failure_error_type, "HTTPError")
 
-    @patch('alerts.service_backends.discord.requests.post')
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
     def test_discord_test_message_non_json_error_stores_failure(self, mock_post):
         # Mock HTTP error response with non-JSON text
         mock_response = Mock()
@@ -402,7 +420,7 @@ class TestDiscordBackendErrorHandling(DjangoTestCase):
         self.assertEqual(self.config.last_failure_response_text, 'Internal Server Error')
         self.assertFalse(self.config.last_failure_is_json)
 
-    @patch('alerts.service_backends.discord.requests.post')
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
     def test_discord_test_message_connection_error_stores_failure(self, mock_post):
         # Mock connection error
         mock_post.side_effect = requests.ConnectionError("Connection failed")
@@ -424,7 +442,7 @@ class TestDiscordBackendErrorHandling(DjangoTestCase):
         self.assertEqual(self.config.last_failure_error_type, "ConnectionError")
         self.assertEqual(self.config.last_failure_error_message, "Connection failed")
 
-    @patch('alerts.service_backends.discord.requests.post')
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
     def test_discord_alert_message_success_clears_failure_status(self, mock_post):
         # Set up existing failure status
         self.config.last_failure_timestamp = timezone.now()
@@ -467,3 +485,101 @@ class TestDiscordBackendErrorHandling(DjangoTestCase):
         self.config.clear_failure_status()
         self.config.save()
         self.assertFalse(self.config.has_recent_failure())
+
+
+class TestWebhookSecurityValidation(DjangoTestCase):
+    def test_rejects_private_ip_target(self):
+        with override_bugsink_settings(ALERTS_WEBHOOK_OUTBOUND_MODE="open"):
+            with self.assertRaisesRegex(ValueError, "non-global IP address"):
+                validate_webhook_url("http://10.0.0.42/hooks/example")
+
+    def test_rejects_ipv4_mapped_ipv6_loopback_target(self):
+        with override_bugsink_settings(ALERTS_WEBHOOK_OUTBOUND_MODE="open"):
+            with self.assertRaisesRegex(ValueError, "non-global IP address"):
+                validate_webhook_url("http://[::ffff:127.0.0.1]/hooks/example")
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_rejects_hostname_that_resolves_to_private_ip(self, mock_resolve):
+        mock_resolve.return_value = {"10.1.2.3"}
+        with override_bugsink_settings(ALERTS_WEBHOOK_OUTBOUND_MODE="open"):
+            with self.assertRaisesRegex(ValueError, "non-global IP address"):
+                validate_webhook_url("https://webhook.internal.example/hooks/example")
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_allowlist_only_denies_non_allowlisted_target(self, mock_resolve):
+        mock_resolve.return_value = {"93.184.216.34"}
+        with override_bugsink_settings(ALERTS_WEBHOOK_OUTBOUND_MODE="allowlist_only"):
+            with self.assertRaisesRegex(ValueError, "not allowlisted"):
+                validate_webhook_url("https://hooks.example.com/webhook")
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_allowlist_only_allows_allowlisted_hostname(self, mock_resolve):
+        mock_resolve.return_value = {"93.184.216.34"}
+        with override_bugsink_settings(
+                ALERTS_WEBHOOK_OUTBOUND_MODE="allowlist_only",
+                ALERTS_WEBHOOK_ALLOW_LIST=["hooks.example.com"]):
+            validate_webhook_url("https://hooks.example.com/webhook")
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_allows_public_ip_target_in_open_mode(self, mock_resolve):
+        mock_resolve.return_value = {"93.184.216.34"}
+        validate_webhook_url("https://hooks.example.com/webhook")
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_denied_when_allow_and_deny_both_match(self, mock_resolve):
+        mock_resolve.return_value = {"93.184.216.34"}
+        with override_bugsink_settings(
+                ALERTS_WEBHOOK_ALLOW_LIST=["hooks.example.com"],
+                ALERTS_WEBHOOK_DENY_LIST=["hooks.example.com"]):
+            with self.assertRaisesRegex(ValueError, "matches ALERTS_WEBHOOK_DENY_LIST"):
+                validate_webhook_url("https://hooks.example.com/webhook")
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_allow_cidr_matches_resolved_ip(self, mock_resolve):
+        mock_resolve.return_value = {"93.184.216.34"}
+        with override_bugsink_settings(
+                ALERTS_WEBHOOK_OUTBOUND_MODE="allowlist_only",
+                ALERTS_WEBHOOK_ALLOW_LIST=["93.184.216.0/24"]):
+            validate_webhook_url("https://hooks.example.com/webhook")
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_deny_cidr_matches_resolved_ip(self, mock_resolve):
+        mock_resolve.return_value = {"93.184.216.34"}
+        with override_bugsink_settings(
+                ALERTS_WEBHOOK_DENY_LIST=["93.184.216.0/24"]):
+            with self.assertRaisesRegex(ValueError, "matches ALERTS_WEBHOOK_DENY_LIST"):
+                validate_webhook_url("https://hooks.example.com/webhook")
+
+    def test_non_global_can_be_allowed_when_toggle_disabled(self):
+        with override_bugsink_settings(
+                ALERTS_WEBHOOK_OUTBOUND_MODE="open",
+                ALERTS_WEBHOOK_DENY_NON_GLOBAL=False):
+            validate_webhook_url("http://10.0.0.42/hooks/example")
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_rejects_invalid_cidr_in_allow_list(self, mock_resolve):
+        mock_resolve.return_value = {"93.184.216.34"}
+        with override_bugsink_settings(ALERTS_WEBHOOK_ALLOW_LIST=["93.184.216.0/33"]):
+            with self.assertRaisesRegex(ValueError, "Invalid entry in ALERTS_WEBHOOK_ALLOW_LIST"):
+                validate_webhook_url("https://hooks.example.com/webhook")
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_rejects_invalid_cidr_in_deny_list(self, mock_resolve):
+        mock_resolve.return_value = {"93.184.216.34"}
+        with override_bugsink_settings(ALERTS_WEBHOOK_DENY_LIST=["93.184.216.0/33"]):
+            with self.assertRaisesRegex(ValueError, "Invalid entry in ALERTS_WEBHOOK_DENY_LIST"):
+                validate_webhook_url("https://hooks.example.com/webhook")
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_legacy_allowed_hostnames_alias_still_works(self, mock_resolve):
+        mock_resolve.return_value = {"93.184.216.34"}
+        with override_bugsink_settings(
+                ALERTS_WEBHOOK_OUTBOUND_MODE="allowlist_only",
+                ALERTS_WEBHOOK_ALLOWED_HOSTNAMES=["hooks.example.com"]):
+            validate_webhook_url("https://hooks.example.com/webhook")
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_rejects_unresolvable_hostname(self, mock_resolve):
+        mock_resolve.side_effect = gaierror("Name or service not known")
+        with self.assertRaisesRegex(ValueError, "could not be resolved"):
+            validate_webhook_url("https://hooks.example.com/webhook")

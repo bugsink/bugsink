@@ -11,6 +11,7 @@ from bugsink.app_settings import get_settings
 from bugsink.transaction import immediate_atomic
 
 from issues.models import Issue
+from .base import BaseWebhookBackend
 
 
 def url_valid_according_to_discord(url):
@@ -114,7 +115,7 @@ def discord_backend_send_test_message(
     }
 
     try:
-        result = requests.post(
+        result = DiscordBackend.safe_post(
             webhook_url,
             data=json.dumps(data),
             headers={"Content-Type": "application/json"},
@@ -182,7 +183,7 @@ def discord_backend_send_alert(
     data = {"embeds": [embed]}
 
     try:
-        result = requests.post(
+        result = DiscordBackend.safe_post(
             webhook_url,
             data=json.dumps(data),
             headers={"Content-Type": "application/json"},
@@ -200,7 +201,7 @@ def discord_backend_send_alert(
         _store_failure_info(service_config_id, e)
 
 
-class DiscordBackend:
+class DiscordBackend(BaseWebhookBackend):
 
     def __init__(self, service_config):
         self.service_config = service_config

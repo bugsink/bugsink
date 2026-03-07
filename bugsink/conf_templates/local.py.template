@@ -74,6 +74,12 @@ BUGSINK = {
     "SINGLE_TEAM": True,
     "USER_REGISTRATION": CB_NOBODY,
 
+    # Webhook outbound security:
+    # "ALERTS_WEBHOOK_OUTBOUND_MODE": "open",  # or "allowlist_only"
+    # "ALERTS_WEBHOOK_ALLOW_LIST": ["hooks.example.com", "203.0.113.0/24"],
+    # "ALERTS_WEBHOOK_DENY_LIST": ["bad.example.com", "198.51.100.0/24"],
+    # "ALERTS_WEBHOOK_DENY_NON_GLOBAL": True,
+
     # "EVENT_STORAGES": {
     #     "local_flat_files": {  # a meaningful name of your choosing
     #         "STORAGE": "events.storage.FileEventStorage",
