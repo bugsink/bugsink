@@ -9,11 +9,11 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.utils.translation import gettext as _
 from django.utils import translation
-from django.utils.http import url_has_allowed_host_and_scheme
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
 from bugsink.decorators import atomic_for_request_method
 from bugsink.middleware import get_chosen_language
+from bugsink.utils import is_safe_next_url
 
 from .forms import (
     UserCreationForm, ResendConfirmationForm, RequestPasswordResetForm, SetPasswordForm, PreferencesForm, UserEditForm)
@@ -182,19 +182,6 @@ def request_reset_password(request):
     return render(request, "users/request_reset_password.html", {"form": form})
 
 
-def _is_safe_url(url, request):
-    # there's a long disucssion here:
-    # https://forum.djangoproject.com/t/why-is-the-use-of-url-has-allowed-host-and-scheme-discouraged/35314/3
-    # The upshot is: url_has_allowed_host_and_scheme was renamed away from _is_safe_url to make it clear that it does
-    # not "generally prove safeness", but it's still exactly the thing to use to check "next" query params, as Django
-    # itself does in django.auth.views. (as long as you use the result in HttpResponseRedirect)
-    return url_has_allowed_host_and_scheme(
-        url=url,
-        allowed_hosts={request.get_host()},
-        require_https=request.is_secure()
-    )
-
-
 @atomic_for_request_method
 def reset_password(request, token=None):
     # alternative name: set_password (because this one also works for initial setting of a password)
@@ -213,7 +200,7 @@ def reset_password(request, token=None):
     user = verification.user
     next_url = request.POST.get("next", request.GET.get("next", reverse("home")))
 
-    if not _is_safe_url(next_url, request):
+    if not is_safe_next_url(next_url, request):
         next_url = reverse("home")
 
     if request.method == 'POST':
