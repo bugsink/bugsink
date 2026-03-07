@@ -3,6 +3,7 @@ import logging
 from collections import defaultdict
 
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import get_template
 from django.apps import apps
@@ -17,6 +18,19 @@ from .conf_utils import deduce_allowed_hosts, deduce_script_name, eat_your_own_d
 nc_rnd = random
 
 logger = logging.getLogger("bugsink.email")
+
+
+def is_safe_next_url(url, request):
+    # There's a long discussion here:
+    # https://forum.djangoproject.com/t/why-is-the-use-of-url-has-allowed-host-and-scheme-discouraged/35314/3
+    # The upshot is: url_has_allowed_host_and_scheme was renamed away from _is_safe_url to make it clear that it does
+    # not "generally prove safeness", but it's still exactly the thing to use to check "next" query params, as Django
+    # itself does in django.auth.views. (as long as you use the result in HttpResponseRedirect)
+    return url_has_allowed_host_and_scheme(
+        url=url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    )
 
 
 def send_rendered_email(subject, base_template_name, recipient_list, context=None):
