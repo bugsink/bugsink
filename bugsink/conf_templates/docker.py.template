@@ -27,6 +27,7 @@ if BEHIND_HTTPS_PROXY or BEHIND_PLAIN_HTTP_PROXY:
     # We hard-code the choice of proxy headers; which means you have to match those on the proxy side (easy enough).
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Note: slightly redundant, Gunicorn also does this.
     USE_X_REAL_IP = True
+    USE_X_FORWARDED_HOST = os.getenv("USE_X_FORWARDED_HOST", "False").lower() in ("true", "1", "yes")
 
 if BEHIND_HTTPS_PROXY:
     SESSION_COOKIE_SECURE = True
@@ -198,6 +199,8 @@ if os.getenv("ALLOWED_HOSTS"):
 else:
     ALLOWED_HOSTS = deduce_allowed_hosts(BUGSINK["BASE_URL"])
 
+if os.getenv("CSRF_TRUSTED_ORIGINS"):
+    CSRF_TRUSTED_ORIGINS = [o if "://" in o else "https://" + o for o in os.getenv("CSRF_TRUSTED_ORIGINS").split(",")]
 
 if os.getenv("FILE_EVENT_STORAGE_PATH"):
     BUGSINK["EVENT_STORAGES"] = {
