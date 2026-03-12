@@ -200,7 +200,12 @@ else:
     ALLOWED_HOSTS = deduce_allowed_hosts(BUGSINK["BASE_URL"])
 
 if os.getenv("CSRF_TRUSTED_ORIGINS"):
-    CSRF_TRUSTED_ORIGINS = [o if "://" in o else "https://" + o for o in os.getenv("CSRF_TRUSTED_ORIGINS").split(",")]
+    behind_plain_http_proxy = os.getenv("BEHIND_PLAIN_HTTP_PROXY", "false").lower() in ("true", "1", "yes")
+    default_scheme = "http://" if behind_plain_http_proxy else "https://"
+    CSRF_TRUSTED_ORIGINS = [
+        o if "://" in o else default_scheme + o
+        for o in os.getenv("CSRF_TRUSTED_ORIGINS").split(",")
+    ]
 
 if os.getenv("FILE_EVENT_STORAGE_PATH"):
     BUGSINK["EVENT_STORAGES"] = {
