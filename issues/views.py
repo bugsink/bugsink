@@ -37,7 +37,6 @@ from .models import Issue, IssueQuerysetStateManager, IssueStateManager, Turning
 from .forms import CommentForm
 from .utils import get_values, get_main_exception
 from events.utils import annotate_with_meta, apply_sourcemaps, get_sourcemap_images
-from events.markdown_stacktrace import render_stacktrace_md
 from .markdown_issue import render_issue_md
 
 logger = logging.getLogger("bugsink.issues")
