@@ -13,7 +13,7 @@ abstract generality. Python 3.12 is the standard environment.
 * Follow PEP8 and ensure `flake8` passes (CI ignores E741, E731). width: 120 columns.
 * Use Django's function-based views
 
-### Tests
+### Writing Tests
 
 Tests should be either of 2 kinds:
 
@@ -56,4 +56,4 @@ git add theme/static/css/dist/styles.css
 tools/strip-trailing-whitespace.sh
 ```
 
-If you fail to do so the pre-commit hook will trigger, and you will not be able to commit.
+Also run the tests (see CONTRIBUTING.md) and ensure they pass.

@@ -26,12 +26,18 @@ Code contributions are welcome! We use the GitHub PR process to review and merge
 
 ```bash
 git clone https://github.com/bugsink/bugsink.git
+```
 
+The full test-suite depends on sample event data, which is not included in the main repository. To get this data, also
+clone the `event-samples` repository:
+
+```
 # event-samples repository for sample event data
 git clone https://github.com/bugsink/event-samples.git
-
-cd bugsink
 ```
+
+If the event-samples live at the same level as the main repository, the test suite will find it automatically. If you
+put it somewhere else, set the set the environment variable `SAMPLES_DIR` accordingly.
 
 2. **Create and activate a virtual environment**
 
@@ -50,25 +56,19 @@ pip install -r requirements.txt
 pip install -r requirements.development.txt
 ```
 
-4. **Set environment variable**
-
-```bash
-export DJANGO_SETTINGS_MODULE="bugsink.settings.development"
-```
-
-5. **Run database migrations**
+4. **Run database migrations**
 
 ```bash
 python manage.py migrate
 ```
 
-6. **Create a superuser**
+5. **Create a superuser**
 
 ```bash
 python manage.py createsuperuser
 ```
 
-7. **Run the development server**
+6. **Run the development server**
 
 ```bash
 python manage.py runserver
@@ -82,13 +82,13 @@ Bugsink uses Django's built-in test framework. To run the test suite:
 
 ```bash
 # Run all tests
-bugsink-manage test
-
-# Run tests with verbose output
-bugsink-manage test -v2
+python manage.py test
 
 # Run tests for specific apps (replace with actual app names)
-bugsink-manage test alerts api events issues
+python manage.py test alerts api events issues
+
+# If you didn't clone the event-samples repository, you can run tests that don't depend on sample data like this:
+python manage.py test --exclude-tag=samples
 ```
 
 #### Linting and code quality
