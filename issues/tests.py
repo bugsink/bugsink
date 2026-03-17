@@ -578,19 +578,16 @@ class IntegrationTest(TransactionTestCase):
         # the following may be used for faster debugging of individual failures:
         # for filename in ["...failing filename here..."]:
 
-        # event-samples-private contains events that I have dumped from my local development environment, but which I
-        # have not bothered cleaning up, and can thus not be publically shared.
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
 
         event_samples = glob(SAMPLES_DIR + "/*/*.json")
-        event_samples_private = glob("../event-samples-private/*.json")
         known_broken = [SAMPLES_DIR + "/" + s.strip() for s in _readlines(SAMPLES_DIR + "/KNOWN-BROKEN")]
 
         if len(event_samples) == 0:
             raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
 
         if self.verbosity > 1:
-            print(f"Found {len(event_samples)} event samples and {len(event_samples_private)} private event samples")
+            print(f"Found {len(event_samples)} event samples")
 
         try:
             github_result = requests.get(
@@ -606,7 +603,7 @@ class IntegrationTest(TransactionTestCase):
             # but we don't want that to introduce a point-of-failure in our tests. So print-and-continue.
             print("Could not fetch the latest event schema from GitHub; I will not fail the tests for this")
 
-        for filename in event_samples + event_samples_private:
+        for filename in event_samples:
             with open(filename) as f:
                 data = json.loads(f.read())
 
