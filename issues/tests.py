@@ -869,7 +869,8 @@ class IssueDeletionTestCase(TransactionTestCase):
 
     def setUp(self):
         super().setUp()
-        self.project = Project.objects.create(name="Test Project", stored_event_count=1)  # 1, in prep. of the below
+        self.project = Project.objects.create(
+            name="Test Project", stored_event_count=1, issue_count=1)  # 1, in prep. of the below
         self.issue, _ = get_or_create_issue(self.project)
         self.event = create_event(self.project, issue=self.issue, project_digest_order=1)
 
@@ -903,7 +904,7 @@ class IssueDeletionTestCase(TransactionTestCase):
         # correct for bugsink/transaction.py's select_for_update for non-sqlite databases
         correct_for_select_for_update = 1 if 'sqlite' not in settings.DATABASES['default']['ENGINE'] else 0
 
-        with self.assertNumQueries(19 + correct_for_select_for_update):
+        with self.assertNumQueries(20 + correct_for_select_for_update):
             self.issue.delete_deferred()
 
         # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly
@@ -916,6 +917,7 @@ class IssueDeletionTestCase(TransactionTestCase):
             self.assertTrue(model.objects.exists(), f"Some {model.__name__}s 'should' exist after issue deletion")
 
         self.assertEqual(0, Project.objects.get().stored_event_count)
+        self.assertEqual(0, Project.objects.get().issue_count)
 
         vacuum_tagvalues()
         # tests run w/ TASK_ALWAYS_EAGER, so any "delayed" (recursive) calls can be expected to have run
