@@ -409,7 +409,11 @@ class BaseIngestAPIView(View):
         # +1 because we're about to add one event
         issue.stored_event_count = issue.stored_event_count + 1 - evicted.per_issue.get(issue.id, 0)
         project.stored_event_count = project_stored_event_count - evicted.total
-        project.save(update_fields=["stored_event_count"])
+        if issue_created:
+            project.issue_count += 1
+            project.save(update_fields=["stored_event_count", "issue_count"])
+        else:
+            project.save(update_fields=["stored_event_count"])
 
         event, event_created = Event.from_ingested(
             event_metadata,

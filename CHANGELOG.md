@@ -1,5 +1,9 @@
 # Changes
 
+## 2.x.x (...)
+
+* Show open issue counts on project list (skipping very large projects), see #228
+
 ## 2.0.14 (3 March 2026)
 
 * sourcemaps upload now works for sentry-cli >= 3.0.0, See #290
