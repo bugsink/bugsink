@@ -213,10 +213,6 @@ BUGSINK = {
     "ALERTS_WEBHOOK_DISALLOWED_IP_CIDRS":
         [h.strip() for h in os.getenv("ALERTS_WEBHOOK_DISALLOWED_IP_CIDRS", "").split(",") if h.strip()],
 
-    # Deprecated alias; kept for compatibility.
-    "ALERTS_WEBHOOK_ALLOWED_HOSTNAMES":
-        [h.strip() for h in os.getenv("ALERTS_WEBHOOK_ALLOWED_HOSTNAMES", "").split(",") if h.strip()],
-
     # Feature flags
     "FEATURE_MINIDUMPS": os.getenv("FEATURE_MINIDUMPS", "false").lower() in ("true", "1", "yes"),
 }

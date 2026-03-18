@@ -97,9 +97,6 @@ DEFAULTS = {
     "ALERTS_WEBHOOK_DENY_NON_GLOBAL": True,
     "ALERTS_WEBHOOK_DISALLOWED_IP_CIDRS": DEFAULT_DISALLOWED_WEBHOOK_IP_CIDRS,
 
-    # Deprecated alias for ALLOW_LIST hostname entries; kept for compatibility.
-    "ALERTS_WEBHOOK_ALLOWED_HOSTNAMES": [],
-
     # Feature flags:
     "FEATURE_MINIDUMPS": False,  # minidumps are experimental/early-stage and likely a DOS-magnet; disabled by default
 }
@@ -143,12 +140,6 @@ def _sanitize(settings):
         settings["ALERTS_WEBHOOK_OUTBOUND_MODE"] in ["open", "allowlist_only"],
         "ALERTS_WEBHOOK_OUTBOUND_MODE must be one of: open, allowlist_only"
     )
-
-    # Backward compatibility: merge deprecated hostname allowlist into the new allow-list shape.
-    deprecated_allow = settings.get("ALERTS_WEBHOOK_ALLOWED_HOSTNAMES", [])
-    if deprecated_allow:
-        settings["ALERTS_WEBHOOK_ALLOW_LIST"] = list(settings["ALERTS_WEBHOOK_ALLOW_LIST"]) + list(deprecated_allow)
-
 
 def get_settings():
     global _settings

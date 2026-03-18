@@ -12,6 +12,7 @@ from bugsink.transaction import immediate_atomic
 
 from issues.models import Issue
 from .base import BaseWebhookBackend
+from .webhook_security import validate_webhook_url
 
 
 def url_valid_according_to_discord(url):
@@ -42,6 +43,14 @@ class DiscordConfigForm(forms.Form):
         return {
             "webhook_url": self.cleaned_data.get("webhook_url"),
         }
+
+    def clean_webhook_url(self):
+        webhook_url = self.cleaned_data["webhook_url"]
+        try:
+            validate_webhook_url(webhook_url)
+        except ValueError as e:
+            raise forms.ValidationError(str(e)) from e
+        return webhook_url
 
 
 def _store_failure_info(service_config_id, exception, response=None):

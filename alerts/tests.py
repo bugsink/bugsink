@@ -17,6 +17,9 @@ from teams.models import Team, TeamMembership
 from .models import MessagingServiceConfig
 from .service_backends.slack import slack_backend_send_test_message, slack_backend_send_alert
 from .service_backends.discord import discord_backend_send_test_message, discord_backend_send_alert
+from .service_backends.discord import DiscordConfigForm
+from .service_backends.mattermost import MattermostConfigForm
+from .service_backends.slack import SlackConfigForm
 from .service_backends.webhook_security import validate_webhook_url
 from .tasks import send_new_issue_alert, send_regression_alert, send_unmute_alert, _get_users_for_email_alert
 from .views import DEBUG_CONTEXTS
@@ -571,15 +574,28 @@ class TestWebhookSecurityValidation(DjangoTestCase):
                 validate_webhook_url("https://hooks.example.com/webhook")
 
     @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
-    def test_legacy_allowed_hostnames_alias_still_works(self, mock_resolve):
-        mock_resolve.return_value = {"93.184.216.34"}
-        with override_bugsink_settings(
-                ALERTS_WEBHOOK_OUTBOUND_MODE="allowlist_only",
-                ALERTS_WEBHOOK_ALLOWED_HOSTNAMES=["hooks.example.com"]):
-            validate_webhook_url("https://hooks.example.com/webhook")
-
-    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
     def test_rejects_unresolvable_hostname(self, mock_resolve):
         mock_resolve.side_effect = gaierror("Name or service not known")
         with self.assertRaisesRegex(ValueError, "could not be resolved"):
             validate_webhook_url("https://hooks.example.com/webhook")
+
+
+class TestWebhookConfigForms(DjangoTestCase):
+    def test_slack_form_rejects_blocked_target(self):
+        form = SlackConfigForm(data={"webhook_url": "http://10.0.0.42/hooks/test"})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("non-global IP address", form.errors["webhook_url"][0])
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_discord_form_accepts_public_target(self, mock_resolve):
+        mock_resolve.return_value = {"93.184.216.34"}
+        form = DiscordConfigForm(data={"webhook_url": "https://discord.com/api/webhooks/test"})
+
+        self.assertTrue(form.is_valid())
+
+    def test_mattermost_form_rejects_blocked_target(self):
+        form = MattermostConfigForm(data={"webhook_url": "http://10.0.0.42/hooks/test", "channel": "town-square"})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("non-global IP address", form.errors["webhook_url"][0])

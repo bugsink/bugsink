@@ -6,56 +6,44 @@ from bugsink.app_settings import get_settings
 
 
 def _parse_networks(cidr_list, setting_name):
-    result = []
+    networks = []
     for cidr in cidr_list:
+        value = cidr.strip()
+        if value == "":
+            continue
         try:
-            result.append(ipaddress.ip_network(cidr))
+            networks.append(ipaddress.ip_network(value))
         except ValueError as e:
-            raise ValueError(f"Invalid CIDR in {setting_name}: {cidr}") from e
-    return result
+            raise ValueError(f"Invalid CIDR in {setting_name}: {value}") from e
+    return networks
 
 
 def _parse_hosts_and_networks(entries, setting_name):
     hosts = set()
     networks = []
     for entry in entries:
-        value = entry.strip()
+        value = entry.strip().lower()
         if value == "":
             continue
-        if "/" in value:
-            try:
-                networks.append(ipaddress.ip_network(value))
-                continue
-            except ValueError:
-                raise ValueError(f"Invalid entry in {setting_name}: {value}") from None
-        try:
-            ip = ipaddress.ip_address(value)
-            networks.append(ipaddress.ip_network(f"{ip}/{ip.max_prefixlen}"))
-            continue
-        except ValueError:
-            pass
         if "://" in value:
             raise ValueError(f"Invalid entry in {setting_name}: {value} (use hostname/IP/CIDR, not full URLs)")
-        hosts.add(value.lower())
+        try:
+            networks.append(ipaddress.ip_network(value, strict=False))
+            continue
+        except ValueError:
+            if "/" in value:
+                raise ValueError(f"Invalid entry in {setting_name}: {value}") from None
+        hosts.add(value)
     return hosts, networks
 
 
 def _resolve_ip_addresses(hostname, port):
     infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
-    result = set()
-    for info in infos:
-        sockaddr = info[4]
-        result.add(sockaddr[0])
-    return result
+    return {info[4][0] for info in infos}
 
 
 def _match_entries(target_hostname, resolved_ips, hosts, networks):
-    if target_hostname in hosts:
-        return True
-    for ip in resolved_ips:
-        if any(ip in network for network in networks):
-            return True
-    return False
+    return target_hostname in hosts or any(ip in network for ip in resolved_ips for network in networks)
 
 
 def validate_webhook_url(webhook_url):
@@ -82,11 +70,10 @@ def validate_webhook_url(webhook_url):
 
     # Resolve on every send to defend against DNS changes after configuration time.
     try:
-        ip_addresses = _resolve_ip_addresses(parsed.hostname, port)
+        resolved_ips = {ipaddress.ip_address(ip) for ip in _resolve_ip_addresses(parsed.hostname, port)}
     except OSError as e:
         raise ValueError(f"Webhook hostname could not be resolved: {parsed.hostname}") from e
 
-    resolved_ips = {ipaddress.ip_address(ip_str) for ip_str in ip_addresses}
     allow_match = _match_entries(hostname, resolved_ips, allow_hosts, allow_networks)
     deny_match = _match_entries(hostname, resolved_ips, deny_hosts, deny_networks)
 
@@ -101,15 +88,14 @@ def validate_webhook_url(webhook_url):
             f"Webhook target {hostname} matches ALERTS_WEBHOOK_DENY_LIST."
         )
 
-    for ip_str in ip_addresses:
-        ip = ipaddress.ip_address(ip_str)
+    for ip in resolved_ips:
         if settings.ALERTS_WEBHOOK_DENY_NON_GLOBAL and not ip.is_global:
             raise ValueError(
-                f"Webhook target resolves to non-global IP address {ip_str}. "
+                f"Webhook target resolves to non-global IP address {ip}. "
                 "If this destination is intentional, add it to ALERTS_WEBHOOK_ALLOW_LIST."
             )
         if any(ip in network for network in disallowed_overlay_networks):
             raise ValueError(
-                f"Webhook target resolves to disallowed IP address {ip_str}. "
+                f"Webhook target resolves to disallowed IP address {ip}. "
                 "If this destination is intentional, adjust ALERTS_WEBHOOK_DISALLOWED_IP_CIDRS."
             )
