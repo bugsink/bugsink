@@ -1,6 +1,6 @@
+import io
 import pprint
 import re
-import io
 import brotli
 
 from unittest import TestCase as RegularTestCase

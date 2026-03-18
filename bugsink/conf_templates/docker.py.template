@@ -26,8 +26,18 @@ BEHIND_PLAIN_HTTP_PROXY = os.getenv("BEHIND_PLAIN_HTTP_PROXY", "False").lower() 
 if BEHIND_HTTPS_PROXY or BEHIND_PLAIN_HTTP_PROXY:
     # We hard-code the choice of proxy headers; which means you have to match those on the proxy side (easy enough).
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Note: slightly redundant, Gunicorn also does this.
-    USE_X_REAL_IP = True
+    USE_X_REAL_IP = os.getenv("USE_X_REAL_IP", "True").lower() in ("true", "1", "yes")
     USE_X_FORWARDED_HOST = os.getenv("USE_X_FORWARDED_HOST", "False").lower() in ("true", "1", "yes")
+    USE_X_FORWARDED_FOR = os.getenv("USE_X_FORWARDED_FOR", "False").lower() in ("true", "1", "yes")
+
+    if USE_X_REAL_IP and USE_X_FORWARDED_FOR:
+        raise ValueError("USE_X_REAL_IP=True and USE_X_FORWARDED_FOR=True are mutually exclusive")
+
+    if USE_X_FORWARDED_FOR:
+        X_FORWARDED_FOR_PROXY_COUNT = int(os.getenv("X_FORWARDED_FOR_PROXY_COUNT", "0"))
+
+        if X_FORWARDED_FOR_PROXY_COUNT <= 0:
+            raise ValueError("USE_X_FORWARDED_FOR=True requires X_FORWARDED_FOR_PROXY_COUNT to be set to a positive integer")
 
 if BEHIND_HTTPS_PROXY:
     SESSION_COOKIE_SECURE = True
