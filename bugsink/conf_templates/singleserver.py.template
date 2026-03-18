@@ -16,6 +16,9 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Note: slightly 
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 USE_X_REAL_IP = True
+# If your reverse proxy must overwrite the Host header when talking to Bugsink, you can pass the original host
+# through X-Forwarded-Host and uncomment the setting below.
+# USE_X_FORWARDED_HOST = True
 # Alternatively, you can use X-Forwarded-For. (Set the number of proxies in the settings below.)
 # USE_X_FORWARDED_FOR = True
 # X_FORWARDED_FOR_PROXY_COUNT = 1
