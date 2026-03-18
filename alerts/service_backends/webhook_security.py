@@ -5,19 +5,6 @@ from urllib.parse import urlparse
 from bugsink.app_settings import get_settings
 
 
-def _parse_networks(cidr_list, setting_name):
-    networks = []
-    for cidr in cidr_list:
-        value = cidr.strip()
-        if value == "":
-            continue
-        try:
-            networks.append(ipaddress.ip_network(value))
-        except ValueError as e:
-            raise ValueError(f"Invalid CIDR in {setting_name}: {value}") from e
-    return networks
-
-
 def _parse_hosts_and_networks(entries, setting_name):
     hosts = set()
     networks = []
@@ -61,8 +48,6 @@ def validate_webhook_url(webhook_url):
         settings.ALERTS_WEBHOOK_ALLOW_LIST, "ALERTS_WEBHOOK_ALLOW_LIST")
     deny_hosts, deny_networks = _parse_hosts_and_networks(
         settings.ALERTS_WEBHOOK_DENY_LIST, "ALERTS_WEBHOOK_DENY_LIST")
-    disallowed_overlay_networks = _parse_networks(
-        settings.ALERTS_WEBHOOK_DISALLOWED_IP_CIDRS, "ALERTS_WEBHOOK_DISALLOWED_IP_CIDRS")
 
     port = parsed.port
     if port is None:
@@ -93,9 +78,4 @@ def validate_webhook_url(webhook_url):
             raise ValueError(
                 f"Webhook target resolves to non-global IP address {ip}. "
                 "If this destination is intentional, add it to ALERTS_WEBHOOK_ALLOW_LIST."
-            )
-        if any(ip in network for network in disallowed_overlay_networks):
-            raise ValueError(
-                f"Webhook target resolves to disallowed IP address {ip}. "
-                "If this destination is intentional, adjust ALERTS_WEBHOOK_DISALLOWED_IP_CIDRS."
             )

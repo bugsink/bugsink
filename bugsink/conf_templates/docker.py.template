@@ -210,8 +210,6 @@ BUGSINK = {
         [h.strip() for h in os.getenv("ALERTS_WEBHOOK_DENY_LIST", "").split(",") if h.strip()],
     "ALERTS_WEBHOOK_DENY_NON_GLOBAL":
         os.getenv("ALERTS_WEBHOOK_DENY_NON_GLOBAL", "true").lower() in ("true", "1", "yes"),
-    "ALERTS_WEBHOOK_DISALLOWED_IP_CIDRS":
-        [h.strip() for h in os.getenv("ALERTS_WEBHOOK_DISALLOWED_IP_CIDRS", "").split(",") if h.strip()],
 
     # Feature flags
     "FEATURE_MINIDUMPS": os.getenv("FEATURE_MINIDUMPS", "false").lower() in ("true", "1", "yes"),

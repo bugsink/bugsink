@@ -12,12 +12,6 @@ _KIBIBYTE = 1024
 _MEBIBYTE = 1024 * _KIBIBYTE
 
 
-# Extra deny CIDRs for outbound webhook targets.
-# This is an explicit deny overlay on top of ALERTS_WEBHOOK_DENY_NON_GLOBAL.
-DEFAULT_DISALLOWED_WEBHOOK_IP_CIDRS = [
-]
-
-
 # CB means "create by"
 CB_ANYBODY = "CB_ANYBODY"
 CB_MEMBERS = "CB_MEMBERS"
@@ -95,7 +89,6 @@ DEFAULTS = {
     "ALERTS_WEBHOOK_ALLOW_LIST": [],
     "ALERTS_WEBHOOK_DENY_LIST": [],
     "ALERTS_WEBHOOK_DENY_NON_GLOBAL": True,
-    "ALERTS_WEBHOOK_DISALLOWED_IP_CIDRS": DEFAULT_DISALLOWED_WEBHOOK_IP_CIDRS,
 
     # Feature flags:
     "FEATURE_MINIDUMPS": False,  # minidumps are experimental/early-stage and likely a DOS-magnet; disabled by default
