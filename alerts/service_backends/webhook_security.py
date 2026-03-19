@@ -30,7 +30,15 @@ def _resolve_ip_addresses(hostname, port):
 
 
 def _match_entries(target_hostname, resolved_ips, hosts, networks):
-    return target_hostname in hosts or any(ip in network for ip in resolved_ips for network in networks)
+    if target_hostname in hosts:
+        return True
+
+    for ip in resolved_ips:
+        for network in networks:
+            if ip in network:
+                return True
+
+    return False
 
 
 def validate_webhook_url(webhook_url):
