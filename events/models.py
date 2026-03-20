@@ -207,15 +207,16 @@ class Event(models.Model):
 
     def get_parsed_data_normalized(self):
         parsed_data = self.get_parsed_data()
+        normalized_data = parsed_data
 
         if not self.data_is_valid:
-            parsed_data = repair_event_data(parsed_data, get_event_validation_problem)
+            normalized_data = repair_event_data(parsed_data, get_event_validation_problem)
 
-        return normalize_event_data(parsed_data)
+        return normalize_event_data(normalized_data)
 
     @classmethod
     def from_ingested(cls, event_metadata, digested_at, digest_order, project_digest_order, stored_event_count, issue,
-                      grouping, parsed_data, denormalized_fields, data_to_store=None, data_is_valid=False):
+                      grouping, normalized_data, denormalized_fields, stored_data=None, data_is_valid=False):
 
         # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
@@ -236,25 +237,25 @@ class Event(models.Model):
                 grouping=grouping,
                 ingested_at=event_metadata["ingested_at"],
                 digested_at=digested_at,
-                data=json.dumps(parsed_data if data_to_store is None else data_to_store) if write_storage is None else "",
+                data=json.dumps(normalized_data if stored_data is None else stored_data) if write_storage is None else "",
                 data_is_valid=data_is_valid,
                 storage_backend=None if write_storage is None else write_storage.name,
 
-                timestamp=parse_timestamp(parsed_data["timestamp"]),
-                platform=parsed_data["platform"][:64],
+                timestamp=parse_timestamp(normalized_data["timestamp"]),
+                platform=normalized_data["platform"][:64],
 
-                level=maybe_empty(parsed_data.get("level", "")),
-                logger=maybe_empty(parsed_data.get("logger", ""))[:64],
+                level=maybe_empty(normalized_data.get("level", "")),
+                logger=maybe_empty(normalized_data.get("logger", ""))[:64],
                 # transaction=maybe_empty(parsed_data.get("transaction", "")), part of denormalized_fields
 
-                server_name=maybe_empty(parsed_data.get("server_name", ""))[:255],
-                release=maybe_empty(parsed_data.get("release", ""))[:250],
-                dist=maybe_empty(parsed_data.get("dist", ""))[:64],
+                server_name=maybe_empty(normalized_data.get("server_name", ""))[:255],
+                release=maybe_empty(normalized_data.get("release", ""))[:250],
+                dist=maybe_empty(normalized_data.get("dist", ""))[:64],
 
-                environment=maybe_empty(parsed_data.get("environment", ""))[:64],
+                environment=maybe_empty(normalized_data.get("environment", ""))[:64],
 
-                sdk_name=maybe_empty(parsed_data.get("sdk", {}).get("name", ""))[:255],
-                sdk_version=maybe_empty(parsed_data.get("sdk", {}).get("version", ""))[:255],
+                sdk_name=maybe_empty(normalized_data.get("sdk", {}).get("name", ""))[:255],
+                sdk_version=maybe_empty(normalized_data.get("sdk", {}).get("version", ""))[:255],
 
                 # just getting from the dict would be more precise, since we always add this info, but doing the .get()
                 # allows for backwards compatability (digesting events for which the info was not added on-ingest) so
@@ -270,7 +271,7 @@ class Event(models.Model):
             created = True
 
             if write_storage is not None:
-                write_to_storage(event.id, parsed_data if data_to_store is None else data_to_store)
+                write_to_storage(event.id, normalized_data if stored_data is None else stored_data)
 
             return event, created
         except IntegrityError as e:

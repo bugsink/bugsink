@@ -46,6 +46,8 @@ class Command(BaseCommand):
             del data["_meta"]
 
         try:
+            # This helper still uses the altered schema because the sample suite's KNOWN-BROKEN inventory historically
+            # tracks "broken for Bugsink's sample validator", not every payload the upstream relay schema would reject.
             schema_filename = settings.BASE_DIR / 'api/event.schema.altered.json'
             with open(schema_filename, 'r') as f:
                 schema = json.loads(f.read())

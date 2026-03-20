@@ -246,7 +246,7 @@ class BaseIngestAPIView(View):
         }
 
     @classmethod
-    def validate_event_data(cls, data, validation_setting):
+    def validate_event_data(cls, data):
         return get_event_validation_problem(data)
 
     @classmethod
@@ -282,7 +282,7 @@ class BaseIngestAPIView(View):
             return  # if over-quota: just return (any cleanup is done calling-side)
 
         validation_setting = get_settings().VALIDATE_ON_DIGEST
-        validation_problem = cls.validate_event_data(event_data, validation_setting)
+        validation_problem = cls.validate_event_data(event_data)
         data_is_valid = validation_problem is None
 
         if minidump_bytes is not None:
@@ -291,32 +291,32 @@ class BaseIngestAPIView(View):
             # TODO should not be inside immediate_atomic if it turns out to be slow
             merge_minidump_event(event_data, minidump_bytes)
 
-        parsed_data_for_usage = event_data
+        normalized_data = event_data
         if not data_is_valid:
-            parsed_data_for_usage = repair_event_data(event_data, get_event_validation_problem)
+            normalized_data = repair_event_data(event_data, get_event_validation_problem)
 
             if validation_setting == "strict":
-                repaired_problem = get_event_validation_problem(parsed_data_for_usage)
+                repaired_problem = get_event_validation_problem(normalized_data)
                 if repaired_problem is not None:
                     raise ValidationError(repaired_problem.as_validation_error_message(), code="invalid_event_data")
 
             elif validation_setting == "warn":
-                repaired_problem = get_event_validation_problem(parsed_data_for_usage)
+                repaired_problem = get_event_validation_problem(normalized_data)
                 if repaired_problem is not None:
                     logger.warning("event data validation failed: %s", repaired_problem.as_validation_error_message())
 
-        normalized_event_data = normalize_event_data(parsed_data_for_usage)
+        normalized_data = normalize_event_data(normalized_data)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
         # in an if-statement would require more rework (and possibly extra queries) than it's worth.
-        denormalized_fields = get_denormalized_fields_for_data(normalized_event_data)
+        denormalized_fields = get_denormalized_fields_for_data(normalized_data)
         # the 3 lines below are suggestive of a further inlining of the get_type_and_value_for_data function
-        calculated_type, calculated_value = get_type_and_value_for_data(normalized_event_data)
+        calculated_type, calculated_value = get_type_and_value_for_data(normalized_data)
         denormalized_fields["calculated_type"] = calculated_type
         denormalized_fields["calculated_value"] = calculated_value
 
-        grouping_key = get_issue_grouper_for_data(normalized_event_data, calculated_type, calculated_value)
+        grouping_key = get_issue_grouper_for_data(normalized_data, calculated_type, calculated_value)
 
         try:
             grouping = Grouping.objects.get(
@@ -391,9 +391,9 @@ class BaseIngestAPIView(View):
             issue.stored_event_count,
             issue,
             grouping,
-            normalized_event_data,
+            normalized_data,
             denormalized_fields,
-            data_to_store=event_data,
+            stored_data=event_data,
             data_is_valid=data_is_valid,
         )
         if not event_created:
@@ -472,7 +472,7 @@ class BaseIngestAPIView(View):
 
         # intentionally at the end: possible future optimization is to push this out of the transaction (or even use
         # a separate DB for this)
-        digest_tags(normalized_event_data, event, issue)
+        digest_tags(normalized_data, event, issue)
 
     @classmethod
     def count_installation_periods_and_act_on_it(cls, installation, now):

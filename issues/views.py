@@ -35,7 +35,7 @@ from theme.templatetags.issues import timestamp_with_millis
 
 from .models import Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind
 from .forms import CommentForm
-from .utils import get_main_exception
+from .utils import get_main_exception, get_values
 from events.utils import annotate_with_meta, apply_sourcemaps, get_sourcemap_images
 
 logger = logging.getLogger("bugsink.issues")
@@ -120,8 +120,8 @@ class UncountablePaginator(EagerPaginator):
         return 1_000_000_000  # big enough to be bigger than what you can click through or store in the DB.
 
 
-def _request_repr(parsed_data):
-    request_data = parsed_data.get("request")
+def _request_repr(normalized_data):
+    request_data = normalized_data.get("request")
     if not isinstance(request_data, dict):
         return ""
 
@@ -130,8 +130,8 @@ def _request_repr(parsed_data):
     return method + " " + url
 
 
-def _get_exception_meta(parsed_data):
-    meta = parsed_data.get("_meta", {})
+def _get_exception_meta(normalized_data):
+    meta = normalized_data.get("_meta", {})
     if not isinstance(meta, dict):
         return {}
 
@@ -143,21 +143,22 @@ def _get_exception_meta(parsed_data):
     return values if isinstance(values, dict) else {}
 
 
-def _get_stacktrace_exceptions(parsed_data, stack_of_plates):
-    exceptions = parsed_data.get("exception")
+def _get_stacktrace_exceptions(normalized_data, stack_of_plates):
+    exceptions = get_values(normalized_data.get("exception"))
     if not exceptions:
         return None
 
     exceptions = copy.deepcopy(exceptions)
 
-    frames = exceptions[-1].get("stacktrace", {}).get("frames", [])
+    frames = exceptions[-1].get("stacktrace", {}).get("frames") or []
     if frames:
         frames[-1]["raise_point"] = True
 
     if stack_of_plates:
         exceptions.reverse()
         for exception in exceptions:
-            exception.get("stacktrace", {}).get("frames", []).reverse()
+            frames = exception.get("stacktrace", {}).get("frames") or []
+            frames.reverse()
 
     return exceptions
 
@@ -524,10 +525,10 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
     except Event.DoesNotExist:
         return issue_event_404(request, issue, event_x_qs, "stacktrace", "event_stacktrace")
 
-    parsed_data = event.get_parsed_data_normalized()
+    normalized_data = event.get_parsed_data_normalized()
 
     try:
-        apply_sourcemaps(parsed_data)
+        apply_sourcemaps(normalized_data)
     except Exception as e:
         if settings.DEBUG or settings.I_AM_RUNNING == "TEST":
             # when developing/testing, I _do_ want to get notified
@@ -541,10 +542,10 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
     # your whole screen turned upside down is not something you do willy-nilly. Better to just have good defaults and
     # (possibly later) have this as something that is configurable at the user level.
     stack_of_plates = event.platform != "python"  # Python is the only platform that has chronological stacktraces
-    exceptions = _get_stacktrace_exceptions(parsed_data, stack_of_plates)
+    exceptions = _get_stacktrace_exceptions(normalized_data, stack_of_plates)
 
     try:
-        annotate_with_meta(exceptions, _get_exception_meta(parsed_data))
+        annotate_with_meta(exceptions, _get_exception_meta(normalized_data))
     except Exception as e:
         # broad Exception handling: "_meta" is completely undocumented, and though we have some example of event-data
         # with "_meta" in it, we're not quite sure what the full structure could be in the wild. Because the
@@ -559,8 +560,8 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
         "issue": issue,
         "event": event,
         "is_event_page": True,
-        "parsed_data": parsed_data,
-        "request_repr": _request_repr(parsed_data),
+        "parsed_data": normalized_data,
+        "request_repr": _request_repr(normalized_data),
         "exceptions": exceptions,
         "stack_of_plates": stack_of_plates,
         "mute_options": GLOBAL_MUTE_OPTIONS,
@@ -602,7 +603,7 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
     except Event.DoesNotExist:
         return issue_event_404(request, issue, event_x_qs, "breadcrumbs", "event_breadcrumbs")
 
-    parsed_data = event.get_parsed_data_normalized()
+    normalized_data = event.get_parsed_data_normalized()
 
     return render(request, "issues/breadcrumbs.html", {
         "tab": "breadcrumbs",
@@ -611,8 +612,8 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
         "issue": issue,
         "event": event,
         "is_event_page": True,
-        "request_repr": _request_repr(parsed_data),
-        "breadcrumbs": parsed_data.get("breadcrumbs"),
+        "request_repr": _request_repr(normalized_data),
+        "breadcrumbs": get_values(normalized_data.get("breadcrumbs")) or [],
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
         # event_qs_count is not used when there is no q, so no need to calculate it in that case
@@ -642,7 +643,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         event = _get_event(event_x_qs, issue, event_pk, digest_order, nav, (first_do, last_do))
     except Event.DoesNotExist:
         return issue_event_404(request, issue, event_x_qs, "event-details", "event_details")
-    parsed_data = event.get_parsed_data_normalized()
+    normalized_data = event.get_parsed_data_normalized()
 
     key_info = [
         ("title", event.title()),
@@ -652,17 +653,17 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         ("bugsink_internal_id", event.id),
     ]
 
-    if get_path(get_main_exception(parsed_data), "mechanism", "handled") is not None:
+    if get_path(get_main_exception(normalized_data), "mechanism", "handled") is not None:
         key_info += [
             # grepping on [private-]samples (admittedly: not a very rich set)  has shown: when there's multiple values
             # for mechanism, they're always identical. We just pick the 'main' (best guess) if this ever turns out to be
             # false.  sentry repeats this info throughout the chains in the trace, btw, but I don't want to pollute my
             # UI so much.
-            ("handled", get_path(get_main_exception(parsed_data), "mechanism", "handled")),
+            ("handled", get_path(get_main_exception(normalized_data), "mechanism", "handled")),
         ]
 
     key_info += [
-        ("mechanism", get_path(get_main_exception(parsed_data), "mechanism", "type")),
+        ("mechanism", get_path(get_main_exception(normalized_data), "mechanism", "type")),
 
         ("issue_id", issue.id),
         ("timestamp", timestamp_with_millis(event.timestamp)),
@@ -672,21 +673,21 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         ("remote_addr", event.remote_addr),
     ]
 
-    logentry_info = _get_logentry_info(parsed_data)
+    logentry_info = _get_logentry_info(normalized_data)
 
     key_info += [
         ("grouping key", event.grouping.grouping_key),
     ]
 
     deployment_info = \
-        ([("release", parsed_data["release"])] if "release" in parsed_data else []) + \
-        ([("environment", parsed_data["environment"])] if "environment" in parsed_data else []) + \
-        ([("server_name", parsed_data["server_name"])] if "server_name" in parsed_data else [])
+        ([("release", normalized_data["release"])] if "release" in normalized_data else []) + \
+        ([("environment", normalized_data["environment"])] if "environment" in normalized_data else []) + \
+        ([("server_name", normalized_data["server_name"])] if "server_name" in normalized_data else [])
 
-    contexts = get_contexts_enriched_with_ua(parsed_data)
+    contexts = get_contexts_enriched_with_ua(normalized_data)
 
     try:
-        sourcemaps_images = get_sourcemap_images(parsed_data)
+        sourcemaps_images = get_sourcemap_images(normalized_data)
     except Exception as e:
         if settings.DEBUG or settings.I_AM_RUNNING == "TEST":
             # when developing/testing, I _do_ want to get notified
@@ -701,8 +702,8 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         "issue": issue,
         "event": event,
         "is_event_page": True,
-        "parsed_data": parsed_data,
-        "request_repr": _request_repr(parsed_data),
+        "parsed_data": normalized_data,
+        "request_repr": _request_repr(normalized_data),
         "key_info": key_info,
         "logentry_info": logentry_info,
         "deployment_info": deployment_info,

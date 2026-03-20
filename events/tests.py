@@ -73,7 +73,16 @@ class NormalizationTestCase(RegularTestCase):
             "exception": {
                 "type": "ValueError",
                 "value": "bad value",
-                "stacktrace": {},
+                "stacktrace": {
+                    "frames": [
+                        {
+                            "filename": "demo.py",
+                            "function": "broken",
+                            "lineno": 1,
+                            "native": False,
+                        },
+                    ],
+                },
             },
         }
 
@@ -85,7 +94,8 @@ class NormalizationTestCase(RegularTestCase):
         self.assertEqual("1234", normalized["user"]["id"])
         self.assertEqual("text/html", normalized["request"]["headers"]["Accept"])
         self.assertEqual("123", normalized["fingerprint"][1])
-        self.assertEqual([], normalized["exception"][0]["stacktrace"]["frames"])
+        self.assertEqual("ValueError", normalized["exception"]["values"][0]["type"])
+        self.assertNotIn("native", normalized["exception"]["values"][0]["stacktrace"]["frames"][0])
 
 
 class TimeZoneTestCase(DjangoTestCase):

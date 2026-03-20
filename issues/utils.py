@@ -13,18 +13,9 @@ def maybe_empty(s):
 
 def get_values(obj):
     """
-    https://develop.sentry.dev/sdk/data-model/event-payloads/exception/
-
-    > The exception attribute should be an object with the attribute values containing a list of one or more values that
-    > are objects in the format described below. Alternatively, the exception attribute may be a flat list of objects in
-    > the format below.
-
-    Same for threads & breadcrumbs:
-    * https://develop.sentry.dev/sdk/data-model/event-payloads/threads/
-    * https://develop.sentry.dev/sdk/data-model/event-payloads/breadcrumbs/
-
-    This function gets that list, whether the exception already was it, or whether it was wrapped in a dict as the
-    single value of a "values" key.
+    Bugsink's normalized event data uses the spec-shaped {"values": [...]} container for exception/threads/breadcrumbs.
+    This helper remains because we also still read raw or older event shapes in a few places, including historical
+    broken inputs that were a flat list or even a single dict.
     """
     if obj is None:
         # None in None out allows us to compose this function with get_path (which returns None if any key is missing).

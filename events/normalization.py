@@ -1,36 +1,46 @@
 import copy
-import re
 
 
-_PATH_TOKEN_RE = re.compile(r"\.([A-Za-z_][A-Za-z0-9_]*)|\[(\d+)\]")
+VALUES_INTERFACE_KEYS = {"exception", "threads", "breadcrumbs"}
+
+STRING_PATHS = {
+    ("platform",),
+    ("level",),
+    ("logger",),
+    ("transaction",),
+    ("server_name",),
+    ("release",),
+    ("dist",),
+    ("environment",),
+    ("user", "id"),
+    ("sdk", "name"),
+    ("sdk", "version"),
+    ("request", "method"),
+    ("request", "url"),
+}
 
 
 def normalize_event_data(parsed_data):
-    normalized = copy.deepcopy(parsed_data)
+    # This is intentionally not a "repair anything" pass. By the time we get here, the data is either already valid or
+    # has just been repaired in response to a concrete validation failure. The job here is only to pick a single,
+    # spec-shaped representation for the interfaces where Bugsink knowingly accepts more than one layout.
+    normalized_data = copy.deepcopy(parsed_data)
 
-    # The validator accepts both the documented {"values": [...]} shape and the flat-list shape for these interfaces.
-    # Internally we always use the flat-list shape so that grouping and the views only have one shape to think about.
-    for key in ["exception", "threads", "breadcrumbs"]:
-        if key in normalized:
-            normalized[key] = _normalize_values_interface(normalized[key])
+    for key in VALUES_INTERFACE_KEYS:
+        _normalize_values_interface(normalized_data, key)
 
-    for exception in normalized.get("exception") or []:
+    for exception in _iter_values_interface(normalized_data.get("exception")):
         _normalize_stacktrace_frames(exception)
 
-    for thread in normalized.get("threads") or []:
+    for thread in _iter_values_interface(normalized_data.get("threads")):
         _normalize_stacktrace_frames(thread)
 
-    if isinstance(normalized.get("tags"), list):
-        normalized["tags"] = {
-            str(key): value
-            for key, value in normalized["tags"]
-            if isinstance(key, str)
-        }
-
-    return normalized
+    return normalized_data
 
 
 def repair_event_data(parsed_data, get_validation_problem):
+    # Validation stays the source of truth: we keep asking the validator for the next concrete problem and only apply a
+    # repair when we have an explicit rule for that exact kind of failure.
     repaired = copy.deepcopy(parsed_data)
     seen = set()
 
@@ -39,7 +49,7 @@ def repair_event_data(parsed_data, get_validation_problem):
         if problem is None:
             return repaired
 
-        signature = (problem.path, problem.message)
+        signature = (problem.absolute_path, problem.validator, problem.message)
         if signature in seen:
             return repaired
         seen.add(signature)
@@ -48,273 +58,249 @@ def repair_event_data(parsed_data, get_validation_problem):
             return repaired
 
 
-def _normalize_values_interface(value):
-    if value is None:
-        return None
-
-    if isinstance(value, list):
-        return value
-
-    if isinstance(value, tuple):
-        return list(value)
-
-    if isinstance(value, dict):
-        if "values" in value:
-            values = value["values"]
-            if values is None:
-                return []
-            if isinstance(values, tuple):
-                return list(values)
-            return values
-
-        # Seen with sentry-roblox style payloads: a plain dict where the interface should have been wrapped.
-        return [value]
-
-    return value
-
-
-def _normalize_stacktrace_frames(item):
-    stacktrace = item.get("stacktrace")
-    if not isinstance(stacktrace, dict):
-        return
-
-    frames = stacktrace.get("frames")
-    if frames is None:
-        stacktrace["frames"] = []
-    elif isinstance(frames, tuple):
-        stacktrace["frames"] = list(frames)
-    elif isinstance(frames, dict):
-        stacktrace["frames"] = [frames]
-
-
 def _repair_for_problem(parsed_data, problem):
-    if problem.path == "$" and _repair_top_level_message(parsed_data, problem.message):
+    if _repair_values_interface(parsed_data, problem):
         return True
 
-    if problem.path in ["$.exception", "$.threads", "$.breadcrumbs"]:
-        # Bugsink has long treated these three interfaces as "the same kind of annoyance": SDKs may send the wrapped
-        # {"values": [...]} shape, the flat-list shape, or occasionally a plain dict. Internally we normalize them to
-        # the flat-list shape so the rest of the code only has to handle one layout.
-        return _repair_values_interface(parsed_data, problem.path[2:])
+    if _repair_top_level_message(parsed_data, problem):
+        return True
 
-    if problem.path == "$.logentry":
-        return _repair_logentry(parsed_data)
+    if _repair_logentry(parsed_data, problem):
+        return True
 
-    if problem.path == "$.request":
-        return _repair_request(parsed_data)
+    if _repair_request(parsed_data, problem):
+        return True
 
-    if problem.path == "$.tags":
-        return _repair_tags(parsed_data)
+    if _repair_scalar_string_field(parsed_data, problem):
+        return True
 
-    if problem.path == "$.user.id":
-        # User ids end up in tags and the UI as text. An integer user id is therefore not semantically wrong for
-        # Bugsink; it just needs to be moved into the string-only shape that the schema wants.
-        return _repair_scalar_string_field(parsed_data, "user", "id")
+    if _repair_request_header(parsed_data, problem):
+        return True
 
-    if problem.path in [
-        "$.platform",
-        "$.level",
-        "$.logger",
-        "$.transaction",
-        "$.server_name",
-        "$.release",
-        "$.dist",
-        "$.environment",
-    ]:
-        # These fields all feed into CharFields, grouping, titles, or tags. A scalar in the wrong JSON type is still
-        # meaningful data to Bugsink, so we coerce it the same way the rest of the codebase already implicitly expects.
-        return _repair_scalar_string_field(parsed_data, problem.path[2:])
+    if _repair_fingerprint_value(parsed_data, problem):
+        return True
 
-    if problem.path in ["$.sdk.name", "$.sdk.version"]:
-        return _repair_scalar_string_field(parsed_data, "sdk", problem.path.split(".")[-1])
+    if _repair_stacktrace(parsed_data, problem):
+        return True
 
-    if problem.path in ["$.request.method", "$.request.url"]:
-        return _repair_scalar_string_field(parsed_data, "request", problem.path.split(".")[-1])
-
-    if problem.path.startswith("$.request.headers."):
-        # ASP.NET style payloads sometimes send header values as one-element lists. For Bugsink's request display and
-        # UA parsing, the meaningful shape is a regular header string.
-        return _repair_request_header(parsed_data, problem.path.rsplit(".", 1)[-1])
-
-    if problem.path.startswith("$.fingerprint["):
-        # Fingerprints are eventually joined into the grouping key; a numeric fragment should therefore behave the same
-        # as its string representation instead of killing ingestion.
-        return _repair_fingerprint_value(parsed_data, problem.path)
-
-    if problem.path.endswith(".stacktrace"):
-        return _repair_stacktrace(problem.path, parsed_data, problem.message)
-
-    if ".stacktrace.frames[" in problem.path:
-        return _repair_frame(problem.path, parsed_data, problem.message)
+    if _repair_frame(parsed_data, problem):
+        return True
 
     return False
 
 
-def _repair_top_level_message(parsed_data, message):
-    if "'message' was unexpected" not in message or "message" not in parsed_data:
+def _repair_values_interface(parsed_data, problem):
+    if len(problem.absolute_path) != 1 or problem.absolute_path[0] not in VALUES_INTERFACE_KEYS:
         return False
 
+    # Exception, threads, and breadcrumbs are the three places where SDKs most often send "almost right" container
+    # shapes: a flat list instead of {"values": [...]}, or a single dict that should have been wrapped.
+    value = parsed_data.get(problem.absolute_path[0])
+
+    if isinstance(value, list):
+        parsed_data[problem.absolute_path[0]] = {"values": value}
+        return True
+
+    if isinstance(value, tuple):
+        parsed_data[problem.absolute_path[0]] = {"values": list(value)}
+        return True
+
+    if isinstance(value, dict) and "values" not in value:
+        # Some SDKs send a single exception/thread/breadcrumb object directly instead of wrapping it in {"values": ...}.
+        parsed_data[problem.absolute_path[0]] = {"values": [value]}
+        return True
+
+    return False
+
+
+def _repair_top_level_message(parsed_data, problem):
+    if problem.validator != "additionalProperties" or problem.absolute_path != ():
+        return False
+
+    unexpected = _get_unexpected_keys(problem)
+    if "message" not in unexpected or "message" not in parsed_data:
+        return False
+
+    # Some SDKs still use the deprecated top-level "message". Bugsink's display and grouping logic works from logentry,
+    # so the repair is to move the data into that modern shape instead of teaching the rest of the code two locations.
     message_value = parsed_data.pop("message")
 
-    # Some SDKs still put their log message in the deprecated top-level "message" field. Internally we want the
-    # modern "logentry" shape so that details/grouping only need to look in one place.
-    if isinstance(message_value, dict):
-        if "logentry" not in parsed_data:
-            parsed_data["logentry"] = message_value
-            return True
+    logentry = parsed_data.get("logentry")
+    if isinstance(logentry, str):
+        logentry = parsed_data["logentry"] = {"formatted": logentry}
 
-        if isinstance(parsed_data["logentry"], dict):
-            for key in ["message", "formatted", "params"]:
-                if key not in parsed_data["logentry"] and key in message_value:
-                    parsed_data["logentry"][key] = message_value[key]
-            return True
-
-        return False
+    if message_value is None:
+        return True
 
     if isinstance(message_value, str):
-        if "logentry" not in parsed_data:
+        if logentry is None:
             parsed_data["logentry"] = {"formatted": message_value}
             return True
 
-        if isinstance(parsed_data["logentry"], dict) and "formatted" not in parsed_data["logentry"]:
-            parsed_data["logentry"]["formatted"] = message_value
+        if isinstance(logentry, dict) and "formatted" not in logentry:
+            logentry["formatted"] = message_value
             return True
 
-    return False
-
-
-def _repair_values_interface(parsed_data, key):
-    value = parsed_data.get(key)
-
-    if isinstance(value, tuple):
-        parsed_data[key] = list(value)
-        return True
-
-    if isinstance(value, list):
         return False
 
-    if isinstance(value, dict):
-        parsed_data[key] = _normalize_values_interface(value)
+    if not isinstance(message_value, dict):
+        return False
+
+    if logentry is None:
+        parsed_data["logentry"] = message_value
         return True
 
-    return False
+    if not isinstance(logentry, dict):
+        return False
+
+    for key in ["formatted", "message", "params"]:
+        if key in message_value and key not in logentry:
+            logentry[key] = message_value[key]
+
+    return True
 
 
-def _repair_logentry(parsed_data):
+def _repair_logentry(parsed_data, problem):
+    if problem.validator != "type" or problem.absolute_path != ("logentry",):
+        return False
+
     if not isinstance(parsed_data.get("logentry"), str):
         return False
 
-    # We already know from the validation error that a string is not a valid logentry object. For display/grouping the
-    # formatted message is the closest fit.
     parsed_data["logentry"] = {"formatted": parsed_data["logentry"]}
     return True
 
 
-def _repair_request(parsed_data):
-    request = parsed_data.get("request")
-    if isinstance(request, str):
-        parsed_data["request"] = {"url": request}
-        return True
-    return False
-
-
-def _repair_tags(parsed_data):
-    tags = parsed_data.get("tags")
-    if not isinstance(tags, list):
+def _repair_request(parsed_data, problem):
+    if problem.validator != "type" or problem.absolute_path != ("request",):
         return False
 
-    repaired = {}
-    for item in tags:
-        if not isinstance(item, (list, tuple)) or len(item) != 2 or not isinstance(item[0], str):
-            return False
-        repaired[item[0]] = item[1]
+    if not isinstance(parsed_data.get("request"), str):
+        return False
 
-    parsed_data["tags"] = repaired
+    # A bare request string is not spec-shaped, but in practice it is almost always just the URL.
+    parsed_data["request"] = {"url": parsed_data["request"]}
     return True
 
 
-def _repair_scalar_string_field(parsed_data, *path):
-    parent, key = _get_parent_and_key(parsed_data, path)
-    if parent is None or key not in parent:
+def _repair_scalar_string_field(parsed_data, problem):
+    if problem.validator != "type" or problem.absolute_path not in STRING_PATHS:
         return False
 
-    value = parent[key]
-    if isinstance(value, bool):
-        parent[key] = str(value).lower()
-        return True
+    # These fields all end up in CharFields, grouping, tags, or otherwise text-oriented display. When an SDK sends a
+    # scalar in the wrong JSON type, preserving the value as text is the least surprising repair.
+    parent, key = _get_parent_and_key(parsed_data, problem.absolute_path)
+    if parent is None or not _has_item(parent, key):
+        return False
 
-    if isinstance(value, (int, float, str)):
-        parent[key] = str(value)
-        return True
+    value = _get_item(parent, key)
+    string_value = _coerce_scalar_to_string(value)
+    if string_value is None:
+        return False
 
-    return False
+    _set_item(parent, key, string_value)
+    return True
 
 
-def _repair_request_header(parsed_data, header_name):
+def _repair_request_header(parsed_data, problem):
+    if problem.validator != "type" or len(problem.absolute_path) != 3:
+        return False
+
+    if tuple(problem.absolute_path[:2]) != ("request", "headers"):
+        return False
+
     headers = parsed_data.get("request", {}).get("headers")
+    header_name = problem.absolute_path[2]
+
     if not isinstance(headers, dict) or header_name not in headers:
         return False
 
+    # ASP.NET style payloads have shown up with one-element header lists, and some broken payloads send numeric header
+    # values. For Bugsink's display and UA parsing, the meaningful normalized shape is a regular header string.
     value = headers[header_name]
-    if isinstance(value, list):
-        headers[header_name] = ", ".join(str(item) for item in value)
+    if isinstance(value, (list, tuple)):
+        parts = []
+        for part in value:
+            string_part = _coerce_scalar_to_string(part)
+            if string_part is None:
+                return False
+            parts.append(string_part)
+
+        headers[header_name] = ", ".join(parts)
         return True
 
-    return False
-
-
-def _repair_fingerprint_value(parsed_data, path):
-    fingerprint = parsed_data.get("fingerprint")
-    if not isinstance(fingerprint, list):
+    string_value = _coerce_scalar_to_string(value)
+    if string_value is None:
         return False
 
-    match = re.match(r"^\$\.fingerprint\[(\d+)\]$", path)
-    if match is None:
-        return False
-
-    index = int(match.group(1))
-    if index >= len(fingerprint):
-        return False
-
-    value = fingerprint[index]
-    if isinstance(value, bool):
-        fingerprint[index] = str(value).lower()
-        return True
-
-    if isinstance(value, (int, float, str)):
-        fingerprint[index] = str(value)
-        return True
-
-    return False
-
-
-def _repair_stacktrace(path, parsed_data, message):
-    if "'frames' is a required property" not in message:
-        return False
-
-    stacktrace = _get_at_json_path(parsed_data, path)
-    if not isinstance(stacktrace, dict):
-        return False
-
-    # Bugsink's stacktrace rendering is perfectly happy with an empty frame list; this is the clean internal shape for
-    # the "stacktrace object exists, but the SDK did not provide frames" cases in KNOWN-BROKEN.
-    stacktrace["frames"] = []
+    headers[header_name] = string_value
     return True
 
 
-def _repair_frame(path, parsed_data, message):
-    frame = _get_at_json_path(parsed_data, path)
+def _repair_fingerprint_value(parsed_data, problem):
+    if problem.validator != "type" or len(problem.absolute_path) != 2:
+        return False
+
+    if problem.absolute_path[0] != "fingerprint" or not isinstance(problem.absolute_path[1], int):
+        return False
+
+    fingerprint = parsed_data.get("fingerprint")
+    index = problem.absolute_path[1]
+
+    if not isinstance(fingerprint, list) or index >= len(fingerprint):
+        return False
+
+    # Fingerprint parts are joined into grouping keys, so a numeric fragment should behave like its string form.
+    string_value = _coerce_scalar_to_string(fingerprint[index])
+    if string_value is None:
+        return False
+
+    fingerprint[index] = string_value
+    return True
+
+
+def _repair_stacktrace(parsed_data, problem):
+    if problem.absolute_path[-1:] != ("stacktrace",):
+        return False
+
+    stacktrace = _get_at_path(parsed_data, problem.absolute_path)
+    if not isinstance(stacktrace, dict):
+        return False
+
+    if problem.validator == "required" and "frames" in (problem.validator_value or []):
+        # Bugsink's stacktrace rendering can handle an empty frame list just fine; the broken sample here is "the SDK
+        # clearly meant to send a stacktrace object, but forgot the frames container".
+        stacktrace["frames"] = []
+        return True
+
+    return False
+
+
+def _repair_frame(parsed_data, problem):
+    if problem.validator == "type" and problem.absolute_path[-2:] == ("stacktrace", "frames"):
+        frames = _get_at_path(parsed_data, problem.absolute_path)
+        # Broken stacktraces have shown up with a single frame object or tuple where the schema wants a list.
+        if isinstance(frames, tuple):
+            _set_at_path(parsed_data, problem.absolute_path, list(frames))
+            return True
+
+        if isinstance(frames, dict):
+            _set_at_path(parsed_data, problem.absolute_path, [frames])
+            return True
+
+        return False
+
+    if problem.validator != "additionalProperties" or not _is_frame_problem(problem):
+        return False
+
+    frame = _get_at_path(parsed_data, problem.absolute_path)
     if not isinstance(frame, dict):
         return False
 
-    unexpected = re.findall(r"'([^']+)'", message)
-    if not unexpected:
-        return False
-
     repaired = False
-    for key in unexpected:
-        # We don't use extra frame attributes like "native" in grouping or the views; dropping them gets us back to
-        # the schema-conforming frame shape without losing information Bugsink depends on.
+    for key in _get_unexpected_keys(problem):
+        # We don't use frame-only extras like "native" in grouping or rendering. Dropping the unknown keys gets us back
+        # to the upstream frame shape while keeping the fields Bugsink does care about.
         if key in frame:
             del frame[key]
             repaired = True
@@ -322,21 +308,143 @@ def _repair_frame(path, parsed_data, message):
     return repaired
 
 
-def _get_at_json_path(obj, path):
+def _normalize_values_interface(parsed_data, key):
+    value = parsed_data.get(key)
+
+    if isinstance(value, list):
+        # The normalized shape for these interfaces is always the spec-shaped {"values": [...]} container.
+        parsed_data[key] = {"values": value}
+        return
+
+    if isinstance(value, tuple):
+        parsed_data[key] = {"values": list(value)}
+        return
+
+    if isinstance(value, dict) and isinstance(value.get("values"), tuple):
+        value["values"] = list(value["values"])
+
+
+def _normalize_stacktrace_frames(item):
+    if not isinstance(item, dict):
+        return
+
+    stacktrace = item.get("stacktrace")
+    if not isinstance(stacktrace, dict):
+        return
+
+    frames = stacktrace.get("frames")
+    if isinstance(frames, tuple):
+        stacktrace["frames"] = list(frames)
+    elif isinstance(frames, dict):
+        stacktrace["frames"] = [frames]
+
+
+def _iter_values_interface(value):
+    if not isinstance(value, dict):
+        return []
+
+    values = value.get("values")
+    if not isinstance(values, list):
+        return []
+
+    return values
+
+
+def _coerce_scalar_to_string(value):
+    if isinstance(value, bool):
+        return str(value).lower()
+
+    if isinstance(value, (int, float, str)):
+        return str(value)
+
+    return None
+
+
+def _get_unexpected_keys(problem):
+    if problem.validator != "additionalProperties":
+        return []
+
+    if not isinstance(problem.instance, dict) or not isinstance(problem.schema, dict):
+        return []
+
+    properties = set(problem.schema.get("properties", {}))
+    return [key for key in problem.instance if key not in properties]
+
+
+def _is_frame_problem(problem):
+    path = problem.absolute_path
+    return len(path) >= 3 and path[-2] == "frames" and isinstance(path[-1], int) and path[-3] == "stacktrace"
+
+
+def _get_at_path(obj, path):
     current = obj
-    for key, index in _PATH_TOKEN_RE.findall(path):
-        current = current[key] if key else current[int(index)]
+
+    for part in path:
+        if isinstance(current, dict):
+            if part not in current:
+                return None
+            current = current[part]
+            continue
+
+        if isinstance(current, list):
+            if not isinstance(part, int) or not (0 <= part < len(current)):
+                return None
+            current = current[part]
+            continue
+
+        return None
+
     return current
 
 
-def _get_parent_and_key(obj, path):
-    current = obj
-    for key in path[:-1]:
-        if not isinstance(current, dict) or key not in current:
-            return None, None
-        current = current[key]
+def _set_at_path(obj, path, value):
+    parent, key = _get_parent_and_key(obj, path)
+    if parent is None:
+        return False
 
-    if not isinstance(current, dict):
+    _set_item(parent, key, value)
+    return True
+
+
+def _get_parent_and_key(obj, path):
+    if not path:
+        return None, None
+
+    current = obj
+    for part in path[:-1]:
+        if isinstance(current, dict):
+            if part not in current:
+                return None, None
+            current = current[part]
+            continue
+
+        if isinstance(current, list):
+            if not isinstance(part, int) or not (0 <= part < len(current)):
+                return None, None
+            current = current[part]
+            continue
+
         return None, None
 
     return current, path[-1]
+
+
+def _has_item(parent, key):
+    if isinstance(parent, dict):
+        return key in parent
+
+    if isinstance(parent, list):
+        return isinstance(key, int) and 0 <= key < len(parent)
+
+    return False
+
+
+def _get_item(parent, key):
+    if isinstance(parent, dict):
+        return parent[key]
+
+    return parent[key]
+
+
+def _set_item(parent, key, value):
+    parent[key] = value
