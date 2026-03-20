@@ -14,6 +14,8 @@ from issues.utils import get_title_for_exception_type_and_value
 
 from .retention import get_random_irrelevance
 from .storage_registry import get_write_storage, get_storage
+from .normalization import normalize_event_data, repair_event_data
+from .validation import get_event_validation_problem
 
 from .tasks import delete_event_deps
 
@@ -75,6 +77,7 @@ class Event(models.Model):
     project = models.ForeignKey(Project, blank=False, null=False, on_delete=models.DO_NOTHING)
 
     data = models.TextField(blank=False, null=False)
+    data_is_valid = models.BooleanField(default=False)
 
     # > Indicates when the event was created in the Sentry SDK. The format is either a string as defined in RFC 3339 or
     # > a numeric (integer or float) value representing the number of seconds that have elapsed since the Unix epoch.
@@ -202,9 +205,17 @@ class Event(models.Model):
     def title(self):
         return get_title_for_exception_type_and_value(self.calculated_type, self.calculated_value)
 
+    def get_parsed_data_normalized(self):
+        parsed_data = self.get_parsed_data()
+
+        if not self.data_is_valid:
+            parsed_data = repair_event_data(parsed_data, get_event_validation_problem)
+
+        return normalize_event_data(parsed_data)
+
     @classmethod
     def from_ingested(cls, event_metadata, digested_at, digest_order, project_digest_order, stored_event_count, issue,
-                      grouping, parsed_data, denormalized_fields):
+                      grouping, parsed_data, denormalized_fields, data_to_store=None, data_is_valid=False):
 
         # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
@@ -225,7 +236,8 @@ class Event(models.Model):
                 grouping=grouping,
                 ingested_at=event_metadata["ingested_at"],
                 digested_at=digested_at,
-                data=json.dumps(parsed_data) if write_storage is None else "",
+                data=json.dumps(parsed_data if data_to_store is None else data_to_store) if write_storage is None else "",
+                data_is_valid=data_is_valid,
                 storage_backend=None if write_storage is None else write_storage.name,
 
                 timestamp=parse_timestamp(parsed_data["timestamp"]),
@@ -258,7 +270,7 @@ class Event(models.Model):
             created = True
 
             if write_storage is not None:
-                write_to_storage(event.id, parsed_data)
+                write_to_storage(event.id, parsed_data if data_to_store is None else data_to_store)
 
             return event, created
         except IntegrityError as e:

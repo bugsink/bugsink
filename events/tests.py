@@ -12,9 +12,11 @@ from projects.models import Project, ProjectMembership
 from issues.factories import get_or_create_issue
 
 from .factories import create_event
+from .normalization import normalize_event_data, repair_event_data
 from .retention import (
     eviction_target, should_evict, evict_for_max_events, get_epoch_bounds_with_irrelevance, filter_for_work)
 from .utils import annotate_with_meta, annotate_var_with_meta
+from .validation import get_event_validation_problem
 
 User = get_user_model()
 
@@ -47,6 +49,43 @@ class ViewTests(TransactionTestCase):
         response = self.client.get(f"/events/event/{self.event.pk}/plain/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'text/plain')
+
+
+class NormalizationTestCase(RegularTestCase):
+
+    def test_repair_and_normalize_known_broken_shapes(self):
+        parsed_data = {
+            "event_id": "a" * 32,
+            "timestamp": "2025-03-20T00:00:00Z",
+            "platform": "python",
+            "message": "hello from a deprecated field",
+            "user": {
+                "id": 1234,
+            },
+            "request": {
+                "url": "https://example.invalid/",
+                "method": "GET",
+                "headers": {
+                    "Accept": ["text/html"],
+                },
+            },
+            "fingerprint": ["custom", 123],
+            "exception": {
+                "type": "ValueError",
+                "value": "bad value",
+                "stacktrace": {},
+            },
+        }
+
+        repaired = repair_event_data(parsed_data, get_event_validation_problem)
+        normalized = normalize_event_data(repaired)
+
+        self.assertIsNone(get_event_validation_problem(normalized))
+        self.assertEqual({"formatted": "hello from a deprecated field"}, normalized["logentry"])
+        self.assertEqual("1234", normalized["user"]["id"])
+        self.assertEqual("text/html", normalized["request"]["headers"]["Accept"])
+        self.assertEqual("123", normalized["fingerprint"][1])
+        self.assertEqual([], normalized["exception"][0]["stacktrace"]["frames"])
 
 
 class TimeZoneTestCase(DjangoTestCase):

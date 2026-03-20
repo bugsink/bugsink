@@ -43,14 +43,7 @@ def _code_lines(frame):
 
 
 def _iter_exceptions(parsed):
-    exc = parsed.get("exception")
-    if not exc:
-        return []
-    if isinstance(exc, dict):
-        return list(exc.get("values") or [])
-    if isinstance(exc, (list, tuple)):
-        return list(exc)
-    return []
+    return list(parsed.get("exception") or [])
 
 
 def _frames_for_exception(exc):
@@ -134,7 +127,7 @@ def _select_frames(frames, in_app_only):
 
 
 def render_stacktrace_md(event, in_app_only=False, include_locals=True):
-    parsed = event.get_parsed_data()
+    parsed = event.get_parsed_data_normalized()
     try:
         apply_sourcemaps(parsed)
     except Exception as e:

@@ -1,4 +1,5 @@
 from collections import namedtuple
+import copy
 import json
 import sentry_sdk
 import logging
@@ -34,7 +35,7 @@ from theme.templatetags.issues import timestamp_with_millis
 
 from .models import Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind
 from .forms import CommentForm
-from .utils import get_values, get_main_exception
+from .utils import get_main_exception
 from events.utils import annotate_with_meta, apply_sourcemaps, get_sourcemap_images
 
 logger = logging.getLogger("bugsink.issues")
@@ -120,12 +121,74 @@ class UncountablePaginator(EagerPaginator):
 
 
 def _request_repr(parsed_data):
-    if "request" not in parsed_data:
+    request_data = parsed_data.get("request")
+    if not isinstance(request_data, dict):
         return ""
 
-    method = parsed_data["request"].get("method", "") or ""
-    url = parsed_data["request"].get("url", "") or ""
+    method = request_data.get("method", "") or ""
+    url = request_data.get("url", "") or ""
     return method + " " + url
+
+
+def _get_exception_meta(parsed_data):
+    meta = parsed_data.get("_meta", {})
+    if not isinstance(meta, dict):
+        return {}
+
+    exception_meta = meta.get("exception", {})
+    if not isinstance(exception_meta, dict):
+        return {}
+
+    values = exception_meta.get("values", {})
+    return values if isinstance(values, dict) else {}
+
+
+def _get_stacktrace_exceptions(parsed_data, stack_of_plates):
+    exceptions = parsed_data.get("exception")
+    if not exceptions:
+        return None
+
+    exceptions = copy.deepcopy(exceptions)
+
+    frames = exceptions[-1].get("stacktrace", {}).get("frames", [])
+    if frames:
+        frames[-1]["raise_point"] = True
+
+    if stack_of_plates:
+        exceptions.reverse()
+        for exception in exceptions:
+            exception.get("stacktrace", {}).get("frames", []).reverse()
+
+    return exceptions
+
+
+def _get_logentry_info(parsed_data):
+    logentry_info = []
+    if parsed_data.get("level"):
+        logentry_info.append(("level", parsed_data["level"]))
+
+    if parsed_data.get("logger"):
+        logentry_info.append(("logger", parsed_data["logger"]))
+
+    logentry = parsed_data.get("logentry")
+    if not isinstance(logentry, dict):
+        return logentry_info
+
+    if logentry.get("formatted"):
+        logentry_info.append(("formatted", logentry["formatted"]))
+
+    if logentry.get("message"):
+        logentry_info.append(("message", logentry["message"]))
+
+    params = logentry.get("params", {})
+    if isinstance(params, list):
+        for param_i, param_v in enumerate(params):
+            logentry_info.append((f"#{param_i}", param_v))
+    elif isinstance(params, dict):
+        for param_k, param_v in params.items():
+            logentry_info.append((param_k, param_v))
+
+    return logentry_info
 
 
 def _is_valid_action(action, issue):
@@ -461,20 +524,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
     except Event.DoesNotExist:
         return issue_event_404(request, issue, event_x_qs, "stacktrace", "event_stacktrace")
 
-    parsed_data = event.get_parsed_data()
-
-    exceptions = get_values(parsed_data["exception"]) if "exception" in parsed_data else None
-
-    try:
-        # get_values for consistency (whether it's needed: unclear, since _meta is not actually in the specs)
-        meta_values = get_values(parsed_data.get("_meta", {}).get("exception", {"values": {}}))
-        annotate_with_meta(exceptions, meta_values)
-    except Exception as e:
-        # broad Exception handling: "_meta" is completely undocumented, and though we have some example of event-data
-        # with "_meta" in it, we're not quite sure what the full structure could be in the wild. Because the
-        # 'incomplete' annotations are not absolutely necessary (Sentry itself went without it for years) we silently
-        # swallow the error in that case.
-        sentry_sdk.capture_exception(e)
+    parsed_data = event.get_parsed_data_normalized()
 
     try:
         apply_sourcemaps(parsed_data)
@@ -491,21 +541,16 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
     # your whole screen turned upside down is not something you do willy-nilly. Better to just have good defaults and
     # (possibly later) have this as something that is configurable at the user level.
     stack_of_plates = event.platform != "python"  # Python is the only platform that has chronological stacktraces
+    exceptions = _get_stacktrace_exceptions(parsed_data, stack_of_plates)
 
-    if exceptions is not None and len(exceptions) > 0:
-        if exceptions[-1].get('stacktrace') and exceptions[-1]['stacktrace'].get('frames'):
-            exceptions[-1]['stacktrace']['frames'][-1]['raise_point'] = True
-
-        if stack_of_plates:
-            # NOTE manipulation of parsed_data going on here, this could be a trap if other parts depend on it
-            # (e.g. grouper)
-            exceptions = [e for e in reversed(exceptions)]
-            for exception in exceptions:
-                if not exception.get('stacktrace'):
-                    continue
-                if not exception.get('stacktrace').get('frames'):
-                    continue
-                exception['stacktrace']['frames'] = [f for f in reversed(exception['stacktrace']['frames'])]
+    try:
+        annotate_with_meta(exceptions, _get_exception_meta(parsed_data))
+    except Exception as e:
+        # broad Exception handling: "_meta" is completely undocumented, and though we have some example of event-data
+        # with "_meta" in it, we're not quite sure what the full structure could be in the wild. Because the
+        # 'incomplete' annotations are not absolutely necessary (Sentry itself went without it for years) we silently
+        # swallow the error in that case.
+        sentry_sdk.capture_exception(e)
 
     return render(request, "issues/stacktrace.html", {
         "tab": "stacktrace",
@@ -557,7 +602,7 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
     except Event.DoesNotExist:
         return issue_event_404(request, issue, event_x_qs, "breadcrumbs", "event_breadcrumbs")
 
-    parsed_data = event.get_parsed_data()
+    parsed_data = event.get_parsed_data_normalized()
 
     return render(request, "issues/breadcrumbs.html", {
         "tab": "breadcrumbs",
@@ -567,7 +612,7 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
         "event": event,
         "is_event_page": True,
         "request_repr": _request_repr(parsed_data),
-        "breadcrumbs": get_values(parsed_data.get("breadcrumbs")),
+        "breadcrumbs": parsed_data.get("breadcrumbs"),
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
         # event_qs_count is not used when there is no q, so no need to calculate it in that case
@@ -597,7 +642,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         event = _get_event(event_x_qs, issue, event_pk, digest_order, nav, (first_do, last_do))
     except Event.DoesNotExist:
         return issue_event_404(request, issue, event_x_qs, "event-details", "event_details")
-    parsed_data = event.get_parsed_data()
+    parsed_data = event.get_parsed_data_normalized()
 
     key_info = [
         ("title", event.title()),
@@ -627,42 +672,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         ("remote_addr", event.remote_addr),
     ]
 
-    logentry_info = []
-    if parsed_data.get("logger") or parsed_data.get("logentry") or parsed_data.get("message"):
-        if "level" in parsed_data:
-            # Sentry gives "level" a front row seat in the UI; but we don't: in an Error Tracker, the default is just
-            # "error" (and we don't want to pollute the UI with this info). Sentry's documentation is also very sparse
-            # on what this actually could be used for, other than that it's "similar" to the log level. I'm just going
-            # to interpret that as "it _is_ the log level" and show it in the logentry_info (only).
-            # Best source is: https://docs.sentry.dev/platforms/python/usage/set-level/
-            logentry_info.append(("level", parsed_data["level"]))
-
-        if parsed_data.get("logger"):
-            logentry_info.append(("logger", parsed_data["logger"]))
-
-        # "message" is a fallback location for the logentry message. It's not in the specs, but it probably was in the
-        # past. see https://github.com/bugsink/bugsink/issues/43
-        logentry_key = "logentry" if "logentry" in parsed_data else "message"
-
-        if isinstance(parsed_data.get(logentry_key), dict):
-            # NOTE: event.schema.json says "If `message` and `params` are given, Sentry will attempt to backfill
-            # `formatted` if empty." but we don't do that yet.
-            if parsed_data.get(logentry_key, {}).get("formatted"):
-                logentry_info.append(("formatted", parsed_data[logentry_key]["formatted"]))
-
-            if parsed_data.get(logentry_key, {}).get("message"):
-                logentry_info.append(("message", parsed_data[logentry_key]["message"]))
-
-            params = parsed_data.get(logentry_key, {}).get("params", {})
-            if isinstance(params, list):
-                for param_i, param_v in enumerate(params):
-                    logentry_info.append(("#%s" % param_i, param_v))
-            elif isinstance(params, dict):
-                for param_k, param_v in params.items():
-                    logentry_info.append((param_k, param_v))
-
-        elif isinstance(parsed_data.get(logentry_key), str):  # robust for top-level as str (see #55)
-            logentry_info.append(("message", parsed_data[logentry_key]))
+    logentry_info = _get_logentry_info(parsed_data)
 
     key_info += [
         ("grouping key", event.grouping.grouping_key),
@@ -720,7 +730,7 @@ def issue_history(request, issue):
         "project": issue.project,
         "issue": issue,
         "is_event_page": False,
-        "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
+        "request_repr": _request_repr(last_event.get_parsed_data_normalized()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
@@ -738,7 +748,7 @@ def issue_tags(request, issue):
         "project": issue.project,
         "issue": issue,
         "is_event_page": False,
-        "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
+        "request_repr": _request_repr(last_event.get_parsed_data_normalized()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
@@ -756,7 +766,7 @@ def issue_grouping(request, issue):
         "project": issue.project,
         "issue": issue,
         "is_event_page": False,
-        "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
+        "request_repr": _request_repr(last_event.get_parsed_data_normalized()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
@@ -790,7 +800,7 @@ def issue_event_list(request, issue):
         "issue": issue,
         "event_list": event_list,
         "is_event_page": False,
-        "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
+        "request_repr": _request_repr(last_event.get_parsed_data_normalized()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
         "page_obj": page_obj,
