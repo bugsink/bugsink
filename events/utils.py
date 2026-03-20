@@ -78,13 +78,13 @@ def annotate_var_with_meta(var, meta_var):
 
     if isinstance(var, list):
         Incomplete = IncompleteList
-        at = lambda k: int(k)  # noqa; (for some reason the meta_k for list lookups is stored as a string)
-        isinvar = lambda k: 0 <= int(k) < len(var)  # noqa
+        at = lambda k: int(k)  # (for some reason the meta_k for list lookups is stored as a string)
+        isinvar = lambda k: 0 <= int(k) < len(var)
 
     elif isinstance(var, dict):
         Incomplete = IncompleteDict
-        at = lambda k: k  # noqa
-        isinvar = lambda k: k in var  # noqa
+        at = lambda k: k
+        isinvar = lambda k: k in var
 
     else:  # str
         # The case I've seen: var == '[Filtered]' and meta_var == {"": {"rem": [["!config", "s"]]}}
