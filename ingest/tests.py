@@ -112,6 +112,26 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(1, TurningPoint.objects.count())
         self.assertEqual(TurningPointKind.FIRST_SEEN, TurningPoint.objects.first().kind)
 
+    @patch("ingest.views.BaseIngestAPIView.count_project_periods_and_act_on_it")
+    @patch("ingest.views.BaseIngestAPIView.count_installation_periods_and_act_on_it")
+    @patch("ingest.views.evict_for_max_events")
+    @patch("events.tasks.delete_by_age_until_under_retention_max.delay")
+    def test_ingest_view_zero_retention_short_circuits(
+            self, cleanup_delay, evict_for_max_events, count_installation, count_project):
+        self.quiet_project.retention_max_event_count = 0
+        self.quiet_project.save(update_fields=["retention_max_event_count"])
+
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
+
+        self.assertFalse(count_installation.called)
+        self.assertFalse(count_project.called)
+        self.assertFalse(evict_for_max_events.called)
+        self.assertFalse(cleanup_delay.called)
+        self.assertEqual(0, Event.objects.filter(project=self.quiet_project).count())
+        self.assertEqual(0, Issue.objects.filter(project=self.quiet_project).count())
+
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
     @patch("issues.models.send_unmute_alert")
@@ -207,6 +227,32 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(TurningPointKind.UNMUTED, TurningPoint.objects.first().kind)
         self.assertEqual(send_unmute_alert.delay.call_args[0][0], str(issue.id))
         self.assertTrue("An event was observed after the mute-deadline of" in send_unmute_alert.delay.call_args[0][1])
+
+    @patch("ingest.views.BaseIngestAPIView.count_project_periods_and_act_on_it")
+    @patch("ingest.views.BaseIngestAPIView.count_installation_periods_and_act_on_it")
+    @patch("ingest.views.evict_for_max_events")
+    @patch("events.tasks.delete_by_age_until_under_retention_max.delay")
+    def test_ingest_view_zero_retention_schedules_cleanup_for_stored_events(
+            self, cleanup_delay, evict_for_max_events, count_installation, count_project):
+        self.quiet_project.retention_max_event_count = 0
+        self.quiet_project.save(update_fields=["retention_max_event_count"])
+
+        event_data = create_event_data()
+        issue, _ = get_or_create_issue(self.quiet_project, event_data)
+        create_event(self.quiet_project, issue, event_data=event_data)
+        issue.stored_event_count = 1
+        issue.save(update_fields=["stored_event_count"])
+        self.quiet_project.stored_event_count = 1
+        self.quiet_project.save(update_fields=["stored_event_count"])
+
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        self.assertFalse(count_installation.called)
+        self.assertFalse(count_project.called)
+        self.assertFalse(evict_for_max_events.called)
+        cleanup_delay.assert_called_once_with(self.quiet_project.id)
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
