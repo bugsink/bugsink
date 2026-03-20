@@ -290,17 +290,17 @@ class BaseIngestAPIView(View):
         # known fields that are not part of the schema (and that we don't want to validate)
         data_to_validate = {k: v for k, v in data.items() if k != "_meta"}
 
-        if validation_setting == "strict":
+        try:
             validate()
             return True
+        except ValidationError as e:
+            if validation_setting == "strict":
+                raise
 
-        else:  # i.e. "warn" - we never reach this function for "none"
-            try:
-                validate()
-                return True
-            except ValidationError as e:
+            if validation_setting == "warn":
                 logger.warning("event data validation failed: %s", e)
-                return False
+
+            return False
 
     @classmethod
     @immediate_atomic()
@@ -334,9 +334,8 @@ class BaseIngestAPIView(View):
 
             return  # if over-quota: just return (any cleanup is done calling-side)
 
-        data_is_valid = False
-        if get_settings().VALIDATE_ON_DIGEST in ["warn", "strict"]:
-            data_is_valid = cls.validate_event_data(event_data, get_settings().VALIDATE_ON_DIGEST)
+        validation_setting = get_settings().VALIDATE_ON_DIGEST
+        data_is_valid = cls.validate_event_data(event_data, validation_setting)
 
         if minidump_bytes is not None:
             # we merge after validation: validation is about what's provided _externally_, not our own merging.
@@ -345,7 +344,7 @@ class BaseIngestAPIView(View):
             merge_minidump_event(event_data, minidump_bytes)
             data_is_valid = False
 
-        normalized_event_data = normalize_event_data(event_data)
+        normalized_event_data = normalize_event_data(event_data, validation_failed=not data_is_valid)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this

@@ -191,7 +191,7 @@ class Event(models.Model):
             return json.load(f)
 
     def get_parsed_data_normalized(self):
-        return normalize_event_data(self.get_parsed_data())
+        return normalize_event_data(self.get_parsed_data(), validation_failed=not self.data_is_valid)
 
     def get_absolute_url(self):
         return f"/issues/issue/{ self.issue_id }/event/{ self.id }/"
@@ -209,7 +209,7 @@ class Event(models.Model):
 
     @classmethod
     def from_ingested(cls, event_metadata, digested_at, digest_order, project_digest_order, stored_event_count, issue,
-                      grouping, raw_data, normalized_data, denormalized_fields, data_is_valid):
+                      grouping, parsed_data, normalized_data, denormalized_fields, data_is_valid):
 
         # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
@@ -230,7 +230,7 @@ class Event(models.Model):
                 grouping=grouping,
                 ingested_at=event_metadata["ingested_at"],
                 digested_at=digested_at,
-                data=json.dumps(raw_data) if write_storage is None else "",
+                data=json.dumps(parsed_data) if write_storage is None else "",
                 data_is_valid=data_is_valid,
                 storage_backend=None if write_storage is None else write_storage.name,
 
@@ -264,7 +264,7 @@ class Event(models.Model):
             created = True
 
             if write_storage is not None:
-                write_to_storage(event.id, raw_data)
+                write_to_storage(event.id, parsed_data)
 
             return event, created
         except IntegrityError as e:

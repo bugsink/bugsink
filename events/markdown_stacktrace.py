@@ -43,19 +43,11 @@ def _code_lines(frame):
 
 
 def _iter_exceptions(parsed):
-    exc = parsed.get("exception")
-    if not exc:
-        return []
-    if isinstance(exc, dict):
-        return list(exc.get("values") or [])
-    if isinstance(exc, (list, tuple)):
-        return list(exc)
-    return []
+    return parsed.get("exception", [])
 
 
 def _frames_for_exception(exc):
-    st = exc.get("stacktrace") or {}
-    return list(st.get("frames") or [])
+    return exc.get("stacktrace", {}).get("frames", [])
 
 
 def _header_lines(event, exc):

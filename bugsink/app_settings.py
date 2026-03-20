@@ -42,7 +42,7 @@ DEFAULTS = {
     "TEAM_CREATION": CB_MEMBERS,  # who can create new teams. default: members, which means "any member of the site"
 
     # System inner workings:
-    "VALIDATE_ON_DIGEST": "none",  # other legal values are "warn" and "strict"
+    "VALIDATE_ON_DIGEST": "none",  # validation always runs; "none" is silent, other legal values are "warn"/"strict"
     "KEEP_ENVELOPES": 0,  # set to a number to store that many; 0 means "store none". This is for debugging.
     "API_LOG_UNIMPLEMENTED_CALLS": False,  # if True, log unimplemented API calls; see #153
     "KEEP_ARTIFACT_BUNDLES": False,  # if True, artifact bundles are kept in the database on-upload (for debugging)

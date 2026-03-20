@@ -128,6 +128,51 @@ def _request_repr(parsed_data):
     return method + " " + url
 
 
+def _annotate_exceptions_from_meta(parsed_data, exceptions):
+    try:
+        # get_values for consistency (whether it's needed: unclear, since _meta is not actually in the specs)
+        meta_values = get_values(parsed_data.get("_meta", {}).get("exception", {"values": {}}))
+        annotate_with_meta(exceptions, meta_values)
+    except Exception as e:
+        # broad Exception handling: "_meta" is completely undocumented, and though we have some example of event-data
+        # with "_meta" in it, we're not quite sure what the full structure could be in the wild. Because the
+        # 'incomplete' annotations are not absolutely necessary (Sentry itself went without it for years) we silently
+        # swallow the error in that case.
+        sentry_sdk.capture_exception(e)
+
+
+def _apply_sourcemaps_for_display(parsed_data):
+    try:
+        apply_sourcemaps(parsed_data)
+    except Exception as e:
+        if settings.DEBUG or settings.I_AM_RUNNING == "TEST":
+            # when developing/testing, I _do_ want to get notified
+            raise
+
+        # sourcemaps are still experimental; we don't want to fail on them, so we just log the error and move on.
+        capture_or_log_exception(e, logger)
+
+
+def _mark_raise_point(exceptions):
+    if not exceptions:
+        return
+
+    frames = exceptions[-1].get("stacktrace", {}).get("frames", [])
+    if frames:
+        frames[-1]["raise_point"] = True
+
+
+def _reverse_exceptions_for_display(exceptions):
+    exceptions = list(reversed(exceptions))
+
+    for exception in exceptions:
+        frames = exception.get("stacktrace", {}).get("frames", [])
+        if frames:
+            exception["stacktrace"]["frames"] = list(reversed(frames))
+
+    return exceptions
+
+
 def _is_valid_action(action, issue):
     """We take the 'strict' approach of complaining even when the action is simply a no-op, because you're already in
     the desired state."""
@@ -463,28 +508,9 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
 
     parsed_data = event.get_parsed_data_normalized()
 
-    exceptions = parsed_data.get("exception")
-
-    try:
-        # get_values for consistency (whether it's needed: unclear, since _meta is not actually in the specs)
-        meta_values = get_values(parsed_data.get("_meta", {}).get("exception", {"values": {}}))
-        annotate_with_meta(exceptions, meta_values)
-    except Exception as e:
-        # broad Exception handling: "_meta" is completely undocumented, and though we have some example of event-data
-        # with "_meta" in it, we're not quite sure what the full structure could be in the wild. Because the
-        # 'incomplete' annotations are not absolutely necessary (Sentry itself went without it for years) we silently
-        # swallow the error in that case.
-        sentry_sdk.capture_exception(e)
-
-    try:
-        apply_sourcemaps(parsed_data)
-    except Exception as e:
-        if settings.DEBUG or settings.I_AM_RUNNING == "TEST":
-            # when developing/testing, I _do_ want to get notified
-            raise
-
-        # sourcemaps are still experimental; we don't want to fail on them, so we just log the error and move on.
-        capture_or_log_exception(e, logger)
+    exceptions = parsed_data.get("exception", [])
+    _annotate_exceptions_from_meta(parsed_data, exceptions)
+    _apply_sourcemaps_for_display(parsed_data)
 
     # NOTE: I considered making this a clickable button of some sort, but decided against it in the end. Getting the UI
     # right is quite hard (https://ux.stackexchange.com/questions/1318) but more generally I would assume that having
@@ -492,20 +518,9 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
     # (possibly later) have this as something that is configurable at the user level.
     stack_of_plates = event.platform != "python"  # Python is the only platform that has chronological stacktraces
 
-    if exceptions is not None and len(exceptions) > 0:
-        if exceptions[-1].get('stacktrace') and exceptions[-1]['stacktrace'].get('frames'):
-            exceptions[-1]['stacktrace']['frames'][-1]['raise_point'] = True
-
-        if stack_of_plates:
-            # NOTE manipulation of parsed_data going on here, this could be a trap if other parts depend on it
-            # (e.g. grouper)
-            exceptions = [e for e in reversed(exceptions)]
-            for exception in exceptions:
-                if not exception.get('stacktrace'):
-                    continue
-                if not exception.get('stacktrace').get('frames'):
-                    continue
-                exception['stacktrace']['frames'] = [f for f in reversed(exception['stacktrace']['frames'])]
+    _mark_raise_point(exceptions)
+    if stack_of_plates:
+        exceptions = _reverse_exceptions_for_display(exceptions)
 
     return render(request, "issues/stacktrace.html", {
         "tab": "stacktrace",

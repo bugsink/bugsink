@@ -329,6 +329,20 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual("https://example.invalid/store", normalized["request"]["url"])
         self.assertEqual("crumb", normalized["breadcrumbs"][0]["message"])
 
+    @patch("ingest.views.logger.warning")
+    @override_settings(VALIDATE_ON_DIGEST="none")
+    def test_digest_validates_silently_in_none_mode(self, logger_warning):
+        request = self.request_factory.post("/api/1/store/")
+
+        event_data = create_event_data()
+        event_data["release"] = 0.171
+
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        event = Event.objects.get()
+        self.assertFalse(event.data_is_valid)
+        self.assertFalse(logger_warning.called)
+
     @override_settings(VALIDATE_ON_DIGEST="warn")
     def test_digest_marks_schema_valid_event_data(self):
         request = self.request_factory.post("/api/1/store/")
