@@ -134,6 +134,7 @@ def _sanitize(settings):
         "ALERTS_WEBHOOK_OUTBOUND_MODE must be one of: open, allowlist_only"
     )
 
+
 def get_settings():
     global _settings
     if _settings is None:

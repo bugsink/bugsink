@@ -335,7 +335,6 @@ class TestDiscordBackendErrorHandling(DjangoTestCase):
             config=json.dumps({"webhook_url": "https://discord.com/api/webhooks/test"}),
         )
 
-
     @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
     def test_discord_test_message_success_clears_failure_status(self, mock_post):
         # Set up existing failure status

@@ -138,7 +138,6 @@ def slack_backend_send_test_message(webhook_url, project_name, display_name, ser
             webhook_url,
             data=json.dumps(data),
             headers={"Content-Type": "application/json"},
-            timeout=5,
         )
 
         result.raise_for_status()
@@ -225,7 +224,6 @@ def slack_backend_send_alert(
             webhook_url,
             data=json.dumps(data),
             headers={"Content-Type": "application/json"},
-            timeout=5,
         )
 
         result.raise_for_status()
