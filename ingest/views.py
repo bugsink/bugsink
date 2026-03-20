@@ -388,81 +388,94 @@ class BaseIngestAPIView(View):
                 issue=issue,
             )
 
-        # +1 because we're about to add one event.
-        project_stored_event_count = project.stored_event_count + 1
+        zero_retention = project.get_retention_max_event_count() == 0
 
-        if should_evict(project, digested_at, project_stored_event_count):
-            # Note: I considered pushing this into some async process, but it makes reasoning much harder, and it's
-            # doubtful whether it would help, because in the end there's just a single pipeline of ingested-related
-            # stuff todo, might as well do the work straight away. Similar thoughts about pushing this into something
-            # cron-like. (not exactly the same, because for cron-like time savings are possible if the cron-likeness
-            # causes the work to be outside of the 'rush hour' -- OTOH this also introduces a lot of complexity about
-            # "what is a limit anyway, if you can go either over it, or work is done before the limit is reached")
-            evicted = evict_for_max_events(project, digested_at, project_stored_event_count)
-
-            # digest_event() is responsible for this update because we have "issue" open (i.e. to "save a query" /
-            # "avoid updating stale objects")
-            update_issue_counts({k: cnt for (k, cnt) in evicted.per_issue.items() if k != issue.id})
-        else:
+        if zero_retention:
             evicted = EvictionCounts(0, {})
+            if project.stored_event_count > 0:
+                from events.tasks import delete_by_age_until_under_retention_max
+                delay_on_commit(delete_by_age_until_under_retention_max, project.id)
+        else:
+            # +1 because we're about to add one event.
+            project_stored_event_count = project.stored_event_count + 1
 
-        # +1 because we're about to add one event
-        issue.stored_event_count = issue.stored_event_count + 1 - evicted.per_issue.get(issue.id, 0)
-        project.stored_event_count = project_stored_event_count - evicted.total
+            if should_evict(project, digested_at, project_stored_event_count):
+                # Note: I considered pushing this into some async process, but it makes reasoning much harder, and it's
+                # doubtful whether it would help, because in the end there's just a single pipeline of ingested-related
+                # stuff todo, might as well do the work straight away. Similar thoughts about pushing this into
+                # something cron-like. (not exactly the same, because for cron-like time savings are possible if the
+                # cron-likeness causes the work to be outside of the 'rush hour' -- OTOH this also introduces a lot of
+                # complexity about "what is a limit anyway, if you can go either over it, or work is done before the
+                # limit is reached")
+                evicted = evict_for_max_events(project, digested_at, project_stored_event_count)
+
+                # digest_event() is responsible for this update because we have "issue" open (i.e. to "save a query" /
+                # "avoid updating stale objects")
+                update_issue_counts({k: cnt for (k, cnt) in evicted.per_issue.items() if k != issue.id})
+            else:
+                evicted = EvictionCounts(0, {})
+
+            # +1 because we're about to add one event
+            issue.stored_event_count = issue.stored_event_count + 1 - evicted.per_issue.get(issue.id, 0)
+            project.stored_event_count = project_stored_event_count - evicted.total
         if issue_created:
             project.issue_count += 1
             project.save(update_fields=["stored_event_count", "issue_count"])
         else:
             project.save(update_fields=["stored_event_count"])
 
-        event, event_created = Event.from_ingested(
-            event_metadata,
-            digested_at,
-            issue.digested_event_count,
-            project.digested_event_count,
-            issue.stored_event_count,
-            issue,
-            grouping,
-            event_data,
-            denormalized_fields,
-        )
-        if not event_created:
-            if issue_created:
-                # this is a weird case that "should not happen" (but can happen in practice). Namely, when some client
-                # sends events with the same event_id (leading to no new event), but different-enough actual data that
-                # they lead to new issue-creation. I've already run into this while debugging (and this may in fact be
-                # the only realistic scenario): manually editing some sample event but not updating the event_id (nor
-                # running send_json with --fresh-id). We raise an exception after cleaning up, to at least avoid getting
-                # into an inconsistent state in the DB.
-                raise ViolatedExpectation("no event created, but issue created")
+        event = None
+        if not zero_retention:
+            event, event_created = Event.from_ingested(
+                event_metadata,
+                digested_at,
+                issue.digested_event_count,
+                project.digested_event_count,
+                issue.stored_event_count,
+                issue,
+                grouping,
+                event_data,
+                denormalized_fields,
+            )
+            if not event_created:
+                if issue_created:
+                    # this is a weird case that "should not happen" (but can happen in practice). Namely, when some
+                    # client sends events with the same event_id (leading to no new event), but different-enough actual
+                    # data that they lead to new issue-creation. I've already run into this while debugging (and this
+                    # may in fact be the only realistic scenario): manually editing some sample event but not updating
+                    # the event_id (nor running send_json with --fresh-id). We raise an exception after cleaning up, to
+                    # at least avoid getting into an inconsistent state in the DB.
+                    raise ViolatedExpectation("no event created, but issue created")
 
-            # Validating by letting the DB raise an exception, and only after taking some other actions already, is not
-            # "by the book" (some book), but it's the most efficient way of doing it when your basic expectation is that
-            # multiple events with the same event_id "don't happen" (i.e. are the result of badly misbehaving clients)
-            # Note: given the ordering here this may hit after an eviction; that was not imagined (but will still work,
-            # albeit with considerable wasted work in that scenario).
-            raise ValidationError("Event already exists", code="event_already_exists")
+                # Validating by letting the DB raise an exception, and only after taking some other actions already, is
+                # not "by the book" (some book), but it's the most efficient way of doing it when your basic
+                # expectation is that multiple events with the same event_id "don't happen" (i.e. are the result of
+                # badly misbehaving clients) Note: given the ordering here this may hit after an eviction; that was not
+                # imagined (but will still work, albeit with considerable wasted work in that scenario).
+                raise ValidationError("Event already exists", code="event_already_exists")
 
-        release, _ = create_release_if_needed(project, event.release, event.ingested_at, issue)
+        release, _ = create_release_if_needed(project, event_data.get("release", "") or "", ingested_at, issue)
 
         if issue_created:
             TurningPoint.objects.create(
                 project=project,
                 issue=issue, triggering_event=event, timestamp=ingested_at,
                 kind=TurningPointKind.FIRST_SEEN)
-            event.never_evict = True
+            if event is not None:
+                event.never_evict = True
 
             if project.alert_on_new_issue:
                 delay_on_commit(send_new_issue_alert, str(issue.id))
 
         else:
             # new issues cannot be regressions by definition, hence this is in the 'else' branch
-            if issue_is_regression(issue, event.release):
+            if issue_is_regression(issue, release.version):
                 TurningPoint.objects.create(
                     project=project,
                     issue=issue, triggering_event=event, timestamp=ingested_at,
                     kind=TurningPointKind.REGRESSED)
-                event.never_evict = True
+                if event is not None:
+                    event.never_evict = True
 
                 if project.alert_on_regression:
                     delay_on_commit(send_regression_alert, str(issue.id))
@@ -482,12 +495,15 @@ class BaseIngestAPIView(View):
                 # long. Phrased slightly differently: you basically click the button saying "I suppose this issue will
                 # self-resolve in x time; notify me if this is not the case"
                 IssueStateManager.unmute(
-                    issue, triggering_event=event,
-                    unmute_metadata={"mute_for": {"unmute_after": issue.unmute_after}})
+                    issue,
+                    timestamp=ingested_at,
+                    triggering_event=event,
+                    unmute_metadata={"mute_for": {"unmute_after": issue.unmute_after}},
+                )
 
         cls.count_issue_periods_and_act_on_it(issue, event, digested_at)
 
-        if event.never_evict:
+        if event is not None and event.never_evict:
             # as a sort of poor man's django-dirtyfields (which we haven't adopted for simplicity's sake) we simply do
             # this manually for a single field; we know that if never_evict has been set, it's always been set after the
             # .create call, i.e. its results still need to be saved. We accept the cost of the extra .save call, since
@@ -502,7 +518,7 @@ class BaseIngestAPIView(View):
 
         # intentionally at the end: possible future optimization is to push this out of the transaction (or even use
         # a separate DB for this)
-        digest_tags(event_data, event, issue)
+        digest_tags(event_data, event, issue, remote_addr=event_metadata.get("remote_addr"))
 
     @classmethod
     def count_installation_periods_and_act_on_it(cls, installation, now):
@@ -523,6 +539,8 @@ class BaseIngestAPIView(View):
         if ((digested_event_count >= installation.next_quota_check) or
                 (installation.next_quota_check - digested_event_count > min_threshold)):
 
+            # PoC caveat: this assumes historical digests are represented by Event rows; with retention=0 they are not,
+            # so the rolling-window quota logic is no longer correct.
             states = check_for_thresholds(Event.objects.all(), now, thresholds, 1)
 
             until, threshold_info = max(
@@ -588,6 +606,8 @@ class BaseIngestAPIView(View):
             #   door (setting quota_exceeded_until).
             # * add_for_current=1 because we're called before the event is digested (it's not in Event.objects.filter),
             #   and because of the previous bullet we know that it will always be digested.
+            # PoC caveat: this assumes historical digests are represented by Event rows; with retention=0 they are not,
+            # so the rolling-window quota logic is no longer correct.
             states = check_for_thresholds(Event.objects.filter(project=project), now, thresholds, 1)
 
             until = max([below_from for (is_exceeded, below_from, _, _) in states if is_exceeded], default=None)
@@ -621,7 +641,12 @@ class BaseIngestAPIView(View):
         thresholds = IssueStateManager.get_unmute_thresholds(issue)
 
         if thresholds and issue.digested_event_count >= issue.next_unmute_check:
-            states = check_for_thresholds(Event.objects.filter(issue=issue), timestamp, thresholds)
+            states = check_for_thresholds(
+                Event.objects.filter(issue=issue),
+                timestamp,
+                thresholds,
+                0 if event is not None else 1,
+            )
 
             check_again_after = max(1, min([check_after for (_, _, check_after, _) in states], default=1))
 
@@ -631,8 +656,13 @@ class BaseIngestAPIView(View):
                 if not is_exceeded:
                     continue
 
-                IssueStateManager.unmute(issue, triggering_event=event, unmute_metadata={"mute_until": {
-                    "period": period_name, "nr_of_periods": nr_of_periods, "volume": gte_threshold}})
+                IssueStateManager.unmute(
+                    issue,
+                    timestamp=timestamp,
+                    triggering_event=event,
+                    unmute_metadata={"mute_until": {
+                        "period": period_name, "nr_of_periods": nr_of_periods, "volume": gte_threshold}},
+                )
 
                 # In the (in the current UI impossible, and generally unlikely) case that multiple unmute conditions are
                 # met simultaneously, we arbitrarily break after the first. (this makes it so that a single TurningPoint

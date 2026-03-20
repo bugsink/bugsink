@@ -114,14 +114,18 @@ def vacuum_eventless_issuetags(min_id=0):
     INNER_BATCH_SIZE = 64
 
     with immediate_atomic():
+        from projects.models import Project
+
         issue_tag_infos = list(
             IssueTag.objects
             .filter(id__gt=min_id)
             .order_by('id')
-            .values('id', 'issue_id', 'value_id')[:BATCH_SIZE]
+            .values('id', 'project_id', 'issue_id', 'value_id')[:BATCH_SIZE]
         )
 
         for issue_tag_infos_batch in batched(issue_tag_infos, INNER_BATCH_SIZE):
+            projects = Project.objects.in_bulk({it['project_id'] for it in issue_tag_infos_batch})
+
             matching_eventtags = _or_join([
                 Q(issue_id=it['issue_id'], value_id=it['value_id']) for it in issue_tag_infos_batch
             ])
@@ -138,7 +142,8 @@ def vacuum_eventless_issuetags(min_id=0):
             stale_issuetags = [
                 it
                 for it in issue_tag_infos_batch
-                if (it['issue_id'], it['value_id']) not in in_use_issue_value_pairs
+                if projects[it['project_id']].get_retention_max_event_count() != 0
+                and (it['issue_id'], it['value_id']) not in in_use_issue_value_pairs
             ]
 
             if stale_issuetags:

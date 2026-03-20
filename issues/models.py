@@ -329,7 +329,7 @@ class IssueStateManager(object):
             issue.unmute_after = unmute_after
 
     @staticmethod
-    def unmute(issue, triggering_event=None, unmute_metadata=None):
+    def unmute(issue, triggering_event=None, unmute_metadata=None, timestamp=None):
         if issue.is_muted:
             # we check on is_muted explicitly: it may be so that multiple unmute conditions happens simultaneously (and
             # not just in "funny configurations"). i.e. a single event could push you past more than 3 events per day or
@@ -339,27 +339,33 @@ class IssueStateManager(object):
             issue.unmute_on_volume_based_conditions = "[]"
             issue.unmute_after = None
 
+            if timestamp is None:
+                assert_(triggering_event is None, "timestamp must be passed for event-triggered unmute")
+                return
+
+            # (note: we can expect project to be set, because it will be None only when projects are deleted, in which
+            # case no more unmuting happens)
+            if issue.project.alert_on_unmute:
+                transaction.on_commit(partial(
+                    send_unmute_alert.delay,
+                    str(issue.id), format_unmute_reason(unmute_metadata)))
+
+            # this is in a funny place but it's still simpler than introducing an Encoder
+            if unmute_metadata is not None and "mute_for" in unmute_metadata:
+                unmute_metadata["mute_for"]["unmute_after"] = \
+                    format_timestamp(unmute_metadata["mute_for"]["unmute_after"])
+
+            # by sticking close to the point where we call send_unmute_alert.delay, we reuse any thinking about
+            # avoinding double calls in edge-cases. a "coincidental advantage" of this approach is that the current
+            # path is never reached via UI-based paths (because those are by definition not event-triggered); thus the
+            # 2 ways of creating TurningPoints do not collide.
+            TurningPoint.objects.create(
+                project_id=issue.project_id,
+                issue=issue,
+                triggering_event=triggering_event,
+                timestamp=timestamp,
+                kind=TurningPointKind.UNMUTED, metadata=json.dumps(unmute_metadata))
             if triggering_event is not None:
-                # (note: we can expect project to be set, because it will be None only when projects are deleted, in
-                # which case no more unmuting happens)
-                if issue.project.alert_on_unmute:
-                    transaction.on_commit(partial(
-                        send_unmute_alert.delay,
-                        str(issue.id), format_unmute_reason(unmute_metadata)))
-
-                # this is in a funny place but it's still simpler than introducing an Encoder
-                if unmute_metadata is not None and "mute_for" in unmute_metadata:
-                    unmute_metadata["mute_for"]["unmute_after"] = \
-                        format_timestamp(unmute_metadata["mute_for"]["unmute_after"])
-
-                # by sticking close to the point where we call send_unmute_alert.delay, we reuse any thinking about
-                # avoinding double calls in edge-cases. a "coincidental advantage" of this approach is that the current
-                # path is never reached via UI-based paths (because those are by definition not event-triggered); thus
-                # the 2 ways of creating TurningPoints do not collide.
-                TurningPoint.objects.create(
-                    project_id=issue.project_id,
-                    issue=issue, triggering_event=triggering_event, timestamp=triggering_event.ingested_at,
-                    kind=TurningPointKind.UNMUTED, metadata=json.dumps(unmute_metadata))
                 triggering_event.never_evict = True  # .save() will be called by the caller of this function
 
     @staticmethod

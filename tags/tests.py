@@ -155,7 +155,7 @@ class DigestTagsTestCase(DjangoTestCase):
         }
         event.remote_addr = "123.123.123.123"
         event.save()
-        digest_tags(event_data, event, issue)
+        digest_tags(event_data, event, issue, event.remote_addr)
 
         # twice because "user" and "user.ip_address"
         self.assertEqual(["123.123.123.123", "123.123.123.123"], [e.value.value for e in event.get_tags])
@@ -174,9 +174,20 @@ class DigestTagsTestCase(DjangoTestCase):
         }
         event.remote_addr = None
         event.save()
-        digest_tags(event_data, event, issue)
+        digest_tags(event_data, event, issue, event.remote_addr)
 
         self.assertEqual([], [e.value.value for e in event.get_tags])
+
+    def test_issue_tags_without_event(self):
+        project = Project.objects.create(name="Test Project")
+        issue, _ = get_or_create_issue(project)
+
+        digest_tags({"release": "1.2.3"}, None, issue)
+
+        self.assertEqual(0, EventTag.objects.count())
+        self.assertEqual(1, IssueTag.objects.count())
+        self.assertEqual("release", IssueTag.objects.first().value.key.key)
+        self.assertEqual("1.2.3", IssueTag.objects.first().value.value)
 
 
 class SearchParserTestCase(RegularTestCase):
@@ -381,3 +392,13 @@ class VacuumEventlessIssueTagsTestCase(TransactionTestCase):
 
         vacuum_eventless_issuetags()
         self.assertEqual(TagValue.objects.all().count(), 0)
+
+    def test_zero_retention_project_preserves_issuetag_without_eventtag(self):
+        self.project.retention_max_event_count = 0
+        self.project.save(update_fields=["retention_max_event_count"])
+
+        store_tags(None, self.issue, {"foo": "bar"})
+
+        self.assertEqual(1, IssueTag.objects.count())
+        vacuum_eventless_issuetags()
+        self.assertEqual(1, IssueTag.objects.count())

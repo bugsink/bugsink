@@ -5,6 +5,7 @@ import io
 import uuid
 import time
 import tempfile
+import hashlib
 
 import datetime
 from unittest.mock import patch
@@ -24,8 +25,13 @@ from events.retention import evict_for_max_events
 from events.storage_registry import override_event_storages
 from events.models import Event
 from issues.factories import get_or_create_issue
-from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
-from issues.utils import get_values
+from issues.models import Grouping, IssueStateManager, Issue, TurningPoint, TurningPointKind
+from issues.utils import (
+    get_denormalized_fields_for_data,
+    get_issue_grouper_for_data,
+    get_type_and_value_for_data,
+    get_values,
+)
 from bugsink.app_settings import override_settings
 from bugsink.streams import UnclosableBytesIO
 from compat.timestamp import format_timestamp
@@ -112,6 +118,41 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(1, TurningPoint.objects.count())
         self.assertEqual(TurningPointKind.FIRST_SEEN, TurningPoint.objects.first().kind)
 
+    @patch("ingest.views.evict_for_max_events")
+    @patch("events.tasks.delete_by_age_until_under_retention_max.delay")
+    @patch("ingest.views.send_new_issue_alert")
+    @patch("ingest.views.send_regression_alert")
+    @patch("issues.models.send_unmute_alert")
+    def test_ingest_view_new_issue_alert_zero_retention(
+            self,
+            send_unmute_alert,
+            send_regression_alert,
+            send_new_issue_alert,
+            cleanup_delay,
+            evict_for_max_events,
+    ):
+        self.loud_project.retention_max_event_count = 0
+        self.loud_project.save(update_fields=["retention_max_event_count"])
+
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.loud_project, request))
+
+        issue = Issue.objects.get(project=self.loud_project)
+        project = Project.objects.get(id=self.loud_project.id)
+        turning_point = TurningPoint.objects.get()
+
+        self.assertTrue(send_new_issue_alert.delay.called)
+        self.assertFalse(send_regression_alert.delay.called)
+        self.assertFalse(send_unmute_alert.delay.called)
+        self.assertFalse(evict_for_max_events.called)
+        self.assertFalse(cleanup_delay.called)
+        self.assertEqual(0, Event.objects.filter(project=self.loud_project).count())
+        self.assertEqual(0, issue.stored_event_count)
+        self.assertEqual(0, project.stored_event_count)
+        self.assertEqual(TurningPointKind.FIRST_SEEN, turning_point.kind)
+        self.assertIsNone(turning_point.triggering_event_id)
+
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
     @patch("issues.models.send_unmute_alert")
@@ -131,6 +172,36 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertFalse(send_unmute_alert.delay.called)
         self.assertEqual(1, TurningPoint.objects.count())
         self.assertEqual(TurningPointKind.REGRESSED, TurningPoint.objects.first().kind)
+
+    @patch("ingest.views.send_new_issue_alert")
+    @patch("ingest.views.send_regression_alert")
+    @patch("issues.models.send_unmute_alert")
+    def test_ingest_view_regression_alert_zero_retention(
+            self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
+        self.loud_project.retention_max_event_count = 0
+        self.loud_project.save(update_fields=["retention_max_event_count"])
+        event_data = create_event_data()
+
+        issue, _ = get_or_create_issue(self.loud_project, event_data)
+        issue.is_resolved = True
+        issue.save()
+
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.loud_project, request))
+
+        issue.refresh_from_db()
+        project = Project.objects.get(id=self.loud_project.id)
+        turning_point = TurningPoint.objects.get()
+
+        self.assertFalse(send_new_issue_alert.delay.called)
+        self.assertTrue(send_regression_alert.delay.called)
+        self.assertFalse(send_unmute_alert.delay.called)
+        self.assertEqual(0, Event.objects.filter(project=self.loud_project).count())
+        self.assertEqual(0, issue.stored_event_count)
+        self.assertEqual(0, project.stored_event_count)
+        self.assertEqual(TurningPointKind.REGRESSED, turning_point.kind)
+        self.assertIsNone(turning_point.triggering_event_id)
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
@@ -181,6 +252,51 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(
             send_unmute_alert.delay.call_args[0][1], "More than 1 events per 1 day occurred, unmuting the issue.")
 
+    @patch("issues.models.send_unmute_alert")
+    def test_ingest_view_unmute_alert_for_vbc_zero_retention_without_stored_events(self, send_unmute_alert):
+        project = Project.objects.create(
+            name="zero-retention",
+            retention_max_event_count=0,
+            alert_on_unmute=True,
+        )
+        event_data = create_event_data()
+        calculated_type, calculated_value = get_type_and_value_for_data(event_data)
+        grouping_key = get_issue_grouper_for_data(event_data, calculated_type, calculated_value)
+
+        issue = Issue.objects.create(
+            project=project,
+            digest_order=1,
+            first_seen=timezone.now(),
+            last_seen=timezone.now(),
+            digested_event_count=0,
+            stored_event_count=0,
+            calculated_type=calculated_type,
+            calculated_value=calculated_value,
+            **get_denormalized_fields_for_data(event_data),
+        )
+        Grouping.objects.create(
+            project=project,
+            grouping_key=grouping_key,
+            grouping_key_hash=hashlib.sha256(grouping_key.encode()).hexdigest(),
+            issue=issue,
+        )
+
+        IssueStateManager.mute(issue, "[{\"period\": \"day\", \"nr_of_periods\": 1, \"volume\": 1}]")
+        issue.save()
+
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, project, request))
+
+        issue.refresh_from_db()
+        turning_point = TurningPoint.objects.get()
+
+        self.assertFalse(issue.is_muted)
+        self.assertEqual(0, Event.objects.filter(project=project).count())
+        self.assertTrue(send_unmute_alert.delay.called)
+        self.assertEqual(TurningPointKind.UNMUTED, turning_point.kind)
+        self.assertIsNone(turning_point.triggering_event_id)
+
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
     @patch("issues.models.send_unmute_alert")
@@ -207,6 +323,66 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(TurningPointKind.UNMUTED, TurningPoint.objects.first().kind)
         self.assertEqual(send_unmute_alert.delay.call_args[0][0], str(issue.id))
         self.assertTrue("An event was observed after the mute-deadline of" in send_unmute_alert.delay.call_args[0][1])
+
+    @patch("ingest.views.send_new_issue_alert")
+    @patch("ingest.views.send_regression_alert")
+    @patch("issues.models.send_unmute_alert")
+    def test_ingest_view_unmute_alert_after_time_zero_retention(
+            self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
+        self.loud_project.retention_max_event_count = 0
+        self.loud_project.save(update_fields=["retention_max_event_count"])
+        event_data = create_event_data()
+
+        issue, _ = get_or_create_issue(self.loud_project, event_data)
+
+        IssueStateManager.mute(issue, unmute_after=timezone.now() + datetime.timedelta(days=1))
+        issue.save()
+
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().digest_event(**_digest_params(
+            event_data,
+            self.loud_project,
+            request,
+            now=timezone.now() + datetime.timedelta(days=2),
+        ))
+
+        issue.refresh_from_db()
+        project = Project.objects.get(id=self.loud_project.id)
+        turning_point = TurningPoint.objects.get()
+
+        self.assertFalse(send_new_issue_alert.delay.called)
+        self.assertFalse(send_regression_alert.delay.called)
+        self.assertTrue(send_unmute_alert.delay.called)
+        self.assertEqual(0, Event.objects.filter(project=self.loud_project).count())
+        self.assertEqual(0, issue.stored_event_count)
+        self.assertEqual(0, project.stored_event_count)
+        self.assertEqual(TurningPointKind.UNMUTED, turning_point.kind)
+        self.assertIsNone(turning_point.triggering_event_id)
+        self.assertEqual(send_unmute_alert.delay.call_args[0][0], str(issue.id))
+        self.assertTrue("An event was observed after the mute-deadline of" in send_unmute_alert.delay.call_args[0][1])
+
+    @patch("ingest.views.evict_for_max_events")
+    @patch("events.tasks.delete_by_age_until_under_retention_max.delay")
+    def test_ingest_view_zero_retention_schedules_cleanup_for_residual_events(
+            self, cleanup_delay, evict_for_max_events):
+        self.quiet_project.retention_max_event_count = 0
+        self.quiet_project.save(update_fields=["retention_max_event_count"])
+
+        event_data = create_event_data()
+        issue, _ = get_or_create_issue(self.quiet_project, event_data)
+        create_event(self.quiet_project, issue, event_data=event_data)
+        issue.stored_event_count = 1
+        issue.save(update_fields=["stored_event_count"])
+        self.quiet_project.stored_event_count = 1
+        self.quiet_project.save(update_fields=["stored_event_count"])
+
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        cleanup_delay.assert_called_once_with(self.quiet_project.id)
+        self.assertFalse(evict_for_max_events.called)
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")

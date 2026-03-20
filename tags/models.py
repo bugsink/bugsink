@@ -159,7 +159,9 @@ def _or_join(q_objects):
     return result
 
 
-def digest_tags(event_data, event, issue):
+def digest_tags(event_data, event, issue, remote_addr=None):
+    # `event` may be None for zero-retention digests. In that case we still keep IssueTag state up to date, but we do
+    # not create EventTag rows because there is no backing Event.
     # The max length of 200 is from TFM for user-provided tags. Still, we just apply it on deduced tags as well;
     # It's a reasonably safe guess that this will not terribly confuse people, and avoids triggering errors on-save.
     tags = {
@@ -168,12 +170,12 @@ def digest_tags(event_data, event, issue):
 
     for key in "user.ip_address", "user":
         if tags.get(key) == "{{auto}}":
-            if event.remote_addr is None:
+            if remote_addr is None:
                 # removing the tag if we don't have the info seems the most faithful to the semantics, i.e. if we don't
                 # have the information it shouldn't appear in tags.
                 del tags[key]
             else:
-                tags[key] = event.remote_addr
+                tags[key] = remote_addr
 
     store_tags(event, issue, tags)
 
@@ -222,9 +224,8 @@ def _store_tags(event, issue, tags):
     # there is some principled point here that there is always a single value of mostly_unique per key, but this point
     # is not formalized in our datbase schema; it "just happens to work correctly" (at least as long as we don't change
     # the list of mostly unique keys, at which point we'll have to do a datamigration).
-    tag_key_objects = [
-        TagKey(project_id=event.project_id, key=key, mostly_unique=is_mostly_unique(key)) for key in tags.keys()
-    ]
+    tag_key_objects = [TagKey(project_id=issue.project_id, key=key, mostly_unique=is_mostly_unique(key))
+                       for key in tags]
     TagKey.objects.bulk_create(
         tag_key_objects, update_conflicts=True, unique_fields=_uf(['project', 'key']), update_fields=['mostly_unique'])
 
@@ -232,10 +233,10 @@ def _store_tags(event, issue, tags):
         # In mysql, bulk_create does not actually set pk on the created objects, so we need to re-query.
         # 'project_id': in the selection-queries below the non-necessity of the project_id is mentioned a number of
         # times, but that's precisly _because_ we encode the link to project in TagKay. i.e. here it is needed.
-        tag_key_objects = TagKey.objects.filter(project_id=event.project_id, key__in=tags.keys())
+        tag_key_objects = TagKey.objects.filter(project_id=issue.project_id, key__in=tags.keys())
 
     tag_value_objects = [
-        TagValue(project_id=event.project_id, key=key_obj, value=tags[key_obj.key]) for key_obj in tag_key_objects
+        TagValue(project_id=issue.project_id, key=key_obj, value=tags[key_obj.key]) for key_obj in tag_key_objects
     ]
 
     # 'project' is not part of the unique constraint, which means it goes into update_fields.
@@ -249,19 +250,20 @@ def _store_tags(event, issue, tags):
         tag_value_objects = TagValue.objects.filter(_or_join([
             Q(key=key_obj, value=tags[key_obj.key]) for key_obj in tag_key_objects]))
 
-    EventTag.objects.bulk_create([
-        EventTag(
-            project_id=event.project_id,
-            value=tag_value,
-            event=event,
-            issue=issue,
-            digest_order=event.digest_order,
-        ) for tag_value in tag_value_objects
-    ], ignore_conflicts=True)
+    if event is not None:
+        EventTag.objects.bulk_create([
+            EventTag(
+                project_id=event.project_id,
+                value=tag_value,
+                event=event,
+                issue=issue,
+                digest_order=event.digest_order,
+            ) for tag_value in tag_value_objects
+        ], ignore_conflicts=True)
 
     IssueTag.objects.bulk_create([
         IssueTag(
-            project_id=event.project_id,
+            project_id=issue.project_id,
             key_id=tag_value.key_id,
             value=tag_value,
             issue=issue,
