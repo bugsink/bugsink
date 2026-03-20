@@ -16,6 +16,6 @@ monofy==1.1.*
 user-agents==2.2.*
 fastjsonschema==2.21.*
 ecma426>=0.2.0
-djangorestframework==3.16.*
+djangorestframework==3.17.*
 drf-spectacular[sidecar]
 symbolic==8.7.2  # the last version to support ProcessState (i.e. minidump parsing)
