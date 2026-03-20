@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from django.test import tag
 from django.contrib.auth import get_user_model
 from django.test import LiveServerTestCase, override_settings
 
@@ -83,6 +84,7 @@ class FilesTests(TransactionTestCase):
                 fms = FileMetadata.objects.filter(debug_id__in=[test_with])
                 self.assertEqual(1, fms.count())
 
+    @tag("samples")
     def test_assemble_artifact_bundle(self):
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
         event_samples = [SAMPLES_DIR + fn for fn in [
@@ -175,6 +177,7 @@ class FilesTests(TransactionTestCase):
                 # we want to know _which_ event failed, hence the raise-from-e here
                 raise AssertionError("Error rendering event %s" % event.event_id) from e
 
+    @tag("samples")
     def test_assemble_artifact_bundle_small_chunks(self):
         # Copy-paste of test_assemble_artifact_bundle, but checking _only_ that bundle assembly works with small chunks.
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")

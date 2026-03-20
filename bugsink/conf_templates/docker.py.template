@@ -199,6 +199,18 @@ BUGSINK = {
 
     "PHONEHOME": os.getenv("PHONEHOME", "true").lower() in ("true", "1", "yes"),
 
+    # Webhook outbound security:
+    # * ALERTS_WEBHOOK_OUTBOUND_MODE=open|allowlist_only
+    # * ALERTS_WEBHOOK_ALLOW_LIST / ALERTS_WEBHOOK_DENY_LIST accept comma-separated hostname/IP/CIDR entries.
+    # * ALERTS_WEBHOOK_DENY_NON_GLOBAL blocks non-global destination IPs by default.
+    "ALERTS_WEBHOOK_OUTBOUND_MODE": os.getenv("ALERTS_WEBHOOK_OUTBOUND_MODE", "open").lower(),
+    "ALERTS_WEBHOOK_ALLOW_LIST":
+        [h.strip() for h in os.getenv("ALERTS_WEBHOOK_ALLOW_LIST", "").split(",") if h.strip()],
+    "ALERTS_WEBHOOK_DENY_LIST":
+        [h.strip() for h in os.getenv("ALERTS_WEBHOOK_DENY_LIST", "").split(",") if h.strip()],
+    "ALERTS_WEBHOOK_DENY_NON_GLOBAL":
+        os.getenv("ALERTS_WEBHOOK_DENY_NON_GLOBAL", "true").lower() in ("true", "1", "yes"),
+
     # Feature flags
     "FEATURE_MINIDUMPS": os.getenv("FEATURE_MINIDUMPS", "false").lower() in ("true", "1", "yes"),
 }

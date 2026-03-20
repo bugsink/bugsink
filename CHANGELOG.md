@@ -1,8 +1,11 @@
 # Changes
 
-## 2.x.x (...)
+## 2.1.0 (...)
 
 * Show open issue counts on project list (skipping very large projects), see #228
+
+* Add outbound webhook destination destinations can be filtered by hostname/IP/CIDR allow/deny lists and non-global IPs
+  are blocked by default. See #339 and [the docs](https://www.bugsink.com/docs/webhook-outbound-policy/).
 
 ## 2.0.14 (3 March 2026)
 

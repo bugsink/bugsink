@@ -82,6 +82,13 @@ DEFAULTS = {
     "MINIMIZE_INFORMATION_EXPOSURE": False,
     "PHONEHOME": True,
     "USE_ADMIN": False,
+    # Webhook outbound policy:
+    # * open            : allow by default unless denied
+    # * allowlist_only  : deny by default unless allow-matched
+    "ALERTS_WEBHOOK_OUTBOUND_MODE": "open",
+    "ALERTS_WEBHOOK_ALLOW_LIST": [],
+    "ALERTS_WEBHOOK_DENY_LIST": [],
+    "ALERTS_WEBHOOK_DENY_NON_GLOBAL": True,
 
     # Feature flags:
     "FEATURE_MINIDUMPS": False,  # minidumps are experimental/early-stage and likely a DOS-magnet; disabled by default
@@ -121,6 +128,12 @@ def _sanitize(settings):
         settings["USER_REGISTRATION"] = CB_NOBODY
         settings["TEAM_CREATION"] = CB_NOBODY
 
+    settings["ALERTS_WEBHOOK_OUTBOUND_MODE"] = settings["ALERTS_WEBHOOK_OUTBOUND_MODE"].lower()
+    assert_(
+        settings["ALERTS_WEBHOOK_OUTBOUND_MODE"] in ["open", "allowlist_only"],
+        "ALERTS_WEBHOOK_OUTBOUND_MODE must be one of: open, allowlist_only"
+    )
+
 
 def get_settings():
     global _settings
@@ -143,5 +156,8 @@ def override_settings(**new_settings):
     for k in new_settings:
         assert_(k in old_settings, "Unknown setting (likely error in tests): %s" % k)
     _settings.update(new_settings)
-    yield
-    _settings = old_settings
+    _sanitize(_settings)
+    try:
+        yield
+    finally:
+        _settings = old_settings
