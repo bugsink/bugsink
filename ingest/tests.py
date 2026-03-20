@@ -289,6 +289,63 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(1, Issue.objects.count())
         self.assertEqual("1.0\n", Issue.objects.get().events_at)
 
+    def test_digest_normalizes_optional_fields_but_keeps_raw_event_data(self):
+        request = self.request_factory.post("/api/1/store/")
+
+        event_data = create_event_data()
+        event_data.update({
+            "release": 0.171,
+            "dist": True,
+            "environment": 123,
+            "server_name": 42,
+            "sdk": {
+                "name": "sentry.javascript.browser",
+                "version": 10.42,
+            },
+            "request": "https://example.invalid/store",
+            "breadcrumbs": {
+                "timestamp": 1,
+                "message": "crumb",
+            },
+        })
+
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        event = Event.objects.get()
+
+        self.assertFalse(event.data_is_valid)
+        self.assertEqual("0.171", event.release)
+        self.assertEqual("True", event.dist)
+        self.assertEqual("123", event.environment)
+        self.assertEqual("42", event.server_name)
+        self.assertEqual("sentry.javascript.browser", event.sdk_name)
+        self.assertEqual("10.42", event.sdk_version)
+
+        self.assertEqual(0.171, event.get_parsed_data()["release"])
+        self.assertEqual("https://example.invalid/store", event.get_parsed_data()["request"])
+
+        normalized = event.get_parsed_data_normalized()
+        self.assertEqual("0.171", normalized["release"])
+        self.assertEqual("https://example.invalid/store", normalized["request"]["url"])
+        self.assertEqual("crumb", normalized["breadcrumbs"][0]["message"])
+
+    @override_settings(VALIDATE_ON_DIGEST="warn")
+    def test_digest_marks_schema_valid_event_data(self):
+        request = self.request_factory.post("/api/1/store/")
+
+        event_data = create_event_data()
+        event_data["sdk"] = {
+            "name": "sentry.python",
+            "version": "1.0",
+        }
+
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        event = Event.objects.get()
+        self.assertTrue(event.data_is_valid)
+        self.assertEqual("sentry.python", event.get_parsed_data_normalized()["sdk"]["name"])
+        self.assertEqual("1.0", event.get_parsed_data_normalized()["sdk"]["version"])
+
     @tag("samples")
     def test_envelope_endpoint(self):
         # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.

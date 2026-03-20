@@ -461,9 +461,9 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
     except Event.DoesNotExist:
         return issue_event_404(request, issue, event_x_qs, "stacktrace", "event_stacktrace")
 
-    parsed_data = event.get_parsed_data()
+    parsed_data = event.get_parsed_data_normalized()
 
-    exceptions = get_values(parsed_data["exception"]) if "exception" in parsed_data else None
+    exceptions = parsed_data.get("exception")
 
     try:
         # get_values for consistency (whether it's needed: unclear, since _meta is not actually in the specs)
@@ -557,7 +557,7 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
     except Event.DoesNotExist:
         return issue_event_404(request, issue, event_x_qs, "breadcrumbs", "event_breadcrumbs")
 
-    parsed_data = event.get_parsed_data()
+    parsed_data = event.get_parsed_data_normalized()
 
     return render(request, "issues/breadcrumbs.html", {
         "tab": "breadcrumbs",
@@ -567,7 +567,7 @@ def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, na
         "event": event,
         "is_event_page": True,
         "request_repr": _request_repr(parsed_data),
-        "breadcrumbs": get_values(parsed_data.get("breadcrumbs")),
+        "breadcrumbs": parsed_data.get("breadcrumbs"),
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
         # event_qs_count is not used when there is no q, so no need to calculate it in that case
@@ -597,7 +597,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         event = _get_event(event_x_qs, issue, event_pk, digest_order, nav, (first_do, last_do))
     except Event.DoesNotExist:
         return issue_event_404(request, issue, event_x_qs, "event-details", "event_details")
-    parsed_data = event.get_parsed_data()
+    parsed_data = event.get_parsed_data_normalized()
 
     key_info = [
         ("title", event.title()),
@@ -720,7 +720,7 @@ def issue_history(request, issue):
         "project": issue.project,
         "issue": issue,
         "is_event_page": False,
-        "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
+        "request_repr": _request_repr(last_event.get_parsed_data_normalized()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
@@ -738,7 +738,7 @@ def issue_tags(request, issue):
         "project": issue.project,
         "issue": issue,
         "is_event_page": False,
-        "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
+        "request_repr": _request_repr(last_event.get_parsed_data_normalized()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
@@ -756,7 +756,7 @@ def issue_grouping(request, issue):
         "project": issue.project,
         "issue": issue,
         "is_event_page": False,
-        "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
+        "request_repr": _request_repr(last_event.get_parsed_data_normalized()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
@@ -790,7 +790,7 @@ def issue_event_list(request, issue):
         "issue": issue,
         "event_list": event_list,
         "is_event_page": False,
-        "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
+        "request_repr": _request_repr(last_event.get_parsed_data_normalized()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
         "page_obj": page_obj,

@@ -134,7 +134,7 @@ def _select_frames(frames, in_app_only):
 
 
 def render_stacktrace_md(event, in_app_only=False, include_locals=True):
-    parsed = event.get_parsed_data()
+    parsed = event.get_parsed_data_normalized()
     try:
         apply_sourcemaps(parsed)
     except Exception as e:

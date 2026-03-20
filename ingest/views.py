@@ -35,6 +35,7 @@ from bugsink.app_settings import get_settings
 from bugsink.utils import set_path
 
 from events.models import Event
+from events.normalization import normalize_event_data
 from events.retention import evict_for_max_events, should_evict, EvictionCounts
 from releases.models import create_release_if_needed
 from alerts.tasks import send_new_issue_alert, send_regression_alert
@@ -291,12 +292,15 @@ class BaseIngestAPIView(View):
 
         if validation_setting == "strict":
             validate()
+            return True
 
         else:  # i.e. "warn" - we never reach this function for "none"
             try:
                 validate()
+                return True
             except ValidationError as e:
                 logger.warning("event data validation failed: %s", e)
+                return False
 
     @classmethod
     @immediate_atomic()
@@ -330,25 +334,29 @@ class BaseIngestAPIView(View):
 
             return  # if over-quota: just return (any cleanup is done calling-side)
 
+        data_is_valid = False
         if get_settings().VALIDATE_ON_DIGEST in ["warn", "strict"]:
-            cls.validate_event_data(event_data, get_settings().VALIDATE_ON_DIGEST)
+            data_is_valid = cls.validate_event_data(event_data, get_settings().VALIDATE_ON_DIGEST)
 
         if minidump_bytes is not None:
             # we merge after validation: validation is about what's provided _externally_, not our own merging.
             # TODO error handling
             # TODO should not be inside immediate_atomic if it turns out to be slow
             merge_minidump_event(event_data, minidump_bytes)
+            data_is_valid = False
+
+        normalized_event_data = normalize_event_data(event_data)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
         # in an if-statement would require more rework (and possibly extra queries) than it's worth.
-        denormalized_fields = get_denormalized_fields_for_data(event_data)
+        denormalized_fields = get_denormalized_fields_for_data(normalized_event_data)
         # the 3 lines below are suggestive of a further inlining of the get_type_and_value_for_data function
-        calculated_type, calculated_value = get_type_and_value_for_data(event_data)
+        calculated_type, calculated_value = get_type_and_value_for_data(normalized_event_data)
         denormalized_fields["calculated_type"] = calculated_type
         denormalized_fields["calculated_value"] = calculated_value
 
-        grouping_key = get_issue_grouper_for_data(event_data, calculated_type, calculated_value)
+        grouping_key = get_issue_grouper_for_data(normalized_event_data, calculated_type, calculated_value)
 
         try:
             grouping = Grouping.objects.get(
@@ -424,7 +432,9 @@ class BaseIngestAPIView(View):
             issue,
             grouping,
             event_data,
+            normalized_event_data,
             denormalized_fields,
+            data_is_valid,
         )
         if not event_created:
             if issue_created:
@@ -502,7 +512,7 @@ class BaseIngestAPIView(View):
 
         # intentionally at the end: possible future optimization is to push this out of the transaction (or even use
         # a separate DB for this)
-        digest_tags(event_data, event, issue)
+        digest_tags(normalized_event_data, event, issue)
 
     @classmethod
     def count_installation_periods_and_act_on_it(cls, installation, now):

@@ -12,6 +12,7 @@ from bugsink.transaction import delay_on_commit
 
 from issues.utils import get_title_for_exception_type_and_value
 
+from .normalization import normalize_event_data
 from .retention import get_random_irrelevance
 from .storage_registry import get_write_storage, get_storage
 
@@ -75,6 +76,7 @@ class Event(models.Model):
     project = models.ForeignKey(Project, blank=False, null=False, on_delete=models.DO_NOTHING)
 
     data = models.TextField(blank=False, null=False)
+    data_is_valid = models.BooleanField(blank=False, null=False, default=False)
 
     # > Indicates when the event was created in the Sentry SDK. The format is either a string as defined in RFC 3339 or
     # > a numeric (integer or float) value representing the number of seconds that have elapsed since the Unix epoch.
@@ -188,6 +190,9 @@ class Event(models.Model):
         with storage.open(self.id, "r") as f:
             return json.load(f)
 
+    def get_parsed_data_normalized(self):
+        return normalize_event_data(self.get_parsed_data())
+
     def get_absolute_url(self):
         return f"/issues/issue/{ self.issue_id }/event/{ self.id }/"
 
@@ -204,7 +209,7 @@ class Event(models.Model):
 
     @classmethod
     def from_ingested(cls, event_metadata, digested_at, digest_order, project_digest_order, stored_event_count, issue,
-                      grouping, parsed_data, denormalized_fields):
+                      grouping, raw_data, normalized_data, denormalized_fields, data_is_valid):
 
         # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
@@ -225,24 +230,25 @@ class Event(models.Model):
                 grouping=grouping,
                 ingested_at=event_metadata["ingested_at"],
                 digested_at=digested_at,
-                data=json.dumps(parsed_data) if write_storage is None else "",
+                data=json.dumps(raw_data) if write_storage is None else "",
+                data_is_valid=data_is_valid,
                 storage_backend=None if write_storage is None else write_storage.name,
 
-                timestamp=parse_timestamp(parsed_data["timestamp"]),
-                platform=parsed_data["platform"][:64],
+                timestamp=parse_timestamp(normalized_data["timestamp"]),
+                platform=normalized_data["platform"][:64],
 
-                level=maybe_empty(parsed_data.get("level", "")),
-                logger=maybe_empty(parsed_data.get("logger", ""))[:64],
+                level=maybe_empty(normalized_data.get("level", "")),
+                logger=maybe_empty(normalized_data.get("logger", ""))[:64],
                 # transaction=maybe_empty(parsed_data.get("transaction", "")), part of denormalized_fields
 
-                server_name=maybe_empty(parsed_data.get("server_name", ""))[:255],
-                release=maybe_empty(parsed_data.get("release", ""))[:250],
-                dist=maybe_empty(parsed_data.get("dist", ""))[:64],
+                server_name=maybe_empty(normalized_data.get("server_name", ""))[:255],
+                release=maybe_empty(normalized_data.get("release", ""))[:250],
+                dist=maybe_empty(normalized_data.get("dist", ""))[:64],
 
-                environment=maybe_empty(parsed_data.get("environment", ""))[:64],
+                environment=maybe_empty(normalized_data.get("environment", ""))[:64],
 
-                sdk_name=maybe_empty(parsed_data.get("sdk", {}).get("name", ""))[:255],
-                sdk_version=maybe_empty(parsed_data.get("sdk", {}).get("version", ""))[:255],
+                sdk_name=maybe_empty(normalized_data.get("sdk", {}).get("name", ""))[:255],
+                sdk_version=maybe_empty(normalized_data.get("sdk", {}).get("version", ""))[:255],
 
                 # just getting from the dict would be more precise, since we always add this info, but doing the .get()
                 # allows for backwards compatability (digesting events for which the info was not added on-ingest) so
@@ -258,7 +264,7 @@ class Event(models.Model):
             created = True
 
             if write_storage is not None:
-                write_to_storage(event.id, parsed_data)
+                write_to_storage(event.id, raw_data)
 
             return event, created
         except IntegrityError as e:

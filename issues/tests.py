@@ -441,6 +441,45 @@ class ViewTests(TransactionTestCase):
         response = self.client.get(f"/issues/issue/{self.issue.id}/events/")
         self.assertContains(response, self.issue.title())
 
+    def test_issue_views_with_unvalidated_event_data(self):
+        self.event.data = json.dumps({
+            "event_id": str(self.event.event_id).replace("-", ""),
+            "timestamp": self.event.timestamp.isoformat(),
+            "platform": "python",
+            "request": "https://example.invalid/issues",
+            "breadcrumbs": {
+                "timestamp": 1,
+                "message": "crumb",
+            },
+            "exception": {
+                "type": "ValueError",
+                "value": "boom",
+                "stacktrace": {
+                    "frames": {
+                        "filename": "example.py",
+                        "function": "view",
+                        "lineno": 1,
+                    },
+                },
+            },
+        })
+        self.event.data_is_valid = False
+        self.event.save(update_fields=["data", "data_is_valid"])
+
+        urls = [
+            f"/issues/issue/{self.issue.id}/event/{self.event.id}/",
+            f"/issues/issue/{self.issue.id}/event/{self.event.id}/details/",
+            f"/issues/issue/{self.issue.id}/event/{self.event.id}/breadcrumbs/",
+            f"/issues/issue/{self.issue.id}/history/",
+            f"/issues/issue/{self.issue.id}/tags/",
+            f"/issues/issue/{self.issue.id}/grouping/",
+            f"/issues/issue/{self.issue.id}/events/",
+        ]
+
+        for url in urls:
+            response = self.client.get(url)
+            self.assertEqual(200, response.status_code)
+
     @patch("events.utils.ecma426.loads")
     def test_use_sourcemap_in_stacktrace(self, mock_ecma426_loads):
         # Single integration test that covers all three sourcemap outcomes in one stacktrace:
