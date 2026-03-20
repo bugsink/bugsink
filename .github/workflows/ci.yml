@@ -22,24 +22,20 @@ env:
   DJANGO_SETTINGS_MODULE: "bugsink.settings.development"
 
 jobs:
-  flake8:
+  ruff:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: "Set up Python 3.11"
+    - name: "Set up Python 3.12"
       uses: actions/setup-python@v5
       with:
-        python-version: "3.11"  # below 3.12 to avoid false positives inside f-string; https://github.com/PyCQA/pycodestyle/issues/1260
-    - name: Install Flake8
+        python-version: "3.12"
+    - name: Install Ruff
       run: |
-        python -m pip install --upgrade flake8
-    - name: Run Flake8
+        python -m pip install --upgrade ruff
+    - name: Run Ruff
       run: |
-        # We ignore 2 classes of whitespace errors (which are useful in the local context,
-        # but not worth breaking the build).
-        # https://github.com/PyCQA/flake8/issues/515 shows a dead end of doing this "properly"
-        # so we just specify it on the command line
-        flake8 --extend-ignore=E127,E741,E501,E731 `git ls-files | grep py$`
+        ruff check .
 
   bandit:
     runs-on: ubuntu-latest

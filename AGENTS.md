@@ -10,7 +10,7 @@ abstract generality. Python 3.12 is the standard environment.
 * Avoid overly clever or verbose code
 * Keep comments absolutely minimal: only comment to explain unusual or complex
   (which there shouldn't be anyway)
-* Follow PEP8 and ensure `flake8` passes (CI ignores E741, E731). width: 120 columns.
+* Follow PEP8 and ensure `ruff check .` passes. Rules/exceptions live in pyproject.toml. width: 120 columns.
 * Use Django's function-based views
 
 ### Writing Tests

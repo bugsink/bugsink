@@ -93,16 +93,16 @@ python manage.py test --exclude-tag=samples
 
 #### Linting and code quality
 
-##### Flake8
+##### Ruff
 
-* Bugsink uses flake8, with rules/exceptions documented in tox.ini
+* Bugsink uses ruff, with rules/exceptions documented in pyproject.toml
 
 ```bash
-# Install flake8
-pip install flake8
+# Install ruff
+pip install ruff
 
-# Run flake8 on all Python files
-flake8
+# Run ruff on all Python files
+ruff check .
 ```
 
 #### Tailwind
