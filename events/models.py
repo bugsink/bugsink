@@ -241,8 +241,8 @@ class Event(models.Model):
 
                 environment=maybe_empty(parsed_data.get("environment", ""))[:64],
 
-                sdk_name=maybe_empty(parsed_data.get("", {}).get("name", ""))[:255],
-                sdk_version=maybe_empty(parsed_data.get("", {}).get("version", ""))[:255],
+                sdk_name=maybe_empty(parsed_data.get("sdk", {}).get("name", ""))[:255],
+                sdk_version=maybe_empty(parsed_data.get("sdk", {}).get("version", ""))[:255],
 
                 # just getting from the dict would be more precise, since we always add this info, but doing the .get()
                 # allows for backwards compatability (digesting events for which the info was not added on-ingest) so
