@@ -5,8 +5,6 @@ import os
 import logging
 from datetime import datetime, timezone
 import json
-import jsonschema
-import fastjsonschema
 
 from django.conf import settings
 from django.shortcuts import get_object_or_404
@@ -35,8 +33,9 @@ from bugsink.app_settings import get_settings
 from bugsink.utils import set_path
 
 from events.models import Event
-from events.normalization import normalize_event_data
+from events.normalization import normalize_event_data, repair_event_data
 from events.retention import evict_for_max_events, should_evict, EvictionCounts
+from events.validation import get_event_validation_problem
 from releases.models import create_release_if_needed
 from alerts.tasks import send_new_issue_alert, send_regression_alert
 from compat.timestamp import format_timestamp, parse_timestamp
@@ -255,52 +254,17 @@ class BaseIngestAPIView(View):
         # presumably because of the transaction rollback. Possible future direction: check pre-transaction. Not
         # optimizing that yet though, because [1] presumably rare and [2] incorrect data might trigger arbitrary
         # exceptions, so you'd have that cost-of-rollback anyway.
+        problem = get_event_validation_problem(data)
+        if problem is None:
+            return None
 
-        def get_schema():
-            schema_filename = settings.BASE_DIR / 'api/event.schema.altered.json'
-            with open(schema_filename, 'r') as f:
-                return json.loads(f.read())
+        if validation_setting == "strict":
+            raise ValidationError(problem.as_validation_error_message(), code="invalid_event_data")
 
-        def validate():
-            # helper function that wraps the idea of "validate quickly, but fail meaningfully"
-            try:
-                cls._event_validator(data_to_validate)
-            except fastjsonschema.exceptions.JsonSchemaValueException as fastjsonschema_e:
-                # fastjsonchema's exceptions provide almost no information (in the case of many anyOfs), so we just fall
-                # back to jsonschema for that. Slow (and double cost), but failing is the rare case, so we don't care.
-                # https://github.com/horejsek/python-fastjsonschema/issues/72 and 37 for some context
-                try:
-                    jsonschema.validate(data_to_validate, get_schema())
-                except jsonschema.ValidationError as inner_e:
-                    best = jsonschema.exceptions.best_match([inner_e])
-                    # we raise 'from best' here; this does lose some information w.r.t. 'from inner_e', but it's my
-                    # belief that it's not useful info we're losing. similarly, but more so for 'fastjsonschema_e'.
-                    raise ValidationError(best.json_path + ": " + best.message, code="invalid_event_data") from best
+        if validation_setting == "warn":
+            logger.warning("event data validation failed: %s", problem.as_validation_error_message())
 
-                # in the (presumably not-happening) case that our fallback validation succeeds, fail w/o useful message
-                raise ValidationError(fastjsonschema_e.message, code="invalid_event_data") from fastjsonschema_e
-
-        # the schema is loaded once and cached on the class (it's in the 1-2ms range, but my measurements varied a lot
-        # so I'm not sure and I'd rather cache (and not always load) a file in the 2.5MB range than to just assume it's
-        # fast)
-        if not hasattr(cls, "_event_validator"):
-            from bugsink.event_schema import validate as validate_schema
-            cls._event_validator = validate_schema
-
-        # known fields that are not part of the schema (and that we don't want to validate)
-        data_to_validate = {k: v for k, v in data.items() if k != "_meta"}
-
-        try:
-            validate()
-            return True
-        except ValidationError as e:
-            if validation_setting == "strict":
-                raise
-
-            if validation_setting == "warn":
-                logger.warning("event data validation failed: %s", e)
-
-            return False
+        return problem
 
     @classmethod
     @immediate_atomic()
@@ -335,7 +299,8 @@ class BaseIngestAPIView(View):
             return  # if over-quota: just return (any cleanup is done calling-side)
 
         validation_setting = get_settings().VALIDATE_ON_DIGEST
-        data_is_valid = cls.validate_event_data(event_data, validation_setting)
+        validation_problem = cls.validate_event_data(event_data, validation_setting)
+        data_is_valid = validation_problem is None
 
         if minidump_bytes is not None:
             # we merge after validation: validation is about what's provided _externally_, not our own merging.
@@ -344,7 +309,11 @@ class BaseIngestAPIView(View):
             merge_minidump_event(event_data, minidump_bytes)
             data_is_valid = False
 
-        normalized_event_data = normalize_event_data(event_data, validation_failed=not data_is_valid)
+        parsed_data_for_usage = event_data
+        if not data_is_valid:
+            parsed_data_for_usage = repair_event_data(parsed_data_for_usage, get_event_validation_problem)
+
+        normalized_event_data = normalize_event_data(parsed_data_for_usage)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this

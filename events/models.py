@@ -12,9 +12,10 @@ from bugsink.transaction import delay_on_commit
 
 from issues.utils import get_title_for_exception_type_and_value
 
-from .normalization import normalize_event_data
+from .normalization import normalize_event_data, repair_event_data
 from .retention import get_random_irrelevance
 from .storage_registry import get_write_storage, get_storage
+from .validation import get_event_validation_problem
 
 from .tasks import delete_event_deps
 
@@ -191,7 +192,11 @@ class Event(models.Model):
             return json.load(f)
 
     def get_parsed_data_normalized(self):
-        return normalize_event_data(self.get_parsed_data(), validation_failed=not self.data_is_valid)
+        parsed_data = self.get_parsed_data()
+        if not self.data_is_valid:
+            parsed_data = repair_event_data(parsed_data, get_event_validation_problem)
+
+        return normalize_event_data(parsed_data)
 
     def get_absolute_url(self):
         return f"/issues/issue/{ self.issue_id }/event/{ self.id }/"
