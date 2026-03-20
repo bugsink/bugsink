@@ -289,6 +289,44 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(1, Issue.objects.count())
         self.assertEqual("1.0\n", Issue.objects.get().events_at)
 
+    def test_digest_event_stores_raw_invalid_data_but_uses_normalized_shape(self):
+        request = self.request_factory.post("/api/1/store/")
+
+        event_data = create_event_data()
+        event_data["message"] = "hello from a deprecated field"
+        event_data["release"] = 0.171
+        event_data["user"] = {"id": 1234}
+        event_data["request"] = {
+            "url": "https://example.invalid/",
+            "method": "GET",
+            "headers": {
+                "Accept": ["text/html"],
+            },
+        }
+
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        event = Event.objects.get(project=self.quiet_project)
+        self.assertFalse(event.data_is_valid)
+        self.assertEqual(0.171, event.get_parsed_data()["release"])
+        self.assertEqual("hello from a deprecated field", event.get_parsed_data()["message"])
+        self.assertEqual("0.171", event.release)
+        self.assertEqual("Log Message: hello from a deprecated field", event.title())
+        self.assertEqual("1234", event.get_parsed_data_normalized()["user"]["id"])
+        self.assertEqual("text/html", event.get_parsed_data_normalized()["request"]["headers"]["Accept"])
+
+    @override_settings(VALIDATE_ON_DIGEST="strict")
+    def test_strict_validation_allows_repairable_event_data(self):
+        request = self.request_factory.post("/api/1/store/")
+
+        event_data = create_event_data()
+        event_data["message"] = "hello from a deprecated field"
+        event_data["release"] = 0.171
+
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        self.assertEqual(1, Event.objects.filter(project=self.quiet_project).count())
+
     @tag("samples")
     def test_envelope_endpoint(self):
         # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.

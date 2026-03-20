@@ -20,8 +20,8 @@ def event_download(request, event, as_attachment=False):
 @atomic_for_request_method
 @event_membership_required
 def event_plaintext(request, event):
-    parsed_data = event.get_parsed_data()
-    exceptions = get_values(parsed_data["exception"]) if "exception" in parsed_data else None
+    normalized_data = event.get_parsed_data_normalized()
+    exceptions = get_values(normalized_data.get("exception"))
 
     return render(request, "events/event_stacktrace.txt", {
         "event": event,

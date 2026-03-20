@@ -67,7 +67,7 @@ class Command(BaseCommand):
                     # only read from the event, and the event_data (the part we care about) is write-once anyway
                     # (unchanging after digest).
 
-                    digest_tags(event.get_parsed_data(), event, event.issue)
+                    digest_tags(event.get_parsed_data_normalized(), event, event.issue)
 
                 if (i + 1) % 1_000 == 0:
                     print(f"Processed {i + 1}/{total} events")

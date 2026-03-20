@@ -38,6 +38,7 @@ def create_event(project=None, issue=None, timestamp=None, event_data=None, **kw
         timestamp=timestamp,
         event_id=uuid.uuid4().hex,
         data=json.dumps(event_data),
+        data_is_valid=True,
         digest_order=issue_digest_order,
         irrelevance_for_retention=0,
         **kwargs,
