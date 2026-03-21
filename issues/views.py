@@ -6,7 +6,8 @@ import logging
 from django.db.models import Q
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
-from django.http import HttpResponseRedirect, HttpResponseNotAllowed
+from django.http import HttpResponseRedirect, HttpResponseNotAllowed, HttpResponse
+from django.utils.http import content_disposition_header
 from django.urls import reverse
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
@@ -36,6 +37,7 @@ from .models import Issue, IssueQuerysetStateManager, IssueStateManager, Turning
 from .forms import CommentForm
 from .utils import get_values, get_main_exception
 from events.utils import annotate_with_meta, apply_sourcemaps, get_sourcemap_images
+from .markdown_issue import render_issue_md
 
 logger = logging.getLogger("bugsink.issues")
 
@@ -724,6 +726,17 @@ def issue_history(request, issue):
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
+@atomic_for_request_method
+@issue_membership_required
+def issue_markdown(request, issue):
+    text = render_issue_md(issue)
+    as_attachment = "download" in request.GET
+    result = HttpResponse(text, content_type="text/markdown; charset=utf-8")
+    if as_attachment:
+        result["Content-Disposition"] = content_disposition_header(
+            as_attachment=True, filename=f"issue-{issue.friendly_id()}.md"
+        )
+    return result
 
 @atomic_for_request_method
 @issue_membership_required
