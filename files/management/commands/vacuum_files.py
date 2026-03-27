@@ -3,7 +3,7 @@ from files.tasks import vacuum_files
 
 
 class Command(BaseCommand):
-    help = "Kick off (sourcemaps-)files cleanup by vacuuming old entries."
+    help = "Kick off (async, in snappea) (sourcemaps-)files cleanup by vacuuming old entries."
 
     def add_arguments(self, parser):
         # default of chunk_max_days=1 is already quite long... Chunks are used immediately, or not at all.

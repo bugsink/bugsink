@@ -19,6 +19,11 @@ from .models import Chunk, File, FileMetadata
 logger = logging.getLogger("bugsink.api")
 
 
+# budget is not yet tuned; reasons for high values: we're dealing with "leaves in the model-dep-tree here"; reasons for
+# low values: deletion of files might just be expensive.
+VACUUM_FILES_BATCH_SIZE = 500
+
+
 # "In the wild", we have run into non-unique debug IDs (one in code, one in comment-at-bottom). This regex matches a
 # known pattern for "one in code", such that we can at least warn if it's not the same at the actually reported one.
 # See #157
@@ -155,11 +160,21 @@ def record_file_accesses(metadata_ids, accessed_at):
 
 @shared_task
 def vacuum_files(chunk_max_days=1, file_max_days=90):
-    now = timezone.now()
+    if vacuum_files_batch(chunk_max_days=chunk_max_days, file_max_days=file_max_days):
+        # possibly more to delete, so we re-schedule the task
+        delay_on_commit(vacuum_files, chunk_max_days=chunk_max_days, file_max_days=file_max_days)
+
+
+def vacuum_files_sync(chunk_max_days=1, file_max_days=90):
+    # possibly more to delete, so we re-schedule the task
+    while vacuum_files_batch(chunk_max_days=chunk_max_days, file_max_days=file_max_days):
+        pass
+
+
+def vacuum_files_batch(chunk_max_days=1, file_max_days=90):
+    # returns True when there may be more work to do.
     with immediate_atomic():
-        # budget is not yet tuned; reasons for high values: we're dealing with "leaves in the model-dep-tree here";
-        # reasons for low values: deletion of files might just be expensive.
-        budget = 500
+        now = timezone.now()
         num_deleted = 0
 
         for model, field_name, max_days in [
@@ -168,9 +183,12 @@ def vacuum_files(chunk_max_days=1, file_max_days=90):
             # for FileMetadata we rely on cascading from File (which will always happen "eventually")
                 ]:
 
-            while num_deleted < budget:
-                ids = (model.objects.filter(**{f"{field_name}__lt": now - timedelta(days=max_days)})[:budget].
-                       values_list('id', flat=True))
+            while num_deleted < VACUUM_FILES_BATCH_SIZE:
+                ids = list(
+                    model.objects
+                    .filter(**{f"{field_name}__lt": now - timedelta(days=max_days)})[:VACUUM_FILES_BATCH_SIZE]
+                    .values_list('id', flat=True)
+                )
 
                 if len(ids) == 0:
                     break
@@ -178,6 +196,5 @@ def vacuum_files(chunk_max_days=1, file_max_days=90):
                 model.objects.filter(id__in=ids).delete()
                 num_deleted += len(ids)
 
-        if num_deleted == budget:
-            # budget exhausted but possibly more to delete, so we re-schedule the task
-            delay_on_commit(vacuum_files, chunk_max_days=chunk_max_days, file_max_days=file_max_days)
+        # budget exhausted but possibly more to delete
+        return num_deleted == VACUUM_FILES_BATCH_SIZE
