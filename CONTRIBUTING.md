@@ -91,6 +91,18 @@ python manage.py test alerts api events issues
 python manage.py test --exclude-tag=samples
 ```
 
+#### Commit messages
+
+No need for magical phrases in the messages; any tense is fine.
+Formatting: Linus-style (short summary, blank line, more detailed description if needed, 72-character line limit).
+
+Details: focus on _why_ things needed to be changed. For bugs this is often a story (in prose, not bullets) of:
+
+1. "problem/symptom"
+2. cause
+3. design decisions/trade offs
+4. the fix.
+
 #### Linting and code quality
 
 ##### Ruff
