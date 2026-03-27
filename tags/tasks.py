@@ -6,12 +6,48 @@ from bugsink.moreiterutils import batched
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from tags.models import TagValue, TagKey, EventTag, IssueTag, _or_join, prune_tagvalues
 
-BATCH_SIZE = 10_000
+VACUUM_TAGS_BATCH_SIZE = 10_000
+VACUUM_EVENTLESS_ISSUETAGS_BATCH_SIZE = 2048
+VACUUM_EVENTLESS_ISSUETAGS_INNER_BATCH_SIZE = 64
 
 
 @shared_task
 def vacuum_tagvalues(min_id=0):
-    # This task cleans up unused TagValue in batches. A TagValue can be unused if no IssueTag or EventTag references it,
+    # Known limitation:
+    # with _many_ TagValues (whether used or not) and when running in EAGER mode, this thing overflows the stack.
+    # Basically: because then the "delayed recursion" is not actually delayed, it just runs immediately. Answer: for
+    # "big things" (basically: serious setups) set up snappea or call the sync version (which uses a loop).
+
+    next_min_id = vacuum_tagvalues_batch(min_id=min_id)
+    if next_min_id is None:
+        # Done with TagValues → start TagKey cleanup
+        delay_on_commit(vacuum_tagkeys, 0)
+        return
+
+    vacuum_tagvalues.delay(next_min_id)
+
+
+def vacuum_tags_sync():
+    min_id = 0
+    while True:
+        min_id = vacuum_tagvalues_batch(min_id=min_id)
+        if min_id is None:
+            break
+
+    # Done with TagValues → start TagKey cleanup
+    vacuum_tagkeys_sync()
+
+
+def vacuum_tagkeys_sync():
+    min_id = 0
+    while True:
+        min_id = vacuum_tagkeys_batch(min_id=min_id)
+        if min_id is None:
+            return  # done
+
+
+def vacuum_tagvalues_batch(min_id=0):
+    # This cleans up unused TagValue in batches. A TagValue can be unused if no IssueTag or EventTag references it,
     # this can happen if IssueTag or EventTag entries are deleted. Cleanup is avoided in that case to avoid repeated
     # checks. But it still needs to be done eventually to avoid bloating the database, which is what this task does.
 
@@ -21,24 +57,17 @@ def vacuum_tagvalues(min_id=0):
     #   TagValue.exclude(some_usage_pattern) which may be slow / for which reasoning about performance is hard.
     # * batched to allow for incremental cleanup, using a defer-with-min-id pattern to implement the batching.
     #
-    # Known limitation:
-    # with _many_ TagValues (whether used or not) and when running in EAGER mode, this thing overflows the stack.
-    # Basically: because then the "delayed recursion" is not actually delayed, it just runs immediately. Answer: for
-    # "big things" (basically: serious setups) set up snappea.
-
     with immediate_atomic():
-        # Select candidate TagValue IDs above min_id
+        # Select candidate TagValue IDs strictly greater than min_id
         ids_to_check = list(
             TagValue.objects
             .filter(id__gt=min_id)
             .order_by('id')
-            .values_list('id', flat=True)[:BATCH_SIZE]
+            .values_list('id', flat=True)[:VACUUM_TAGS_BATCH_SIZE]
         )
 
         if not ids_to_check:
-            # Done with TagValues → start TagKey cleanup
-            delay_on_commit(vacuum_tagkeys, 0)
-            return
+            return None
 
         # Determine which ids_to_check are referenced
         used_in_event = set(
@@ -54,23 +83,32 @@ def vacuum_tagvalues(min_id=0):
         if unused:
             TagValue.objects.filter(id__in=unused).delete()
 
-    # Defer next batch
-    vacuum_tagvalues.delay(ids_to_check[-1])
+        # Return the last ID we checked as the new min_id for the next batch. This is correct because we select IDs
+        # strictly greater than min_id.
+        return ids_to_check[-1]
 
 
 @shared_task
 def vacuum_tagkeys(min_id=0):
+    next_min_id = vacuum_tagkeys_batch(min_id=min_id)
+    if next_min_id is None:
+        return  # done
+
+    vacuum_tagkeys.delay(next_min_id)  # defer next batch
+
+
+def vacuum_tagkeys_batch(min_id=0):
     with immediate_atomic():
-        # Select candidate TagKey IDs above min_id
+        # Select candidate TagKey IDs strictly greater than min_id
         ids_to_check = list(
             TagKey.objects
             .filter(id__gt=min_id)
             .order_by('id')
-            .values_list('id', flat=True)[:BATCH_SIZE]
+            .values_list('id', flat=True)[:VACUUM_TAGS_BATCH_SIZE]
         )
 
         if not ids_to_check:
-            return  # done
+            return None
 
         # Determine which ids_to_check are referenced
         used = set(
@@ -83,12 +121,27 @@ def vacuum_tagkeys(min_id=0):
         if unused:
             TagKey.objects.filter(id__in=unused).delete()
 
-    # Defer next batch
-    vacuum_tagkeys.delay(ids_to_check[-1])
+        return ids_to_check[-1]
 
 
 @shared_task
 def vacuum_eventless_issuetags(min_id=0):
+    next_min_id = vacuum_eventless_issuetags_batch(min_id=min_id)
+    if next_min_id is None:
+        return
+
+    vacuum_eventless_issuetags.delay(next_min_id)
+
+
+def vacuum_eventless_issuetags_sync():
+    min_id = 0
+    while True:
+        min_id = vacuum_eventless_issuetags_batch(min_id=min_id)
+        if min_id is None:
+            return
+
+
+def vacuum_eventless_issuetags_batch(min_id=0):
     # This task removes IssueTag entries that are no longer referenced by any EventTag for an Event on the same Issue.
     #
     # Under normal operation, we evict Events and their EventTags. However, we do not track how many EventTags back
@@ -107,21 +160,19 @@ def vacuum_eventless_issuetags(min_id=0):
     # edge of the object-graph" than for e.g. even-retention, so we can both afford bigger batches (less cascading
     # effects per item) as well as need bigger batches (because there are more expected items in a fanning-out
     # object-graph).
-    BATCH_SIZE = 2048
 
     # Community wisdom (says ChatGPT, w/o source): queries with dozens of OR clauses can slow down significantly. 64 is
     # a safe, batch size that avoids planner overhead and keeps things fast across databases.
-    INNER_BATCH_SIZE = 64
 
     with immediate_atomic():
         issue_tag_infos = list(
             IssueTag.objects
             .filter(id__gt=min_id)
             .order_by('id')
-            .values('id', 'issue_id', 'value_id')[:BATCH_SIZE]
+            .values('id', 'issue_id', 'value_id')[:VACUUM_EVENTLESS_ISSUETAGS_BATCH_SIZE]
         )
 
-        for issue_tag_infos_batch in batched(issue_tag_infos, INNER_BATCH_SIZE):
+        for issue_tag_infos_batch in batched(issue_tag_infos, VACUUM_EVENTLESS_ISSUETAGS_INNER_BATCH_SIZE):
             matching_eventtags = _or_join([
                 Q(issue_id=it['issue_id'], value_id=it['value_id']) for it in issue_tag_infos_batch
             ])
@@ -148,10 +199,11 @@ def vacuum_eventless_issuetags(min_id=0):
                 # prune_orphans.
                 prune_tagvalues([it['value_id'] for it in stale_issuetags])
 
-    if not issue_tag_infos:
-        # We don't have a continuation for the "done" case. One could argue: kick off vacuum_tagvalues there, but I'd
-        # rather rather build the toolbox of cleanup tasks first and see how they might fit together later. Because the
-        # downside of triggering the next vacuum command would be that "more things might happen too soon".
-        return
+        if not issue_tag_infos:
+            # We don't have a continuation for the "done" case. One could argue: kick off vacuum_tagvalues there, but
+            # I'd rather rather build the toolbox of cleanup tasks first and see how they might fit together later.
+            # Because the
+            # downside of triggering the next vacuum command would be that "more things might happen too soon".
+            return None
 
-    vacuum_eventless_issuetags.delay(issue_tag_infos[-1]['id'])
+        return issue_tag_infos[-1]['id']
