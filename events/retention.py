@@ -1,5 +1,7 @@
+from functools import partial
 import logging
 from django.db.models import Q, Min, Max, Count
+from django.db import transaction
 
 from datetime import timezone, datetime
 
@@ -95,7 +97,7 @@ def should_evict(project, timestamp, stored_event_count):
     #         get_epoch(project.retention_last_eviction) != get_epoch(timestamp)):
     #     return True
 
-    if stored_event_count > project.retention_max_event_count:  # > because: do something when _over_ the max
+    if stored_event_count > project.get_retention_max_event_count():  # > because: do something when _over_ the max
         return True
 
     return False
@@ -248,7 +250,7 @@ def evict_for_max_events(project, timestamp, stored_event_count, include_never_e
 
     with time_and_query_count() as phase1:
         evicted = EvictionCounts(0, {})
-        target = eviction_target(project.retention_max_event_count, stored_event_count)
+        target = eviction_target(project.get_retention_max_event_count(), stored_event_count)
         while evicted.total < target:
             # -1 at the beginning of the loop; this means the actually observed max value is precisely the first thing
             # that will be evicted (since `evict_for_irrelevance` will evict anything above (but not including) the
@@ -278,7 +280,7 @@ def evict_for_max_events(project, timestamp, stored_event_count, include_never_e
                 # the reason I can think of this happening is when stored_event_count is wrong (too high).
                 bugsink_logger.error(
                     "Failed to evict enough events; %d < %d (max %d, stored %d)", evicted.total, target,
-                    project.retention_max_event_count, stored_event_count)
+                    project.get_retention_max_event_count(), stored_event_count)
                 break
 
     # phase 0: SELECT statements to identify per-epoch observed irrelevances
@@ -393,6 +395,11 @@ def evict_for_epoch_and_irrelevance(project, max_epoch, max_irrelevance, max_eve
 
 
 def cleanup_events_on_storage(todos):
+    todos = list(todos)  # force evaluation _inside_ the transaction (on_commit the todos will be gone otherwise)
+    transaction.on_commit(partial(_cleanup_events_on_storage, todos))
+
+
+def _cleanup_events_on_storage(todos):
     for event_id, storage_backend in todos:
         try:
             get_storage(storage_backend).delete(event_id)

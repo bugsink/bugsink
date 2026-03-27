@@ -1,5 +1,187 @@
 # Changes
 
+## 2.1.0 (...)
+
+* Show open issue counts on project list (skipping very large projects), see #228
+
+* Add outbound webhook destination destinations can be filtered by hostname/IP/CIDR allow/deny lists and non-global IPs
+  are blocked by default. See #339 and [the docs](https://www.bugsink.com/docs/webhook-outbound-policy/).
+
+## 2.0.14 (3 March 2026)
+
+* sourcemaps upload now works for sentry-cli >= 3.0.0, See #290
+* Add `chunk_max_days` and `file_max_days parameters` to `vacuum_files` command and task
+
+* Update whitenoise requirement from ==6.11.* to ==6.12.*
+* Fix `FEATURE_MINIDUMPS` env-parsing in docker template
+* mobile menu: somewhat workable, See #120
+* Add index on `(digested_at, digest_order)` Fix #322
+* Move `mark_safe` closer to actual escaping
+
+## 2.0.13 (21 February 20206)
+
+### Security
+
+Fix: escape output for pygments fallback.
+
+An unauthenticated attacker could store arbitrary JavaScript in a bugsink
+project by sending a crafted Sentry event. Any admin who views the stacktrace
+will execute the payload.
+
+### Other
+
+* annotate with meta: when meta-keys are not actually in the var
+* Reduce Slack title length from 200 to 150 characters (See #318)
+* fix dbrouter `allow_migrate` for more than 2 databases
+* Distinguish installation-quota warning message from the project-level ones
+* fix unsupported operand type(s) for +: 'NoneType' and 'str' in request.url display
+* Add a `description` field to authtoken (See #312)
+* 400 template should say 'bad request' not 'server error'
+* Max retention: default per-project of 20% per project to avoid out-of-room on project 2
+* Allow editing of project when global `max_rention` settings have recently been decreased
+
+## 2.0.12 (26 January 2026)
+
+### Fixes:
+
+* Quota checks: don't get confused (so much) by eviction, see c157827a3050
+* `cleanup_eventstorage` command: don't fail when no storage initialized, see 45dc85a38288
+* `EventStorage.list` must return UUIDs for usage in .delete, see c8457ed9bd45
+* Don't rely on SDK-provided `event_id` for ingest-digest handover, see 6ab3fa56200e, and 9e8f59ebc1b1
+* `cleanup_events` (after delete): push out of transaction, see 4130cd240205 and 7f726cad8fc9
+* Add simple command to delete the oldest events until under retention max, see 941490605355
+* `FileEventStorage` config forward-compatible, see 5099d697493f
+* `migrate_to_current_eventstorage` command: don't crash when there are 'very many' events, see 34cf7dc868f5
+
+### Upgrading
+
+The optional management command `fix_project_digest_order` can be run in
+addition to migrations; this will make rate-limiting quota work more
+correctly immediately.
+
+(if you don't care, this will become eventually correct as the old data
+fades away).
+
+## 2.0.11 (20 January 2026)
+
+* Add brotli and gzip filestorages, see 5b345e0535c9
+* Apply max retention from settings even if stored project value is higher, see 1f1b06b74dd0
+* Max retention event count: guard the API, see d3beed517217
+* Max event retention: don't mention a negative budget, see 0a39ce16f487
+* New project: suggest no more than the legal retention, see 0cdb6c0afdab
+
+## 2.0.10 (14 January 2026)
+
+* FileStorage: basepath configurable using `get_basepath` (callable), 2561f5602a7b
+
+## 2.0.9 (13 January 2026)
+
+* Add event URL for the "external" (SDK-provided) ID, see #291
+* Add OpenAPI link to navigation bar, see #302 / #301
+* Adding info to contributing guidelines, see #303
+
+## 2.0.8 (10 January 2026)
+
+* Improve default Sentry SDK settings for Python, Fix #298
+* Fix background of event search inputs in dark mode, see #300
+* Add missing tailwindcss dependencies (for development)
+* `MAX_RETENTION[_PER_PROJECT]` as a setting
+* More fully disable the admin when `USE_ADMIN=False`, See #131
+* quota exceeded: show a message
+* Project quota: pick up on settings-changes
+* Setting & check for site-wide per-month event ingestion maximum
+* Add modelcounts command; useful in the context of housekeeping when servers are down
+* Fix exception for unsupported envelope items / when minidump feature is off. See #293
+
+## 2.0.7 (6 January 2026)
+
+### New & Improved Alert backends
+
+* Adds the Mattermost Alert Backend, see #278, #253, #277
+* Adds the Discord Alert Backend, see #279, #121
+
+### Minidump API Endpoint: _Experimental_
+
+This release contains _code_ that supports Minidumps, and which can be turned on with the
+feature-flag (setting) `FEATURE_MINIDUMPS`.
+
+However, as it stands, this code should be seen as development-only: it has not
+passed security-review yet, which means it opens your Bugsink-installation to DOS-like
+attacks.
+
+See #270, #82.
+
+### Other changes
+
+* Fix `never_evict` for the "conditional ummute" case, see #292
+* ingest ParseError: don't raise a 500; make this the SDK's problem (400), see 4fe8bd3fad44
+* Upgrade Verbose CSRF Middleware to match Django 5.2, see e3f1c92fd17f
+* Fix for pygements mishandling a weird case w/ ruby, see 4564131ff532
+* Raise 413 for the 'content too large' case
+* Slack alerts: issue title in message title, fix #283
+* Channel support for Mattermost message backend, see #281
+* Discord alert backend: send 'valid' URLs only, fix #280
+* yesno filter: just don't return None ever, see 9b2acddf206b
+* tailwind update, see bddc2e8f640e
+* Link to 'all tags' in the 'tags' RHS box, see eeac2e750c05
+* 'files' is a bugsink module too; reflect in `eat_your_own_dogfood`, see 74a04f6ea1dc
+* Don't log emails to 0 recepients, see #86
+* Fix member counts on project/team list, they were at most 1, see a93f369ad749
+* Support request.body when doing Chuncked Transfer Encoding, see #9
+* Fix inefficient bytes concatenation when `KEEP_ENVELOPES` != 0, see 0432451e8e8b
+* Compression decoding errors: return 400 rather than 500, see 53bea102d911
+* Support Python 3.14, see #267
+
+## 2.0.6 (8 November 2025)
+
+### Security
+
+Add a mitigation for another DOS attack using adverserial brotli payloads.
+Similar to, but distinct from, the fix in 2.0.5.
+
+## 2.0.5 (8 November 2025)
+
+### Security
+
+Add a mitigation for certain DOS attacks using adverserial brotli payloads, see #266
+
+### Backwards incompatible changes
+
+Fail to start when using non-sqlite for snappea, See #252
+
+Since this was always recommended against, and probably broken anyway, this is not
+expected to be backwards incompatible _in practice_, but it is at least in prinicple.
+
+
+### Other changes
+
+* Markdown stacktrace: render with all frames, See 9cb89ecf46a7
+* Add database vendor, version and machine arch to phonehome message, see d8fef759cabc
+* Fix redirect on single-click actions when hosting at subdomain, Fix #250
+* 'poor mans's DB lock: lock the right DB; See e55c0eb417e2, and #252 for context
+* Add more warnings about using non-sqlite for snappea in the conf templates, See #252
+* `parse_timestamp`: _actually_ parse as UTC when timezone not provided, see 8ad7f9738085
+* Add debug setting for email-sending, Fix #86
+* docker-compose-sample.yaml: more clearly email:password, See #261
+* create snappea database on Docker start rather than image build, See #244
+
+## 2.0.4 (9 October 2025)
+
+* `convert_mariadb_uuids` command to fix UUID column problems on MariaDB
+
+If you upgrade (or have upgraded) from Bugsink < 2.0 to any 2.0.x version you
+need to run this command (and you need 2.0.4 to be able to run it).
+
+See #226
+
+## 2.0.3 (5 October 2025)
+
+* Simplify login template (f8be55da89dd)
+* Better hints for malformed Token headers (d0e7b75dbba1)
+* API: datetime objects always in UTC (afd31d226352)
+* API: remove `is_deleted` as a field (0ca3e33e1f81)
+* Fix null constraint failure when `remote_addr` is `None` and user is '{{auto}}' (See #229)
+
 ## 2.0.2 (22 September 2025)
 
 * Fix broken checkbox in issue list (See #225)

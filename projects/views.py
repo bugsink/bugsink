@@ -20,9 +20,8 @@ from bugsink.app_settings import get_settings, CB_ANYBODY, CB_MEMBERS, CB_ADMINS
 from bugsink.decorators import login_exempt, atomic_for_request_method
 from bugsink.utils import assert_
 
-from alerts.models import MessagingServiceConfig
-from alerts.forms import MessagingServiceConfigForm
-from alerts.service_backends.slack import SlackConfigForm
+from alerts.models import MessagingServiceConfig, get_alert_service_backend_class, get_alert_service_kind_choices
+from alerts.forms import MessagingServiceConfigNewForm, MessagingServiceConfigEditForm
 
 from .models import Project, ProjectMembership, ProjectRole, ProjectVisibility
 from .forms import ProjectMembershipForm, MyProjectMembershipForm, ProjectMemberInviteForm, ProjectForm
@@ -30,33 +29,36 @@ from .tasks import send_project_invite_email, send_project_invite_email_new_user
 
 
 User = get_user_model()
+OPEN_ISSUE_COUNT_SHOW_THRESHOLD = 25_000
 
 
 @atomic_for_request_method
 def project_list(request, ownership_filter=None):
     my_memberships = ProjectMembership.objects.filter(user=request.user)
-    my_team_memberships = TeamMembership.objects.filter(user=request.user)
 
+    # using `id__in` here to ensure the counts later on is not restricted to our own memberships (at most 1)
     my_projects = Project.objects.filter(
-        projectmembership__in=my_memberships, is_deleted=False).order_by('name').distinct()
+        id__in=ProjectMembership.objects.filter(user=request.user).values('project_id'), is_deleted=False) \
+        .order_by('name').distinct()
+
     my_teams_projects = \
         Project.objects \
-        .filter(team__teammembership__in=my_team_memberships, is_deleted=False) \
+        .filter(team_id__in=TeamMembership.objects.filter(user=request.user).values('team_id'), is_deleted=False) \
         .exclude(projectmembership__in=my_memberships) \
         .order_by('name').distinct()
 
     if request.user.is_superuser:
-        # superusers can see all project, even hidden ones
+        # superusers can see all projects, even hidden ones
         other_projects = Project.objects \
             .filter(is_deleted=False) \
-            .exclude(projectmembership__in=my_memberships) \
-            .exclude(team__teammembership__in=my_team_memberships) \
+            .exclude(id__in=ProjectMembership.objects.filter(user=request.user).values('project_id')) \
+            .exclude(team_id__in=TeamMembership.objects.filter(user=request.user).values('team_id')) \
             .order_by('name').distinct()
     else:
         other_projects = Project.objects \
             .filter(is_deleted=False) \
-            .exclude(projectmembership__in=my_memberships) \
-            .exclude(team__teammembership__in=my_team_memberships) \
+            .exclude(id__in=ProjectMembership.objects.filter(user=request.user).values('project_id')) \
+            .exclude(team_id__in=TeamMembership.objects.filter(user=request.user).values('team_id')) \
             .exclude(visibility=ProjectVisibility.TEAM_MEMBERS) \
             .order_by('name').distinct()
 
@@ -93,12 +95,31 @@ def project_list(request, ownership_filter=None):
     else:
         raise ValueError(f"Invalid ownership_filter: {ownership_filter}")
 
-    project_list = base_qs.annotate(
-        # open_issue_count disabled, it's too expensive
-        # open_issue_count=models.Count('issue', filter=models.Q(issue__is_resolved=False, issue__is_muted=False)),
+    project_list = list(base_qs.annotate(
         member_count=models.Count(
             'projectmembership', distinct=True, filter=models.Q(projectmembership__accepted=True)),
-    ).select_related('team')
+    ).select_related('team'))
+
+    for project in project_list:
+        project.open_issue_count = None
+
+    projects_for_open_counts = [p for p in project_list if p.issue_count <= OPEN_ISSUE_COUNT_SHOW_THRESHOLD]
+    if projects_for_open_counts:
+        from issues.models import Issue
+        open_counts_by_project_id = dict(
+            Issue.objects.filter(
+                project_id__in=[p.id for p in projects_for_open_counts],
+                is_deleted=False,
+                is_resolved=False,
+                is_muted=False,
+            )
+            .values("project_id")
+            .annotate(open_issue_count=models.Count("id"))
+            .values_list("project_id", "open_issue_count")
+        )
+
+        for project in projects_for_open_counts:
+            project.open_issue_count = open_counts_by_project_id.get(project.id, 0)
 
     if ownership_filter == "mine":
         # Perhaps there's some Django-native way of doing this, but I can't figure it out soon enough, and this also
@@ -455,26 +476,35 @@ def project_messaging_service_add(request, project_pk):
     project = Project.objects.get(id=project_pk, is_deleted=False)
     _check_project_admin(project, request.user)
 
+    config_forms = {
+        kind: get_alert_service_backend_class(kind).get_form_class()()
+        for (kind, _) in get_alert_service_kind_choices()
+    }
+
     if request.method == 'POST':
-        form = MessagingServiceConfigForm(project, request.POST)
-        config_form = SlackConfigForm(data=request.POST)
+        form = MessagingServiceConfigNewForm(project, request.POST)
+        kind = form.data.get('kind') or form.fields['kind'].initial
+        config_form = get_alert_service_backend_class(kind).get_form_class()(data=request.POST)
+        config_forms[kind] = config_form
 
-        if form.is_valid() and config_form.is_valid():
-            service = form.save(commit=False)
-            service.config = json.dumps(config_form.get_config())
-            service.save()
+        if form.is_valid():
+            if config_form.is_valid():
+                service = form.save(commit=False)
+                service.config = json.dumps(config_form.get_config())
+                service.save()
 
-            messages.success(request, "Messaging service added successfully.")
-            return redirect('project_alerts_setup', project_pk=project_pk)
+                messages.success(request, "Messaging service added successfully.")
+                return redirect('project_alerts_setup', project_pk=project_pk)
 
     else:
-        form = MessagingServiceConfigForm(project)
-        config_form = SlackConfigForm()
+        form = MessagingServiceConfigNewForm(project)
+        kind = form.fields['kind'].initial
 
-    return render(request, 'projects/project_messaging_service_edit.html', {
+    return render(request, 'projects/project_messaging_service_new.html', {
         'project': project,
         'form': form,
-        'config_form': config_form,
+        'config_forms': config_forms,
+        'selected_config_form_kind': kind,
     })
 
 
@@ -484,10 +514,14 @@ def project_messaging_service_edit(request, project_pk, service_pk):
     _check_project_admin(project, request.user)
 
     instance = project.service_configs.get(id=service_pk)
+    # for editing, we don't allow for changing the kind; although it's probably possible to implement it, it would raise
+    # questions on "how much are the various configs related (should data be transferred from one config to another).
+    # and even though "it's possible" simply disallowing greatly simplifies the implementation.
+    config_form_class = get_alert_service_backend_class(instance.kind).get_form_class()
 
     if request.method == 'POST':
-        form = MessagingServiceConfigForm(project, request.POST, instance=instance)
-        config_form = SlackConfigForm(data=request.POST)
+        form = MessagingServiceConfigEditForm(request.POST, instance=instance)
+        config_form = config_form_class(data=request.POST)
 
         if form.is_valid() and config_form.is_valid():
             service = form.save(commit=False)
@@ -498,8 +532,8 @@ def project_messaging_service_edit(request, project_pk, service_pk):
             return redirect('project_alerts_setup', project_pk=project_pk)
 
     else:
-        form = MessagingServiceConfigForm(project, instance=instance)
-        config_form = SlackConfigForm(config=json.loads(instance.config))
+        form = MessagingServiceConfigEditForm(instance=instance)
+        config_form = config_form_class(config=json.loads(instance.config))
 
     return render(request, 'projects/project_messaging_service_edit.html', {
         'project': project,

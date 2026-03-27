@@ -19,8 +19,15 @@ class BearerTokenAuthentication(BaseAuthentication):
             return None
 
         raw = header[len(self.keyword) + 1:].strip()
+
+        if " " in raw:
+            hint, _ = raw.split(" ", 1)
+            if len(hint) <= 20:  # arbitrary cutoff to lower chance of echoing tokens in error messages
+                # typically: 'Bearer Bearer abcd1234'
+                raise exceptions.AuthenticationFailed("Invalid Authorization: '%s %s ...'" % (self.keyword, hint))
+
         if len(raw) != 40 or any(c not in "0123456789abcdef" for c in raw):
-            raise exceptions.AuthenticationFailed("Invalid Bearer token.")
+            raise exceptions.AuthenticationFailed("Malformed Bearer token, must be 40 lowercase hex chars.")
 
         token_obj = AuthToken.objects.filter(token=raw).first()
         if not token_obj:

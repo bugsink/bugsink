@@ -6,10 +6,6 @@ from pathlib import Path
 
 from django.utils.log import DEFAULT_LOGGING
 
-# Hide development server warning
-# https://docs.djangoproject.com/en/stable/ref/django-admin/#envvar-DJANGO_RUNSERVER_HIDE_WARNING
-os.environ["DJANGO_RUNSERVER_HIDE_WARNING"] = "true"
-
 # We have a single file for our default settings, and expect (if they use the singleserver setup) the end-users to
 # configure their setup using a single bugsink_conf.py also. To be able to have (slightly) different settings for e.g.
 # logging for various commands, we expose a variable I_AM_RUNNING that can be used to determine what command is being
@@ -133,6 +129,7 @@ AUTH_USER_MODEL = "users.User"
 TAILWIND_APP_NAME = 'theme'
 
 MIDDLEWARE = [
+    "bugsink.middleware.ContentEncodingCheckMiddleware",
     'bugsink.middleware.SetRemoteAddrMiddleware',
     'bugsink.middleware.DisallowChunkedMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -142,6 +139,7 @@ MIDDLEWARE = [
     'verbose_csrf_middleware.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
 
+    'bugsink.middleware.AdminRequiresSettingMiddleware',
     'bugsink.middleware.LoginRequiredMiddleware',
 
     # note on ordering: we need request.user, so after AuthenticationMiddleware; and we're not tied to "before
@@ -249,7 +247,9 @@ DATABASES = {
 }
 
 
-DATABASE_ROUTERS = ("bugsink.dbrouters.SeparateSnappeaDBRouter",)
+DATABASE_ROUTERS = (
+    "snappea.dbrouters.SeparateSnappeaDBRouter",
+)
 
 # This is the default, but we're being explicit. In our recommended setup (sqlite) we assume a low cost for reconnecting
 # to the DB, but a potential high cost ("checkpoint starvation") for keeping connections open.
@@ -357,6 +357,13 @@ LOGGING['loggers']['bugsink'] = {
 LOGGING['loggers']['bugsink.performance'] = {
     "level": "INFO",
     "handlers": [],
+    "propagate": False,
+}
+
+# Email logging is hidden below WARNING by default, but this can be changed by setting the level to INFO.
+LOGGING['loggers']['bugsink.email'] = {
+    "level": "WARNING",
+    "handlers": ["console"],
     "propagate": False,
 }
 

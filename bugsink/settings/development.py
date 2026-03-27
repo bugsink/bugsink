@@ -8,6 +8,10 @@ from sentry_sdk_extensions.transport import MoreLoudlyFailingTransport
 
 from bugsink.conf_utils import deduce_allowed_hosts, eat_your_own_dogfood, deduce_script_name
 
+# Hide development server warning
+# https://docs.djangoproject.com/en/stable/ref/django-admin/#envvar-DJANGO_RUNSERVER_HIDE_WARNING
+os.environ["DJANGO_RUNSERVER_HIDE_WARNING"] = "true"
+
 
 # no_bandit_expl: _development_ settings, we know that this is insecure; would fail to deploy in prod if (as configured)
 # the django checks (with --check --deploy) are run.
@@ -79,8 +83,6 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL = 'Klaas van Schelven <klaas@bugsink.com>'
 
 
 BUGSINK = {
-    "DIGEST_IMMEDIATELY": False,
-
     # "MAX_EVENT_SIZE": _MEBIBYTE,
     # "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,
     # "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
@@ -89,8 +91,8 @@ BUGSINK = {
     "BASE_URL": "http://bugsink:8000",  # no trailing slash
     "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 
-    # undocumented feature: this enables links to the admin interface in the header/footer. I'm not sure where the admin
-    # will fit in the final version, so that's why it's not documented.
+    # undocumented feature: this enables the admin interface. I'm not sure where the admin will fit in the final
+    # version, so that's why it's not documented.
     "USE_ADMIN": True,
 
     # In development, I want to be able to upload broken events, so I can test their downstream rendering/processing.
@@ -103,10 +105,21 @@ BUGSINK = {
     # set MAX_EVENTS* very high to be able to do serious performance testing (which I do often in my dev environment)
     "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": 1_000_000,
     "MAX_EVENTS_PER_PROJECT_PER_HOUR": 50_000_000,
+    "MAX_EVENTS_PER_PROJECT_PER_MONTH": 1_000_000_000,
 
-    "MAX_EMAILS_PER_MONTH": 10,  # for development: a thing to tune if you want to the the quota system
+    "MAX_EVENTS_PER_5_MINUTES": 1_000_000,
+    "MAX_EVENTS_PER_HOUR": 50_000_000,
+    "MAX_EVENTS_PER_MONTH": 1_000_000_000,
+
+    # for development: things to tune if you want to test the the quota system
+    "MAX_RETENTION_PER_PROJECT_EVENT_COUNT": None,
+    "MAX_RETENTION_EVENT_COUNT": None,
+    "MAX_EMAILS_PER_MONTH": 10,
 
     "KEEP_ARTIFACT_BUNDLES": True,  # in development: useful to preserve sourcemap uploads
+
+    # in development we want optional features enabled to [1] play with them and [2] have the tests work
+    "FEATURE_MINIDUMPS": True,
 }
 
 
@@ -116,6 +129,14 @@ if not I_AM_RUNNING == "TEST":
             "STORAGE": "events.storage.FileEventStorage",
             "OPTIONS": {
                 "basepath": safe_join(BASE_DIR, "filestorage"),
+            },
+        },
+        "local_flat_files_br": {
+            "STORAGE": "events.storage.FileEventStorage",
+            "OPTIONS": {
+                "basepath": safe_join(BASE_DIR, "filestorage"),
+                "compression_algorithm": "br",
+                "future_kwarg": "added here for testing",
             },
             "USE_FOR_WRITE": True,
         },
@@ -142,10 +163,14 @@ else:
     LOGGING['loggers']['bugsink.performance']["handlers"] = ["look_below_in_stream"]
 
 
-# snappea development settings: see all details, and include timestamps (we have no sytemd journal here)
+# snappea development settings: see all details, and include timestamps (we have no systemd journal here)
 LOGGING["handlers"]["snappea"]["level"] = "DEBUG"
 LOGGING["loggers"]["snappea"]["level"] = "DEBUG"
 LOGGING["formatters"]["snappea"]["format"] = "{asctime} - {threadName} - {levelname:7} - {message}"
+
+# email logger: we mirror the advised logger from #86 here to debug that setting itself as well as get insight in email
+# sending during development
+LOGGING['loggers']['bugsink.email']['level'] = "INFO"
 
 ALLOWED_HOSTS = deduce_allowed_hosts(BUGSINK["BASE_URL"])
 

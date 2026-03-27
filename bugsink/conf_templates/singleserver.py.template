@@ -16,6 +16,9 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Note: slightly 
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 USE_X_REAL_IP = True
+# If your reverse proxy must overwrite the Host header when talking to Bugsink, you can pass the original host
+# through X-Forwarded-Host and uncomment the setting below.
+# USE_X_FORWARDED_HOST = True
 # Alternatively, you can use X-Forwarded-For. (Set the number of proxies in the settings below.)
 # USE_X_FORWARDED_FOR = True
 # X_FORWARDED_FOR_PROXY_COUNT = 1
@@ -24,6 +27,9 @@ USE_X_REAL_IP = True
 # In the singleserver production setup, the database is SQLite. The single (unix) user is named `bugsink` and we put
 # the database in its home directory:
 DATABASES["default"]["NAME"] = '{{ base_dir }}/db.sqlite3'
+
+# This is a "database as message queue" setup; If you're reading this and are thinking of replacing this particular
+# DB with mysql/postgres, know that you "probably shouldn't".
 DATABASES["snappea"]["NAME"] = '{{ base_dir }}/snappea.sqlite3'
 
 
@@ -68,6 +74,10 @@ EMAIL_BACKEND = "bugsink.email_backends.QuietConsoleEmailBackend"  # instead of 
 # EMAIL_USE_TLS = ...
 # EMAIL_USE_SSL = ...
 
+# Uncomment the line below to show all sent emails in the logs
+# LOGGING['loggers']['bugsink.email']['level'] = "INFO"
+
+
 SERVER_EMAIL = DEFAULT_FROM_EMAIL = "Bugsink <bugsink@example.org>"
 
 # constants for "create by" (user/team/project) settings
@@ -95,10 +105,6 @@ BUGSINK = {
     "SINGLE_TEAM": False,
     "TEAM_CREATION": CB_MEMBERS,  # who can create new teams. default: members, which means "any member of the site"
 
-    # In the singleserver production setup, we do not digest events immediately, but instead offload this to Snappea.
-    # This ensures a more response and reliable server when there are peak loads in the events.
-    "DIGEST_IMMEDIATELY": False,
-
     # "MAX_EVENT_SIZE": _MEBIBYTE,
     # "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,
     # "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
@@ -109,6 +115,12 @@ BUGSINK = {
     # Optionally, you can set the following to True to further minimize information exposure in the UI. (The default is
     # False, which we've judged to still not expose too much in most cases, but you might have different requirements.)
     "MINIMIZE_INFORMATION_EXPOSURE": False,
+
+    # Webhook outbound security:
+    # "ALERTS_WEBHOOK_OUTBOUND_MODE": "open",  # or "allowlist_only"
+    # "ALERTS_WEBHOOK_ALLOW_LIST": ["hooks.example.com", "203.0.113.0/24"],
+    # "ALERTS_WEBHOOK_DENY_LIST": ["bad.example.com", "198.51.100.0/24"],
+    # "ALERTS_WEBHOOK_DENY_NON_GLOBAL": True,
 
     # "EVENT_STORAGES": {
     #     "local_flat_files": {  # a meaningful name of your choosing

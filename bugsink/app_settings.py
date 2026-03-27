@@ -42,7 +42,6 @@ DEFAULTS = {
     "TEAM_CREATION": CB_MEMBERS,  # who can create new teams. default: members, which means "any member of the site"
 
     # System inner workings:
-    "DIGEST_IMMEDIATELY": True,
     "VALIDATE_ON_DIGEST": "none",  # other legal values are "warn" and "strict"
     "KEEP_ENVELOPES": 0,  # set to a number to store that many; 0 means "store none". This is for debugging.
     "API_LOG_UNIMPLEMENTED_CALLS": False,  # if True, log unimplemented API calls; see #153
@@ -50,17 +49,26 @@ DEFAULTS = {
 
     # MAX* below mirror the (current) values for the Sentry Relay
     "MAX_EVENT_SIZE": _MEBIBYTE,
+    "MAX_ATTACHMENT_SIZE": 100 * _MEBIBYTE,
     "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,  # Note: this only applies to the deprecated "store" endpoint.
     "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
     "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
 
     # Bugsink-specific limits:
-    # The default values are 1_000 and 5_000 respectively; which corresponds to ~6% and ~2.7% of the total capacity of
-    # 50 requests/s (ingestion) on low-grade hardware that I measured, and with 50% of the default value for retention.
+    # The default values are 1_000, 5_000, 1M respectively; which corresponds to ~6%, ~2.7%, .8% of the total capacity
+    # of 50/s (ingestion) on low-grade hardware that I measured.
     "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": 1_000,
     "MAX_EVENTS_PER_PROJECT_PER_HOUR": 5_000,
+    "MAX_EVENTS_PER_PROJECT_PER_MONTH": 1_000_000,
+
+    "MAX_EVENTS_PER_5_MINUTES": 1_000,
+    "MAX_EVENTS_PER_HOUR": 5_000,
+    "MAX_EVENTS_PER_MONTH": 1_000_000,
 
     "MAX_EMAILS_PER_MONTH": None,  # None means "no limit"; for non-None values, the quota is per calendar month
+
+    "MAX_RETENTION_PER_PROJECT_EVENT_COUNT": None,  # None means "no limit"
+    "MAX_RETENTION_EVENT_COUNT": None,  # None means "no limit"
 
     # I don't think Sentry specifies this one, but we do: given the spec 8KiB should be enough by an order of magnitude.
     "MAX_HEADER_SIZE": 8 * _KIBIBYTE,
@@ -73,6 +81,17 @@ DEFAULTS = {
     # Security:
     "MINIMIZE_INFORMATION_EXPOSURE": False,
     "PHONEHOME": True,
+    "USE_ADMIN": False,
+    # Webhook outbound policy:
+    # * open            : allow by default unless denied
+    # * allowlist_only  : deny by default unless allow-matched
+    "ALERTS_WEBHOOK_OUTBOUND_MODE": "open",
+    "ALERTS_WEBHOOK_ALLOW_LIST": [],
+    "ALERTS_WEBHOOK_DENY_LIST": [],
+    "ALERTS_WEBHOOK_DENY_NON_GLOBAL": True,
+
+    # Feature flags:
+    "FEATURE_MINIDUMPS": False,  # minidumps are experimental/early-stage and likely a DOS-magnet; disabled by default
 }
 
 
@@ -109,6 +128,12 @@ def _sanitize(settings):
         settings["USER_REGISTRATION"] = CB_NOBODY
         settings["TEAM_CREATION"] = CB_NOBODY
 
+    settings["ALERTS_WEBHOOK_OUTBOUND_MODE"] = settings["ALERTS_WEBHOOK_OUTBOUND_MODE"].lower()
+    assert_(
+        settings["ALERTS_WEBHOOK_OUTBOUND_MODE"] in ["open", "allowlist_only"],
+        "ALERTS_WEBHOOK_OUTBOUND_MODE must be one of: open, allowlist_only"
+    )
+
 
 def get_settings():
     global _settings
@@ -131,5 +156,8 @@ def override_settings(**new_settings):
     for k in new_settings:
         assert_(k in old_settings, "Unknown setting (likely error in tests): %s" % k)
     _settings.update(new_settings)
-    yield
-    _settings = old_settings
+    _sanitize(_settings)
+    try:
+        yield
+    finally:
+        _settings = old_settings

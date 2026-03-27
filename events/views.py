@@ -32,7 +32,7 @@ def event_plaintext(request, event):
 @atomic_for_request_method
 @event_membership_required
 def event_markdown(request, event, as_attachment=False):
-    text = render_stacktrace_md(event, frames="in_app", include_locals=True)
+    text = render_stacktrace_md(event, in_app_only=False, include_locals=True)
     result = HttpResponse(text, content_type="text/markdown; charset=utf-8")
     if as_attachment:
         result["Content-Disposition"] = content_disposition_header(

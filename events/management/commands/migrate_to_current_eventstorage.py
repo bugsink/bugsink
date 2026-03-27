@@ -1,5 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.db.utils import OperationalError
+
 import signal
 
 from bugsink.transaction import immediate_atomic
@@ -29,8 +31,14 @@ class Command(BaseCommand):
 
         migrated = 0
         with transaction.atomic():  # explicit is better than implicit for transaction management
-            total = Event.objects.all().count()
-            todo = Event.objects.exclude(storage_backend=target_storage_name).count()
+            total = "many"
+            todo = "many"
+            try:
+                total = Event.objects.all().count()
+                todo = Event.objects.exclude(storage_backend=target_storage_name).count()
+            except OperationalError as e:
+                if e.args[0] != "interrupted":
+                    raise
 
         print("Migrating {} events to {} (out of {} total events)".format(todo, target_storage_name, total))
 
@@ -67,10 +75,11 @@ class Command(BaseCommand):
                 print("Migrated {} / {} events".format(migrated, todo))
 
         if self.stopped:
+            remaining = todo - migrated if isinstance(todo, int) else "unknown number of"
             # todo - migrated may be incorrect as per the comment below; however, when ^C-ing I don't want to make the
             # user wait on the outcome of a possibly expensive query.
             print("Interrupted; migrated {} events to {}; {} events remain.".format(
-                migrated, target_storage_name, todo - migrated))
+                migrated, target_storage_name, remaining))
         else:
             print("Done migrating; migrated {} events to {}; no more events remain.".format(
                 migrated, target_storage_name))

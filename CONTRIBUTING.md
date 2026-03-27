@@ -12,9 +12,98 @@ There are many ways to help contribute to Bugsink. Here are a few:
 
 Code contributions are welcome! We use the GitHub PR process to review and merge code changes.
 
-#### Style guidance
+#### Local development setup
 
-* Bugsink uses flake8, with rules/exceptions documented in tox.ini
+##### Prerequisites
+
+* Python 3.10 or higher (3.10, 3.11, 3.12, 3.13, or 3.14)
+* Git
+* Optional: MySQL or PostgreSQL (SQLite works for local development)
+
+##### Setting up your development environment
+
+1. **Clone the repository**
+
+```bash
+git clone https://github.com/bugsink/bugsink.git
+```
+
+The full test-suite depends on sample event data, which is not included in the main repository. To get this data, also
+clone the `event-samples` repository:
+
+```
+# event-samples repository for sample event data
+git clone https://github.com/bugsink/event-samples.git
+```
+
+If the event-samples live at the same level as the main repository, the test suite will find it automatically. If you
+put it somewhere else, set the set the environment variable `SAMPLES_DIR` accordingly.
+
+2. **Create and activate a virtual environment**
+
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. **Install dependencies**
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Install development dependencies
+pip install -r requirements.development.txt
+```
+
+4. **Run database migrations**
+
+```bash
+python manage.py migrate
+```
+
+5. **Create a superuser**
+
+```bash
+python manage.py createsuperuser
+```
+
+6. **Run the development server**
+
+```bash
+python manage.py runserver
+```
+
+Visit [http://localhost:8000](http://localhost:8000) to see your local Bugsink instance.
+
+#### Running tests
+
+Bugsink uses Django's built-in test framework. To run the test suite:
+
+```bash
+# Run all tests
+python manage.py test
+
+# Run tests for specific apps (replace with actual app names)
+python manage.py test alerts api events issues
+
+# If you didn't clone the event-samples repository, you can run tests that don't depend on sample data like this:
+python manage.py test --exclude-tag=samples
+```
+
+#### Linting and code quality
+
+##### Ruff
+
+* Bugsink uses ruff, with rules/exceptions documented in pyproject.toml
+
+```bash
+# Install ruff
+pip install ruff
+
+# Run ruff on all Python files
+ruff check .
+```
 
 #### Tailwind
 

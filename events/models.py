@@ -35,6 +35,11 @@ def write_to_storage(event_id, parsed_data):
     event_id means event.id, i.e. the internal one. This saves us from thinking about the security implications of
     using an externally provided ID across storage backends.
     """
+    # NOTE: we write to the storage backend in the middle of our transaction. In any case, writing before commit is
+    # good, because it means we always have event-data for Event objects. In principle this leaves "dangling" data
+    # behind; we take that as the better of two evils. I thought briefly about at least pushing the write to near the
+    # end of the transaction, but [a] Django has no before_commit hook and [b] most validation actually happens as part
+    # of the commit anyway, so it wouldn't help much.
     with get_write_storage().open(event_id, "w") as f:
         json.dump(parsed_data, f)
 
@@ -51,7 +56,7 @@ class Event(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, help_text="Bugsink-internal")
 
     ingested_at = models.DateTimeField(blank=False, null=False)
-    digested_at = models.DateTimeField(db_index=True, blank=False, null=False)
+    digested_at = models.DateTimeField(db_index=True, blank=False, null=False)  # index for installationwide quota-check
     remote_addr = models.GenericIPAddressField(blank=True, null=True, default=None)
 
     issue = models.ForeignKey("issues.Issue", blank=False, null=False, on_delete=models.DO_NOTHING)
@@ -117,9 +122,6 @@ class Event(models.Model):
     sdk_name = models.CharField(max_length=255, blank=True, null=False, default="")
     sdk_version = models.CharField(max_length=255, blank=True, null=False, default="")
 
-    # this is a temporary(?), bugsink-specific value;
-    debug_info = models.CharField(max_length=255, blank=True, null=False, default="")
-
     # denormalized/cached fields:
     calculated_type = models.CharField(max_length=128, blank=True, null=False, default="")
     calculated_value = models.TextField(max_length=1024, blank=True, null=False, default="")
@@ -128,9 +130,10 @@ class Event(models.Model):
     last_frame_module = models.CharField(max_length=255, blank=True, null=False, default="")
     last_frame_function = models.CharField(max_length=255, blank=True, null=False, default="")
 
-    # 1-based, because this is for human consumption only, and using 0-based internally when we don't actually do
+    # 1-based, because this is mostly for human consumption, and using 0-based internally when we don't actually do
     # anything with this value other than showing it to humans is super-confusing. Sorry Dijkstra!
     digest_order = models.PositiveIntegerField(blank=False, null=False)
+    project_digest_order = models.PositiveIntegerField(null=True)
 
     # irrelevance_for_retention is set on-ingest based on the number of available events for an issue; it is combined
     # with age-based-irrelevance to determine which events will be evicted when retention quota are met.
@@ -159,12 +162,14 @@ class Event(models.Model):
 
     class Meta:
         unique_together = [
-            ("project", "event_id"),
-            ("issue", "digest_order"),
+            ("project", "event_id"),  # our main uniqueness constraint as per digestion.
+            ("issue", "digest_order"),  # uniqueness, but also: index for sorting (navigation through events per issue)
         ]
         indexes = [
-            models.Index(fields=["project", "never_evict", "digested_at", "irrelevance_for_retention"]),
-            models.Index(fields=["issue", "digested_at"]),
+            models.Index(fields=["project", "never_evict", "digested_at", "irrelevance_for_retention"]),  # eviction
+            models.Index(fields=["issue", "digested_at"]),  # issue-based check_for_thresholds
+            models.Index(fields=["project", "digested_at"]),  # project-wide quota check
+            models.Index(fields=["digested_at", "digest_order"]),  # check_for_thresholds, see #322
         ]
 
     def get_raw_data(self):
@@ -198,8 +203,8 @@ class Event(models.Model):
         return get_title_for_exception_type_and_value(self.calculated_type, self.calculated_value)
 
     @classmethod
-    def from_ingested(cls, event_metadata, digested_at, digest_order, stored_event_count, issue, grouping, parsed_data,
-                      denormalized_fields):
+    def from_ingested(cls, event_metadata, digested_at, digest_order, project_digest_order, stored_event_count, issue,
+                      grouping, parsed_data, denormalized_fields):
 
         # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
@@ -236,10 +241,8 @@ class Event(models.Model):
 
                 environment=maybe_empty(parsed_data.get("environment", ""))[:64],
 
-                sdk_name=maybe_empty(parsed_data.get("", {}).get("name", ""))[:255],
-                sdk_version=maybe_empty(parsed_data.get("", {}).get("version", ""))[:255],
-
-                debug_info=event_metadata["debug_info"][:255],
+                sdk_name=maybe_empty(parsed_data.get("sdk", {}).get("name", ""))[:255],
+                sdk_version=maybe_empty(parsed_data.get("sdk", {}).get("version", ""))[:255],
 
                 # just getting from the dict would be more precise, since we always add this info, but doing the .get()
                 # allows for backwards compatability (digesting events for which the info was not added on-ingest) so
@@ -247,6 +250,7 @@ class Event(models.Model):
                 remote_addr=event_metadata.get("remote_addr"),
 
                 digest_order=digest_order,
+                project_digest_order=project_digest_order,
                 irrelevance_for_retention=irrelevance_for_retention,
 
                 **denormalized_fields,

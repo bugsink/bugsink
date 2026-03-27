@@ -15,13 +15,20 @@ def auth_token_list(request):
     auth_tokens = AuthToken.objects.all()
 
     if request.method == 'POST':
-        # DIT KOMT ZO WEL
         full_action_str = request.POST.get('action')
         action, pk = full_action_str.split(":", 1)
         if action == "delete":
             AuthToken.objects.get(pk=pk).delete()
 
             messages.success(request, _('Token deleted'))
+            return redirect('auth_token_list')
+
+        elif action == "update_description":
+            auth_token = AuthToken.objects.get(pk=pk)
+            auth_token.description = request.POST.get('description', '')[:255]
+            auth_token.save()
+
+            messages.success(request, _('Description updated'))
             return redirect('auth_token_list')
 
     return render(request, 'bsmain/auth_token_list.html', {

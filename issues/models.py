@@ -81,8 +81,13 @@ class Issue(models.Model):
 
     def delete_deferred(self):
         """Marks the issue as deleted, and schedules deletion of all related objects"""
+        if self.is_deleted:
+            return  # quick check for performance; also: idempotency w.r.t. updates to counts.
+
         self.is_deleted = True
         self.save(update_fields=["is_deleted"])
+        from projects.models import Project
+        Project.objects.filter(id=self.project_id).update(issue_count=F("issue_count") - 1)
 
         # we set grouping_key_hash to None to ensure that event digests that happen simultaneously with the delayed
         # cleanup will get their own fresh Grouping and hence Issue. This matches with the behavior that would happen
@@ -200,6 +205,7 @@ class Issue(models.Model):
         indexes = [
             # 4 indexes for the list view (state_filter). Note: no is_deleted here; basic assumption is: is_deleted=True
             # are such a minority that a post-index filter is more efficient than having more indexes. see 7b340fd8ff1d
+            # `issue_list_open` is also used for project-level open-issue counting (same where-clause prefix).
             models.Index(fields=["project", "is_resolved", "is_muted", "last_seen"], name="issue_list_open"),
             models.Index(fields=["project", "is_muted", "last_seen"], name="issue_list_muted"),
             models.Index(fields=["project", "is_resolved", "last_seen"], name="issue_list_resolved"),  # and unresolved

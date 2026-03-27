@@ -84,7 +84,7 @@ class SuperDurableAtomic(django_db_transaction.Atomic):
 
 
 def durable_atomic(using=None, savepoint=True):
-    # this is the Django 4.2 db.transaction.atomic but with durable=True by default
+    # this is the Django db.transaction.atomic but with durable=True by default. (based on 4.2, unchanged until 6.0)
 
     # the model of "just having outer transactions" is one that I can wrap my head around, and I would like to make sure
     # it's the one I've implemented.
@@ -172,7 +172,7 @@ class ImmediateAtomic(SuperDurableAtomic):
             # like very much that we stick closely to the sqlite model for the mysql case, but we can always take this
             # road later.
             from django.contrib.contenttypes.models import ContentType
-            ContentType.objects.select_for_update().order_by("pk").first()
+            ContentType.objects.using(self.using).select_for_update().order_by("pk").first()
 
         self.t0 = time.time()
 

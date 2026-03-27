@@ -45,7 +45,10 @@ sentry_sdk.init(
     # infer it, but explicitly setting it is more reliable:
     # release=...,
 
+    # Don't event types which are not supported by Bugsink:
     traces_sample_rate=0,
+    send_client_reports=False,
+    auto_session_tracking=False,
 )
 {% endcode %}
 

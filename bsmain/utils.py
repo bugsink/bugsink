@@ -1,6 +1,7 @@
 import os
 import stat
 import logging
+from django.template.defaultfilters import yesno as broken_yesno
 
 from .future_python import makedirs
 
@@ -100,3 +101,13 @@ def b108_makedirs(path):
             break
 
         current = parent
+
+
+def yesno(value, arg=None):
+    """
+    See https://code.djangoproject.com/ticket/36579
+    """
+    result = broken_yesno(value, arg)
+    if result is None:
+        return "Maybe"
+    return result

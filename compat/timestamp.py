@@ -15,12 +15,20 @@ def parse_timestamp(value):
     > in our systems). With that caveat in mind, just send whatever is easiest to produce.
 
     > All timestamps in the event protocol are formatted this way.
+
+    This function returns None for invalid input.
     """
+    # NOTE: the fact that we return None for invalid input strikes me as surprising when revisiting this code; but ATM
+    # I don't have the time to go through all the callsites to see if they may have become to depend on this behavior.
 
     if isinstance(value, int) or isinstance(value, float):
         return datetime.datetime.fromtimestamp(value, tz=datetime.timezone.utc)
 
-    return parse_datetime(value)
+    result = parse_datetime(value)
+    if result is not None and result.tzinfo is None:
+        return result.replace(tzinfo=datetime.timezone.utc)
+
+    return result
 
 
 def format_timestamp(value):

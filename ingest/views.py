@@ -1,8 +1,8 @@
+from collections import defaultdict
 import uuid
 import hashlib
 import os
 import logging
-import io
 from datetime import datetime, timezone
 import json
 import jsonschema
@@ -10,10 +10,9 @@ import fastjsonschema
 
 from django.conf import settings
 from django.shortcuts import get_object_or_404
-from django.db.models import Max, F
+from django.db.models import Max, F, Sum
 from django.views import View
-from django.core import exceptions
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, PermissionDenied
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -29,8 +28,11 @@ from issues.regressions import issue_is_regression
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.exceptions import ViolatedExpectation
-from bugsink.streams import content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded
+from bugsink.streams import (
+    content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded,
+    handle_request_content_encoding)
 from bugsink.app_settings import get_settings
+from bugsink.utils import set_path
 
 from events.models import Event
 from events.retention import evict_for_max_events, should_evict, EvictionCounts
@@ -39,6 +41,10 @@ from alerts.tasks import send_new_issue_alert, send_regression_alert
 from compat.timestamp import format_timestamp, parse_timestamp
 from tags.models import digest_tags
 from bsmain.utils import b108_makedirs
+from phonehome.models import Installation
+
+from sentry_sdk_extensions import capture_or_log_exception
+from sentry.minidump import merge_minidump_event
 
 from .parsers import StreamingEnvelopeParser, ParseError
 from .filestore import get_filename_for_event_id
@@ -49,8 +55,23 @@ from .models import StoreEnvelope, DontStoreEnvelope, Envelope
 
 HTTP_429_TOO_MANY_REQUESTS = 429
 HTTP_400_BAD_REQUEST = 400
+HTTP_404_NOT_FOUND = 404
+HTTP_413_CONTENT_TOO_LARGE = 413
 HTTP_501_NOT_IMPLEMENTED = 501
 
+
+QUOTA_THRESHOLDS = {
+    "Installation": [
+        ("minute", 5, "MAX_EVENTS_PER_5_MINUTES"),
+        ("hour", 1, "MAX_EVENTS_PER_HOUR",),
+        ("month", 1, "MAX_EVENTS_PER_MONTH"),
+    ],
+    "Project": [
+        ("minute", 5, "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES"),
+        ("hour", 1, "MAX_EVENTS_PER_PROJECT_PER_HOUR",),
+        ("month", 1, "MAX_EVENTS_PER_PROJECT_PER_MONTH"),
+    ],
+}
 
 logger = logging.getLogger("bugsink.ingest")
 performance_logger = logging.getLogger("bugsink.performance.ingest")
@@ -109,8 +130,10 @@ class BaseIngestAPIView(View):
         try:
             return self._set_cors_headers(self._post(request, project_pk))
         except MaxLengthExceeded as e:
+            return self._set_cors_headers(JsonResponse({"message": str(e)}, status=HTTP_413_CONTENT_TOO_LARGE))
+        except ValidationError as e:
             return self._set_cors_headers(JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST))
-        except exceptions.ValidationError as e:
+        except ParseError as e:
             return self._set_cors_headers(JsonResponse({"message": str(e)}, status=HTTP_400_BAD_REQUEST))
 
     @classmethod
@@ -128,7 +151,7 @@ class BaseIngestAPIView(View):
             auth_dict = parse_auth_header_value(request.META["HTTP_X_SENTRY_AUTH"])
             return auth_dict.get("sentry_key")
 
-        raise exceptions.PermissionDenied("Unable to find authentication information")
+        raise PermissionDenied("Unable to find authentication information")
 
     @classmethod
     def get_project(cls, project_pk, sentry_key):
@@ -143,7 +166,7 @@ class BaseIngestAPIView(View):
             # you want to show as a first step towards debugging issues with SDKs with faulty authentication (a rather
             # common scenario).
             dsn = build_dsn(str(get_settings().BASE_URL), project_pk, sentry_key)
-            raise exceptions.PermissionDenied("Project not found or key incorrect: %s" % dsn) from None
+            raise PermissionDenied("Project not found or key incorrect: %s" % dsn) from None
 
     @classmethod
     def get_project_for_request(cls, project_pk, request):
@@ -151,29 +174,64 @@ class BaseIngestAPIView(View):
         return cls.get_project(project_pk, sentry_key)
 
     @classmethod
-    def process_event(cls, ingested_at, event_id, event_data_stream, project, request):
-        event_metadata = cls.get_event_meta(event_id, ingested_at, request, project)
+    def _minidump_post_data(cls, request):
+        event_data = {}
+        extra_data = {}
 
-        if get_settings().DIGEST_IMMEDIATELY:
-            # in this case the stream will be an BytesIO object, so we can actually call .get_value() on it.
-            event_data_bytes = event_data_stream.getvalue()
-            event_data = json.loads(event_data_bytes.decode("utf-8"))
-            performance_logger.info("ingested event with %s bytes", len(event_data_bytes))
-            cls.digest_event(event_metadata, event_data)
-        else:
-            # In this case the stream will be a file that has been written the event's content to it.
-            # To ensure that the (possibly EAGER) handling of the digest has the file available, we flush it here:
-            event_data_stream.flush()
+        for key, value in request.POST.items():
+            # Additionally,  you can set all attributes corresponding to the Sentry event interface in a sentry field...
+            if key == "sentry":
+                # > This field either accepts JSON data...
+                try:
+                    payload = json.loads(value)
+                    event_data.update(payload)
+                except Exception as e:
+                    capture_or_log_exception(e, logger)
 
-            performance_logger.info("ingested event with %s bytes", event_data_stream.bytes_written)
-            digest.delay(event_id, event_metadata)
+            elif key.startswith("sentry[") and key.endswith("]"):
+                # > ... or its values can be flattened with the bracket syntax.
+                parts = key[len("sentry["):-1].split("][")
+                set_path(event_data, parts, value)
+            else:
+                # > fields to the upload HTTP request [..] will be collected in the "Extra Data" section
+                extra_data[key] = value
+
+        if extra_data:
+            event_data.setdefault("extra", {}).update(extra_data)
+
+        return event_data
 
     @classmethod
-    def get_event_meta(cls, event_id, ingested_at, request, project):
-        # Meta means: not part of the event data. Basically: information that is available at the time of ingestion, and
-        # that must be passed to digest() in a serializable form.
-        debug_info = request.META.get("HTTP_X_BUGSINK_DEBUGINFO", "")
+    def process_minidump(cls, ingested_at, ingestion_id, minidump_bytes, project, request):
+        # This is for the "pure" minidump case, i.e. full separate event (however: event data/extra data _can_ be
+        # provided via POST). TSTTCPW: convert the minidump data to an event and then proceed as usual.
+        performance_logger.info("ingested minidump with %s bytes", len(minidump_bytes))
 
+        # NOTE: the sentry-native SDK (at least when crashpad-powered) sends a 'guid' request.POST field; we don't use
+        # this yet and AFAICT Sentry doesn't either; AFAICT it's per-binary (not per-event), so the obvious target would
+        # be "user".
+        event_id = uuid.uuid4().hex
+        event_data = cls._minidump_post_data(request)
+
+        event_data["event_id"] = event_id
+        event_data["platform"] = "native"
+        event_data["errors"] = []
+
+        merge_minidump_event(event_data, minidump_bytes)
+
+        # write the event data to disk:
+        filename = get_filename_for_event_id(ingestion_id)
+        b108_makedirs(os.path.dirname(filename))
+        with open(filename, 'w') as f:
+            json.dump(event_data, f)
+
+        event_metadata = cls.get_event_meta(event_data["event_id"], ingested_at, ingestion_id, request, project)
+        digest.delay(event_data["event_id"], event_metadata)
+
+        return event_id
+
+    @classmethod
+    def get_event_meta(cls, event_id, ingested_at, ingestion_id, request, project):
         # .get(..) -- don't want to crash on this and it's non-trivial to find a source that tells me with certainty
         # that the REMOTE_ADDR is always in request.META (it probably is in practice)
         remote_addr = request.META.get("REMOTE_ADDR")
@@ -182,7 +240,7 @@ class BaseIngestAPIView(View):
             "event_id": event_id,
             "project_id": project.id,
             "ingested_at": format_timestamp(ingested_at),
-            "debug_info": debug_info,
+            "ingestion_id": ingestion_id,
             "remote_addr": remote_addr,
         }
 
@@ -242,7 +300,7 @@ class BaseIngestAPIView(View):
 
     @classmethod
     @immediate_atomic()
-    def digest_event(cls, event_metadata, event_data, digested_at=None):
+    def digest_event(cls, event_metadata, event_data, digested_at=None, minidump_bytes=None):
         # ingested_at is passed from the point-of-ingestion; digested_at is determined here. Because this happens inside
         # `immediate_atomic`, we know digestions are serialized, and assuming non-decreasing server clocks, not decrea-
         # sing. (no so for ingestion times: clock-watching happens outside the snappe transaction, and threading in the
@@ -266,11 +324,26 @@ class BaseIngestAPIView(View):
             # (covers both "deletion in progress (is_deleted=True)" and "fully deleted").
             return
 
-        if not cls.count_project_periods_and_act_on_it(project, digested_at):
+        if project.get_retention_max_event_count() == 0:
+            if project.stored_event_count > 0:
+                from events.tasks import delete_by_age_until_under_retention_max
+                delay_on_commit(delete_by_age_until_under_retention_max, project.id)
+            return
+
+        installation = Installation.objects.get()
+        if (not cls.count_installation_periods_and_act_on_it(installation, digested_at)
+                or not cls.count_project_periods_and_act_on_it(project, digested_at)):
+
             return  # if over-quota: just return (any cleanup is done calling-side)
 
         if get_settings().VALIDATE_ON_DIGEST in ["warn", "strict"]:
             cls.validate_event_data(event_data, get_settings().VALIDATE_ON_DIGEST)
+
+        if minidump_bytes is not None:
+            # we merge after validation: validation is about what's provided _externally_, not our own merging.
+            # TODO error handling
+            # TODO should not be inside immediate_atomic if it turns out to be slow
+            merge_minidump_event(event_data, minidump_bytes)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
@@ -342,12 +415,17 @@ class BaseIngestAPIView(View):
         # +1 because we're about to add one event
         issue.stored_event_count = issue.stored_event_count + 1 - evicted.per_issue.get(issue.id, 0)
         project.stored_event_count = project_stored_event_count - evicted.total
-        project.save(update_fields=["stored_event_count"])
+        if issue_created:
+            project.issue_count += 1
+            project.save(update_fields=["stored_event_count", "issue_count"])
+        else:
+            project.save(update_fields=["stored_event_count"])
 
         event, event_created = Event.from_ingested(
             event_metadata,
             digested_at,
             issue.digested_event_count,
+            project.digested_event_count,
             issue.stored_event_count,
             issue,
             grouping,
@@ -367,6 +445,8 @@ class BaseIngestAPIView(View):
             # Validating by letting the DB raise an exception, and only after taking some other actions already, is not
             # "by the book" (some book), but it's the most efficient way of doing it when your basic expectation is that
             # multiple events with the same event_id "don't happen" (i.e. are the result of badly misbehaving clients)
+            # Note: given the ordering here this may hit after an eviction; that was not imagined (but will still work,
+            # albeit with considerable wasted work in that scenario).
             raise ValidationError("Event already exists", code="event_already_exists")
 
         release, _ = create_release_if_needed(project, event.release, event.ingested_at, issue)
@@ -411,6 +491,8 @@ class BaseIngestAPIView(View):
                     issue, triggering_event=event,
                     unmute_metadata={"mute_for": {"unmute_after": issue.unmute_after}})
 
+        cls.count_issue_periods_and_act_on_it(issue, event, digested_at)
+
         if event.never_evict:
             # as a sort of poor man's django-dirtyfields (which we haven't adopted for simplicity's sake) we simply do
             # this manually for a single field; we know that if never_evict has been set, it's always been set after the
@@ -422,8 +504,6 @@ class BaseIngestAPIView(View):
         if release.version + "\n" not in issue.events_at:
             issue.events_at += release.version + "\n"
 
-        cls.count_issue_periods_and_act_on_it(issue, event, digested_at)
-
         issue.save()
 
         # intentionally at the end: possible future optimization is to push this out of the transaction (or even use
@@ -431,15 +511,64 @@ class BaseIngestAPIView(View):
         digest_tags(event_data, event, issue)
 
     @classmethod
+    def count_installation_periods_and_act_on_it(cls, installation, now):
+        # Copy/pasted from count_project_periods_and_act_on_it and adapted. Explaining comments from over there were not
+        # kept; the comments below are specific to the adapations.
+        thresholds = [(p, n, get_settings()[key]) for (p, n, key) in QUOTA_THRESHOLDS["Installation"]]
+        min_threshold = min([gte_threshold for (_, _, gte_threshold) in thresholds])
+
+        if cls.is_quota_still_exceeded(installation, now):
+            return False
+
+        # We don't do per-event-digest bookkeeping on the installation because doing so would tie us in further into
+        # "global locking"; the assumption is that a group by over (a few) projects is still quite cheap. The per-exceed
+        # bookkeeping _is_ done on the installation level (moments of exceeding are quite rare; cost is amortized).
+        # +1 because about-to-add and the installation-wide call precedes the per-project bookkeeping.
+        digested_event_count = (Project.objects.aggregate(total=Sum("digested_event_count"))["total"] or 0) + 1
+
+        if ((digested_event_count >= installation.next_quota_check) or
+                (installation.next_quota_check - digested_event_count > min_threshold)):
+
+            states = check_for_thresholds(Event.objects.all(), now, thresholds, 1)
+
+            until, threshold_info = max(
+                [(below_from, ti) for (is_exceeded, below_from, _, ti) in states if is_exceeded],
+                default=(None, None))
+
+            check_again_after = max(1, min([check_after for (_, _, check_after, _) in states], default=1))
+
+            installation.quota_exceeded_until = until  # note: never reset to None, but the `now <` will still just work
+            installation.quota_exceeded_reason = json.dumps(threshold_info)
+            installation.next_quota_check = digested_event_count + check_again_after
+            installation.save()  # conditional in the if-statement because no per-digest bookkeeping on the installation
+
+        return True
+
+    @classmethod
+    def is_quota_still_exceeded(cls, obj, now):
+        if obj.quota_exceeded_until is None or now >= obj.quota_exceeded_until:
+            return False
+
+        # check if the setting has not been made more lax since the quota was tripped (an alternative would be: always
+        # reset these on snappea/server start)
+        period_name, nr_of_periods, gte_threshold = json.loads(obj.quota_exceeded_reason)
+        relevant_setting = [
+            k for (p, n, k) in QUOTA_THRESHOLDS[type(obj).__name__]
+            if p == period_name and n == nr_of_periods
+        ][0]
+        current_gte_threshold = get_settings()[relevant_setting]
+        if current_gte_threshold > gte_threshold:
+            return False
+
+        return True
+
+    @classmethod
     def count_project_periods_and_act_on_it(cls, project, now):
         # returns: True if any further processing should be done.
+        thresholds = [(p, n, get_settings()[key]) for (p, n, key) in QUOTA_THRESHOLDS["Project"]]
+        min_threshold = min([gte_threshold for (_, _, gte_threshold) in thresholds])
 
-        thresholds = [
-            ("minute", 5, get_settings().MAX_EVENTS_PER_PROJECT_PER_5_MINUTES),
-            ("minute", 60, get_settings().MAX_EVENTS_PER_PROJECT_PER_HOUR),
-        ]
-
-        if project.quota_exceeded_until is not None and now < project.quota_exceeded_until:
+        if cls.is_quota_still_exceeded(project, now):
             # This is the same check that we do on-ingest. Naively, one might think that it is superfluous. However,
             # because by design there is the potential for a digestion backlog to exist, it is possible that the update
             # of `project.quota_exceeded_until` happens only after any number of events have already passed through
@@ -450,7 +579,13 @@ class BaseIngestAPIView(View):
 
         project.digested_event_count += 1
 
-        if project.digested_event_count >= project.next_quota_check:
+        if ((project.digested_event_count >= project.next_quota_check) or
+                (project.next_quota_check - project.digested_event_count > min_threshold)):
+
+            # diff > min_threshold guards against shrunken thresholds (changed settings): if this condition holds, we've
+            # been able to detect the setting-change and trigger a recheck. (in the case it's not detectable, we may at
+            # worst get a "fresh quotum batch" of the new quotom size which is fine too).
+
             # check_for_thresholds is relatively expensive (SQL group by); we do it as little as possible
 
             # Notes on off-by-one:
@@ -461,14 +596,15 @@ class BaseIngestAPIView(View):
             #   and because of the previous bullet we know that it will always be digested.
             states = check_for_thresholds(Event.objects.filter(project=project), now, thresholds, 1)
 
-            until = max([below_from for (state, below_from, _, _) in states if state], default=None)
+            until = max([below_from for (is_exceeded, below_from, _, _) in states if is_exceeded], default=None)
+            until, threshold_info = max(
+                [(below_from, ti) for (is_exceeded, below_from, _, ti) in states if is_exceeded],
+                default=(None, None))
 
-            # "at least 1" is a matter of taste; because the actual usage of `next_quota_check` is with a gte, leaving
-            # it out would result in the same behavior. But once we reach this point we know that digested_event_count
-            # will increase, so we know that a next check cannot happen before current + 1, we might as well be explicit
-            check_again_after = max(1, min([check_after for (_, _, check_after, _) in states], default=1))
+            check_again_after = min([check_after for (_, _, check_after, _) in states], default=1)
 
             project.quota_exceeded_until = until
+            project.quota_exceeded_reason = json.dumps(threshold_info)
 
             # note on correction of `digested_event_count += 1`: as long as we don't do that between the check on
             # next_quota_check (the if-statement) and the setting (the statement below) we're good.
@@ -497,8 +633,8 @@ class BaseIngestAPIView(View):
 
             issue.next_unmute_check = issue.digested_event_count + check_again_after
 
-            for (state, until, _, (period_name, nr_of_periods, gte_threshold)) in states:
-                if not state:
+            for (is_exceeded, until, _, (period_name, nr_of_periods, gte_threshold)) in states:
+                if not is_exceeded:
                     continue
 
                 IssueStateManager.unmute(issue, triggering_event=event, unmute_metadata={"mute_until": {
@@ -515,30 +651,37 @@ class BaseIngestAPIView(View):
 class IngestEventAPIView(BaseIngestAPIView):
 
     def _post(self, request, project_pk=None):
-        ingested_at = datetime.now(timezone.utc)
-        project = self.get_project_for_request(project_pk, request)
-        if project.quota_exceeded_until is not None and ingested_at < project.quota_exceeded_until:
-            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
-
         # This endpoint is deprecated. Personally, I think it's the simpler (and given my goals therefore better) of the
         # two, but fighting windmills and all... given that it's deprecated, I'm not going to give it quite as much love
-        # (at least for now). Interfaces between the internal methods quite changed a bit recently, and this one did not
-        # keep up.
+        # (at least for now).
         #
-        # In particular I'd like to just call process_event() here, but that takes both an event_id and an unparsed data
-        # stream, and we don't have an event_id here before parsing (and we don't want to parse twice). similarly,
-        # event_metadata construction requires the event_id.
-        #
-        # Instead, we just copy/pasted the relevant parts of process_event() here, and take only one branch (the one
-        # that digests immediately); i.e. we always digest immediately, independent of the setting.
+        # The main point of "inefficiency" is that the event data is parsed twice: once here (to get the event_id), and
+        # once in the actual digest.delay()
+        ingested_at = datetime.now(timezone.utc)
+        ingestion_id = str(uuid.uuid4())
 
-        event_data = json.loads(
-            MaxDataReader("MAX_EVENT_SIZE", content_encoding_reader(
-                MaxDataReader("MAX_EVENT_COMPRESSED_SIZE", request))).read())
+        installation = Installation.objects.get()
+        if self.is_quota_still_exceeded(installation, ingested_at):
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
-        event_metadata = self.get_event_meta(event_data["event_id"], ingested_at, request, project)
+        project = self.get_project_for_request(project_pk, request)
+        if self.is_quota_still_exceeded(project, ingested_at):
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
-        self.digest_event(event_metadata, event_data)
+        event_data_bytes = MaxDataReader(
+            "MAX_EVENT_SIZE", content_encoding_reader(MaxDataReader("MAX_EVENT_COMPRESSED_SIZE", request))).read()
+
+        performance_logger.info("ingested event with %s bytes", len(event_data_bytes))
+
+        event_data = json.loads(event_data_bytes)
+        filename = get_filename_for_event_id(ingestion_id)
+        b108_makedirs(os.path.dirname(filename))
+        with open(filename, 'w') as f:
+            json.dump(event_data, f)
+
+        event_metadata = self.get_event_meta(event_data["event_id"], ingested_at, ingestion_id, request, project)
+
+        digest.delay(event_data["event_id"], event_metadata)
 
         return HttpResponse()
 
@@ -547,6 +690,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
     def _post(self, request, project_pk=None):
         ingested_at = datetime.now(timezone.utc)
+        ingestion_id = str(uuid.uuid4())
 
         input_stream = MaxDataReader("MAX_ENVELOPE_SIZE", content_encoding_reader(
             MaxDataReader("MAX_ENVELOPE_COMPRESSED_SIZE", request)))
@@ -556,7 +700,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             else DontStoreEnvelope(input_stream)
 
         try:
-            return self._post2(request, input_stream, ingested_at, project_pk)
+            return self._post2(request, input_stream, ingested_at, ingestion_id, project_pk)
         finally:
             # storing stuff in the DB on-ingest (rather than on digest-only) is not "as architected"; it's only
             # acceptible because this is a debug-only thing which is turned off by default; but even for me and other
@@ -570,7 +714,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             # transaction" in the DB).
             input_stream.store()
 
-    def _post2(self, request, input_stream, ingested_at, project_pk=None):
+    def _post2(self, request, input_stream, ingested_at, ingestion_id, project_pk=None):
         # Note: wrapping the COMPRESSES_SIZE checks arount request makes it so that when clients do not compress their
         # requests, they are still subject to the (smaller) maximums that apply pre-uncompress. This is exactly what we
         # want.
@@ -578,8 +722,8 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
         envelope_headers = parser.get_envelope_headers()
 
-        # Getting the project is the only DB-touching (a read) we do before we (only in IMMEDIATE/EAGER modes), start
-        # start read/writing in digest_event. Notes on transactions:
+        # Getting the installation & project is the only DB-touching (a read) we do before we (only in IMMEDIATE/EAGER
+        # modes), start start read/writing in digest_event. Notes on transactions:
         #
         # * we could add `durable_atomic` here for explicitness / if we ever do more than one read (for consistent
         #   snapshots. As it stands, not needed. (I believe this is implicit due to Django or even sqlite itself)
@@ -592,6 +736,10 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         #   only modes where this would make sense). This allows for passing of project between the 2 methods, but the
         #   added complexity (conditional transactions both here and in digest_event) is not worth it for modes that are
         #   non-production anyway.
+        installation = Installation.objects.get()
+        if self.is_quota_still_exceeded(installation, ingested_at):
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
+
         if "dsn" in envelope_headers:
             # as in get_sentry_key_for_request, we don't verify that the DSN contains the project_pk, for the same
             # reason ("reasons unconvincing")
@@ -599,7 +747,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         else:
             project = self.get_project_for_request(project_pk, request)
 
-        if project.quota_exceeded_until is not None and ingested_at < project.quota_exceeded_until:
+        if self.is_quota_still_exceeded(project, ingested_at):
             # Sentry has x-sentry-rate-limits, but for now 429 is just fine. Client-side this is implemented as a 60s
             # backoff.
             #
@@ -618,47 +766,85 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         def factory(item_headers):
-            if item_headers.get("type") == "event":
-                if get_settings().DIGEST_IMMEDIATELY:
-                    return MaxDataWriter("MAX_EVENT_SIZE", io.BytesIO())
+            type_ = item_headers.get("type")
 
-                # envelope_headers["event_id"] is required when type=event per the spec (and takes precedence over the
-                # payload's event_id), so we can rely on it having been set.
-                if "event_id" not in envelope_headers:
-                    raise ParseError("event_id not found in envelope headers")
+            if ((type_ not in ["event", "attachment"]) or
+                    (item_headers.get("type") == "attachment" and
+                     item_headers.get("attachment_type") != "event.minidump") or
+                    (item_headers.get("type") == "attachment" and
+                     item_headers.get("attachment_type") == "event.minidump" and
+                     not get_settings().FEATURE_MINIDUMPS)):
 
-                try:
-                    # validate that the event_id is a valid UUID as per the spec (validate at the edge)
-                    uuid.UUID(envelope_headers["event_id"])
-                except ValueError:
-                    raise ParseError("event_id in envelope headers is not a valid UUID")
+                # non-event/minidumps can be discarded; (the somewhat arbitrary size limit is no problem because we have
+                # the envelope limit to protect us, and we incur almost no cost (NullWriter))
+                return MaxDataWriter("MAX_ATTACHMENT_SIZE", NullWriter())
 
-                filename = get_filename_for_event_id(envelope_headers["event_id"])
-                b108_makedirs(os.path.dirname(filename))
-                return MaxDataWriter("MAX_EVENT_SIZE", open(filename, 'wb'))
+            # envelope_headers["event_id"] is required when type in ["event", "attachment"] per the spec (and takes
+            # precedence over the payload's event_id), so we can rely on it having been set.
+            if "event_id" not in envelope_headers:
+                raise ParseError("event_id not found in envelope headers")
 
-            # everything else can be discarded; (we don't check for individual size limits, because these differ
-            # per item type, we have the envelope limit to protect us, and we incur almost no cost (NullWriter) anyway.
-            return NullWriter()
-
-        for item_headers, event_output_stream in parser.get_items(factory):
             try:
-                if item_headers.get("type") != "event":
-                    logger.info("skipping non-event item: %s", item_headers.get("type"))
+                # validate that the event_id is a valid UUID as per the spec (validate at the edge)
+                uuid.UUID(envelope_headers["event_id"])
+            except ValueError:
+                raise ParseError("event_id in envelope headers is not a valid UUID")
 
-                    if item_headers.get("type") == "transaction":
-                        # From the spec of type=event: This Item is mutually exclusive with `"transaction"` Items.
-                        # i.e. when we see a transaction, a regular event will not be present and we can stop.
-                        logger.info("discarding the rest of the envelope")
-                        break
+            filetype = "event" if type_ == "event" else "minidump"
+            filename = get_filename_for_event_id(ingestion_id, filetype=filetype)
+            b108_makedirs(os.path.dirname(filename))
 
-                    continue
+            size_conf = "MAX_EVENT_SIZE" if type_ == "event" else "MAX_ATTACHMENT_SIZE"
+            return MaxDataWriter(size_conf, open(filename, 'wb'))
 
-                self.process_event(ingested_at, envelope_headers["event_id"], event_output_stream, project, request)
-                break  # From the spec of type=event: This Item may occur at most once per Envelope. once seen: done
+        # We ingest the whole envelope first and organize by type; this enables "digest once" across envelope-parts
+        items_by_type = defaultdict(list)
+        for item_headers, output_stream in parser.get_items(factory):
+            type_ = item_headers.get("type")
+            if type_ not in ["event", "attachment"]:
+                logger.info("skipping non-supported envelope item: %s", item_headers.get("type"))
+                continue
 
-            finally:
-                event_output_stream.close()
+            if type_ == "attachment" and item_headers.get("attachment_type") != "event.minidump":
+                logger.info("skipping non-supported attachment type: %s", item_headers.get("attachment_type"))
+                continue
+
+            performance_logger.info("ingested %s with %s bytes", type_, output_stream.bytes_written)
+            items_by_type[type_].append(output_stream)
+
+        event_count = len(items_by_type.get("event", []))
+        minidump_count = len(items_by_type.get("attachment", [])) if get_settings().FEATURE_MINIDUMPS else 0
+
+        if event_count + minidump_count == 0:
+            logger.info("no event or minidump found in envelope, ignoring this envelope.")
+            return HttpResponse()
+
+        if event_count > 1 or minidump_count > 1:
+            # TODO: we do 2 passes (one for storing, one for calling the right task), and we check certain conditions
+            # only on the second pass; this means that we may not clean up after ourselves yet.
+            # TODO we don't do any minidump files cleanup yet in any of the cases.
+
+            logger.info(
+                "can only deal with one event/minidump per envelope but found %s/%s, ignoring this envelope.",
+                event_count, minidump_count)
+            return HttpResponse()
+
+        event_metadata = self.get_event_meta(envelope_headers["event_id"], ingested_at, ingestion_id, request, project)
+
+        if event_count == 1:
+            if minidump_count == 1:
+                event_metadata["has_minidump"] = True
+            digest.delay(envelope_headers["event_id"], event_metadata)
+
+        else:
+            # as it stands, we implement the minidump->event path for the minidump-only case on-ingest; we could push
+            # this to a task too if needed or for reasons of symmetry.
+            with open(get_filename_for_event_id(ingestion_id, filetype="minidump"), 'rb') as f:
+                minidump_bytes = f.read()
+
+            # TODO: error handling
+            # NOTE "The file should start with the MDMP magic bytes." is not checked yet.
+            self.process_minidump(ingested_at, ingestion_id, minidump_bytes, project, request)
 
         return HttpResponse()
 
@@ -678,6 +864,37 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 # more stuff that we don't care about (up to 20MiB compressed) whereas the max event size (uncompressed) is 1MiB.
 # Another advantage: this allows us to raise the relevant Header parsing and size limitation Exceptions to the SDKs.
 #
+
+
+class MinidumpAPIView(BaseIngestAPIView):
+    # A Base "Ingest" APIView in the sense that it reuses some key building blocks (auth).
+    # I'm not 100% sure whether "philosophically" the minidump endpoint is also "ingesting"; we'll see.
+
+    def post(self, request, project_pk=None):
+        if not get_settings().FEATURE_MINIDUMPS:
+            return JsonResponse({"detail": "minidumps not enabled"}, status=HTTP_404_NOT_FOUND)
+
+        # not reusing the CORS stuff here; minidump-from-browser doesn't make sense.
+
+        # TODO: actually pick/configure max
+        handle_request_content_encoding(request, 50 * 1024 * 1024)
+
+        ingested_at = datetime.now(timezone.utc)
+        project = self.get_project_for_request(project_pk, request)
+
+        try:
+            if "upload_file_minidump" not in request.FILES:
+                return JsonResponse({"detail": "upload_file_minidump not found"}, status=HTTP_400_BAD_REQUEST)
+
+            minidump_bytes = request.FILES["upload_file_minidump"].read()
+            event_id = self.process_minidump(ingested_at, minidump_bytes, project, request)
+
+            return JsonResponse({"id": event_id})
+        except Exception as e:
+            # we're still figuring out what this endpoint should do; so we log errors to learn from them while saying
+            # to the client "400 Bad Request" if we can't handle their stuff.
+            capture_or_log_exception(e, logger)
+            return JsonResponse({"detail": str(e)}, status=HTTP_400_BAD_REQUEST)
 
 
 @user_passes_test(lambda u: u.is_superuser)

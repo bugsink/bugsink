@@ -14,7 +14,7 @@ from django.conf import settings
 from django.db.utils import OperationalError
 
 from django.template.defaultfilters import filesizeformat
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.cache import cache_control
 from django.views.defaults import permission_denied as django_permission_denied, page_not_found as django_page_not_found
 from django.http import FileResponse, HttpRequest, HttpResponse
@@ -29,6 +29,7 @@ from bugsink.decorators import login_exempt
 from bugsink.app_settings import get_settings as get_bugsink_settings
 from bugsink.decorators import atomic_for_request_method
 from bugsink.timed_sqlite_backend.base import different_runtime_limit
+from bugsink.utils import is_safe_next_url
 
 from phonehome.tasks import send_if_due
 from phonehome.models import Installation
@@ -173,6 +174,7 @@ def settings_view(request):
 @user_passes_test(lambda u: u.is_superuser)
 @atomic_for_request_method  # get a consistent view (barring cached, which are marked as such)
 def counts(request):
+    # See also: modelcounts management command.
     interesting_apps = [
         # "admin",
         # "auth",
@@ -228,14 +230,17 @@ def counts(request):
 
 
 @user_passes_test(lambda u: u.is_superuser)
+@require_POST
 @atomic_for_request_method
 def silence_email_system_warning(request):
     installation = Installation.objects.get()
     installation.silence_email_system_warning = True
     installation.save()
 
-    next = request.POST.get("next", "/")
-    return HttpResponseRedirect(next)
+    next_url = request.POST.get("next", "/")
+    if not is_safe_next_url(next_url, request):
+        next_url = "/"
+    return HttpResponseRedirect(next_url)
 
 
 @requires_csrf_token

@@ -32,7 +32,7 @@ class EventAdmin(admin.ModelAdmin):
 
     ordering = ['-timestamp']
 
-    search_fields = ['event_id', 'debug_info']
+    search_fields = ['event_id']
 
     list_display = [
         'timestamp',
@@ -41,7 +41,6 @@ class EventAdmin(admin.ModelAdmin):
         'level',
         'sdk_name',
         'sdk_version',
-        'debug_info',
         'on_site',
     ]
 
@@ -73,7 +72,6 @@ class EventAdmin(admin.ModelAdmin):
         'environment',
         'sdk_name',
         'sdk_version',
-        'debug_info',
         'pretty_data',
     ]
 

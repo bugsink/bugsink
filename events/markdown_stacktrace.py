@@ -133,7 +133,7 @@ def _select_frames(frames, in_app_only):
     return filtered if filtered else frames
 
 
-def render_stacktrace_md(event, frames="in_app", include_locals=True):
+def render_stacktrace_md(event, in_app_only=False, include_locals=True):
     parsed = event.get_parsed_data()
     try:
         apply_sourcemaps(parsed)
@@ -163,7 +163,6 @@ def render_stacktrace_md(event, frames="in_app", include_locals=True):
         if stack_of_plates and frames_list:
             frames_list = list(reversed(frames_list))
 
-        in_app_only = frames == "in_app"
         frames_list = _select_frames(frames_list, in_app_only)
 
         for frame in frames_list:

@@ -49,7 +49,7 @@ class DatabaseWrapper(TimedDatabaseWrapper):
             raise Exception("Cannot determine subdomain outside of request/response loop")
 
         if subdomain not in self.tenants:
-            # shouldn't happen 'in practice' (because there would be no certificate then)
+            # shouldn't happen 'in practice' (should be caught on the middleware level)
             raise Http404(f"No such site: {subdomain}.bugsink.com not found")
 
         return self.tenants[subdomain]

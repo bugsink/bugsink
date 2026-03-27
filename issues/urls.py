@@ -2,7 +2,7 @@ from django.urls import path, register_converter
 
 from .views import (
     issue_list, issue_event_stacktrace, issue_event_details, issue_event_list, issue_history, issue_grouping,
-    issue_event_breadcrumbs, event_by_internal_id, history_comment_new, history_comment_edit, history_comment_delete,
+    issue_event_breadcrumbs, event_by_id, history_comment_new, history_comment_edit, history_comment_delete,
     issue_tags)
 
 
@@ -62,7 +62,7 @@ urlpatterns = [
     path('issue/<uuid:issue_pk>/grouping/', issue_grouping),
     path('issue/<uuid:issue_pk>/events/', issue_event_list),
 
-    path('event/<uuid:event_pk>/', event_by_internal_id, name="event_by_internal_id"),
+    path('event/<uuid:event_pk>/', event_by_id, name="event_by_id"),
     path('issue/<uuid:issue_pk>/history/comment/', history_comment_new, name="history_comment_new"),
     path('issue/<uuid:issue_pk>/history/comment/<int:comment_pk>/', history_comment_edit, name="history_comment_edit"),
     path('issue/<uuid:issue_pk>/history/comment/<int:comment_pk>/delete/', history_comment_delete,

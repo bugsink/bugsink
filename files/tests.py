@@ -5,7 +5,14 @@ import gzip
 from io import BytesIO
 import os
 from glob import glob
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+from django.test import tag
 from django.contrib.auth import get_user_model
+from django.test import LiveServerTestCase, override_settings
 
 from compat.dsn import get_header_value
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
@@ -13,6 +20,7 @@ from projects.models import Project, ProjectMembership
 from events.models import Event
 from bsmain.models import AuthToken
 from bugsink.moreiterutils import batched
+from bugsink.app_settings import override_settings as bugsink_override_settings
 
 from .models import File, FileMetadata
 
@@ -76,6 +84,7 @@ class FilesTests(TransactionTestCase):
                 fms = FileMetadata.objects.filter(debug_id__in=[test_with])
                 self.assertEqual(1, fms.count())
 
+    @tag("samples")
     def test_assemble_artifact_bundle(self):
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
         event_samples = [SAMPLES_DIR + fn for fn in [
@@ -168,6 +177,7 @@ class FilesTests(TransactionTestCase):
                 # we want to know _which_ event failed, hence the raise-from-e here
                 raise AssertionError("Error rendering event %s" % event.event_id) from e
 
+    @tag("samples")
     def test_assemble_artifact_bundle_small_chunks(self):
         # Copy-paste of test_assemble_artifact_bundle, but checking _only_ that bundle assembly works with small chunks.
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
@@ -218,3 +228,113 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(
             200, response.status_code, "Error in %s: %s" % (
                 filename, response.content if response.status_code != 302 else response.url))
+
+
+class EnterContextMixin:
+    # https://docs.python.org/3.11/library/unittest.html#unittest.TestCase.enterContext but we support 3.10 too
+    def enterContext(self, cm):
+        result = cm.__enter__()
+
+        def _exit(exc_type=None, exc=None, tb=None):
+            cm.__exit__(exc_type, exc, tb)
+
+        self.addCleanup(_exit)
+        return result
+
+
+class SentryCLITest(EnterContextMixin, LiveServerTestCase):
+    # Test that the _actual_ sentry-cli tool can upload files to our chunk-upload endpoint, and that the files are
+    # correctly assembled and processed.
+
+    def setUp(self):
+        super().setUp()
+        auth = AuthToken.objects.create(description="test token")
+        self.token = auth.token
+
+        # sentry-cli asks _us_ for our own URL...
+        self.enterContext(bugsink_override_settings(BASE_URL=self.live_server_url))
+
+        # propagate exceptions so that we get the errors "from inside the server" instead of just sentry-cli reporting
+        # about a 500 error (the setting just makes it end up on the output, it does not actually "escape" in such a
+        # way that it fails the test itself (but sentry-cli will fail so we get both).
+        self.enterContext(override_settings(DEBUG_PROPAGATE_EXCEPTIONS=True))
+        self.tempdir = self.enterContext(tempfile.TemporaryDirectory())
+
+    def _run(self, args):
+        sp = subprocess.run(
+            args,
+            cwd=self.tempdir,
+            env={
+                "SENTRY_AUTH_TOKEN": self.token,
+                "HOME": str(self.tempdir),  # avoid reading any config from the user's real home dir
+            },
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # merge stderr into stdout so we can see it in test failures
+        )
+        if sp.returncode != 0:
+            raise Exception(f"Command {args} failed with output:\n{sp.stdout.decode('utf-8')}")
+
+    def test_sentry_cli_upload(self):
+        # Test-the-test (these things should live in your env, as per requirements.development.txt)
+        sentry_cli = shutil.which("sentry-cli")
+        identity = shutil.which("identity-sourcemap")
+        assert sentry_cli, "sentry-cli not found on PATH (venv?)"
+        assert identity, "identity-sourcemap not found on PATH (pip install ecma426)"
+
+        ptempdir = Path(self.tempdir)
+        js_path = ptempdir / "captureException.js"
+        map_path = ptempdir / "captureException.js.map"
+
+        js_path.write_text(MINIMAL_JS, encoding="utf-8")
+
+        # generate sourcemap with identity-sourcemap
+        self._run([identity, str(js_path)])
+        assert map_path.exists(), "identity-sourcemap did not produce captureException.js.map"
+
+        # sentry-cli sourcemaps inject
+        self._run([sentry_cli, "sourcemaps", "inject", str(js_path), str(map_path)])
+
+        injected_js = js_path.read_text(encoding="utf-8")
+        assert "debugId=" in injected_js, injected_js[-500:]
+
+        sourcemap = json.loads(map_path.read_text(encoding="utf-8"))
+        assert ("debugId" in sourcemap) or ("debug_id" in sourcemap), sourcemap.keys()
+
+        # sentry-cli sourcemaps upload
+        self._run([
+            sentry_cli,
+            "--log-level=debug",
+            "--url",
+            self.live_server_url,
+            "sourcemaps",
+            "--org",
+            "bugsinkhasnoorgs",
+            "--project",
+            "ignoredfornow",
+            "upload",
+            str(map_path),
+        ])
+
+        self.assertEqual(2, File.objects.count())
+        self.assertTrue(File.objects.filter(filename="captureException.js.map").exists())
+        self.assertTrue(File.objects.filter(filename__endswith=".zip").exists())
+
+        # > When using sentry-cli or [..] Debug IDs are deterministically generated based on the source file contents.
+        self.assertEqual(
+            UUID('9b40e0f3-8084-5931-94d4-8d941780a177'),
+            FileMetadata.objects.get(file__filename="captureException.js.map").debug_id)
+
+
+MINIMAL_JS = """\
+function bar() {
+Sentry.captureException(new Error("Test Error"));
+}
+
+function foo() {
+bar();
+}
+
+function captureException() {
+foo();
+}
+"""

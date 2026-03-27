@@ -1,9 +1,9 @@
-from rest_framework import serializers
+from bugsink.api_serializers import UTCModelSerializer
 
 from .models import Issue
 
 
-class IssueSerializer(serializers.ModelSerializer):
+class IssueSerializer(UTCModelSerializer):
     # grouping_keys = serializers.SerializerMethodField()  # read-only list of strings
 
     class Meta:
@@ -16,7 +16,6 @@ class IssueSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "project",
-            "is_deleted",
             "digest_order",
             "last_seen",
             "first_seen",

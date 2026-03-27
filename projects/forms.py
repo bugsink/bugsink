@@ -1,12 +1,14 @@
 from django import forms
 from django.contrib.auth import get_user_model
-from django.template.defaultfilters import yesno
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.utils.html import format_html
+from django.db.models import Sum
 
 from bugsink.utils import assert_
+from bugsink.app_settings import get_settings
 from teams.models import TeamMembership
+from bsmain.utils import yesno
 
 from .models import Project, ProjectMembership, ProjectRole
 
@@ -84,6 +86,16 @@ class ProjectForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         self.fields["retention_max_event_count"].help_text = _("The maximum number of events to store before evicting.")
+
+        maxes = []
+        if get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT is not None:
+            maxes.append(get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT)
+        if get_settings().MAX_RETENTION_EVENT_COUNT is not None:
+            # pick an initial value that will leave some room for other projects
+            maxes.append(get_settings().MAX_RETENTION_EVENT_COUNT // 5)
+        if maxes:
+            self.fields["retention_max_event_count"].initial = min(maxes)
+
         if self.instance is not None and self.instance.pk is not None:
             # for editing, we disallow changing the team. consideration: it's somewhat hard to see what the consequences
             # for authorization are (from the user's perspective).
@@ -128,3 +140,32 @@ class ProjectForm(forms.ModelForm):
         # how Django does this (but it requires JQuery)
 
         # "alert_on_new_issue", "alert_on_regression", "alert_on_unmute" later
+
+    def clean_retention_max_event_count(self):
+        retention_max_event_count = self.cleaned_data['retention_max_event_count']
+
+        if self.instance and self.instance.pk:
+            # skip validation / have better error message when the value is unchanged or decreased; otherwise one would
+            # get "stuck" (have no more allowed edits, even for other values) after a budget decrease.
+            grace = self.instance.retention_max_event_count
+        else:
+            grace = 0
+
+        if get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT is not None:
+            if retention_max_event_count > max(get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT, grace):
+                raise forms.ValidationError("The maximum allowed retention per project is %d events." %
+                                            get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT)
+
+        if get_settings().MAX_RETENTION_EVENT_COUNT is not None:
+            sum_of_others = Project.objects.exclude(pk=self.instance.pk).aggregate(
+                total=Sum('retention_max_event_count'))['total'] or 0
+            budget_left = max(get_settings().MAX_RETENTION_EVENT_COUNT - sum_of_others, 0, grace)
+
+            if retention_max_event_count > budget_left:
+                # grace not mentioned explicitly here as a reason for "why so high" but that's ok.
+                raise forms.ValidationError("The maximum allowed retention for this project is %d events (based on the "
+                                            "installation-wide max of %d events)." % (
+                                                budget_left,
+                                                get_settings().MAX_RETENTION_EVENT_COUNT))
+
+        return retention_max_event_count

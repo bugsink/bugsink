@@ -3,6 +3,7 @@ import logging
 from collections import defaultdict
 
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import get_template
 from django.apps import apps
@@ -19,8 +20,27 @@ nc_rnd = random
 logger = logging.getLogger("bugsink.email")
 
 
+def is_safe_next_url(url, request):
+    # There's a long discussion here:
+    # https://forum.djangoproject.com/t/why-is-the-use-of-url-has-allowed-host-and-scheme-discouraged/35314/3
+    # The upshot is: url_has_allowed_host_and_scheme was renamed away from _is_safe_url to make it clear that it does
+    # not "generally prove safeness", but it's still exactly the thing to use to check "next" query params, as Django
+    # itself does in django.auth.views. (as long as you use the result in HttpResponseRedirect)
+    return url_has_allowed_host_and_scheme(
+        url=url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    )
+
+
 def send_rendered_email(subject, base_template_name, recipient_list, context=None):
     from phonehome.models import Installation
+
+    # Clean up; Django will do the same: https://github.com/django/django/blob/main/django/core/mail/message.py#L354
+    # However, by doing the filter here we avoid logging something that is not reflective of what will actually happen.
+    recipient_list = [r for r in recipient_list if r]
+    if not recipient_list:
+        return
 
     if not Installation.check_and_inc_email_quota(timezone.now()):
         logger.warning(
@@ -29,6 +49,8 @@ def send_rendered_email(subject, base_template_name, recipient_list, context=Non
             recipient_list,
         )
         return
+
+    logger.info("Sending email with subject '%s' to %s", subject, recipient_list)
 
     if context is None:
         context = {}
@@ -46,7 +68,7 @@ def send_rendered_email(subject, base_template_name, recipient_list, context=Non
 
     msg.attach_alternative(html_content, "text/html")
 
-    msg.send()
+    msg.send(fail_silently=False)  # (fail_silently=False is the default)
 
 
 def get_model_topography():
@@ -202,3 +224,10 @@ def assert_(condition, message=None):
         if message is None:
             raise AssertionError()
         raise AssertionError(message)
+
+
+def set_path(data, path, value):
+    d = data
+    for part in path[:-1]:
+        d = d.setdefault(part, {})
+    d[path[-1]] = value

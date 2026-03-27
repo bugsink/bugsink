@@ -17,19 +17,22 @@ from django.test.client import RequestFactory
 from django.core.exceptions import ValidationError
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
+from bugsink.transaction import immediate_atomic
 from projects.models import Project
 from events.factories import create_event_data, create_event
 from events.retention import evict_for_max_events
 from events.storage_registry import override_event_storages
+from events.models import Event
 from issues.factories import get_or_create_issue
 from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
 from issues.utils import get_values
 from bugsink.app_settings import override_settings
+from bugsink.streams import UnclosableBytesIO
 from compat.timestamp import format_timestamp
 from compat.dsn import get_header_value
 from bsmain.management.commands.send_json import Command as SendJsonCommand
 
-from .views import BaseIngestAPIView
+from .views import BaseIngestAPIView, MinidumpAPIView
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 from .event_counter import check_for_thresholds
 from .header_validators import (
@@ -49,7 +52,6 @@ def _digest_params(event_data, project, request, now=None):
             "event_id": event_data["event_id"],
             "project_id": project.id,
             "ingested_at": format_timestamp(now),
-            "debug_info": "",
         },
         "event_data": event_data,
         "digested_at": now,
@@ -77,8 +79,10 @@ class IngestViewTestCase(TransactionTestCase):
     def setUp(self):
         super().setUp()
 
-        # the existence of loud/quiet reflect that parts of this test focusses on alert-sending
+        # RequestFactory builds `Request` objects for us to pass to the view methods during tests
         self.request_factory = RequestFactory()
+
+        # the existence of loud/quiet reflect that parts of this test focusses on alert-sending
         self.loud_project = Project.objects.create(
             name="loud",
             alert_on_new_issue=True,
@@ -107,6 +111,26 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual("\n", Issue.objects.get().events_at)
         self.assertEqual(1, TurningPoint.objects.count())
         self.assertEqual(TurningPointKind.FIRST_SEEN, TurningPoint.objects.first().kind)
+
+    @patch("ingest.views.BaseIngestAPIView.count_project_periods_and_act_on_it")
+    @patch("ingest.views.BaseIngestAPIView.count_installation_periods_and_act_on_it")
+    @patch("ingest.views.evict_for_max_events")
+    @patch("events.tasks.delete_by_age_until_under_retention_max.delay")
+    def test_ingest_view_zero_retention_short_circuits(
+            self, cleanup_delay, evict_for_max_events, count_installation, count_project):
+        self.quiet_project.retention_max_event_count = 0
+        self.quiet_project.save(update_fields=["retention_max_event_count"])
+
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
+
+        self.assertFalse(count_installation.called)
+        self.assertFalse(count_project.called)
+        self.assertFalse(evict_for_max_events.called)
+        self.assertFalse(cleanup_delay.called)
+        self.assertEqual(0, Event.objects.filter(project=self.quiet_project).count())
+        self.assertEqual(0, Issue.objects.filter(project=self.quiet_project).count())
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
@@ -204,6 +228,32 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(send_unmute_alert.delay.call_args[0][0], str(issue.id))
         self.assertTrue("An event was observed after the mute-deadline of" in send_unmute_alert.delay.call_args[0][1])
 
+    @patch("ingest.views.BaseIngestAPIView.count_project_periods_and_act_on_it")
+    @patch("ingest.views.BaseIngestAPIView.count_installation_periods_and_act_on_it")
+    @patch("ingest.views.evict_for_max_events")
+    @patch("events.tasks.delete_by_age_until_under_retention_max.delay")
+    def test_ingest_view_zero_retention_schedules_cleanup_for_stored_events(
+            self, cleanup_delay, evict_for_max_events, count_installation, count_project):
+        self.quiet_project.retention_max_event_count = 0
+        self.quiet_project.save(update_fields=["retention_max_event_count"])
+
+        event_data = create_event_data()
+        issue, _ = get_or_create_issue(self.quiet_project, event_data)
+        create_event(self.quiet_project, issue, event_data=event_data)
+        issue.stored_event_count = 1
+        issue.save(update_fields=["stored_event_count"])
+        self.quiet_project.stored_event_count = 1
+        self.quiet_project.save(update_fields=["stored_event_count"])
+
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        self.assertFalse(count_installation.called)
+        self.assertFalse(count_project.called)
+        self.assertFalse(evict_for_max_events.called)
+        cleanup_delay.assert_called_once_with(self.quiet_project.id)
+
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
     @patch("issues.models.send_unmute_alert")
@@ -292,49 +342,216 @@ class IngestViewTestCase(TransactionTestCase):
 
         sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
 
-        # first, we ingest many issues
-        command = SendJsonCommand()
-        command.stdout = io.StringIO()
-        command.stderr = io.StringIO()
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
+
+        filename = glob(SAMPLES_DIR + "/bugsink/contexts.json")[0]  # pick a fixed one for reproducibility
+
+        for i, include_event_id in enumerate([True, False]):
+            with open(filename) as f:
+                data = json.loads(f.read())
+
+            data["event_id"] = uuid.uuid4().hex  # for good measure we reset this to avoid duplicates.
+
+            if "timestamp" not in data:
+                # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
+                data["timestamp"] = time.time()
+
+            event_id = data["event_id"]
+            if not include_event_id:
+                del data["event_id"]
+
+            data_bytes = json.dumps(data).encode("utf-8")
+            data_bytes = (
+                b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") + data_bytes)
+
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                },
+                data=data_bytes,
+            )
+            self.assertEqual(
+                200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+            self.assertEqual(1 + i, Event.objects.count())
+
+    @tag("samples")
+    def test_envelope_endpoint_event_and_minidump(self):
+        # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
 
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
 
-        event_samples = glob(SAMPLES_DIR + "/sentry/mobile1-xen.json")  # pick a fixed one for reproducibility
-        known_broken = [SAMPLES_DIR + "/" + s.strip() for s in _readlines(SAMPLES_DIR + "/KNOWN-BROKEN")]
+        filename = glob(SAMPLES_DIR + "/bugsink/contexts.json")[0]  # pick a fixed one for reproducibility
+        with open(filename) as f:
+            data = json.loads(f.read())
 
-        if len(event_samples) == 0:
-            raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
+        data["event_id"] = uuid.uuid4().hex  # for good measure we reset this to avoid duplicates.
 
-        for include_event_id in [True, False]:
-            for filename in [sample for sample in event_samples if sample not in known_broken][:1]:  # one is enough
-                with open(filename) as f:
-                    data = json.loads(f.read())
+        if "timestamp" not in data:
+            # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
+            data["timestamp"] = time.time()
 
-                data["event_id"] = uuid.uuid4().hex  # for good measure we reset this to avoid duplicates.
+        filename = glob(SAMPLES_DIR + "/minidumps/linux_overflow.dmp")[0]  # pick a fixed one for reproducibility
+        with open(filename, 'rb') as f:
+            minidump_bytes = f.read()
 
-                if "timestamp" not in data:
-                    # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
-                    data["timestamp"] = time.time()
+        event_id = data["event_id"]
 
-                event_id = data["event_id"]
-                if not include_event_id:
-                    del data["event_id"]
+        event_bytes = json.dumps(data).encode("utf-8")
+        data_bytes = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "event"}\n' + event_bytes + b"\n" +
+            b'{"type": "attachment", "attachment_type": "event.minidump", "length": %d}\n' % len(minidump_bytes) +
+            minidump_bytes
+            )
 
-                data_bytes = json.dumps(data).encode("utf-8")
-                data_bytes = (
-                    b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") + data_bytes)
+        response = self.client.post(
+            f"/api/{ project.id }/envelope/",
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+            },
+            data=data_bytes,
+        )
+        self.assertEqual(
+            200, response.status_code, response.content if response.status_code != 302 else response.url)
 
-                response = self.client.post(
-                    f"/api/{ project.id }/envelope/",
-                    content_type="application/json",
-                    headers={
-                        "X-Sentry-Auth": sentry_auth_header,
-                        "X-BugSink-DebugInfo": filename,
-                    },
-                    data=data_bytes,
-                )
-                self.assertEqual(
-                    200, response.status_code, response.content if response.status_code != 302 else response.url)
+        self.assertEqual(1, Event.objects.count())
+        event = Event.objects.get()
+        self.assertTrue("prod" in ([tag.value.value for tag in event.tags.all()]))  # from the sample event
+
+        self.assertEqual('SIGABRT: Fatal Error: SIGABRT', Event.objects.get().title())
+
+    @tag("samples")
+    def test_envelope_endpoint_minidump_only(self):
+        # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
+
+        filename = glob(SAMPLES_DIR + "/minidumps/linux_overflow.dmp")[0]  # pick a fixed one for reproducibility
+        with open(filename, 'rb') as f:
+            minidump_bytes = f.read()
+
+        event_id = uuid.uuid4().hex  # required at the envelope level so we provide it.
+
+        data_bytes = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "attachment", "attachment_type": "event.minidump", "length": %d}\n' % len(minidump_bytes) +
+            minidump_bytes
+            )
+
+        response = self.client.post(
+            f"/api/{ project.id }/envelope/",
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+            },
+            data=data_bytes,
+        )
+        self.assertEqual(
+            200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+        self.assertEqual(1, Event.objects.count())
+        event = Event.objects.get()
+        self.assertFalse("prod" in ([tag.value.value for tag in event.tags.all()]))  # no sample event, so False
+
+        self.assertEqual('SIGABRT: Fatal Error: SIGABRT', Event.objects.get().title())
+
+    @tag("samples")
+    @override_settings(FEATURE_MINIDUMPS=False)
+    def test_envelope_endpoint_minidump_only_when_feature_off(self):
+        # dirty copy/paste from the "feature on" case, with different expectations.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
+
+        filename = glob(SAMPLES_DIR + "/minidumps/linux_overflow.dmp")[0]  # pick a fixed one for reproducibility
+        with open(filename, 'rb') as f:
+            minidump_bytes = f.read()
+
+        event_id = uuid.uuid4().hex  # required at the envelope level so we provide it.
+
+        data_bytes = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "attachment", "attachment_type": "event.minidump", "length": %d}\n' % len(minidump_bytes) +
+            minidump_bytes
+            )
+
+        response = self.client.post(
+            f"/api/{ project.id }/envelope/",
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+            },
+            data=data_bytes,
+        )
+        self.assertEqual(
+            200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+        self.assertEqual(0, Event.objects.count())
+
+    def test_envelope_endpoint_unsupported_type(self):
+        # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        for i, include_event_id in enumerate([True, False]):
+            data = {}
+            event_id = uuid.uuid4().hex
+
+            data_bytes = json.dumps(data).encode("utf-8")
+            data_bytes = (
+                b'{"event_id": "%s"}\n{"type": "unsupported_type"}\n' % event_id.encode("utf-8") + data_bytes)
+
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                },
+                data=data_bytes,
+            )
+            self.assertEqual(
+                200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+            self.assertEqual(0, Event.objects.count())
+
+    def test_envelope_endpoint_unsupported_type_without_event_id(self):
+        # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        for i, include_event_id in enumerate([True, False]):
+            data = {}
+
+            data_bytes = json.dumps(data).encode("utf-8")
+            data_bytes = (
+                b'{}\n{"type": "unsupported_type"}\n' + data_bytes)
+
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                },
+                data=data_bytes,
+            )
+            self.assertEqual(
+                200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+            self.assertEqual(0, Event.objects.count())
 
     @tag("samples")
     def test_envelope_endpoint_reused_ids_different_exceptions(self):
@@ -343,60 +560,69 @@ class IngestViewTestCase(TransactionTestCase):
 
         sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
 
-        # first, we ingest many issues
-        command = SendJsonCommand()
-        command.stdout = io.StringIO()
-        command.stderr = io.StringIO()
-
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
 
-        event_samples = glob(SAMPLES_DIR + "/sentry/mobile1-xen.json")  # this one has 'exception.values[0].type'
-        known_broken = [SAMPLES_DIR + "/" + s.strip() for s in _readlines(SAMPLES_DIR + "/KNOWN-BROKEN")]
+        filename = glob(SAMPLES_DIR + "/sentry/mobile1-xen.json")[0]  # this one has 'exception.values[0].type'
 
-        if len(event_samples) == 0:
-            raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
+        with open(filename) as f:
+            data = json.loads(f.read())
+        data["event_id"] = uuid.uuid4().hex  # we set it once, before the loop.
 
-        for filename in [sample for sample in event_samples if sample not in known_broken][:1]:  # one is enough
-            with open(filename) as f:
-                data = json.loads(f.read())
-            data["event_id"] = uuid.uuid4().hex  # we set it once, before the loop.
+        for type_ in ["Foo", "Bar"]:  # forces different groupers, leading to separate Issue objects
+            data['exception']['values'][0]['type'] = type_
 
-            for type_ in ["Foo", "Bar"]:  # forces different groupers, leading to separate Issue objects
-                data['exception']['values'][0]['type'] = type_
+            if "timestamp" not in data:
+                # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
+                data["timestamp"] = time.time()
 
-                if "timestamp" not in data:
-                    # as per send_json command ("weirdly enough a large numer of sentry test data don't actually...")
-                    data["timestamp"] = time.time()
+            event_id = data["event_id"]
 
-                event_id = data["event_id"]
+            data_bytes = json.dumps(data).encode("utf-8")
+            data_bytes = (
+                b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") + data_bytes)
 
-                data_bytes = json.dumps(data).encode("utf-8")
-                data_bytes = (
-                    b'{"event_id": "%s"}\n{"type": "event"}\n' % event_id.encode("utf-8") + data_bytes)
+            def check():
+                response = self.client.post(
+                    f"/api/{ project.id }/envelope/",
+                    content_type="application/json",
+                    headers={
+                        "X-Sentry-Auth": sentry_auth_header,
+                    },
+                    data=data_bytes,
+                )
+                self.assertEqual(
+                    200, response.status_code, response.content if response.status_code != 302 else response.url)
 
-                def check():
-                    response = self.client.post(
-                        f"/api/{ project.id }/envelope/",
-                        content_type="application/json",
-                        headers={
-                            "X-Sentry-Auth": sentry_auth_header,
-                            "X-BugSink-DebugInfo": filename,
-                        },
-                        data=data_bytes,
-                    )
-                    self.assertEqual(
-                        200, response.status_code, response.content if response.status_code != 302 else response.url)
-
-                if type_ == "Foo":
+            if type_ == "Foo":
+                check()
+            else:
+                with self.assertRaises(ViolatedExpectation):
                     check()
-                else:
-                    with self.assertRaises(ViolatedExpectation):
-                        check()
 
-    @tag("samples")
-    def test_envelope_endpoint_digest_non_immediate(self):
-        with override_settings(DIGEST_IMMEDIATELY=False):
-            self.test_envelope_endpoint()
+    def test_envelope_endpoint_brotli_bomb(self):
+        project = Project.objects.create(name="test")
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        data_bytes = BROTLI_BOMB_4G
+
+        t0 = time.time()
+        response = self.client.post(
+            f"/api/{ project.id }/envelope/",
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+                "Content-Encoding": "br",
+            },
+            data=data_bytes,
+        )
+
+        if time.time() - t0 > 5:
+            # in practice, locally: sub-second post-fix.
+            # the failing version is well above 5s (I just stopped the process after ~30s)
+            self.fail("Brotli bomb caused excessive processing time: %d seconds" % (time.time() - t0))
+
+        self.assertTrue(b"Max length" in response.content, response.content)
+        self.assertTrue(b"exceeded" in response.content, response.content)
 
     @tag("samples")
     def test_filestore(self):
@@ -413,11 +639,86 @@ class IngestViewTestCase(TransactionTestCase):
                     },
                     }):
                 self.test_envelope_endpoint()
+                [e.get_parsed_data() for e in Event.objects.all()]  # force reading from filestore
                 self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
 
-                project = Project.objects.get(name="test")
-                project.retention_max_event_count = 1
-                evict_for_max_events(project, timezone.now(), stored_event_count=2)
+                with immediate_atomic():
+                    project = Project.objects.get(name="test")
+                    project.retention_max_event_count = 1
+                    evict_for_max_events(project, timezone.now(), stored_event_count=2)
+
+                self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
+
+    @tag("samples")
+    def test_filestore_get_basepath(self):
+        # exact copy of test_filestore but using get_basepath option variant
+        with tempfile.TemporaryDirectory() as tempdir:
+            with override_event_storages({"local_flat_files": {
+                        "STORAGE": "events.storage.FileEventStorage",
+                        "OPTIONS": {
+                            "get_basepath": lambda: tempdir,
+                        },
+                        "USE_FOR_WRITE": True,
+                    },
+                    }):
+                self.test_envelope_endpoint()
+                [e.get_parsed_data() for e in Event.objects.all()]  # force reading from filestore
+                self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
+
+                with immediate_atomic():
+                    project = Project.objects.get(name="test")
+                    project.retention_max_event_count = 1
+                    evict_for_max_events(project, timezone.now(), stored_event_count=2)
+
+                self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
+
+    @tag("samples")
+    def test_filestore_br(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            # exact copy of test_filestore but using brotli compression
+            with override_event_storages({"local_flat_files": {
+                        "STORAGE": "events.storage.FileEventStorage",
+                        "OPTIONS": {
+                            "basepath": tempdir,
+                            "compression_algorithm": "br",
+                            "compression_level": 7,
+                        },
+                        "USE_FOR_WRITE": True,
+                    },
+                    }):
+                self.test_envelope_endpoint()
+                [e.get_parsed_data() for e in Event.objects.all()]  # force reading from filestore
+                self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
+
+                with immediate_atomic():
+                    project = Project.objects.get(name="test")
+                    project.retention_max_event_count = 1
+                    evict_for_max_events(project, timezone.now(), stored_event_count=2)
+
+                self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
+
+    @tag("samples")
+    def test_filestore_gzip(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            # exact copy of test_filestore but using gzip compression
+            with override_event_storages({"local_flat_files": {
+                        "STORAGE": "events.storage.FileEventStorage",
+                        "OPTIONS": {
+                            "basepath": tempdir,
+                            "compression_algorithm": "gzip",
+                            "compression_level": 7,
+                        },
+                        "USE_FOR_WRITE": True,
+                    },
+                    }):
+                self.test_envelope_endpoint()
+                [e.get_parsed_data() for e in Event.objects.all()]  # force reading from filestore
+                self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
+
+                with immediate_atomic():
+                    project = Project.objects.get(name="test")
+                    project.retention_max_event_count = 1
+                    evict_for_max_events(project, timezone.now(), stored_event_count=2)
 
                 self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
 
@@ -471,7 +772,6 @@ class IngestViewTestCase(TransactionTestCase):
                     content_type="application/json",
                     headers={
                         "X-Sentry-Auth": sentry_auth_header,
-                        "X-BugSink-DebugInfo": filename,
                     },
                     data=data_bytes,
                 )
@@ -516,7 +816,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertIsNone(project.quota_exceeded_until)
         self.assertEqual(1, patched_check_for_thresholds.call_count)
 
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=1)  # result was True, proceed accordingly
 
         # second call
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
@@ -526,7 +826,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertIsNone(project.quota_exceeded_until)
         self.assertEqual(1, patched_check_for_thresholds.call_count)  # no new call to the expensive check is done
 
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=2)  # result was True, proceed accordingly
 
         # third call (equals but does not exceed quota, so this event should still be accepted, but the door should be
         # closed right after it)
@@ -537,7 +837,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(now + relativedelta(minutes=5), project.quota_exceeded_until)
         self.assertEqual(2, patched_check_for_thresholds.call_count)  # the check was done right at the lower bound
 
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=3)  # result was True, proceed accordingly
 
         # fourth call
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
@@ -555,6 +855,43 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertIsNone(project.quota_exceeded_until)
         self.assertEqual(3, patched_check_for_thresholds.call_count)  # the check is done on "re-enter"
 
+    @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=100)
+    @patch("ingest.views.check_for_thresholds")
+    def test_count_project_periods_and_act_on_it_in_face_of_evication(self, patched_check_for_thresholds):
+        patched_check_for_thresholds.side_effect = check_for_thresholds  # the patch is only there to count calls
+        now = timezone.now()
+
+        project = Project.objects.create(name="test")
+
+        # first call
+        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+
+        self.assertEqual(True, result)
+        self.assertEqual(1, project.digested_event_count)
+        self.assertIsNone(project.quota_exceeded_until)
+        self.assertEqual(1, patched_check_for_thresholds.call_count)
+        create_event(project, timestamp=now, project_digest_order=1)  # result was True, proceed accordingly
+
+        # calls 2 - 98 are eluded here; this mimicks eviction; we do manually update project.digested_event_count though
+        project.digested_event_count = 98
+        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+
+        self.assertEqual(True, result)
+        self.assertEqual(99, project.digested_event_count)
+        self.assertIsNone(project.quota_exceeded_until)
+
+        create_event(project, timestamp=now, project_digest_order=99)  # result was True, proceed accordingly
+
+        # 100th call (equals but does not exceed quota, so this event should still be accepted, but the door should be
+        # closed right after it)
+        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+
+        self.assertEqual(True, result)
+        self.assertEqual(100, project.digested_event_count)
+        self.assertEqual(now + relativedelta(minutes=5), project.quota_exceeded_until)
+
+        create_event(project, timestamp=now, project_digest_order=100)  # result was True, proceed accordingly
+
     @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=3)
     @patch("ingest.views.check_for_thresholds")
     def test_count_project_periods_and_act_on_it_new_check_done_but_below_threshold(self, patched_check_for_thresholds):
@@ -565,10 +902,10 @@ class IngestViewTestCase(TransactionTestCase):
 
         # first and second call as in "simple_case" test
         BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=1)  # result was True, proceed accordingly
 
         BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=2)  # result was True, proceed accordingly
 
         # third call must trigger the check; if it happens outside of the 5-minute period the result should be OK though
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now + relativedelta(minutes=6))
@@ -592,7 +929,7 @@ class IngestViewTestCase(TransactionTestCase):
 
         # first call (assertions implied, as in simple_case)
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=1)  # result was True, proceed accordingly
 
         with override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=1):
             # the path described in this test only works if the next_quota_check are simultaneously reset
@@ -617,11 +954,45 @@ class IngestViewTestCase(TransactionTestCase):
 
         self.assertEqual(1, Issue.objects.count())
         self.assertEqual(1, Issue.objects.get().stored_event_count)
+        self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).issue_count)
         self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).stored_event_count)
 
         BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
+        self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).issue_count)
         self.assertEqual(2, Issue.objects.get().stored_event_count)
         self.assertEqual(2, Project.objects.get(id=self.quiet_project.id).stored_event_count)
+
+
+class MinidumpAPIViewTestCase(TransactionTestCase):
+    # NOTE: no tests for the _actual_ minidump processing just yet.
+
+    def setUp(self):
+        super().setUp()
+        self.request_factory = RequestFactory()
+
+    def test_plain_extra_fields(self):
+        request = self.request_factory.post("ignored", data={"custom_field": "value"})
+        result = MinidumpAPIView._minidump_post_data(request)
+        self.assertEqual(result, {"extra": {"custom_field": "value"}})
+
+    def test_json_sentry_field(self):
+        request = self.request_factory.post(
+            "ignored",
+            data={"sentry": '{"release":"1.2.3","tags":{"a":"b"}}'}
+        )
+        result = MinidumpAPIView._minidump_post_data(request)
+        self.assertEqual(result, {"release": "1.2.3", "tags": {"a": "b"}})
+
+    def test_flattened_sentry_brackets(self):
+        request = self.request_factory.post(
+            "ignored",
+            data={
+                "sentry[release]": "1.2.3",
+                "sentry[tags][a]": "b",
+            },
+        )
+        result = MinidumpAPIView._minidump_post_data(request)
+        self.assertEqual(result, {"release": "1.2.3", "tags": {"a": "b"}})
 
 
 class TestParser(RegularTestCase):
@@ -631,7 +1002,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b"line 0\nline 1\n"
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertFalse(at_eof)
@@ -644,7 +1015,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b"lin"
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertFalse(at_eof)
@@ -657,7 +1028,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b""
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertFalse(at_eof)
@@ -670,7 +1041,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b""
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 3)
 
         self.assertTrue(at_eof)
@@ -683,7 +1054,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b"lin"
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, NewlineFinder(), output_stream, 1024)
 
         self.assertFalse(at_eof)
@@ -696,7 +1067,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b"lin"
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         remainder, at_eof = readuntil(input_stream, initial_chunk, LengthFinder(10, "eof not ok"), output_stream, 3)
 
         self.assertFalse(at_eof)
@@ -709,7 +1080,7 @@ class TestParser(RegularTestCase):
         initial_chunk = b"lin"
         input_stream.seek(0)
 
-        output_stream = io.BytesIO()
+        output_stream = UnclosableBytesIO()
         with self.assertRaises(ParseError):
             remainder, at_eof = readuntil(input_stream, initial_chunk, LengthFinder(100, "EOF"), output_stream, 1000)
 
@@ -972,3 +1343,234 @@ class HeaderValidationTest(RegularTestCase):
         self.assertEqual(filter_valid_item_headers(
             {"type": "event", "length": 3, "foo": 1}),
             {"type": "event", "length": 3})
+
+
+BROTLI_BOMB_4G = (
+    b"\xcb\xff\xff?\x00\xe6r\x1by%\xed>\xcf\xbc\x15\xdc\x13\x87N\x0e\x98\xff\x95%-\xb00\xa00\xc1\x1c\x03\xb6\xf4d"
+    b"\x13\x12\xc2\x7fs!\x89\x0f\xd8'\xf9\xd8@\x02\xedZ\x1f\x1b\xef[\xdd\x06\x13\xbd)\xab\xe8*\xabB\xebBgd\x16\xfc"
+    b"\xe8\x83[\x81?\xacm 8,\xe7\x18\x9e\xcd\x0f\x15\xb2y\xd7\x83(\x9b\x01oFE\x13\x9dW\x1d\x08/G\x1f\xd4\xe9\xef"
+    b"\xf4\xce\x1a\xc5\x83\xdc\xff\xfd(+\xfc\xff\xff\x83\x7f\x02 \x0e\x8b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c"
+    b"\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff"
+    b"\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0"
+    b"\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 "
+    b"\x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0"
+    b"\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff"
+    b"\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01"
+    b"\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16"
+    b"\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7"
+    b"\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f"
+    b"\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e"
+    b"\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd"
+    b"\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f"
+    b"\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10"
+    b"\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00"
+    b"\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff"
+    b"\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00"
+    b"\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b"
+    b"\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff"
+    b"\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O"
+    b"\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87"
+    b"\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8"
+    b"\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?"
+    b"\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88"
+    b"\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t"
+    b"\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff"
+    b"\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a"
+    b"\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00"
+    b"\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff"
+    b"\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00"
+    b"\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02"
+    b"\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff"
+    b"\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f"
+    b"\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80"
+    b"\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7"
+    b"\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff"
+    b"\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0"
+    b"\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd"
+    b"\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff"
+    b"\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc"
+    b"\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f"
+    b"\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@"
+    b"\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb?"
+    b"\xfe\xff\xff\xc1?\x01\x10\x87\x05\x00\xba\xf7\x7f\xfc\xff\xff\x83\x7f\x02 \x0e\x0b\x00t\xef\xff\xf8\xff\xff"
+    b"\x07\xff\x04@\x1c\x16\x00\xe8\xde\xff\xf1\xff\xff\x0f\xfe\t\x808,\x00\xd0\xbd\xff\xe3\xff\xff\x1f\xfc\x13"
+    b"\x00qX\x00\xa0{\xff\xc7\xff\xff?\xf8'\x00\xe2\xb0\x00@\xf7\xfe\x8f\xff\xff\x7f\xf0O\x00\xc4a\x01\x80\xee\xfd"
+    b"\x1f\xff\xff\xff\xe0\x9f\x00\x88\xc3\x02\x00\xdd\xfb\xbf\xc0\x04\xc0?\x01\x10\x82\x05"
+    b"\x00\x13")

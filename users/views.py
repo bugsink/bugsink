@@ -13,6 +13,7 @@ from django.utils import translation
 from bugsink.app_settings import get_settings, CB_ANYBODY
 from bugsink.decorators import atomic_for_request_method
 from bugsink.middleware import get_chosen_language
+from bugsink.utils import is_safe_next_url
 
 from .forms import (
     UserCreationForm, ResendConfirmationForm, RequestPasswordResetForm, SetPasswordForm, PreferencesForm, UserEditForm)
@@ -197,7 +198,10 @@ def reset_password(request, token=None):
         raise Http404("Invalid or expired token")
 
     user = verification.user
-    next = request.POST.get("next", request.GET.get("next", reverse("home")))
+    next_url = request.POST.get("next", request.GET.get("next", reverse("home")))
+
+    if not is_safe_next_url(next_url, request):
+        next_url = reverse("home")
 
     if request.method == 'POST':
         form = SetPasswordForm(user, request.POST)
@@ -210,12 +214,12 @@ def reset_password(request, token=None):
 
             login(request, verification.user)
 
-            return redirect(next)
+            return redirect(next_url)
 
     else:
         form = SetPasswordForm(user)
 
-    return render(request, "users/reset_password.html", {"form": form, "next": next})
+    return render(request, "users/reset_password.html", {"form": form, "next": next_url})
 
 
 @atomic_for_request_method

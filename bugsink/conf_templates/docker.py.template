@@ -1,7 +1,7 @@
 import os
 from urllib.parse import urlparse
 
-from bugsink.conf_utils import deduce_allowed_hosts, eat_your_own_dogfood, deduce_script_name
+from bugsink.conf_utils import deduce_allowed_hosts, eat_your_own_dogfood, deduce_script_name, int_or_none
 
 from bugsink.settings.default import *  # noqa
 from bugsink.settings.default import DATABASES
@@ -26,7 +26,18 @@ BEHIND_PLAIN_HTTP_PROXY = os.getenv("BEHIND_PLAIN_HTTP_PROXY", "False").lower() 
 if BEHIND_HTTPS_PROXY or BEHIND_PLAIN_HTTP_PROXY:
     # We hard-code the choice of proxy headers; which means you have to match those on the proxy side (easy enough).
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Note: slightly redundant, Gunicorn also does this.
-    USE_X_REAL_IP = True
+    USE_X_REAL_IP = os.getenv("USE_X_REAL_IP", "True").lower() in ("true", "1", "yes")
+    USE_X_FORWARDED_HOST = os.getenv("USE_X_FORWARDED_HOST", "False").lower() in ("true", "1", "yes")
+    USE_X_FORWARDED_FOR = os.getenv("USE_X_FORWARDED_FOR", "False").lower() in ("true", "1", "yes")
+
+    if USE_X_REAL_IP and USE_X_FORWARDED_FOR:
+        raise ValueError("USE_X_REAL_IP=True and USE_X_FORWARDED_FOR=True are mutually exclusive")
+
+    if USE_X_FORWARDED_FOR:
+        X_FORWARDED_FOR_PROXY_COUNT = int(os.getenv("X_FORWARDED_FOR_PROXY_COUNT", "0"))
+
+        if X_FORWARDED_FOR_PROXY_COUNT <= 0:
+            raise ValueError("USE_X_FORWARDED_FOR=True requires X_FORWARDED_FOR_PROXY_COUNT to be set to a positive integer")
 
 if BEHIND_HTTPS_PROXY:
     SESSION_COOKIE_SECURE = True
@@ -52,7 +63,7 @@ eat_your_own_dogfood(SENTRY_DSN)
 
 
 # Our Docker image is hard-coded to run with snappea in the background; this means we hard-code (as opposed to reading
-# the from the env) certain variables: TASK_ALWAYS_EAGER, WORKAHOLIC and DIGEST_IMMEDIATELY.
+# the from the env) certain variables: TASK_ALWAYS_EAGER and WORKAHOLIC
 SNAPPEA = {
     "TASK_ALWAYS_EAGER": False,  # hard-coded, corresponds to Docker setup
     "WORKAHOLIC": True,  # hard-coded, corresponds to Docker setup
@@ -106,6 +117,7 @@ else:
 
 
 if os.getenv("EMAIL_HOST"):
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"  # default, here for explicitness
     EMAIL_HOST = os.getenv("EMAIL_HOST")
     EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
     EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
@@ -114,6 +126,10 @@ if os.getenv("EMAIL_HOST"):
     # True, we use that.
     EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False").lower() in ("true", "1", "yes")
     EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", str(not EMAIL_USE_SSL)).lower() in ("true", "1", "yes")
+
+    if os.getenv("EMAIL_LOGGING", "false").lower() in ("true", "1", "yes"):
+        LOGGING['loggers']['bugsink.email']['level'] = "INFO"
+
 else:
     # print("WARNING: EMAIL_HOST not set; email will not be sent")
     EMAIL_BACKEND = "bugsink.email_backends.QuietConsoleEmailBackend"
@@ -131,8 +147,6 @@ CB_NOBODY = "CB_NOBODY"
 
 
 BUGSINK = {
-    "DIGEST_IMMEDIATELY": False,  # hard-coded, corresponds to Docker setup
-
     # The URL where the Bugsink instance is hosted. This is used in the email notifications and to construct DSNs.
     "BASE_URL": os.getenv("BASE_URL", f"http://localhost:{_PORT}"),  # no trailing slash
 
@@ -160,10 +174,18 @@ BUGSINK = {
     "MAX_ENVELOPE_COMPRESSED_SIZE": int(os.getenv("MAX_ENVELOPE_COMPRESSED_SIZE", 20 * _MEBIBYTE)),
 
     # Bugsink-specific limits:
-    # The default values are 1_000 and 5_000 respectively; which corresponds to ~6% and ~2.7% of the total capacity of
-    # 50 requests/s (ingestion) on low-grade hardware that I measured, and with 50% of the default value for retention.
+    # The default values are 1_000, 5_000, 1M respectively; which corresponds to ~6%, ~2.7%, .8% of the total capacity
+    # of 50/s (ingestion) on low-grade hardware that I measured.
     "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": int(os.getenv("MAX_EVENTS_PER_PROJECT_PER_5_MINUTES", 1_000)),
     "MAX_EVENTS_PER_PROJECT_PER_HOUR": int(os.getenv("MAX_EVENTS_PER_PROJECT_PER_HOUR", 5_000)),
+    "MAX_EVENTS_PER_PROJECT_PER_MONTH": int(os.getenv("MAX_EVENTS_PER_PROJECT_PER_MONTH", 1_000_000)),
+
+    "MAX_EVENTS_PER_5_MINUTES": int(os.getenv("MAX_EVENTS_PER_5_MINUTES", 1_000)),
+    "MAX_EVENTS_PER_HOUR": int(os.getenv("MAX_EVENTS_PER_HOUR", 5_000)),
+    "MAX_EVENTS_PER_MONTH": int(os.getenv("MAX_EVENTS_PER_MONTH", 1_000_000)),
+
+    "MAX_RETENTION_PER_PROJECT_EVENT_COUNT": int_or_none(os.getenv("MAX_RETENTION_PER_PROJECT_EVENT_COUNT", None)),
+    "MAX_RETENTION_EVENT_COUNT": int_or_none(os.getenv("MAX_RETENTION_EVENT_COUNT", None)),
 
     # Settings that help with debugging and development ("why isn't Bugsink doing what I expect?")
     "VALIDATE_ON_DIGEST": os.getenv("VALIDATE_ON_DIGEST", "none").lower(),  # other legal values are "warn" and "strict"
@@ -176,6 +198,21 @@ BUGSINK = {
         os.getenv("MINIMIZE_INFORMATION_EXPOSURE", "false").lower() in ("true", "1", "yes"),
 
     "PHONEHOME": os.getenv("PHONEHOME", "true").lower() in ("true", "1", "yes"),
+
+    # Webhook outbound security:
+    # * ALERTS_WEBHOOK_OUTBOUND_MODE=open|allowlist_only
+    # * ALERTS_WEBHOOK_ALLOW_LIST / ALERTS_WEBHOOK_DENY_LIST accept comma-separated hostname/IP/CIDR entries.
+    # * ALERTS_WEBHOOK_DENY_NON_GLOBAL blocks non-global destination IPs by default.
+    "ALERTS_WEBHOOK_OUTBOUND_MODE": os.getenv("ALERTS_WEBHOOK_OUTBOUND_MODE", "open").lower(),
+    "ALERTS_WEBHOOK_ALLOW_LIST":
+        [h.strip() for h in os.getenv("ALERTS_WEBHOOK_ALLOW_LIST", "").split(",") if h.strip()],
+    "ALERTS_WEBHOOK_DENY_LIST":
+        [h.strip() for h in os.getenv("ALERTS_WEBHOOK_DENY_LIST", "").split(",") if h.strip()],
+    "ALERTS_WEBHOOK_DENY_NON_GLOBAL":
+        os.getenv("ALERTS_WEBHOOK_DENY_NON_GLOBAL", "true").lower() in ("true", "1", "yes"),
+
+    # Feature flags
+    "FEATURE_MINIDUMPS": os.getenv("FEATURE_MINIDUMPS", "false").lower() in ("true", "1", "yes"),
 }
 
 
@@ -183,7 +220,6 @@ if os.getenv("ALLOWED_HOSTS"):
     ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS").split(",")
 else:
     ALLOWED_HOSTS = deduce_allowed_hosts(BUGSINK["BASE_URL"])
-
 
 if os.getenv("FILE_EVENT_STORAGE_PATH"):
     BUGSINK["EVENT_STORAGES"] = {

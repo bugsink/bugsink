@@ -14,7 +14,7 @@ from issues.factories import get_or_create_issue
 from .factories import create_event
 from .retention import (
     eviction_target, should_evict, evict_for_max_events, get_epoch_bounds_with_irrelevance, filter_for_work)
-from .utils import annotate_with_meta
+from .utils import annotate_with_meta, annotate_var_with_meta
 
 User = get_user_model()
 
@@ -251,6 +251,19 @@ class AnnotateWithMetaTestCase(RegularTestCase):
             (meta_frames["2"]["vars"]["args"]["1"]["__builtins__"][""]["len"] -
              len(frames[2]["vars"]["args"][1]["__builtins__"])),
             frames[2]["vars"]["args"][1]["__builtins__"].incomplete)
+
+    def test_annotate_var_with_meta_when_meta_not_in_var(self):
+        # something I saw crashing in the wild and want to be robust for"
+        # (I didn't see the equivalent case for lists; the code has been made robust for both but I don't want to
+        # suggest something is "seen in the wild" when I actually haven't seen it so 1 test only
+        result = annotate_var_with_meta(
+            {},  # note: no "auth"
+            {'auth': {'': {'rem': [['!config', 's']]}}},
+        )
+
+        # alternative here would be to interpret the "!config" instruction and display it as "[Filtered]" but I'd like
+        # to have someone on-hand who tells me exactly what happened SDK-side before I make that step.
+        self.assertEqual({}, result)
 
 
 EXAMPLE_META = r'''{

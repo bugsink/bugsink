@@ -15,18 +15,7 @@ from bugsink.streams import compress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARA
 from bugsink.utils import nc_rnd
 from issues.utils import get_values
 
-
-def random_postfix():
-    # avoids numbers, because when usedd in the type I imagine numbers may at some point be ignored in the grouping.
-    random_number = nc_rnd.random()
-
-    if random_number < 0.1:
-        # 10% of the time we simply sample from 1M to create a "fat tail".
-        unevenly_distributed_number = int(nc_rnd.random() * 1_000_000)
-    else:
-        unevenly_distributed_number = int(1 / random_number)
-
-    return "".join([chr(ord("A") + int(c)) for c in str(unevenly_distributed_number)])
+from ..utils import handle_upload_tags, random_postfix
 
 
 class Command(BaseCommand):
@@ -110,17 +99,13 @@ class Command(BaseCommand):
             data["contexts"]["trace"]["trace_id"] = nc_rnd.getrandbits(128).to_bytes(16, byteorder='big').hex()
 
         if options["tag"]:
-            if "tags" not in data:
-                data["tags"] = {}
-
+            tags = {}
             for tag in options["tag"]:
-                tag = tag[0]  # it's a list of lists... how to prevent this is not immediately clear
+                # it's a list of lists... how to prevent this is not immediately clear
+                tag = tag[0]
                 k, v = tag.split(":", 1)
-
-                if v == "RANDOM":
-                    v = "value-" + random_postfix()
-
-                data["tags"][k] = v
+                tags[k] = v
+            handle_upload_tags(data, tags)
 
         if options["random_type"]:
             values = get_values(data["exception"])

@@ -10,10 +10,17 @@ from bugsink.app_settings import get_settings
 from bugsink.transaction import immediate_atomic
 
 from issues.models import Issue
+from .base import BaseWebhookBackend
+from .webhook_security import validate_webhook_url
 
 
 class SlackConfigForm(forms.Form):
     webhook_url = forms.URLField(required=True)
+
+    # Slack does not support multi-channel webhooks, as per the docs:
+    # > You cannot override the default channel (chosen by the user who installed your app), username, or icon when
+    # > you're using incoming webhooks to post messages. Instead, these values will always inherit from the associated
+    # > Slack app configuration.
 
     def __init__(self, *args, **kwargs):
         config = kwargs.pop("config", None)
@@ -26,6 +33,14 @@ class SlackConfigForm(forms.Form):
         return {
             "webhook_url": self.cleaned_data.get("webhook_url"),
         }
+
+    def clean_webhook_url(self):
+        webhook_url = self.cleaned_data["webhook_url"]
+        try:
+            validate_webhook_url(webhook_url)
+        except ValueError as e:
+            raise forms.ValidationError(str(e)) from e
+        return webhook_url
 
 
 def _safe_markdown(text):
@@ -119,11 +134,10 @@ def slack_backend_send_test_message(webhook_url, project_name, display_name, ser
             ]}
 
     try:
-        result = requests.post(
+        result = SlackBackend.safe_post(
             webhook_url,
             data=json.dumps(data),
             headers={"Content-Type": "application/json"},
-            timeout=5,
         )
 
         result.raise_for_status()
@@ -144,21 +158,22 @@ def slack_backend_send_alert(
     issue = Issue.objects.get(id=issue_id)
 
     issue_url = get_settings().BASE_URL + issue.get_absolute_url()
-    link = f"<{issue_url}|" + _safe_markdown(truncatechars(issue.title().replace("|", ""), 200)) + ">"
+    title = truncatechars(issue.title().replace("|", ""), 150)
+    link = f"<{issue_url}|view on Bugsink>"
 
     sections = [
                 {
                     "type": "header",
                     "text": {
                         "type": "plain_text",
-                        "text": f"{alert_reason} issue",
+                        "text": title,
                     },
                 },
                 {
                     "type": "section",
                     "text": {
-                        "type": "mrkdwn",
-                        "text": link,
+                        "type": "plain_text",
+                        "text": f"{alert_reason} issue",
                     },
                 },
                ]
@@ -185,25 +200,30 @@ def slack_backend_send_alert(
     # if event.environment:
     #     fields["environment"] = event.environment
 
-    data = {"text": sections[0]["text"]["text"],  # mattermost requires at least one text field; use the first section
-            "blocks": sections + [
-                {
-                    "type": "section",
-                    "fields": [
+    sections += [{"type": "section",
+                  "fields": [
                         {
                             "type": "mrkdwn",
                             "text": f"*{field}*: " + _safe_markdown(value),
                         } for field, value in fields.items()
-                    ]
-                },
-            ]}
+                    ]}]
+
+    sections += [{
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": link,
+                    },
+                }]
+
+    # slack service-backend also support mattermost; mattermost requires at least one text field; use the first section
+    data = {"text": sections[0]["text"]["text"], "blocks": sections}
 
     try:
-        result = requests.post(
+        result = SlackBackend.safe_post(
             webhook_url,
             data=json.dumps(data),
             headers={"Content-Type": "application/json"},
-            timeout=5,
         )
 
         result.raise_for_status()
@@ -217,23 +237,31 @@ def slack_backend_send_alert(
         _store_failure_info(service_config_id, e)
 
 
-class SlackBackend:
-
+class SlackBackend(BaseWebhookBackend):
     def __init__(self, service_config):
         self.service_config = service_config
 
-    def get_form_class(self):
+    @classmethod
+    def get_form_class(cls):
         return SlackConfigForm
 
     def send_test_message(self):
+        config = json.loads(self.service_config.config)
         slack_backend_send_test_message.delay(
-            json.loads(self.service_config.config)["webhook_url"],
+            config["webhook_url"],
             self.service_config.project.name,
             self.service_config.display_name,
             self.service_config.id,
         )
 
     def send_alert(self, issue_id, state_description, alert_article, alert_reason, **kwargs):
+        config = json.loads(self.service_config.config)
         slack_backend_send_alert.delay(
-            json.loads(self.service_config.config)["webhook_url"],
-            issue_id, state_description, alert_article, alert_reason, self.service_config.id, **kwargs)
+            config["webhook_url"],
+            issue_id,
+            state_description,
+            alert_article,
+            alert_reason,
+            self.service_config.id,
+            **kwargs,
+        )

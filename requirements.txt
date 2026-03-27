@@ -1,20 +1,21 @@
-gunicorn==23.0.*
+gunicorn==25.1.*
 Django==5.2.*
+verbose_csrf_middleware==5.2.*
 sentry-sdk==2.*
 django-tailwind==4.2.*
-jsonschema==4.25.*
+jsonschema==4.26.*
 semver==3.0.*
 django-admin-autocomplete-filter==0.7.*
 pygments==2.19.*
 inotify_simple==2.0.*
-Brotli==1.1.*
+Brotli==1.2.*
 python-dateutil==2.9.*
-whitenoise==6.11.*
+whitenoise==6.12.*
 requests==2.32.*
 monofy==1.1.*
 user-agents==2.2.*
 fastjsonschema==2.21.*
-verbose_csrf_middleware==1.0.*
 ecma426>=0.2.0
-djangorestframework==3.16.*
+djangorestframework==3.17.*
 drf-spectacular[sidecar]
+symbolic==8.7.2  # the last version to support ProcessState (i.e. minidump parsing)

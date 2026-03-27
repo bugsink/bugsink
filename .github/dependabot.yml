@@ -5,20 +5,27 @@ updates:
   schedule:
     interval: daily
     time: "15:00"
-  groups:
-    python-packages:
-      patterns:
-        - "*"
+
   ignore:
-    # Let's keep Django at 4.2 until a new LTS comes along
+    # Upgrading Django: we'll time this ourselves
     - dependency-name: "django"
       versions:
-      - ">=5.0"
+      - ">=6.0"
 
-    # django-tailwind 3.7 and are broken on Python 3.9: https://github.com/timonweb/django-tailwind/issues/210
+    # As per Django; for each django version we match the verbose_csrf_middleware
+    - dependency-name: "verbose_csrf_middleware"
+      versions:
+      - ">=6.0"
+
+    # 4.2.0 is the last version to support Python 3.10, which Bugsink supports
     - dependency-name: "django-tailwind"
       versions:
-      - ">3.6"
+      - ">4.2.0"
+
+    # 8.7.2. is the last version to support ProcessState (i.e. minidump parsing) which we need
+    - dependency-name: "symbolic"
+      versions:
+      - ">8.7.2"
 
 # Turn off all pull requests for npm dependencies; we only use npm as a development-side
 # dependency (for tailwind, the results of which we simply commit into the repo).

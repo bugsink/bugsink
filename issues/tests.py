@@ -3,6 +3,7 @@ import os
 import inspect
 import uuid
 import json
+import hashlib
 from io import StringIO
 from glob import glob
 from unittest import TestCase as RegularTestCase
@@ -28,6 +29,7 @@ from issues.factories import get_or_create_issue
 from tags.models import store_tags
 from tags.tasks import vacuum_tagvalues
 from events.markdown_stacktrace import render_stacktrace_md
+from files.models import File, FileMetadata
 
 from .models import Issue, IssueStateManager, TurningPoint, TurningPointKind
 from .regressions import is_regression, is_regression_2, issue_is_regression
@@ -367,7 +369,7 @@ class MuteUnmuteTestCase(TransactionTestCase):
         issue.is_muted = True
         issue.save()
 
-        event = create_event(project, issue)
+        event = create_event(project, issue, project_digest_order=1)
         BaseIngestAPIView.count_issue_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
         issue.save()
 
@@ -389,7 +391,7 @@ class MuteUnmuteTestCase(TransactionTestCase):
         issue.is_muted = True
         issue.save()
 
-        event = create_event(project, issue)
+        event = create_event(project, issue, project_digest_order=1)
         BaseIngestAPIView.count_issue_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
         issue.save()
 
@@ -408,7 +410,7 @@ class ViewTests(TransactionTestCase):
         self.project = Project.objects.create()
         ProjectMembership.objects.create(project=self.project, user=self.user)
         self.issue, _ = get_or_create_issue(self.project)
-        self.event = create_event(self.project, self.issue)
+        self.event = create_event(self.project, self.issue, project_digest_order=1)
         self.client.force_login(self.user)
 
     def test_issue_list_view(self):
@@ -438,6 +440,109 @@ class ViewTests(TransactionTestCase):
     def test_issue_event_list(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/events/")
         self.assertContains(response, self.issue.title())
+
+    @patch("events.utils.ecma426.loads")
+    def test_use_sourcemap_in_stacktrace(self, mock_ecma426_loads):
+        # Single integration test that covers all three sourcemap outcomes in one stacktrace:
+        # * debug ID present but sourcemap missing
+        # * sourcemap present but frame unmappable,
+        # * sourcemap present and frame successfully mapped.
+        missing_debug_id = uuid.uuid4()
+        broken_debug_id = uuid.uuid4()
+        good_debug_id = uuid.uuid4()
+
+        broken_sourcemap = json.dumps({
+            "version": 3,
+            "x_kind": "broken",
+            "sources": ["broken-source.ts"],
+            "sourcesContent": ["broken line 1\nbroken line 2"],
+            "names": [],
+            "mappings": "",
+        }).encode("utf-8")
+        good_sourcemap = json.dumps({
+            "version": 3,
+            "x_kind": "good",
+            "sources": ["good-source.ts"],
+            "sourcesContent": [
+                "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12"
+            ],
+            "names": [],
+            "mappings": "",
+        }).encode("utf-8")
+
+        broken_file = File.objects.create(
+            checksum=hashlib.sha1(broken_sourcemap).hexdigest(),
+            filename="broken.js.map",
+            size=len(broken_sourcemap),
+            data=broken_sourcemap,
+        )
+        good_file = File.objects.create(
+            checksum=hashlib.sha1(good_sourcemap).hexdigest(),
+            filename="good.js.map",
+            size=len(good_sourcemap),
+            data=good_sourcemap,
+        )
+        FileMetadata.objects.create(file=broken_file, debug_id=broken_debug_id, file_type="source_map", data="{}")
+        FileMetadata.objects.create(file=good_file, debug_id=good_debug_id, file_type="source_map", data="{}")
+
+        class FakeMapping:
+            source = "good-source.ts"
+            original_line = 10
+            name = "mappedFunction"
+
+        class BrokenSourceMap:
+            def lookup_left(self, *_args, **_kwargs):
+                raise KeyError((10, 36758))
+
+        class GoodSourceMap:
+            def lookup_left(self, line, column):
+                if (line, column) == (5, 12):
+                    return FakeMapping()
+
+        def fake_loads(data):
+            sm = json.loads(data)
+            if sm["x_kind"] == "broken":
+                return BrokenSourceMap()
+            if sm["x_kind"] == "good":
+                return GoodSourceMap()
+            raise AssertionError(f"unknown sourcemap marker: {sm.get('x_kind')}")
+
+        mock_ecma426_loads.side_effect = fake_loads
+
+        event_data = {
+            "event_id": uuid.uuid4().hex,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "platform": "javascript",
+            "exception": {
+                "values": [{
+                    "type": "Error",
+                    "value": "test",
+                    "stacktrace": {
+                        "frames": [
+                            {"filename": "missing.js", "lineno": 3, "colno": 9, "in_app": True},
+                            {"filename": "broken.js", "lineno": 11, "colno": 36758, "in_app": True},
+                            {"filename": "good.js", "lineno": 6, "colno": 12, "in_app": True},
+                        ]
+                    },
+                }]
+            },
+            "debug_meta": {
+                "images": [
+                    {"type": "sourcemap", "code_file": "missing.js", "debug_id": str(missing_debug_id)},
+                    {"type": "sourcemap", "code_file": "broken.js", "debug_id": str(broken_debug_id)},
+                    {"type": "sourcemap", "code_file": "good.js", "debug_id": str(good_debug_id)},
+                ]
+            },
+        }
+        event = create_event(self.project, self.issue, event_data=event_data, project_digest_order=2)
+
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{event.id}/")
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, f"No sourcemaps found for Debug ID {missing_debug_id}")
+        self.assertContains(response, f"Error mapping (10, 36758) into sourcemap ({broken_debug_id})")
+        self.assertContains(response, "broken.js")
+        self.assertContains(response, "good-source.ts")
+        self.assertContains(response, "mappedFunction</span> line <span class=\"font-bold\">11</span>")
 
 
 @tag("samples")
@@ -473,19 +578,16 @@ class IntegrationTest(TransactionTestCase):
         # the following may be used for faster debugging of individual failures:
         # for filename in ["...failing filename here..."]:
 
-        # event-samples-private contains events that I have dumped from my local development environment, but which I
-        # have not bothered cleaning up, and can thus not be publically shared.
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
 
         event_samples = glob(SAMPLES_DIR + "/*/*.json")
-        event_samples_private = glob("../event-samples-private/*.json")
         known_broken = [SAMPLES_DIR + "/" + s.strip() for s in _readlines(SAMPLES_DIR + "/KNOWN-BROKEN")]
 
         if len(event_samples) == 0:
             raise Exception(f"No event samples found in {SAMPLES_DIR}; I insist on having some to test with.")
 
         if self.verbosity > 1:
-            print(f"Found {len(event_samples)} event samples and {len(event_samples_private)} private event samples")
+            print(f"Found {len(event_samples)} event samples")
 
         try:
             github_result = requests.get(
@@ -501,7 +603,7 @@ class IntegrationTest(TransactionTestCase):
             # but we don't want that to introduce a point-of-failure in our tests. So print-and-continue.
             print("Could not fetch the latest event schema from GitHub; I will not fail the tests for this")
 
-        for filename in event_samples + event_samples_private:
+        for filename in event_samples:
             with open(filename) as f:
                 data = json.loads(f.read())
 
@@ -521,7 +623,6 @@ class IntegrationTest(TransactionTestCase):
                 content_type="application/json",
                 headers={
                     "X-Sentry-Auth": sentry_auth_header,
-                    "X-BugSink-DebugInfo": filename,
                 },
             )
             self.assertEqual(
@@ -554,7 +655,7 @@ class IntegrationTest(TransactionTestCase):
 
                 except Exception as e:
                     # we want to know _which_ event failed, hence the raise-from-e here
-                    raise AssertionError("Error rendering event %s" % event.debug_info) from e
+                    raise AssertionError("Error rendering event") from e
 
     def test_render_stacktrace_md(self):
         user = User.objects.create_user(username='test', password='test')
@@ -588,7 +689,6 @@ class IntegrationTest(TransactionTestCase):
             content_type="application/json",
             headers={
                 "X-Sentry-Auth": sentry_auth_header,
-                "X-BugSink-DebugInfo": filename,
             },
         )
         self.assertEqual(
@@ -596,7 +696,7 @@ class IntegrationTest(TransactionTestCase):
                 filename, response.content if response.status_code != 302 else response.url))
 
         event = Event.objects.get(issue__project=project, event_id=data["event_id"])
-        md = render_stacktrace_md(event, frames="all", include_locals=True)
+        md = render_stacktrace_md(event, in_app_only=False, include_locals=True)
 
         self.assertEqual('''# CapturedStacktraceFo
 4 kinds of frames
@@ -766,9 +866,10 @@ class IssueDeletionTestCase(TransactionTestCase):
 
     def setUp(self):
         super().setUp()
-        self.project = Project.objects.create(name="Test Project", stored_event_count=1)  # 1, in prep. of the below
+        self.project = Project.objects.create(
+            name="Test Project", stored_event_count=1, issue_count=1)  # 1, in prep. of the below
         self.issue, _ = get_or_create_issue(self.project)
-        self.event = create_event(self.project, issue=self.issue)
+        self.event = create_event(self.project, issue=self.issue, project_digest_order=1)
 
         TurningPoint.objects.create(
             project=self.project,
@@ -788,7 +889,7 @@ class IssueDeletionTestCase(TransactionTestCase):
 
         # see the note in `prune_orphans` about TagKey to understand why it's special.
         vacuum_models = [apps.get_model(app_label=s.split('.')[0], model_name=s.split('.')[1].lower())
-                         for s in ['tags.TagKey',]]
+                         for s in ['tags.TagKey']]
 
         for model in models + vacuum_models:
             # test-the-test: make sure some instances of the models actually exist after setup
@@ -800,7 +901,7 @@ class IssueDeletionTestCase(TransactionTestCase):
         # correct for bugsink/transaction.py's select_for_update for non-sqlite databases
         correct_for_select_for_update = 1 if 'sqlite' not in settings.DATABASES['default']['ENGINE'] else 0
 
-        with self.assertNumQueries(19 + correct_for_select_for_update):
+        with self.assertNumQueries(20 + correct_for_select_for_update):
             self.issue.delete_deferred()
 
         # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly
@@ -813,6 +914,7 @@ class IssueDeletionTestCase(TransactionTestCase):
             self.assertTrue(model.objects.exists(), f"Some {model.__name__}s 'should' exist after issue deletion")
 
         self.assertEqual(0, Project.objects.get().stored_event_count)
+        self.assertEqual(0, Project.objects.get().issue_count)
 
         vacuum_tagvalues()
         # tests run w/ TASK_ALWAYS_EAGER, so any "delayed" (recursive) calls can be expected to have run
