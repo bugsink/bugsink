@@ -69,6 +69,7 @@ DEFAULTS = {
 
     "MAX_RETENTION_PER_PROJECT_EVENT_COUNT": None,  # None means "no limit"
     "MAX_RETENTION_EVENT_COUNT": None,  # None means "no limit"
+    "MAX_EVENT_AGE_DAYS": None,  # None means "disabled"
 
     # I don't think Sentry specifies this one, but we do: given the spec 8KiB should be enough by an order of magnitude.
     "MAX_HEADER_SIZE": 8 * _KIBIBYTE,
