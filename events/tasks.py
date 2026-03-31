@@ -4,6 +4,8 @@ from snappea.decorators import shared_task
 from bugsink.utils import get_model_topography, delete_deps_with_budget
 from bugsink.transaction import immediate_atomic, delay_on_commit
 
+DELETE_OLD_EVENTS_BATCH_SIZE = 500
+
 
 @shared_task
 def delete_event_deps(project_id, event_id):
@@ -62,9 +64,7 @@ def delete_by_age_until_under_retention_max(project_id):
     # the present command is much simpler; and runs in ~1s per 500 events deleted on the same VM/dataset.
 
     from .models import Event   # avoid circular import
-    from tags.models import EventTag
     from projects.models import Project
-    from issues.models import TurningPoint
 
     with immediate_atomic():
         project = Project.objects.get(pk=project_id)
@@ -73,40 +73,101 @@ def delete_by_age_until_under_retention_max(project_id):
         if how_many_too_many == 0:
             return
 
-        max_event_count = min(how_many_too_many, 500)
+        max_event_count = min(how_many_too_many, DELETE_OLD_EVENTS_BATCH_SIZE)
+        pks_to_delete = list(
+            Event.objects.filter(project_id=project_id)
+            .order_by("digested_at")[:max_event_count]
+            .values_list("id", flat=True)
+        )
 
-        pks_to_delete = list(Event.objects.filter(
-            project_id=project_id).order_by("digested_at")[:max_event_count].values_list("id", flat=True))
+        evicted = _delete_events(project, pks_to_delete)
 
-        # section lifted from events/retention.py
-        from events.retention import cleanup_events_on_storage, EvictionCounts
+        if evicted.total > 0:
+            delay_on_commit(delete_by_age_until_under_retention_max, project_id)
 
-        # we assume "include_never_evict" here; we'll just take the blunt approach for this task/command
-        TurningPoint.objects.filter(triggering_event_id__in=pks_to_delete).update(triggering_event=None)
 
-        # this block is verbatim
-        if len(pks_to_delete) > 0:
-            cleanup_events_on_storage(
-                Event.objects.filter(pk__in=pks_to_delete).exclude(storage_backend=None)
-                .values_list("id", "storage_backend")
-            )
-            deletions_per_issue = {
-                d['issue_id']: d['count'] for d in
-                Event.objects.filter(pk__in=pks_to_delete).values("issue_id").annotate(count=Count("issue_id"))}
+def delete_events_older_than_sync(cutoff, project_id=None, on_batch=None):
+    from projects.models import Project
 
-            EventTag.objects.filter(event_id__in=pks_to_delete).delete()
-            nr_of_deletions = Event.objects.filter(pk__in=pks_to_delete).delete()[1].get("events.Event", 0)
-        else:
-            nr_of_deletions = 0
-            deletions_per_issue = {}
+    if project_id is not None:
+        project_ids = [project_id]
+    else:
+        project_ids = list(Project.objects.order_by("id").values_list("id", flat=True))
 
-        evicted = EvictionCounts(nr_of_deletions, deletions_per_issue)
+    total_deleted = 0
+    total_batches = 0
+    project_summaries = []
 
-        # based on ingest/views.py
-        from ingest.views import update_issue_counts
-        update_issue_counts(evicted.per_issue)
-        project.stored_event_count = project.stored_event_count - evicted.total
-        project.save()
+    for project_id in project_ids:
+        project_deleted = 0
+        project_batches = 0
 
-        # no conditional here; we just rely on the check at the start
-        delay_on_commit(delete_by_age_until_under_retention_max, project_id)
+        while True:
+            evicted = delete_events_older_than_batch(project_id, cutoff)
+            if evicted.total == 0:
+                break
+
+            total_deleted += evicted.total
+            total_batches += 1
+            project_deleted += evicted.total
+            project_batches += 1
+
+            if on_batch is not None:
+                on_batch(project_id, evicted.total, project_batches)
+
+        project_summaries.append((project_id, project_deleted, project_batches))
+
+    return total_deleted, total_batches, project_summaries
+
+
+def delete_events_older_than_batch(project_id, cutoff):
+    from .models import Event
+    from projects.models import Project
+
+    with immediate_atomic():
+        project = Project.objects.get(pk=project_id)
+
+        pks_to_delete = list(
+            Event.objects.filter(project_id=project_id, digested_at__lt=cutoff)
+            .order_by("digested_at", "id")[:DELETE_OLD_EVENTS_BATCH_SIZE]
+            .values_list("id", flat=True)
+        )
+
+        return _delete_events(project, pks_to_delete)
+
+
+def _delete_events(project, pks_to_delete):
+    from .models import Event
+    from tags.models import EventTag
+    from issues.models import TurningPoint
+    # section lifted from events/retention.py
+    from events.retention import cleanup_events_on_storage, EvictionCounts
+
+    # based on ingest/views.py
+    from ingest.views import update_issue_counts
+
+    # we assume "include_never_evict" here; we'll just take the blunt approach for this task/command
+    TurningPoint.objects.filter(triggering_event_id__in=pks_to_delete).update(triggering_event=None)
+
+    # this block is verbatim
+    if len(pks_to_delete) > 0:
+        cleanup_events_on_storage(
+            Event.objects.filter(pk__in=pks_to_delete).exclude(storage_backend=None)
+            .values_list("id", "storage_backend")
+        )
+        deletions_per_issue = {
+            d['issue_id']: d['count'] for d in
+            Event.objects.filter(pk__in=pks_to_delete).values("issue_id").annotate(count=Count("issue_id"))}
+
+        EventTag.objects.filter(event_id__in=pks_to_delete).delete()
+        nr_of_deletions = Event.objects.filter(pk__in=pks_to_delete).delete()[1].get("events.Event", 0)
+    else:
+        nr_of_deletions = 0
+        deletions_per_issue = {}
+
+    evicted = EvictionCounts(nr_of_deletions, deletions_per_issue)
+    update_issue_counts(evicted.per_issue)
+    project.stored_event_count = project.stored_event_count - evicted.total
+    project.save()
+
+    return evicted

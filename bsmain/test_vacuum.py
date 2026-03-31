@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from events.factories import create_event
+from events.models import Event
 from files.models import Chunk, File, FileMetadata
 from issues.factories import get_or_create_issue
 from projects.models import Project
@@ -95,3 +96,22 @@ class VacuumCommandTestCase(TransactionTestCase):
 
         self.assertFalse(IssueTag.objects.exists())
         self.assertFalse(TagValue.objects.exists())
+
+    def test_vacuum_old_events_runs_inline_to_completion(self):
+        project = Project.objects.create(name="T")
+        issue, _ = get_or_create_issue(project)
+        old = timezone.now() - timedelta(days=11)
+        recent = timezone.now() - timedelta(days=9)
+
+        old_event = create_event(project, issue=issue, timestamp=old)
+        create_event(project, issue=issue, timestamp=recent)
+
+        project.stored_event_count = 2
+        project.save(update_fields=["stored_event_count"])
+        issue.stored_event_count = 2
+        issue.save(update_fields=["stored_event_count"])
+
+        call_command("vacuum", "--old-events", "--max-event-age-days", "10", stdout=io.StringIO())
+
+        self.assertFalse(Event.objects.filter(pk=old_event.pk).exists())
+        self.assertEqual(1, Event.objects.filter(project=project).count())
