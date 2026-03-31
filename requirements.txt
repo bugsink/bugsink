@@ -6,7 +6,7 @@ django-tailwind==4.2.*
 jsonschema==4.26.*
 semver==3.0.*
 django-admin-autocomplete-filter==0.7.*
-pygments==2.19.*
+pygments==2.20.*
 inotify_simple==2.0.*
 Brotli==1.2.*
 python-dateutil==2.9.*
