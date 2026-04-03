@@ -187,6 +187,8 @@ BUGSINK = {
     "MAX_RETENTION_PER_PROJECT_EVENT_COUNT": int_or_none(os.getenv("MAX_RETENTION_PER_PROJECT_EVENT_COUNT", None)),
     "MAX_RETENTION_EVENT_COUNT": int_or_none(os.getenv("MAX_RETENTION_EVENT_COUNT", None)),
     "MAX_EVENT_AGE_DAYS": int_or_none(os.getenv("MAX_EVENT_AGE_DAYS", None)),
+    "MAX_STORED_FILE_COUNT": int_or_none(os.getenv("MAX_STORED_FILE_COUNT", None)),
+    "MAX_STORED_FILE_BYTES": int_or_none(os.getenv("MAX_STORED_FILE_BYTES", None)),
 
     # Settings that help with debugging and development ("why isn't Bugsink doing what I expect?")
     "VALIDATE_ON_DIGEST": os.getenv("VALIDATE_ON_DIGEST", "none").lower(),  # other legal values are "warn" and "strict"

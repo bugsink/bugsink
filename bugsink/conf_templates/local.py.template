@@ -75,6 +75,8 @@ BUGSINK = {
     "USER_REGISTRATION": CB_NOBODY,
 
     # "MAX_EVENT_AGE_DAYS": 60,
+    # "MAX_STORED_FILE_COUNT": 10_000,
+    # "MAX_STORED_FILE_BYTES": 1_000_000_000,
 
     # Webhook outbound security:
     # "ALERTS_WEBHOOK_OUTBOUND_MODE": "open",  # or "allowlist_only"
