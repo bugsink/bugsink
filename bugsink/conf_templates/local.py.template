@@ -75,6 +75,8 @@ BUGSINK = {
     "USER_REGISTRATION": CB_NOBODY,
 
     # "MAX_EVENT_AGE_DAYS": 60,
+    # For large MAX_FILE_SIZE values, you may want OBJECT_STORAGES["file"] configured too.
+    # "MAX_FILE_SIZE": 2 * _GIBIBYTE,
 
     # Webhook outbound security:
     # "ALERTS_WEBHOOK_OUTBOUND_MODE": "open",  # or "allowlist_only"

@@ -13,7 +13,7 @@ from sentry.assemble import ChunkFileState
 
 from bugsink.app_settings import get_settings
 from bugsink.transaction import durable_atomic, immediate_atomic
-from bugsink.streams import handle_request_content_encoding
+from bugsink.streams import handle_request_content_encoding, copy_stream_limited, MaxLengthExceeded
 from bsmain.models import AuthToken
 
 from .models import Chunk, File, FileMetadata
@@ -25,13 +25,7 @@ logger = logging.getLogger("bugsink.api")
 
 _KIBIBYTE = 1024
 _MEBIBYTE = 1024 * _KIBIBYTE
-_GIBIBYTE = 1024 * _MEBIBYTE
-
-
-class NamedBytesIO(BytesIO):
-    def __init__(self, data, name):
-        super().__init__(data)
-        self.name = name
+CHUNK_UPLOAD_SIZE = 2 * _MEBIBYTE
 
 
 def get_chunk_upload_settings(request, organization_slug):
@@ -54,12 +48,12 @@ def get_chunk_upload_settings(request, organization_slug):
         # I've played with 32-byte requests.
         # note: sentry-cli <= v2.39.1 requires a power of 2 here.
         # chunkSize == maxRequestSize per the comments on `chunksPerRequest: 1`.
-        "chunkSize": 2 * _MEBIBYTE,
-        "maxRequestSize": 2 * _MEBIBYTE,
+        "chunkSize": CHUNK_UPLOAD_SIZE,
+        "maxRequestSize": CHUNK_UPLOAD_SIZE,
 
         # The limit here is _actually storing this_. For now "just picking a high limit" assuming that we'll have decent
         # storage (#151) for the files eventually.
-        "maxFileSize": 2 * _GIBIBYTE,
+        "maxFileSize": get_settings().MAX_FILE_SIZE,
 
         # In our current setup increasing concurrency doesn't help (single-writer architecture) while coming at the cost
         # of potential reliability issues. Current codebase has works just fine with it _in principle_ (tested by
@@ -152,31 +146,58 @@ def chunk_upload(request, organization_slug):
         return get_chunk_upload_settings(request, organization_slug)
 
     # POST: upload (full-size) "chunks" and store them as Chunk objects; file.name whould be the sha1 of the content.
-    chunks = []
-    if request.FILES:
+    try:
         # "file" and "file_gzip" are both possible multi-value keys for uploading (with associated semantics each)
-        chunks = request.FILES.getlist("file")
+        for chunk in request.FILES.getlist("file"):
+            output_stream = BytesIO()
+            copy_stream_limited(
+                chunk,
+                output_stream,
+                max_bytes=CHUNK_UPLOAD_SIZE,
+                reason=f"chunk upload size: {CHUNK_UPLOAD_SIZE}",
+            )
+            data = output_stream.getvalue()
 
-        # NOTE: we read the whole unzipped file into memory; we _could_ take an approach like bugsink/streams.py.
-        # (Note that, because of the auth layer in front, we're slightly less worried about adverserial scenarios)
-        chunks += [
-            NamedBytesIO(GzipFile(fileobj=file_gzip, mode="rb").read(), name=file_gzip.name)
-            for file_gzip in request.FILES.getlist("file_gzip")]
+            # usedforsecurity=False: sha1 is not used cryptographically, and it's part of the protocol, so we use it
+            # as is.
+            if sha1(data, usedforsecurity=False).hexdigest() != chunk.name:
+                raise Exception("checksum mismatch")
 
-    for chunk in chunks:
-        data = chunk.getvalue()
+            # a snug fit around the only DB-writing thing we do here to ensure minimal blocking
+            with immediate_atomic():
+                _, _ = Chunk.objects.get_or_create(
+                    checksum=chunk.name,
+                    defaults={
+                        "size": len(data),
+                        # NOTE: further possible optimization: don't even read the file when already existing
+                        "data": data,
+                    })
 
-        # usedforsecurity=False: sha1 is not used cryptographically, and it's part of the protocol, so we use it as is.
-        if sha1(data, usedforsecurity=False).hexdigest() != chunk.name:
-            raise Exception("checksum mismatch")
+        for chunk in request.FILES.getlist("file_gzip"):
+            output_stream = BytesIO()
+            with GzipFile(fileobj=chunk, mode="rb") as gzip_stream:
+                copy_stream_limited(
+                    gzip_stream,
+                    output_stream,
+                    max_bytes=CHUNK_UPLOAD_SIZE,
+                    reason=f"chunk upload size: {CHUNK_UPLOAD_SIZE}",
+                )
+            data = output_stream.getvalue()
 
-        with immediate_atomic():  # a snug fit around the only DB-writing thing we do here to ensure minimal blocking
-            _, _ = Chunk.objects.get_or_create(
-                checksum=chunk.name,
-                defaults={
-                    "size": len(data),
-                    "data": data,  # NOTE: further possible optimization: don't even read the file when already existing
-                })
+            if sha1(data, usedforsecurity=False).hexdigest() != chunk.name:
+                raise Exception("checksum mismatch")
+
+            # a snug fit around the only DB-writing thing we do here to ensure minimal blocking
+            with immediate_atomic():
+                _, _ = Chunk.objects.get_or_create(
+                    checksum=chunk.name,
+                    defaults={
+                        "size": len(data),
+                        # NOTE: further possible optimization: don't even read the file when already existing
+                        "data": data,
+                    })
+    except MaxLengthExceeded as e:
+        return JsonResponse({"error": str(e)}, status=413)
 
     return HttpResponse()
 

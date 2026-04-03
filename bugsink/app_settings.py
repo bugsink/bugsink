@@ -10,6 +10,7 @@ from bugsink.utils import assert_
 
 _KIBIBYTE = 1024
 _MEBIBYTE = 1024 * _KIBIBYTE
+_GIBIBYTE = 1024 * _MEBIBYTE
 
 
 # CB means "create by"
@@ -53,6 +54,7 @@ DEFAULTS = {
     "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,  # Note: this only applies to the deprecated "store" endpoint.
     "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
     "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
+    "MAX_FILE_SIZE": 2 * _GIBIBYTE,
 
     # Bugsink-specific limits:
     # The default values are 1_000, 5_000, 1M respectively; which corresponds to ~6%, ~2.7%, .8% of the total capacity

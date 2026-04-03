@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from zipfile import ZipFile, ZIP_DEFLATED
 
 from django.test import tag
 from django.contrib.auth import get_user_model
@@ -26,10 +27,12 @@ from events.models import Event
 from bsmain.models import AuthToken
 from bugsink.moreiterutils import batched
 from bugsink.app_settings import override_settings as bugsink_override_settings
+from bugsink.streams import MaxLengthExceeded
 
 from .models import Chunk, File, FileMetadata
 from .storage_registry import override_object_storages
 from .tasks import assemble_file
+from .views import CHUNK_UPLOAD_SIZE
 
 
 User = get_user_model()
@@ -81,6 +84,43 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(401, response.status_code)
         self.assertEqual({"error": "Invalid token"}, response.json())
 
+    def test_chunk_upload_settings_use_real_limits(self):
+        with bugsink_override_settings(MAX_FILE_SIZE=1234):
+            response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers=self.token_headers)
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(CHUNK_UPLOAD_SIZE, response.json()["chunkSize"])
+        self.assertEqual(CHUNK_UPLOAD_SIZE, response.json()["maxRequestSize"])
+        self.assertEqual(1234, response.json()["maxFileSize"])
+
+    def test_chunk_upload_rejects_plain_chunk_larger_than_advertised(self):
+        data = b"x" * (CHUNK_UPLOAD_SIZE + 1)
+        upload = BytesIO(data)
+        upload.name = sha1(data, usedforsecurity=False).hexdigest()
+
+        response = self.client.post(
+            "/api/0/organizations/anyorg/chunk-upload/",
+            data={"file": upload},
+            headers=self.token_headers,
+        )
+
+        self.assertEqual(413, response.status_code)
+        self.assertIn("chunk upload size", response.json()["error"])
+
+    def test_chunk_upload_rejects_gzipped_chunk_larger_than_advertised_after_decompression(self):
+        data = b"x" * (CHUNK_UPLOAD_SIZE + 1)
+        upload = BytesIO(gzip.compress(data))
+        upload.name = sha1(data, usedforsecurity=False).hexdigest()
+
+        response = self.client.post(
+            "/api/0/organizations/anyorg/chunk-upload/",
+            data={"file_gzip": upload},
+            headers=self.token_headers,
+        )
+
+        self.assertEqual(413, response.status_code)
+        self.assertIn("chunk upload size", response.json()["error"])
+
     def test_assemble_file_to_object_storage(self):
         data = b"hello world"
         checksum = sha1(data, usedforsecurity=False).hexdigest()
@@ -95,6 +135,81 @@ class FilesTests(TransactionTestCase):
                 self.assertEqual("local", file.storage_backend)
                 self.assertEqual(data, file.get_raw_data())
                 self.assertEqual(data, Path(tempdir, checksum).read_bytes())
+
+    def test_open_for_read_works_for_db_and_object_storage(self):
+        data = b"hello world"
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+
+        file = File.objects.create(checksum=checksum, filename="hello.txt", size=len(data), data=data)
+        with file.open_for_read() as f:
+            self.assertEqual(data, f.read())
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with override_object_storages(get_test_object_storages(tempdir, use_for_write=True)):
+                call_command("migrate_to_current_objectstorage", "file", stdout=io.StringIO())
+
+                file.refresh_from_db()
+                with file.open_for_read() as f:
+                    self.assertEqual(data, f.read())
+
+    def test_assemble_file_enforces_max_file_size(self):
+        chunk_a = b"hello "
+        chunk_b = b"world"
+        checksum = sha1(chunk_a + chunk_b, usedforsecurity=False).hexdigest()
+
+        Chunk.objects.create(checksum=sha1(chunk_a, usedforsecurity=False).hexdigest(), size=len(chunk_a), data=chunk_a)
+        Chunk.objects.create(checksum=sha1(chunk_b, usedforsecurity=False).hexdigest(), size=len(chunk_b), data=chunk_b)
+
+        with bugsink_override_settings(MAX_FILE_SIZE=len(chunk_a + chunk_b) - 1):
+            with self.assertRaisesMessage(ValueError, "MAX_FILE_SIZE"):
+                assemble_file(
+                    checksum,
+                    [
+                        sha1(chunk_a, usedforsecurity=False).hexdigest(),
+                        sha1(chunk_b, usedforsecurity=False).hexdigest(),
+                    ],
+                    filename="hello.txt",
+                )
+
+    def test_artifact_bundle_rejects_extracted_file_larger_than_max_file_size(self):
+        bundle = BytesIO()
+        with tempfile.TemporaryDirectory() as tempdir:
+            extracted_data = b"0" * 1000
+            manifest = {
+                "files": {
+                    "~/app.min.js": {
+                        "url": "~/app.min.js",
+                        "type": "minified_source",
+                        "headers": {"debug-id": "12345678-1234-5678-1234-567812345678"},
+                    },
+                },
+            }
+
+            with bugsink_override_settings(MAX_FILE_SIZE=900, KEEP_ARTIFACT_BUNDLES=False):
+                with override_object_storages(get_test_object_storages(tempdir, use_for_write=True)):
+                    with ZipFile(bundle, "w", compression=ZIP_DEFLATED) as zf:
+                        zf.writestr("manifest.json", json.dumps(manifest))
+                        zf.writestr("~/app.min.js", extracted_data)
+
+                    bundle_data = bundle.getvalue()
+                    checksum = sha1(bundle_data, usedforsecurity=False).hexdigest()
+                    upload = BytesIO(gzip.compress(bundle_data))
+                    upload.name = checksum
+
+                    response = self.client.post(
+                        "/api/0/organizations/anyorg/chunk-upload/",
+                        data={"file_gzip": upload},
+                        headers=self.token_headers,
+                    )
+                    self.assertEqual(200, response.status_code)
+
+                    with self.assertRaises(MaxLengthExceeded):
+                        self.client.post(
+                            "/api/0/organizations/anyorg/artifactbundle/assemble/",
+                            json.dumps({"checksum": checksum, "chunks": [checksum], "projects": ["unused"]}),
+                            content_type="application/json",
+                            headers=self.token_headers,
+                        )
 
     def test_migrate_file_to_and_from_object_storage(self):
         data = b"hello world"
