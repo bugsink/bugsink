@@ -107,7 +107,7 @@ Details: focus on _why_ things needed to be changed. For bugs this is often a st
 
 #### Single Writer Database Architecture
 
-Bugsink uses a [Single Writer Database Architecture](https://www.bugsink.com/blog/database-transactions/). 
+Bugsink uses a [Single Writer Database Architecture](https://www.bugsink.com/blog/database-transactions/).
 In general this means: keep write transactions as short as possible and wrap them in `immediate_atomic()` (if you don't
 know why, read the article). For views, `atomic_for_request_method()` may be used. On the flip side: because of this
 simple architecture, there is no need for complex locking/reasoning about transaction isolation/race conditions.
@@ -137,6 +137,12 @@ ruff check .
 
 Bugsink uses tailwind for styling, and [django-tailwind](https://github.com/timonweb/django-tailwind/)
 to "do tailwind stuff from the Django world".
+
+Make sure npm (20+) is installed, then run the following to install tailwind and its dependencies:
+
+```
+python manage.py tailwind install
+```
 
 If you're working on HTML, you should probably develop while running the following somewhere:
 
