@@ -1,12 +1,12 @@
 import logging
 from django.db import models
 from django.db import transaction
-from django.db.models.signals import post_delete
-from django.dispatch import receiver
 
 from functools import partial
 
 from .storage_registry import get_write_storage, get_storage
+from .object_kinds import (
+    get_object_kind_for_model, get_object_kind_spec, get_object_storage_backend, get_object_storage_key)
 
 
 logger = logging.getLogger("bugsink.objectstorage")
@@ -29,6 +29,39 @@ class Chunk(models.Model):
         return self.checksum
 
 
+def get_storage_todo_for_instance(instance):
+    object_kind = get_object_kind_for_model(instance.__class__)
+    key = get_object_storage_key(instance, object_kind)
+    storage_backend = get_object_storage_backend(instance)
+    return object_kind, key, storage_backend
+
+
+def resolve_storage_for_instance(instance):
+    object_kind, key, storage_backend = get_storage_todo_for_instance(instance)
+    storage = None if storage_backend is None else get_storage(object_kind, storage_backend)
+    return object_kind, key, storage_backend, storage
+
+
+class StorageAwareQuerySet(models.QuerySet):
+
+    def delete(self):
+        object_kind = get_object_kind_for_model(self.model)
+        object_kind_spec = get_object_kind_spec(object_kind)
+        todos = list(
+            self.exclude(storage_backend=None).values_list(
+                object_kind_spec["key_field"],
+                "storage_backend",
+            )
+        )
+
+        result = super().delete()
+
+        if todos:
+            cleanup_objects_on_storage((object_kind, key, storage_backend) for key, storage_backend in todos)
+
+        return result
+
+
 class File(models.Model):
     # NOTE: since we do single-chunk uploads, optimizations are imaginable. Make it work first though
 
@@ -46,42 +79,44 @@ class File(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
     accessed_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
 
+    objects = StorageAwareQuerySet.as_manager()
+
     def __str__(self):
         return self.filename
 
     def get_raw_data(self):
-        if self.storage_backend is None:
+        _, key, _, storage = resolve_storage_for_instance(self)
+
+        if storage is None:
             return _binary_to_bytes(self.data)
 
-        storage = get_storage("file", self.storage_backend)
-        with storage.open(self.checksum, "rb") as f:
+        with storage.open(key, "rb") as f:
             return f.read()
 
+    def delete(self, *args, **kwargs):
+        object_kind, key, storage_backend = get_storage_todo_for_instance(self)
+        if storage_backend is not None:
+            cleanup_objects_on_storage([(object_kind, key, storage_backend)])
 
-def write_to_storage(file_checksum, data):
-    with get_write_storage("file").open(file_checksum, "wb") as f:
+        return super().delete(*args, **kwargs)
+
+
+def write_to_storage(object_kind, key, data):
+    with get_write_storage(object_kind).open(key, "wb") as f:
         f.write(data)
 
 
-def cleanup_files_on_storage(todos):
+def cleanup_objects_on_storage(todos):
     todos = list(todos)  # force evaluation _inside_ the transaction (on_commit the todos will be gone otherwise)
-    transaction.on_commit(partial(_cleanup_files_on_storage, todos))
+    transaction.on_commit(partial(_cleanup_objects_on_storage, todos))
 
 
-def _cleanup_files_on_storage(todos):
-    for checksum, storage_backend in todos:
+def _cleanup_objects_on_storage(todos):
+    for object_kind, key, storage_backend in todos:
         try:
-            get_storage("file", storage_backend).delete(checksum)
+            get_storage(object_kind, storage_backend).delete(key)
         except Exception as e:
-            logger.error("Error during cleanup of %s on %s: %s", checksum, storage_backend, e)
-
-
-@receiver(post_delete, sender=File)
-def cleanup_file_on_storage(instance, **kwargs):
-    if instance.storage_backend is None:
-        return
-
-    cleanup_files_on_storage([(instance.checksum, instance.storage_backend)])
+            logger.error("Error during cleanup of %s on %s: %s", key, storage_backend, e)
 
 
 class FileMetadata(models.Model):

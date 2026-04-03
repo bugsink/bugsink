@@ -1,11 +1,11 @@
-import sys
 import signal
+import sys
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from bugsink.app_settings import get_settings
-from files.object_kinds import get_object_kind_spec
+from files.object_kinds import get_object_kind_model, get_object_kind_spec
 from files.storage_registry import get_storage
 
 
@@ -24,7 +24,7 @@ class Command(BaseCommand):
         storage_name = options["storage_name"]
 
         object_kind_spec = get_object_kind_spec(object_kind)
-        model = object_kind_spec["model"]
+        model = get_object_kind_model(object_kind)
         key_field = object_kind_spec["key_field"]
 
         configured_object_storages = get_settings().OBJECT_STORAGES.get(object_kind, {})

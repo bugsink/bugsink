@@ -134,7 +134,7 @@ def assemble_file(checksum, chunk_checksums, filename):
         })
 
     if created and write_storage is not None:
-        write_to_storage(checksum, data)
+        write_to_storage("file", checksum, data)
 
     # the assumption here is: chunks are basically use-once, so we can delete them after use. "in theory" a chunk may
     # be used in multiple files (which are still being assembled) but with chunksizes in the order of 1MiB, I'd say this

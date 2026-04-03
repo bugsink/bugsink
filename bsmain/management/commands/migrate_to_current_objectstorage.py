@@ -6,7 +6,13 @@ from django.db.utils import OperationalError
 
 from bugsink.transaction import immediate_atomic
 
-from files.object_kinds import get_object_kind_spec
+from files.object_kinds import (
+    get_object_kind_model,
+    get_object_kind_spec,
+    get_object_storage_backend,
+    get_object_storage_key,
+    set_object_stored_data,
+)
 from files.storage_registry import get_storage, get_write_storage
 
 
@@ -25,8 +31,7 @@ class Command(BaseCommand):
 
         object_kind = options["object_kind"]
         object_kind_spec = get_object_kind_spec(object_kind)
-        model = object_kind_spec["model"]
-        key_field = object_kind_spec["key_field"]
+        model = get_object_kind_model(object_kind)
 
         target_storage = get_write_storage(object_kind)
         target_storage_name = target_storage.name if target_storage is not None else None
@@ -46,27 +51,35 @@ class Command(BaseCommand):
 
         while not self.stopped:
             with immediate_atomic():
-                objects = model.objects.exclude(storage_backend=target_storage_name).order_by("id")[:BATCH_SIZE]
+                objects = (
+                    model.objects
+                    .exclude(storage_backend=target_storage_name)
+                    .order_by("id")[:BATCH_SIZE]
+                )
                 if not objects:
                     break
 
                 for cnt, obj in enumerate(objects):
-                    key = getattr(obj, key_field)
-                    current_storage = get_storage(object_kind, obj.storage_backend) if obj.storage_backend else None
+                    key = get_object_storage_key(obj, object_kind)
+                    current_storage_backend = get_object_storage_backend(obj)
+                    current_storage = (
+                        get_storage(object_kind, current_storage_backend)
+                        if current_storage_backend else None
+                    )
 
                     if current_storage is None:
-                        source_data = obj.get_raw_data()
+                        source_data = getattr(obj, object_kind_spec["raw_data_getter"])()
                     else:
                         with current_storage.open(key, "rb") as source:
                             source_data = source.read()
                         current_storage.delete(key)
 
                     if target_storage is None:
-                        obj.data = source_data
+                        set_object_stored_data(obj, object_kind, source_data)
                     else:
                         with target_storage.open(key, "wb") as target:
                             target.write(source_data)
-                        obj.data = b""
+                        set_object_stored_data(obj, object_kind, b"")
 
                     obj.storage_backend = target_storage_name
                     obj.save()

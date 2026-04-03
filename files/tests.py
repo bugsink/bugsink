@@ -155,21 +155,21 @@ class FilesTests(TransactionTestCase):
                     storage_backend="local",
                 )
 
-                with patch("files.models._cleanup_files_on_storage") as cleanup:
+                with patch("files.models._cleanup_objects_on_storage") as cleanup:
                     with immediate_atomic():
                         file.delete()
                         cleanup.assert_not_called()
 
-                    cleanup.assert_called_once_with([(checksum, "local")])
+                    cleanup.assert_called_once_with([("file", checksum, "local")])
 
-    def test_external_file_cleanup_is_not_run_on_rollback(self):
+    def test_external_file_queryset_cleanup_is_not_run_on_rollback(self):
         checksum = "a" * 40
 
         with tempfile.TemporaryDirectory() as tempdir:
             Path(tempdir, checksum).write_bytes(b"live")
 
             with override_object_storages(get_test_object_storages(tempdir, use_for_write=False)):
-                file = File.objects.create(
+                File.objects.create(
                     checksum=checksum,
                     filename="live.txt",
                     size=4,
@@ -177,10 +177,10 @@ class FilesTests(TransactionTestCase):
                     storage_backend="local",
                 )
 
-                with patch("files.models._cleanup_files_on_storage") as cleanup:
+                with patch("files.models._cleanup_objects_on_storage") as cleanup:
                     with self.assertRaises(Exception):
                         with immediate_atomic():
-                            file.delete()
+                            File.objects.filter(checksum=checksum).delete()
                             raise Exception("rollback")
 
                     cleanup.assert_not_called()
