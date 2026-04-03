@@ -276,7 +276,7 @@ def difs_assemble(request, organization_slug, project_slug):
 
         file, _ = assemble_file(file_checksum, file_chunks, filename=file_info["name"])
 
-        symbolic_metadata = extract_dif_metadata(file.data)
+        symbolic_metadata = extract_dif_metadata(file.get_raw_data())
 
         FileMetadata.objects.get_or_create(
             debug_id=file_info.get("debug_id"),  # TODO : .get implies "no debug_id", but in that case it's useless
@@ -299,7 +299,7 @@ def difs_assemble(request, organization_slug, project_slug):
 @durable_atomic
 def download_file(request, checksum):
     file = File.objects.get(checksum=checksum)
-    response = HttpResponse(file.data, content_type="application/octet-stream")
+    response = HttpResponse(file.get_raw_data(), content_type="application/octet-stream")
     response["Content-Disposition"] = f"attachment; filename={file.filename}"
     return response
 

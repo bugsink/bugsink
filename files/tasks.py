@@ -14,7 +14,8 @@ from snappea.decorators import shared_task
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.app_settings import get_settings
 
-from .models import Chunk, File, FileMetadata
+from .models import Chunk, File, FileMetadata, write_to_storage
+from .storage_registry import get_write_storage
 
 logger = logging.getLogger("bugsink.api")
 
@@ -44,7 +45,7 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
 
         bundle_file, _ = assemble_file(bundle_checksum, chunk_checksums, filename=f"{bundle_checksum}.zip")
 
-        bundle_zip = ZipFile(BytesIO(bundle_file.data))  # NOTE: in-memory handling of zips.
+        bundle_zip = ZipFile(BytesIO(bundle_file.get_raw_data()))  # NOTE: in-memory handling of zips.
         manifest_bytes = bundle_zip.read("manifest.json")
         manifest = json.loads(manifest_bytes.decode("utf-8"))
 
@@ -122,13 +123,18 @@ def assemble_file(checksum, chunk_checksums, filename):
     if sha1(data, usedforsecurity=False).hexdigest() != checksum:
         raise Exception("checksum mismatch")
 
+    write_storage = get_write_storage("file")
     file, created = File.objects.get_or_create(
         checksum=checksum,
         defaults={
             "size": len(data),
-            "data": data,
+            "data": b"" if write_storage is not None else data,
             "filename": filename,
+            "storage_backend": None if write_storage is None else write_storage.name,
         })
+
+    if created and write_storage is not None:
+        write_to_storage("file", checksum, data)
 
     # the assumption here is: chunks are basically use-once, so we can delete them after use. "in theory" a chunk may
     # be used in multiple files (which are still being assembled) but with chunksizes in the order of 1MiB, I'd say this

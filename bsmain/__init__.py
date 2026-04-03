@@ -6,6 +6,7 @@ from django.conf import settings
 
 from bugsink.app_settings import get_settings
 from events.storage_registry import get_write_storage
+from files.storage_registry import get_write_storage as get_object_write_storage
 
 
 @register("bsmain")
@@ -33,6 +34,20 @@ def check_event_storage_properly_configured(app_configs, **kwargs):
             str(e),
             id="bsmain.W002",
             ))
+    return errors
+
+
+@register("bsmain")
+def check_object_storage_properly_configured(app_configs, **kwargs):
+    errors = []
+    try:
+        for object_kind in get_settings().OBJECT_STORAGES:
+            get_object_write_storage(object_kind)
+    except ValueError as e:
+        errors.append(Warning(
+            str(e),
+            id="bsmain.W005",
+        ))
     return errors
 
 

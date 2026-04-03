@@ -78,6 +78,7 @@ DEFAULTS = {
     # no_bandit_expl: the usage of this path (via get_filename_for_event_id) is protected with `b108_makedirs`
     "INGEST_STORE_BASE_DIR": "/tmp/bugsink/ingestion",  # nosec
     "EVENT_STORAGES": {},
+    "OBJECT_STORAGES": {},
 
     # Security:
     "MINIMIZE_INFORMATION_EXPOSURE": False,

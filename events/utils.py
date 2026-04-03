@@ -140,13 +140,13 @@ def apply_sourcemaps(event_data):
         ]
 
     sourcemap_for_filename = {
-        filename: ecma426.loads(_postgres_fix(meta.file.data))
+        filename: ecma426.loads(_postgres_fix(meta.file.get_raw_data()))
         for (filename, meta) in filenames_with_metas
     }
 
     source_for_filename = {}
     for filename, meta in filenames_with_metas:
-        sm_data = json.loads(_postgres_fix(meta.file.data))
+        sm_data = json.loads(_postgres_fix(meta.file.get_raw_data()))
 
         sources = sm_data.get("sources", [])
         sources_content = sm_data.get("sourcesContent", [])

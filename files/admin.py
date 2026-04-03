@@ -14,9 +14,9 @@ class ChunkAdmin(admin.ModelAdmin):
 
 @admin.register(File)
 class FileAdmin(admin.ModelAdmin):
-    list_display = ('filename', 'checksum', 'size', 'download_link', 'created_at', 'accessed_at')
+    list_display = ('filename', 'checksum', 'storage_backend', 'size', 'download_link', 'created_at', 'accessed_at')
     search_fields = ('checksum',)
-    readonly_fields = ('data', 'download_link')
+    readonly_fields = ('data', 'storage_backend', 'download_link')
 
     def download_link(self, obj):
         return format_html(
