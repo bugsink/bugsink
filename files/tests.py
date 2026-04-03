@@ -2,6 +2,7 @@ from hashlib import sha1
 from uuid import UUID
 import json
 import gzip
+import io
 from io import BytesIO
 import os
 from glob import glob
@@ -13,19 +14,38 @@ from pathlib import Path
 from django.test import tag
 from django.contrib.auth import get_user_model
 from django.test import LiveServerTestCase, override_settings
+from django.core.management import call_command
+from unittest.mock import patch
 
 from compat.dsn import get_header_value
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
+from bugsink.transaction import immediate_atomic
 from projects.models import Project, ProjectMembership
 from events.models import Event
 from bsmain.models import AuthToken
 from bugsink.moreiterutils import batched
 from bugsink.app_settings import override_settings as bugsink_override_settings
 
-from .models import File, FileMetadata
+from .models import Chunk, File, FileMetadata
+from .storage_registry import override_object_storages
+from .tasks import assemble_file
 
 
 User = get_user_model()
+
+
+def get_test_object_storages(basepath, use_for_write):
+    return {
+        "file": {
+            "local": {
+                "STORAGE": "files.storage.ObjectFileStorage",
+                "OPTIONS": {
+                    "basepath": basepath,
+                },
+                "USE_FOR_WRITE": use_for_write,
+            },
+        },
+    }
 
 
 class FilesTests(TransactionTestCase):
@@ -59,6 +79,114 @@ class FilesTests(TransactionTestCase):
         response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers={"Authorization": "Bearer xxx"})
         self.assertEqual(401, response.status_code)
         self.assertEqual({"error": "Invalid token"}, response.json())
+
+    def test_assemble_file_to_object_storage(self):
+        data = b"hello world"
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with override_object_storages(get_test_object_storages(tempdir, use_for_write=True)):
+                Chunk.objects.create(checksum=checksum, size=len(data), data=data)
+
+                file, created = assemble_file(checksum, [checksum], filename="hello.txt")
+
+                self.assertTrue(created)
+                self.assertEqual("local", file.storage_backend)
+                self.assertEqual(data, file.get_raw_data())
+                self.assertEqual(data, Path(tempdir, checksum).read_bytes())
+
+    def test_migrate_file_to_and_from_object_storage(self):
+        data = b"hello world"
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+
+        file = File.objects.create(checksum=checksum, filename="hello.txt", size=len(data), data=data)
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with override_object_storages(get_test_object_storages(tempdir, use_for_write=True)):
+                call_command("migrate_to_current_objectstorage", "file", stdout=io.StringIO())
+
+                file.refresh_from_db()
+                self.assertEqual("local", file.storage_backend)
+                self.assertEqual(b"", file.data)
+                self.assertEqual(data, Path(tempdir, checksum).read_bytes())
+                self.assertEqual(data, file.get_raw_data())
+
+            with override_object_storages(get_test_object_storages(tempdir, use_for_write=False)):
+                call_command("migrate_to_current_objectstorage", "file", stdout=io.StringIO())
+
+                file.refresh_from_db()
+                self.assertIsNone(file.storage_backend)
+                self.assertEqual(data, file.get_raw_data())
+
+    def test_cleanup_objectstorage_deletes_orphans(self):
+        live_checksum = "a" * 40
+        orphan_checksum = "b" * 40
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            Path(tempdir, live_checksum).write_bytes(b"live")
+            Path(tempdir, orphan_checksum).write_bytes(b"orphan")
+
+            File.objects.create(
+                checksum=live_checksum,
+                filename="live.txt",
+                size=4,
+                data=b"",
+                storage_backend="local",
+            )
+
+            with override_object_storages(get_test_object_storages(tempdir, use_for_write=False)):
+                call_command("cleanup_objectstorage", "file", "local", stdout=io.StringIO())
+
+            self.assertTrue(Path(tempdir, live_checksum).exists())
+            self.assertFalse(Path(tempdir, orphan_checksum).exists())
+
+    def test_external_file_cleanup_happens_after_commit(self):
+        checksum = "a" * 40
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            Path(tempdir, checksum).write_bytes(b"live")
+
+            with override_object_storages(get_test_object_storages(tempdir, use_for_write=False)):
+                file = File.objects.create(
+                    checksum=checksum,
+                    filename="live.txt",
+                    size=4,
+                    data=b"",
+                    storage_backend="local",
+                )
+
+                with patch("files.models._cleanup_files_on_storage") as cleanup:
+                    with immediate_atomic():
+                        file.delete()
+                        cleanup.assert_not_called()
+
+                    cleanup.assert_called_once_with([(checksum, "local")])
+
+    def test_external_file_cleanup_is_not_run_on_rollback(self):
+        checksum = "a" * 40
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            Path(tempdir, checksum).write_bytes(b"live")
+
+            with override_object_storages(get_test_object_storages(tempdir, use_for_write=False)):
+                file = File.objects.create(
+                    checksum=checksum,
+                    filename="live.txt",
+                    size=4,
+                    data=b"",
+                    storage_backend="local",
+                )
+
+                with patch("files.models._cleanup_files_on_storage") as cleanup:
+                    with self.assertRaises(Exception):
+                        with immediate_atomic():
+                            file.delete()
+                            raise Exception("rollback")
+
+                    cleanup.assert_not_called()
+
+                self.assertTrue(File.objects.filter(checksum=checksum).exists())
+                self.assertTrue(Path(tempdir, checksum).exists())
 
     def test_uuid_behavior_of_django(self):
         # test to check Django is doing the thing of converting various UUID-like things on "both sides" before

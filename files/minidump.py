@@ -28,7 +28,7 @@ def build_cfi_map_from_minidump_bytes(minidump_bytes):
         if FileMetadata.objects.filter(debug_id=dashed_debug_id, file_type="dbg").count() == 0:
             continue
 
-        dif_bytes = FileMetadata.objects.get(debug_id=dashed_debug_id, file_type="dbg").file.data
+        dif_bytes = FileMetadata.objects.get(debug_id=dashed_debug_id, file_type="dbg").file.get_raw_data()
         archive = symbolic.debuginfo.Archive.from_bytes(dif_bytes)
 
         debug_object = get_single_object(archive)
@@ -101,7 +101,7 @@ def event_threads_for_process_state(process_state):
 
                 file_metadata = FileMetadata.objects.filter(debug_id=dashed_debug_id, file_type="dbg").first()
                 if file_metadata:
-                    dif_bytes = file_metadata.file.data
+                    dif_bytes = file_metadata.file.get_raw_data()
 
                     archive = symbolic.debuginfo.Archive.from_bytes(dif_bytes)
 
@@ -124,7 +124,7 @@ def event_threads_for_process_state(process_state):
                         src_meta = FileMetadata.objects.filter(debug_id=dashed_debug_id, file_type="src").first()
                         if src_meta and line_info.filename and line_info.line:
                             frame["pre_context"], frame["context_line"], frame["post_context"] = extract_source_context(
-                                src_meta.file.data, line_info.filename, line_info.line)
+                                src_meta.file.get_raw_data(), line_info.filename, line_info.line)
 
             frames.append(frame)
 

@@ -1,4 +1,22 @@
+import logging
 from django.db import models
+from django.db import transaction
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
+
+from functools import partial
+
+from .storage_registry import get_write_storage, get_storage
+
+
+logger = logging.getLogger("bugsink.objectstorage")
+
+
+def _binary_to_bytes(value):
+    # psycopg may return BinaryField values as memoryview objects; callers here expect plain bytes.
+    if isinstance(value, memoryview):
+        return bytes(value)
+    return value
 
 
 class Chunk(models.Model):
@@ -24,11 +42,46 @@ class File(models.Model):
 
     size = models.PositiveIntegerField()
     data = models.BinaryField(null=False)  # as with Events, we can "eventually" move this out of the database
+    storage_backend = models.CharField(max_length=255, blank=True, null=True, default=None, editable=False)
     created_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
     accessed_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
 
     def __str__(self):
         return self.filename
+
+    def get_raw_data(self):
+        if self.storage_backend is None:
+            return _binary_to_bytes(self.data)
+
+        storage = get_storage("file", self.storage_backend)
+        with storage.open(self.checksum, "rb") as f:
+            return f.read()
+
+
+def write_to_storage(file_checksum, data):
+    with get_write_storage("file").open(file_checksum, "wb") as f:
+        f.write(data)
+
+
+def cleanup_files_on_storage(todos):
+    todos = list(todos)  # force evaluation _inside_ the transaction (on_commit the todos will be gone otherwise)
+    transaction.on_commit(partial(_cleanup_files_on_storage, todos))
+
+
+def _cleanup_files_on_storage(todos):
+    for checksum, storage_backend in todos:
+        try:
+            get_storage("file", storage_backend).delete(checksum)
+        except Exception as e:
+            logger.error("Error during cleanup of %s on %s: %s", checksum, storage_backend, e)
+
+
+@receiver(post_delete, sender=File)
+def cleanup_file_on_storage(instance, **kwargs):
+    if instance.storage_backend is None:
+        return
+
+    cleanup_files_on_storage([(instance.checksum, instance.storage_backend)])
 
 
 class FileMetadata(models.Model):
