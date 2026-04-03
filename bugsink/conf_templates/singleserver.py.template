@@ -135,6 +135,18 @@ BUGSINK = {
     #         "USE_FOR_WRITE": True,
     #     },
     # },
+    #
+    # "OBJECT_STORAGES": {
+    #     "file": {
+    #         "local_files": {
+    #             "STORAGE": "files.storage.ObjectFileStorage",
+    #             "OPTIONS": {
+    #                 "basepath": "{{ base_dir }}/file_storage",
+    #             },
+    #             "USE_FOR_WRITE": True,
+    #         },
+    #     },
+    # },
 
 }
 

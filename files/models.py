@@ -1,4 +1,22 @@
+import logging
 from django.db import models
+from django.db import transaction
+
+from functools import partial
+
+from .storage_registry import get_write_storage, get_storage
+from .object_kinds import (
+    get_object_kind_for_model, get_object_kind_spec, get_object_storage_backend, get_object_storage_key)
+
+
+logger = logging.getLogger("bugsink.objectstorage")
+
+
+def _binary_to_bytes(value):
+    # psycopg may return BinaryField values as memoryview objects; callers here expect plain bytes.
+    if isinstance(value, memoryview):
+        return bytes(value)
+    return value
 
 
 class Chunk(models.Model):
@@ -9,6 +27,39 @@ class Chunk(models.Model):
 
     def __str__(self):
         return self.checksum
+
+
+def get_storage_todo_for_instance(instance):
+    object_kind = get_object_kind_for_model(instance.__class__)
+    key = get_object_storage_key(instance, object_kind)
+    storage_backend = get_object_storage_backend(instance)
+    return object_kind, key, storage_backend
+
+
+def resolve_storage_for_instance(instance):
+    object_kind, key, storage_backend = get_storage_todo_for_instance(instance)
+    storage = None if storage_backend is None else get_storage(object_kind, storage_backend)
+    return object_kind, key, storage_backend, storage
+
+
+class StorageAwareQuerySet(models.QuerySet):
+
+    def delete(self):
+        object_kind = get_object_kind_for_model(self.model)
+        object_kind_spec = get_object_kind_spec(object_kind)
+        todos = list(
+            self.exclude(storage_backend=None).values_list(
+                object_kind_spec["key_field"],
+                "storage_backend",
+            )
+        )
+
+        result = super().delete()
+
+        if todos:
+            cleanup_objects_on_storage((object_kind, key, storage_backend) for key, storage_backend in todos)
+
+        return result
 
 
 class File(models.Model):
@@ -24,11 +75,48 @@ class File(models.Model):
 
     size = models.PositiveIntegerField()
     data = models.BinaryField(null=False)  # as with Events, we can "eventually" move this out of the database
+    storage_backend = models.CharField(max_length=255, blank=True, null=True, default=None, editable=False)
     created_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
     accessed_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
 
+    objects = StorageAwareQuerySet.as_manager()
+
     def __str__(self):
         return self.filename
+
+    def get_raw_data(self):
+        _, key, _, storage = resolve_storage_for_instance(self)
+
+        if storage is None:
+            return _binary_to_bytes(self.data)
+
+        with storage.open(key, "rb") as f:
+            return f.read()
+
+    def delete(self, *args, **kwargs):
+        object_kind, key, storage_backend = get_storage_todo_for_instance(self)
+        if storage_backend is not None:
+            cleanup_objects_on_storage([(object_kind, key, storage_backend)])
+
+        return super().delete(*args, **kwargs)
+
+
+def write_to_storage(object_kind, key, data):
+    with get_write_storage(object_kind).open(key, "wb") as f:
+        f.write(data)
+
+
+def cleanup_objects_on_storage(todos):
+    todos = list(todos)  # force evaluation _inside_ the transaction (on_commit the todos will be gone otherwise)
+    transaction.on_commit(partial(_cleanup_objects_on_storage, todos))
+
+
+def _cleanup_objects_on_storage(todos):
+    for object_kind, key, storage_backend in todos:
+        try:
+            get_storage(object_kind, storage_backend).delete(key)
+        except Exception as e:
+            logger.error("Error during cleanup of %s on %s: %s", key, storage_backend, e)
 
 
 class FileMetadata(models.Model):

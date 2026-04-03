@@ -3,6 +3,8 @@ abstract generality. Python 3.12 is the standard environment.
 
 ## Coding Guidance
 
+* CONTRIBUTING.md contains many important notes for humans and agents alike. Make sure to read it apply its advice.
+
 * Keep it clear and simple. When in doubt: shorter.
 * Use descriptive names, short functions, minimal boilerplate.
 * Error-handling: avoid catching every possible error; in many cases "fail early"
@@ -55,5 +57,3 @@ python manage.py tailwind build
 git add theme/static/css/dist/styles.css
 tools/strip-trailing-whitespace.sh
 ```
-
-Also run the tests (see CONTRIBUTING.md) and ensure they pass.

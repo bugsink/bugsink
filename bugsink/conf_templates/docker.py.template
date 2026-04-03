@@ -235,6 +235,19 @@ if os.getenv("FILE_EVENT_STORAGE_PATH"):
         },
     }
 
+if os.getenv("FILE_OBJECT_STORAGE_PATH"):
+    BUGSINK["OBJECT_STORAGES"] = {
+        "file": {
+            "file_object_storage": {
+                "STORAGE": "files.storage.ObjectFileStorage",
+                "OPTIONS": {
+                    "basepath": os.getenv("FILE_OBJECT_STORAGE_PATH"),
+                },
+                "USE_FOR_WRITE": os.getenv("FILE_OBJECT_STORAGE_USE_FOR_WRITE", "false").lower() in ("true", "1", "yes"),
+            },
+        },
+    }
+
 
 FORCE_SCRIPT_NAME = deduce_script_name(BUGSINK["BASE_URL"])
 if FORCE_SCRIPT_NAME:
