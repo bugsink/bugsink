@@ -44,6 +44,20 @@ def get_storage(object_kind, storage_name):
     return _storages[object_kind][storage_name]
 
 
+def validate_storage_names(object_kind, storage_names):
+    missing = []
+
+    for storage_name in storage_names:
+        try:
+            get_storage(object_kind, storage_name)
+        except KeyError:
+            missing.append(storage_name)
+
+    if missing:
+        missing_list = ", ".join(sorted(missing))
+        raise ValueError(f"Unknown storages found for {object_kind}: {missing_list}")
+
+
 def _resolve(object_kind, name, conf):
     storage_name = conf["STORAGE"]
 

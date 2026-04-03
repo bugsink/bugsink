@@ -14,6 +14,7 @@ from pathlib import Path
 from django.test import tag
 from django.contrib.auth import get_user_model
 from django.test import LiveServerTestCase, override_settings
+from django.core.management.base import CommandError
 from django.core.management import call_command
 from unittest.mock import patch
 
@@ -117,6 +118,64 @@ class FilesTests(TransactionTestCase):
                 file.refresh_from_db()
                 self.assertIsNone(file.storage_backend)
                 self.assertEqual(data, file.get_raw_data())
+
+    def test_migrate_file_hard_fails_when_source_storage_is_missing(self):
+        checksum = "a" * 40
+        file = File.objects.create(
+            checksum=checksum,
+            filename="hello.txt",
+            size=0,
+            data=b"",
+            storage_backend="missing",
+        )
+
+        with self.assertRaisesMessage(
+            CommandError,
+            "Cannot migrate file objects; Unknown storages found for file: missing",
+        ):
+            call_command("migrate_to_current_objectstorage", "file", stdout=io.StringIO())
+
+        file.refresh_from_db()
+        self.assertEqual("missing", file.storage_backend)
+        self.assertEqual(b"", file.data)
+
+    def test_migrate_file_does_not_delete_source_before_commit(self):
+        data = b"hello world"
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+
+        file = File.objects.create(
+            checksum=checksum,
+            filename="hello.txt",
+            size=len(data),
+            data=b"",
+            storage_backend="source",
+        )
+
+        with tempfile.TemporaryDirectory() as source_dir, tempfile.TemporaryDirectory() as target_dir:
+            Path(source_dir, checksum).write_bytes(data)
+            storages = {
+                "file": {
+                    "source": {
+                        "STORAGE": "files.storage.ObjectFileStorage",
+                        "OPTIONS": {"basepath": source_dir},
+                    },
+                    "target": {
+                        "STORAGE": "files.storage.ObjectFileStorage",
+                        "OPTIONS": {"basepath": target_dir},
+                        "USE_FOR_WRITE": True,
+                    },
+                },
+            }
+
+            with override_object_storages(storages):
+                with patch.object(File, "save", autospec=True, side_effect=Exception("boom")):
+                    with self.assertRaisesMessage(Exception, "boom"):
+                        call_command("migrate_to_current_objectstorage", "file", stdout=io.StringIO())
+
+            file.refresh_from_db()
+            self.assertEqual("source", file.storage_backend)
+            self.assertTrue(Path(source_dir, checksum).exists())
+            self.assertEqual(data, Path(source_dir, checksum).read_bytes())
 
     def test_cleanup_objectstorage_deletes_orphans(self):
         live_checksum = "a" * 40

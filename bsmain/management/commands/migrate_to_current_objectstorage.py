@@ -1,11 +1,12 @@
 import signal
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.db.utils import OperationalError
 
 from bugsink.transaction import immediate_atomic
 
+from files.models import cleanup_objects_on_storage
 from files.object_kinds import (
     get_object_kind_model,
     get_object_kind_spec,
@@ -13,7 +14,7 @@ from files.object_kinds import (
     get_object_storage_key,
     set_object_stored_data,
 )
-from files.storage_registry import get_storage, get_write_storage
+from files.storage_registry import get_storage, get_write_storage, validate_storage_names
 
 
 BATCH_SIZE = 100
@@ -37,6 +38,8 @@ class Command(BaseCommand):
         target_storage_name = target_storage.name if target_storage is not None else None
 
         migrated = 0
+        self._validate_referenced_storages(model, object_kind)
+
         with transaction.atomic():
             total = "many"
             todo = "many"
@@ -59,6 +62,7 @@ class Command(BaseCommand):
                 if not objects:
                     break
 
+                source_cleanup_todos = []
                 for cnt, obj in enumerate(objects):
                     key = get_object_storage_key(obj, object_kind)
                     current_storage_backend = get_object_storage_backend(obj)
@@ -72,7 +76,6 @@ class Command(BaseCommand):
                     else:
                         with current_storage.open(key, "rb") as source:
                             source_data = source.read()
-                        current_storage.delete(key)
 
                     if target_storage is None:
                         set_object_stored_data(obj, object_kind, source_data)
@@ -84,8 +87,14 @@ class Command(BaseCommand):
                     obj.storage_backend = target_storage_name
                     obj.save()
 
+                    if current_storage_backend is not None:
+                        source_cleanup_todos.append((object_kind, key, current_storage_backend))
+
                     if self.stopped:
                         break
+
+                if source_cleanup_todos:
+                    cleanup_objects_on_storage(source_cleanup_todos)
 
                 migrated += cnt + 1
                 print(f"Migrated {migrated} / {todo} {object_kind} objects")
@@ -98,3 +107,16 @@ class Command(BaseCommand):
 
     def handle_sigint(self, signum, frame):
         self.stopped = True
+
+    def _validate_referenced_storages(self, model, object_kind):
+        storage_names = (
+            model.objects
+            .exclude(storage_backend=None)
+            .values_list("storage_backend", flat=True)
+            .distinct()
+        )
+
+        try:
+            validate_storage_names(object_kind, storage_names)
+        except ValueError as e:
+            raise CommandError(f"Cannot migrate {object_kind} objects; {e}")
