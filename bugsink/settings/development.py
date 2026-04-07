@@ -120,6 +120,8 @@ BUGSINK = {
 
     # in development we want optional features enabled to [1] play with them and [2] have the tests work
     "FEATURE_MINIDUMPS": True,
+    # Avoid polluting phonehome from local development and test runs.
+    "PHONEHOME": False,
 }
 
 
