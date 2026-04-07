@@ -49,7 +49,7 @@ from sentry.minidump import merge_minidump_event
 from .parsers import StreamingEnvelopeParser, ParseError
 from .filestore import get_filename_for_event_id
 from .tasks import digest
-from .event_counter import check_for_thresholds
+from .event_counter import check_for_thresholds, count_for_thresholds, filter_for_periods, state_for_threshold
 from .models import StoreEnvelope, DontStoreEnvelope, Envelope
 
 
@@ -86,6 +86,26 @@ def update_issue_counts(per_issue):
 
     for count, issue_ids in by_count.items():
         Issue.objects.filter(id__in=issue_ids).update(stored_event_count=F("stored_event_count") - count)
+
+
+def check_for_thresholds_on_installation(qs, now, thresholds, add_for_current=0):
+    # project_digest_order is only monotonic per project, so installation-wide counting sums project-local results
+    # rather than trying to pretend there is a single installation-wide order.
+    project_ids = list(qs.order_by().values_list("project_id", flat=True).distinct())
+    total_events_in_periods = [add_for_current] * len(thresholds)
+
+    for project_id in project_ids:
+        project_counts = count_for_thresholds(qs.filter(project_id=project_id), now, thresholds)
+        for i, (project_total_events_in_period, _) in enumerate(project_counts):
+            total_events_in_periods[i] += project_total_events_in_period
+
+    states = []
+    for i, threshold in enumerate(thresholds):
+        period_name, nr_of_periods, _ = threshold
+        qs_for_period = filter_for_periods(qs, period_name, nr_of_periods, now)
+        states.append(state_for_threshold(qs_for_period, now, total_events_in_periods[i], threshold))
+
+    return states
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -529,7 +549,7 @@ class BaseIngestAPIView(View):
         if ((digested_event_count >= installation.next_quota_check) or
                 (installation.next_quota_check - digested_event_count > min_threshold)):
 
-            states = check_for_thresholds(Event.objects.all(), now, thresholds, 1)
+            states = check_for_thresholds_on_installation(Event.objects.all(), now, thresholds, 1)
 
             until, threshold_info = max(
                 [(below_from, ti) for (is_exceeded, below_from, _, ti) in states if is_exceeded],
