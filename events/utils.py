@@ -152,7 +152,8 @@ def apply_sourcemaps(event_data):
         sources_content = sm_data.get("sourcesContent", [])
 
         for (source_file_name, source_file) in zip(sources, sources_content):
-            source_for_filename[source_file_name] = source_file.splitlines()
+            if source_file is not None:
+                source_for_filename[source_file_name] = source_file.splitlines()
 
     for exception in get_values(event_data.get("exception", {})):
         for frame in exception.get("stacktrace", {}).get("frames", []):
