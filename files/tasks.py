@@ -6,7 +6,6 @@ from zipfile import ZipFile
 import json
 from hashlib import sha1
 from os.path import basename
-from pathlib import Path
 from django.utils import timezone
 
 from compat.timestamp import parse_timestamp
@@ -36,20 +35,20 @@ IN_CODE_DEBUG_ID_REGEX = re.compile(
 DEBUG_ID_SCAN_TAIL_SIZE = 64 * 1024
 
 
-def create_file_from_local_path(checksum, filename, size, local_path):
+def create_file_from_local_file(checksum, filename, size, local_file):
     write_storage = get_write_storage("file")
     file, created = File.objects.get_or_create(
         checksum=checksum,
         defaults={
             "size": size,
-            "data": b"" if write_storage is not None else local_path.read_bytes(),
+            "data": b"" if write_storage is not None else local_file.read(),
             "filename": filename,
             "storage_backend": None if write_storage is None else write_storage.name,
         })
 
     if created and write_storage is not None:
-        with local_path.open("rb") as f:
-            write_fileobj_to_storage("file", checksum, f)
+        local_file.seek(0)
+        write_fileobj_to_storage("file", checksum, local_file)
 
     return file, created
 
@@ -66,43 +65,42 @@ def read_limited_bytes(input_stream, max_bytes):
         return output_stream.read(), bytes_read
 
 
-def extract_zip_entry_to_path(bundle_zip, entry_name, local_path, max_bytes):
+def extract_zip_entry_to_file(bundle_zip, entry_name, local_file, max_bytes):
     # usedforsecurity=false: sha1 is not used cryptographically, it's part of the protocol, so we use it as is.
     checksum = sha1(usedforsecurity=False)
 
     with bundle_zip.open(entry_name) as input_stream:
-        with local_path.open("wb") as output_stream:
-            size = copy_stream_limited(
-                input_stream,
-                output_stream,
-                max_bytes=max_bytes,
-                reason=f"MAX_FILE_SIZE: {max_bytes}",
-                digest=checksum,
-            )
+        size = copy_stream_limited(
+            input_stream,
+            local_file,
+            max_bytes=max_bytes,
+            reason=f"MAX_FILE_SIZE: {max_bytes}",
+            digest=checksum,
+        )
 
     return checksum.hexdigest(), size
 
 
-def find_in_code_debug_ids(local_path):
+def find_in_code_debug_ids(local_file):
     matches = set()
     tail = b""
 
-    with local_path.open("rb") as f:
-        while True:
-            chunk = f.read(64 * 1024)
-            if not chunk:
-                break
+    local_file.seek(0)
+    while True:
+        chunk = local_file.read(64 * 1024)
+        if not chunk:
+            break
 
-            haystack = tail + chunk
-            if len(haystack) > DEBUG_ID_SCAN_TAIL_SIZE:
-                cutoff = len(haystack) - DEBUG_ID_SCAN_TAIL_SIZE
-                scan_bytes = haystack[:cutoff]
-                tail = haystack[cutoff:]
-            else:
-                scan_bytes = b""
-                tail = haystack
+        haystack = tail + chunk
+        if len(haystack) > DEBUG_ID_SCAN_TAIL_SIZE:
+            cutoff = len(haystack) - DEBUG_ID_SCAN_TAIL_SIZE
+            scan_bytes = haystack[:cutoff]
+            tail = haystack[cutoff:]
+        else:
+            scan_bytes = b""
+            tail = haystack
 
-            matches.update(match.decode("ascii") for match in IN_CODE_DEBUG_ID_REGEX.findall(scan_bytes))
+        matches.update(match.decode("ascii") for match in IN_CODE_DEBUG_ID_REGEX.findall(scan_bytes))
 
     matches.update(match.decode("ascii") for match in IN_CODE_DEBUG_ID_REGEX.findall(tail))
     return matches
@@ -128,55 +126,54 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
                     manifest = json.loads(manifest_bytes.decode("utf-8"))
 
                     for zip_entry_name, manifest_entry in manifest["files"].items():
-                        # We intentionally do not use the zip entry name directly for path construction here. A stable
-                        # digest gives us a local temp filename without having to reason about ".." or similar path
-                        # components in untrusted archive entries.
-                        local_path = Path(
-                            tempdir,
-                            sha1(zip_entry_name.encode("utf-8"), usedforsecurity=False).hexdigest(),
-                        )
-                        checksum, size = extract_zip_entry_to_path(
-                            bundle_zip, zip_entry_name, local_path, max_file_size,
-                        )
-
-                        filename = basename(manifest_entry.get("url", zip_entry_name))[:255]
-                        file, _ = create_file_from_local_path(checksum, filename, size, local_path)
-
-                        debug_id = manifest_entry.get("headers", {}).get("debug-id", None)
-                        file_type = manifest_entry.get("type", None)
-                        if debug_id is None or file_type is None:
-                            because = (
-                                "it has neither Debug ID nor file-type" if debug_id is None and file_type is None else
-                                "it has no Debug ID" if debug_id is None else "it has no file-type")
-
-                            logger.warning(
-                                "Uploaded file %s will be ignored by Bugsink because %s.",
-                                filename,
-                                because,
+                        with tempfile.TemporaryFile(dir=tempdir) as local_file:
+                            checksum, size = extract_zip_entry_to_file(
+                                bundle_zip, zip_entry_name, local_file, max_file_size,
                             )
 
-                            continue
+                            local_file.seek(0)
+                            filename = basename(manifest_entry.get("url", zip_entry_name))[:255]
+                            file, _ = create_file_from_local_file(checksum, filename, size, local_file)
 
-                        FileMetadata.objects.get_or_create(
-                            debug_id=debug_id,
-                            file_type=file_type,
-                            defaults={
-                                "file": file,
-                                "data": json.dumps(manifest_entry),
-                            }
-                        )
+                            debug_id = manifest_entry.get("headers", {}).get("debug-id", None)
+                            file_type = manifest_entry.get("type", None)
+                            if debug_id is None or file_type is None:
+                                because = (
+                                    "it has neither Debug ID nor file-type"
+                                    if debug_id is None and file_type is None else
+                                    "it has no Debug ID" if debug_id is None else "it has no file-type")
 
-                        # the in-code regexes show up in the _minified_ source only (the sourcemap's original source
-                        # code will not have been "polluted" with it yet, since it's the original).
-                        if file_type == "minified_source":
-                            mismatches = find_in_code_debug_ids(local_path) - {debug_id}
-                            if mismatches:
                                 logger.warning(
-                                    "Uploaded file %s contains multiple Debug IDs. Uploaded as %s, but also found: %s.",
+                                    "Uploaded file %s will be ignored by Bugsink because %s.",
                                     filename,
-                                    debug_id,
-                                    ", ".join(sorted(mismatches)),
+                                    because,
                                 )
+
+                                continue
+
+                            FileMetadata.objects.get_or_create(
+                                debug_id=debug_id,
+                                file_type=file_type,
+                                defaults={
+                                    "file": file,
+                                    "data": json.dumps(manifest_entry),
+                                }
+                            )
+
+                            # the in-code regexes show up in the _minified_ source only (the sourcemap's original source
+                            # code will not have been "polluted" with it yet, since it's the original).
+                            if file_type == "minified_source":
+                                mismatches = find_in_code_debug_ids(local_file) - {debug_id}
+                                if mismatches:
+                                    logger.warning(
+                                        (
+                                            "Uploaded file %s contains multiple Debug IDs. "
+                                            "Uploaded as %s, but also found: %s."
+                                        ),
+                                        filename,
+                                        debug_id,
+                                        ", ".join(sorted(mismatches)),
+                                    )
 
         if not get_settings().KEEP_ARTIFACT_BUNDLES:
             # delete the bundle file after processing, since we don't need it anymore.
@@ -197,33 +194,33 @@ def assemble_file(checksum, chunk_checksums, filename):
     max_file_size = get_settings().MAX_FILE_SIZE
 
     with tempfile.TemporaryDirectory() as tempdir:
-        local_path = Path(tempdir, checksum)
+        with tempfile.TemporaryFile(dir=tempdir) as local_file:
+            # usedforsecurity=false: sha1 is not used cryptographically, and it's part of the protocol, so we use it
+            # as is.
+            checksum_state = sha1(usedforsecurity=False)
+            size = 0
 
-        # usedforsecurity=false: sha1 is not used cryptographically, and it's part of the protocol, so we use it as is.
-        checksum_state = sha1(usedforsecurity=False)
-        size = 0
-
-        with local_path.open("wb") as output_stream:
             for chunk in chunks_in_order:
                 chunk_data = _binary_to_bytes(chunk.data)
                 next_size = size + len(chunk_data)
                 if next_size > max_file_size:
                     raise ValueError("Assembled file exceeds MAX_FILE_SIZE")
 
-                output_stream.write(chunk_data)
+                local_file.write(chunk_data)
                 checksum_state.update(chunk_data)
                 size = next_size
 
-        if checksum_state.hexdigest() != checksum:
-            raise Exception("checksum mismatch")
+            if checksum_state.hexdigest() != checksum:
+                raise Exception("checksum mismatch")
 
-        file, created = create_file_from_local_path(checksum, filename, size, local_path)
+            local_file.seek(0)
+            file, created = create_file_from_local_file(checksum, filename, size, local_file)
 
-        # the assumption here is: chunks are basically use-once, so we can delete them after use. "in theory" a chunk
-        # may be used in multiple files (which are still being assembled) but with chunksizes in the order of 1MiB, I'd
-        # say this is unlikely.
-        chunks.delete()
-        return file, created
+            # the assumption here is: chunks are basically use-once, so we can delete them after use. "in theory" a
+            # chunk may be used in multiple files (which are still being assembled) but with chunksizes in the order
+            # of 1MiB, I'd say this is unlikely.
+            chunks.delete()
+            return file, created
 
 
 @shared_task
