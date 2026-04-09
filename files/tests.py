@@ -1,5 +1,5 @@
 from hashlib import sha1
-from uuid import UUID
+from uuid import UUID, uuid4
 import json
 import gzip
 import io
@@ -210,6 +210,41 @@ class FilesTests(TransactionTestCase):
                             content_type="application/json",
                             headers=self.token_headers,
                         )
+
+    def test_artifact_bundle_assemble_does_not_use_checksum_as_temp_filename(self):
+        data = b"hello world"
+        real_checksum = sha1(data, usedforsecurity=False).hexdigest()
+        Chunk.objects.create(checksum=real_checksum, size=len(data), data=data)
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            probe_path = Path(tempdir, f"probe-{uuid4().hex}.txt")
+
+            try:
+                self.client.post(
+                    "/api/0/organizations/anyorg/artifactbundle/assemble/",
+                    json.dumps({"checksum": str(probe_path), "chunks": [real_checksum], "projects": ["unused"]}),
+                    content_type="application/json",
+                    headers=self.token_headers,
+                )
+            except Exception:
+                pass  # we don't care about the details of failure, we just care about the probe file not being created
+
+            self.assertFalse(probe_path.exists())
+
+    def test_assemble_file_does_not_use_checksum_as_temp_filename(self):
+        data = b"hello world"
+        real_checksum = sha1(data, usedforsecurity=False).hexdigest()
+        Chunk.objects.create(checksum=real_checksum, size=len(data), data=data)
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            probe_path = Path(tempdir, f"probe-{uuid4().hex}.txt")
+
+            try:
+                assemble_file(str(probe_path), [real_checksum], filename="hello.txt")
+            except Exception:
+                pass  # we don't care about the details of failure, we just care about the probe file not being created
+
+            self.assertFalse(probe_path.exists())
 
     def test_migrate_file_to_and_from_object_storage(self):
         data = b"hello world"
