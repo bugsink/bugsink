@@ -1,5 +1,22 @@
 # Changes
 
+## 2.1.1 (9 April 2026)
+
+### Security
+
+Fix: avoid using upload checksums as temporary filenames.
+
+The recent temp-file assembly change made checksum values part of path
+construction before they had been validated. An authenticated caller could
+thereby reach a write-before-checksum-mismatch path during file assembly.
+
+### Smaller fixes
+
+* AuthToken deletion is now idempotent, so mashing the delete button no longer results in a spurious 500.
+* Disable phonehome in development, see #357.
+* Allow enabling `USE_ADMIN` via environment variable, see #361.
+* Fix sourcemap application when `sourcesContent` contains `null`, see #360.
+
 ## 2.1.0 (4 April 2026)
 
 * Show open issue counts on project list (skipping very large projects), see #228
