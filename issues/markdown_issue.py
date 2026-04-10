@@ -95,8 +95,8 @@ def render_issue_md(issue):
     lines += [
         "## Identity",
         "",
-        f"| Field | Value |",
-        f"|-------|-------|",
+        "| Field | Value |",
+        "|-------|-------|",
         f"| Issue ID | `{issue.id}` |",
         f"| Friendly ID | `{issue.friendly_id()}` |",
         f"| Project | `{issue.project.slug}` |",
@@ -111,8 +111,8 @@ def render_issue_md(issue):
     lines += [
         "## Event Counts",
         "",
-        f"| Field | Value |",
-        f"|-------|-------|",
+        "| Field | Value |",
+        "|-------|-------|",
         f"| Digested event count | {issue.digested_event_count} |",
         f"| Stored event count | {issue.stored_event_count} |",
         f"| First seen | {_fmt(issue.first_seen)} |",
@@ -125,8 +125,8 @@ def render_issue_md(issue):
         lines += [
             "## Last Frame",
             "",
-            f"| Field | Value |",
-            f"|-------|-------|",
+            "| Field | Value |",
+            "|-------|-------|",
         ]
         if issue.last_frame_filename:
             lines.append(f"| Filename | `{issue.last_frame_filename}` |")
@@ -220,8 +220,8 @@ def render_issue_md(issue):
         lines += [
             "## Latest Event",
             "",
-            f"| Field | Value |",
-            f"|-------|-------|",
+            "| Field | Value |",
+            "|-------|-------|",
             f"| Event ID | `{last_event.id}` |",
             f"| External ID | `{last_event.event_id}` |",
             f"| Timestamp | {_fmt(last_event.timestamp)} |",
