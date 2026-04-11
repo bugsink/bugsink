@@ -33,13 +33,13 @@ class Command(BaseCommand):
 
         if storage_name not in configured_storage_names:
             if not configured_storage_names:
-                print(
+                self.stderr.write(
                     f"Storage name {storage_name} not found because you have not configured any object storage for "
                     f"{object_kind}."
                 )
                 sys.exit(1)
 
-            print(
+            self.stderr.write(
                 f"Storage name {storage_name} not found for {object_kind}. "
                 f"Available storage names: {available_storages}"
             )
@@ -61,20 +61,22 @@ class Command(BaseCommand):
                     break
 
                 if model.objects.filter(**{key_field: key, "storage_backend": storage_name}).count() == 0:
-                    print(f"Deleting {object_kind} data {key}")
+                    self.stdout.write(f"Deleting {object_kind} data {key}")
                     storage.delete(key)
                     delete_count += 1
 
             if checked_count % 100 == 0:
-                print(f"Processed {checked_count} items from the storage.")
+                self.stdout.write(f"Processed {checked_count} items from the storage.")
 
-        print()
+        self.stdout.write("")
         if self.stopped:
-            print(
+            self.stdout.write(
                 f"Checked {checked_count} {object_kind} objects, deleted {delete_count} from the storage; interrupted."
             )
         else:
-            print(f"Checked {checked_count} {object_kind} objects, deleted {delete_count} from the storage; done.")
+            self.stdout.write(
+                f"Checked {checked_count} {object_kind} objects, deleted {delete_count} from the storage; done."
+            )
 
     def handle_sigint(self, signum, frame):
         self.stopped = True

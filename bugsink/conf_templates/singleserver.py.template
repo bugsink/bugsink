@@ -113,6 +113,8 @@ BUGSINK = {
     # "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,
     # "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
     # "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
+    # For large MAX_FILE_SIZE values, you may want OBJECT_STORAGES["file"] configured too.
+    # "MAX_FILE_SIZE": 2 * _GIBIBYTE,
 
     "INGEST_STORE_BASE_DIR": "{{ base_dir }}/ingestion",
 

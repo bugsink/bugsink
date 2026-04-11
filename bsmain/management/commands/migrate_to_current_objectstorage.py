@@ -50,7 +50,9 @@ class Command(BaseCommand):
                 if e.args[0] != "interrupted":
                     raise
 
-        print(f"Migrating {todo} {object_kind} objects to {target_storage_name} (out of {total} total objects)")
+        self.stdout.write(
+            f"Migrating {todo} {object_kind} objects to {target_storage_name} (out of {total} total objects)"
+        )
 
         while not self.stopped:
             with immediate_atomic():
@@ -97,13 +99,15 @@ class Command(BaseCommand):
                     cleanup_objects_on_storage(source_cleanup_todos)
 
                 migrated += cnt + 1
-                print(f"Migrated {migrated} / {todo} {object_kind} objects")
+                self.stdout.write(f"Migrated {migrated} / {todo} {object_kind} objects")
 
         if self.stopped:
             remaining = todo - migrated if isinstance(todo, int) else f"unknown number of {object_kind}"
-            print(f"Interrupted; migrated {migrated} objects to {target_storage_name}; {remaining} remain.")
+            self.stdout.write(f"Interrupted; migrated {migrated} objects to {target_storage_name}; {remaining} remain.")
         else:
-            print(f"Done migrating; migrated {migrated} objects to {target_storage_name}; no more objects remain.")
+            self.stdout.write(
+                f"Done migrating; migrated {migrated} objects to {target_storage_name}; no more objects remain."
+            )
 
     def handle_sigint(self, signum, frame):
         self.stopped = True

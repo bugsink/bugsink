@@ -18,7 +18,7 @@ def auth_token_list(request):
         full_action_str = request.POST.get('action')
         action, pk = full_action_str.split(":", 1)
         if action == "delete":
-            AuthToken.objects.get(pk=pk).delete()
+            AuthToken.objects.filter(pk=pk).delete()
 
             messages.success(request, _('Token deleted'))
             return redirect('auth_token_list')

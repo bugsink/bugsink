@@ -1,8 +1,12 @@
 import logging
+from contextlib import contextmanager
+from io import BytesIO
 from django.db import models
 from django.db import transaction
 
 from functools import partial
+
+from bugsink.streams import copy_stream_limited
 
 from .storage_registry import get_write_storage, get_storage
 from .object_kinds import (
@@ -84,13 +88,19 @@ class File(models.Model):
     def __str__(self):
         return self.filename
 
-    def get_raw_data(self):
+    @contextmanager
+    def open_for_read(self):
         _, key, _, storage = resolve_storage_for_instance(self)
 
         if storage is None:
-            return _binary_to_bytes(self.data)
+            yield BytesIO(_binary_to_bytes(self.data))
+            return
 
         with storage.open(key, "rb") as f:
+            yield f
+
+    def get_raw_data(self):
+        with self.open_for_read() as f:
             return f.read()
 
     def delete(self, *args, **kwargs):
@@ -104,6 +114,11 @@ class File(models.Model):
 def write_to_storage(object_kind, key, data):
     with get_write_storage(object_kind).open(key, "wb") as f:
         f.write(data)
+
+
+def write_fileobj_to_storage(object_kind, key, fileobj):
+    with get_write_storage(object_kind).open(key, "wb") as f:
+        copy_stream_limited(fileobj, f)
 
 
 def cleanup_objects_on_storage(todos):

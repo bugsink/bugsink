@@ -78,6 +78,9 @@ BUGSINK = {
     # "MAX_STORED_FILE_COUNT": 10_000,
     # "MAX_STORED_FILE_BYTES": 1_000_000_000,
 
+    # For large MAX_FILE_SIZE values, you may want OBJECT_STORAGES["file"] configured too.
+    # "MAX_FILE_SIZE": 2 * _GIBIBYTE,
+
     # Webhook outbound security:
     # "ALERTS_WEBHOOK_OUTBOUND_MODE": "open",  # or "allowlist_only"
     # "ALERTS_WEBHOOK_ALLOW_LIST": ["hooks.example.com", "203.0.113.0/24"],

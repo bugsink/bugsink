@@ -8,6 +8,7 @@ from bugsink.settings.default import DATABASES
 
 _KIBIBYTE = 1024
 _MEBIBYTE = 1024 * _KIBIBYTE
+_GIBIBYTE = 1024 * _MEBIBYTE
 _PORT = os.environ.get("PORT", "8000")
 
 
@@ -153,6 +154,8 @@ BUGSINK = {
     # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
     "SITE_TITLE": os.getenv("SITE_TITLE", "Bugsink"),
 
+    "USE_ADMIN": os.getenv("USE_ADMIN", False),
+
     # Settings for Users, Teams and Projects
     "SINGLE_USER": os.getenv("SINGLE_USER", "False").lower() in ("true", "1", "yes"),
 
@@ -172,6 +175,8 @@ BUGSINK = {
     "MAX_EVENT_COMPRESSED_SIZE": int(os.getenv("MAX_EVENT_COMPRESSED_SIZE", 200 * _KIBIBYTE)),
     "MAX_ENVELOPE_SIZE": int(os.getenv("MAX_ENVELOPE_SIZE", 100 * _MEBIBYTE)),
     "MAX_ENVELOPE_COMPRESSED_SIZE": int(os.getenv("MAX_ENVELOPE_COMPRESSED_SIZE", 20 * _MEBIBYTE)),
+    # For large MAX_FILE_SIZE values, you may want FILE_OBJECT_STORAGE_PATH configured too.
+    "MAX_FILE_SIZE": int(os.getenv("MAX_FILE_SIZE", 2 * _GIBIBYTE)),
 
     # Bugsink-specific limits:
     # The default values are 1_000, 5_000, 1M respectively; which corresponds to ~6%, ~2.7%, .8% of the total capacity

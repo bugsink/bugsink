@@ -1,10 +1,10 @@
 import re
 import logging
+import tempfile
 from datetime import timedelta
 from zipfile import ZipFile
 import json
 from hashlib import sha1
-from io import BytesIO
 from os.path import basename
 from django.utils import timezone
 from django.db.models import Count, Sum
@@ -14,8 +14,9 @@ from snappea.decorators import shared_task
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.app_settings import get_settings
+from bugsink.streams import copy_stream_limited
 
-from .models import Chunk, File, FileMetadata, write_to_storage
+from .models import Chunk, File, FileMetadata, write_fileobj_to_storage, _binary_to_bytes
 from .storage_registry import get_write_storage
 
 logger = logging.getLogger("bugsink.api")
@@ -30,8 +31,80 @@ VACUUM_FILES_BATCH_SIZE = 500
 # known pattern for "one in code", such that we can at least warn if it's not the same at the actually reported one.
 # See #157
 IN_CODE_DEBUG_ID_REGEX = re.compile(
-    r'e\._sentryDebugIds\[.*?\]\s*=\s*["\']([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})["\']'
+    rb'e\._sentryDebugIds\[.*?\]\s*=\s*["\']([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})["\']'
 )
+DEBUG_ID_SCAN_TAIL_SIZE = 64 * 1024
+
+
+def create_file_from_local_file(checksum, filename, size, local_file):
+    write_storage = get_write_storage("file")
+    file, created = File.objects.get_or_create(
+        checksum=checksum,
+        defaults={
+            "size": size,
+            "data": b"" if write_storage is not None else local_file.read(),
+            "filename": filename,
+            "storage_backend": None if write_storage is None else write_storage.name,
+        })
+
+    if created and write_storage is not None:
+        local_file.seek(0)
+        write_fileobj_to_storage("file", checksum, local_file)
+
+    return file, created
+
+
+def read_limited_bytes(input_stream, max_bytes):
+    with tempfile.SpooledTemporaryFile(max_size=max_bytes + 1) as output_stream:
+        bytes_read = copy_stream_limited(
+            input_stream,
+            output_stream,
+            max_bytes=max_bytes,
+            reason=f"MAX_FILE_SIZE: {max_bytes}",
+        )
+        output_stream.seek(0)
+        return output_stream.read(), bytes_read
+
+
+def extract_zip_entry_to_file(bundle_zip, entry_name, local_file, max_bytes):
+    # usedforsecurity=false: sha1 is not used cryptographically, it's part of the protocol, so we use it as is.
+    checksum = sha1(usedforsecurity=False)
+
+    with bundle_zip.open(entry_name) as input_stream:
+        size = copy_stream_limited(
+            input_stream,
+            local_file,
+            max_bytes=max_bytes,
+            reason=f"MAX_FILE_SIZE: {max_bytes}",
+            digest=checksum,
+        )
+
+    return checksum.hexdigest(), size
+
+
+def find_in_code_debug_ids(local_file):
+    matches = set()
+    tail = b""
+
+    local_file.seek(0)
+    while True:
+        chunk = local_file.read(64 * 1024)
+        if not chunk:
+            break
+
+        haystack = tail + chunk
+        if len(haystack) > DEBUG_ID_SCAN_TAIL_SIZE:
+            cutoff = len(haystack) - DEBUG_ID_SCAN_TAIL_SIZE
+            scan_bytes = haystack[:cutoff]
+            tail = haystack[cutoff:]
+        else:
+            scan_bytes = b""
+            tail = haystack
+
+        matches.update(match.decode("ascii") for match in IN_CODE_DEBUG_ID_REGEX.findall(scan_bytes))
+
+    matches.update(match.decode("ascii") for match in IN_CODE_DEBUG_ID_REGEX.findall(tail))
+    return matches
 
 
 @shared_task
@@ -45,62 +118,63 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
         # support that, but if we ever were to support it we'd need a separate method/param to distinguish it.
 
         bundle_file, _ = assemble_file(bundle_checksum, chunk_checksums, filename=f"{bundle_checksum}.zip")
+        max_file_size = get_settings().MAX_FILE_SIZE
+        with tempfile.TemporaryDirectory() as tempdir:
+            with bundle_file.open_for_read() as f:
+                with ZipFile(f) as bundle_zip:
+                    with bundle_zip.open("manifest.json") as manifest_stream:
+                        manifest_bytes, _ = read_limited_bytes(manifest_stream, max_file_size)
+                    manifest = json.loads(manifest_bytes.decode("utf-8"))
 
-        bundle_zip = ZipFile(BytesIO(bundle_file.get_raw_data()))  # NOTE: in-memory handling of zips.
-        manifest_bytes = bundle_zip.read("manifest.json")
-        manifest = json.loads(manifest_bytes.decode("utf-8"))
+                    for zip_entry_name, manifest_entry in manifest["files"].items():
+                        with tempfile.TemporaryFile(dir=tempdir) as local_file:
+                            checksum, size = extract_zip_entry_to_file(
+                                bundle_zip, zip_entry_name, local_file, max_file_size,
+                            )
 
-        for filename, manifest_entry in manifest["files"].items():
-            file_data = bundle_zip.read(filename)
+                            local_file.seek(0)
+                            filename = basename(manifest_entry.get("url", zip_entry_name))[:255]
+                            file, _ = create_file_from_local_file(checksum, filename, size, local_file)
 
-            # usedforsecurity=false: sha1 is not used cryptographically, it's part of the protocol, so we use it as is.
-            checksum = sha1(file_data, usedforsecurity=False).hexdigest()
+                            debug_id = manifest_entry.get("headers", {}).get("debug-id", None)
+                            file_type = manifest_entry.get("type", None)
+                            if debug_id is None or file_type is None:
+                                because = (
+                                    "it has neither Debug ID nor file-type"
+                                    if debug_id is None and file_type is None else
+                                    "it has no Debug ID" if debug_id is None else "it has no file-type")
 
-            filename = basename(manifest_entry.get("url", filename))[:255]
+                                logger.warning(
+                                    "Uploaded file %s will be ignored by Bugsink because %s.",
+                                    filename,
+                                    because,
+                                )
 
-            file, _ = File.objects.get_or_create(
-                checksum=checksum,
-                defaults={
-                    "filename": filename,
-                    "size": len(file_data),
-                    "data": file_data,
-                })
+                                continue
 
-            debug_id = manifest_entry.get("headers", {}).get("debug-id", None)
-            file_type = manifest_entry.get("type", None)
-            if debug_id is None or file_type is None:
-                because = (
-                    "it has neither Debug ID nor file-type" if debug_id is None and file_type is None else
-                    "it has no Debug ID" if debug_id is None else "it has no file-type")
+                            FileMetadata.objects.get_or_create(
+                                debug_id=debug_id,
+                                file_type=file_type,
+                                defaults={
+                                    "file": file,
+                                    "data": json.dumps(manifest_entry),
+                                }
+                            )
 
-                logger.warning(
-                    "Uploaded file %s will be ignored by Bugsink because %s.",
-                    filename,
-                    because,
-                )
-
-                continue
-
-            FileMetadata.objects.get_or_create(
-                debug_id=debug_id,
-                file_type=file_type,
-                defaults={
-                    "file": file,
-                    "data": json.dumps(manifest_entry),
-                }
-            )
-
-            # the in-code regexes show up in the _minified_ source only (the sourcemap's original source code will not
-            # have been "polluted" with it yet, since it's the original).
-            if file_type == "minified_source":
-                mismatches = set(IN_CODE_DEBUG_ID_REGEX.findall(file_data.decode("utf-8"))) - {debug_id}
-                if mismatches:
-                    logger.warning(
-                        "Uploaded file %s contains multiple Debug IDs. Uploaded as %s, but also found: %s.",
-                        filename,
-                        debug_id,
-                        ", ".join(sorted(mismatches)),
-                    )
+                            # the in-code regexes show up in the _minified_ source only (the sourcemap's original source
+                            # code will not have been "polluted" with it yet, since it's the original).
+                            if file_type == "minified_source":
+                                mismatches = find_in_code_debug_ids(local_file) - {debug_id}
+                                if mismatches:
+                                    logger.warning(
+                                        (
+                                            "Uploaded file %s contains multiple Debug IDs. "
+                                            "Uploaded as %s, but also found: %s."
+                                        ),
+                                        filename,
+                                        debug_id,
+                                        ", ".join(sorted(mismatches)),
+                                    )
 
         if not get_settings().KEEP_ARTIFACT_BUNDLES:
             # delete the bundle file after processing, since we don't need it anymore.
@@ -118,30 +192,36 @@ def assemble_file(checksum, chunk_checksums, filename):
     chunks = Chunk.objects.filter(checksum__in=chunk_checksums)
     chunks_dicts = {chunk.checksum: chunk for chunk in chunks}
     chunks_in_order = [chunks_dicts[checksum] for checksum in chunk_checksums]  # implicitly checks chunk availability
-    data = b"".join([chunk.data for chunk in chunks_in_order])
+    max_file_size = get_settings().MAX_FILE_SIZE
 
-    # usedforsecurity=false: sha1 is not used cryptographically, and it's part of the protocol, so we use it as is.
-    if sha1(data, usedforsecurity=False).hexdigest() != checksum:
-        raise Exception("checksum mismatch")
+    with tempfile.TemporaryDirectory() as tempdir:
+        with tempfile.TemporaryFile(dir=tempdir) as local_file:
+            # usedforsecurity=false: sha1 is not used cryptographically, and it's part of the protocol, so we use it
+            # as is.
+            checksum_state = sha1(usedforsecurity=False)
+            size = 0
 
-    write_storage = get_write_storage("file")
-    file, created = File.objects.get_or_create(
-        checksum=checksum,
-        defaults={
-            "size": len(data),
-            "data": b"" if write_storage is not None else data,
-            "filename": filename,
-            "storage_backend": None if write_storage is None else write_storage.name,
-        })
+            for chunk in chunks_in_order:
+                chunk_data = _binary_to_bytes(chunk.data)
+                next_size = size + len(chunk_data)
+                if next_size > max_file_size:
+                    raise ValueError("Assembled file exceeds MAX_FILE_SIZE")
 
-    if created and write_storage is not None:
-        write_to_storage("file", checksum, data)
+                local_file.write(chunk_data)
+                checksum_state.update(chunk_data)
+                size = next_size
 
-    # the assumption here is: chunks are basically use-once, so we can delete them after use. "in theory" a chunk may
-    # be used in multiple files (which are still being assembled) but with chunksizes in the order of 1MiB, I'd say this
-    # is unlikely.
-    chunks.delete()
-    return file, created
+            if checksum_state.hexdigest() != checksum:
+                raise Exception("checksum mismatch")
+
+            local_file.seek(0)
+            file, created = create_file_from_local_file(checksum, filename, size, local_file)
+
+            # the assumption here is: chunks are basically use-once, so we can delete them after use. "in theory" a
+            # chunk may be used in multiple files (which are still being assembled) but with chunksizes in the order
+            # of 1MiB, I'd say this is unlikely.
+            chunks.delete()
+            return file, created
 
 
 @shared_task
