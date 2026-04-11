@@ -6,11 +6,83 @@ from bugsink.period_utils import add_periods_to_datetime, sub_periods_from_datet
 from bugsink.utils import assert_
 
 
-def _filter_for_periods(qs, period_name, nr_of_periods, now):
+def filter_for_periods(qs, period_name, nr_of_periods, now):
     if period_name == "total":
         return qs
 
     return qs.filter(digested_at__gte=sub_periods_from_datetime(now, nr_of_periods, period_name))
+
+
+def get_total_events_in_period(qs_for_period, add_for_current=0):
+    # We have indexes on digested_at prefixed with either (nothing, project, issue) which makes this efficient.
+    # project_digest_order is the tie-breaker and makes tests make sense; it is assumed to not be necessarily part
+    # of the index (most of the sorting happens before that point) but as per #322 it does appear to be necessary
+    # for at least some dbs (mariadb and perhaps others).
+    first_in_period = (
+        qs_for_period.exclude(project_digest_order__isnull=True)
+        .order_by('digested_at', 'project_digest_order').first())
+
+    if first_in_period is None:
+        return add_for_current
+    elif first_in_period.project_digest_order is None:
+        # Fall back to the pre-project_digest_order behavior.
+        return qs_for_period.count() + add_for_current
+    else:
+        # will exist (implied by 'first'), and will have a project_digest_order (because only _older_ might not)
+        last_in_period = (qs_for_period.exclude(project_digest_order__isnull=True)
+                          .order_by('-digested_at', '-project_digest_order').first())
+
+        return (last_in_period.project_digest_order - first_in_period.project_digest_order
+                + 1 + add_for_current)  # +1: not the difference, but the count incl. both ends
+
+
+def count_for_thresholds(qs, now, thresholds, add_for_current=0):
+    assert_(now.tzinfo == timezone.utc)
+
+    counts = []
+    for threshold in thresholds:
+        period_name, nr_of_periods, _ = threshold
+        qs_for_period = filter_for_periods(qs, period_name, nr_of_periods, now)
+        total_events_in_period = get_total_events_in_period(qs_for_period, add_for_current)
+        counts.append((total_events_in_period, threshold))
+
+    return counts
+
+
+def state_for_threshold(qs_for_period, now, total_events_in_period, threshold):
+    assert_(now.tzinfo == timezone.utc)
+    period_name, nr_of_periods, gte_threshold = threshold
+
+    exceeded = total_events_in_period >= gte_threshold
+
+    if exceeded:
+        if period_name == "total":
+            # when counting the 'total', there will never be a time when the condition becomes false. We
+            # just pick an arbitrarily large date; we'll deal with it by the end of the myria-annum.
+            # unlikely to actually end up in the DB (because it would imply the use of a quota for total).
+            below_threshold_from = datetime(9999, 12, 31, 23, 59, tzinfo=timezone.utc)
+
+        else:
+            # `below_threshold_from` is the first moment in time where the condition no longer applies. Assuming
+            # the present function is called "often enough" (i.e is called for the moment the switch to
+            # threshold_exceeded happens, and not thereafter), there will be _excactly_ `gte_threshold` items in the
+            # qs. Taking the min of those and adding the time period brings us to the point in time where the
+            # condition will become False again.
+            #
+            # (The assumption of "often enough, and no more" holds for us because for quota we stop accepting events
+            # once the quota is met; for muted we remove the vbc once unmuted). For the "overshoot" case (see tests,
+            # not really expected) this has the consequence of seeing a result that is "too old", and hence going
+            # back to accepting too soon. But this is self-correcting, so no need to deal with it.
+            #
+            # `or now` to handle funny `gte_threshold==0`
+            observed_period_start = qs_for_period.aggregate(agg=Min('digested_at'))['agg'] or now
+            below_threshold_from = add_periods_to_datetime(observed_period_start, nr_of_periods, period_name)
+
+    else:
+        below_threshold_from = None
+
+    check_again_after = gte_threshold - total_events_in_period
+    return exceeded, below_threshold_from, check_again_after, threshold
 
 
 def check_for_thresholds(qs, now, thresholds, add_for_current=0):
@@ -36,62 +108,14 @@ def check_for_thresholds(qs, now, thresholds, add_for_current=0):
     # we only allow UTC, and we generally use Django model fields, which are UTC, so this should be good:
     assert_(now.tzinfo == timezone.utc)
 
-    states = []
+    result = []
+    for (total_events_in_period, threshold) in count_for_thresholds(qs, now, thresholds, add_for_current):
+        period_name, nr_of_periods, _ = threshold
+        result.append(state_for_threshold(
+            filter_for_periods(qs, period_name, nr_of_periods, now),
+            now,
+            total_events_in_period,
+            threshold,
+        ))
 
-    for (period_name, nr_of_periods, gte_threshold) in thresholds:
-        qs_for_period = _filter_for_periods(qs, period_name, nr_of_periods, now)
-
-        # We have indexes on digested_at prefixed with either (nothing, project, issue) which makes this efficient.
-        # project_digest_order is the tie-breaker and makes tests make sense; it is assumed to not be necessarily part
-        # of the index (most of the sorting happens before that point) but as per #322 it does appear to be necessary
-        # for at least some dbs (mariadb and perhaps others).
-        first_in_period = (
-            qs_for_period.exclude(project_digest_order__isnull=True)
-            .order_by('digested_at', 'project_digest_order').first())
-
-        if first_in_period is None:
-            total_events_in_period = add_for_current
-        elif first_in_period.project_digest_order is None:
-            # Fall back to the pre-project_digest_order behavior.
-            total_events_in_period = qs_for_period.count() + add_for_current
-        else:
-            # will exist (implied by 'first'), and will have a project_digest_order (because only _older_ might not)
-            last_in_period = (qs_for_period.exclude(project_digest_order__isnull=True)
-                              .order_by('-digested_at', '-project_digest_order').first())
-
-            total_events_in_period = (last_in_period.project_digest_order - first_in_period.project_digest_order
-                                      + 1 + add_for_current)  # +1: not the difference, but the count incl. both ends
-
-        exceeded = total_events_in_period >= gte_threshold
-
-        if exceeded:
-            if period_name == "total":
-                # when counting the 'total', there will never be a time when the condition becomes false. We
-                # just pick an arbitrarily large date; we'll deal with it by the end of the myria-annum.
-                # unlikely to actually end up in the DB (because it would imply the use of a quota for total).
-                below_threshold_from = datetime(9999, 12, 31, 23, 59, tzinfo=timezone.utc)
-
-            else:
-                # `below_threshold_from` is the first moment in time where the condition no longer applies. Assuming
-                # the present function is called "often enough" (i.e is called for the moment the switch to
-                # threshold_exceeded happens, and not thereafter), there will be _excactly_ `gte_threshold` items in the
-                # qs. Taking the min of those and adding the time period brings us to the point in time where the
-                # condition will become False again.
-                #
-                # (The assumption of "often enough, and no more" holds for us because for quota we stop accepting events
-                # once the quota is met; for muted we remove the vbc once unmuted). For the "overshoot" case (see tests,
-                # not really expected) this has the consequence of seeing a result that is "too old", and hence going
-                # back to accepting too soon. But this is self-correcting, so no need to deal with it.
-                #
-                # `or now` to handle funny `gte_threshold==0`
-                observed_period_start = qs_for_period.aggregate(agg=Min('digested_at'))['agg'] or now
-                below_threshold_from = add_periods_to_datetime(observed_period_start, nr_of_periods, period_name)
-
-        else:
-            below_threshold_from = None
-
-        check_again_after = gte_threshold - total_events_in_period
-
-        states.append((exceeded, below_threshold_from, check_again_after, (period_name, nr_of_periods, gte_threshold)))
-
-    return states
+    return result

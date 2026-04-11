@@ -31,6 +31,7 @@ from bugsink.streams import UnclosableBytesIO
 from compat.timestamp import format_timestamp
 from compat.dsn import get_header_value
 from bsmain.management.commands.send_json import Command as SendJsonCommand
+from phonehome.models import Installation
 
 from .views import BaseIngestAPIView, MinidumpAPIView
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
@@ -946,6 +947,33 @@ class IngestViewTestCase(TransactionTestCase):
 
             # but at least this closes the door for the next event
             self.assertEqual(now + relativedelta(minutes=5), project.quota_exceeded_until)
+
+    @override_settings(MAX_EVENTS_PER_5_MINUTES=1_000, MAX_EVENTS_PER_HOUR=1_000, MAX_EVENTS_PER_MONTH=3)
+    def test_count_installation_periods_and_act_on_it_sums_project_spans(self):
+        now = timezone.now()
+        installation = Installation.objects.get()
+
+        project_a = Project.objects.create(name="installation-a")
+        project_b = Project.objects.create(name="installation-b")
+
+        create_event(project_a, timestamp=now, project_digest_order=100)
+        create_event(project_b, timestamp=now + relativedelta(seconds=1), project_digest_order=1)
+
+        project_a.digested_event_count = 1
+        project_a.save(update_fields=["digested_event_count"])
+        project_b.digested_event_count = 1
+        project_b.save(update_fields=["digested_event_count"])
+
+        result = BaseIngestAPIView.count_installation_periods_and_act_on_it(
+            installation,
+            now + relativedelta(seconds=2),
+        )
+
+        installation.refresh_from_db()
+
+        self.assertEqual(True, result)
+        self.assertEqual(now + relativedelta(months=1), installation.quota_exceeded_until)
+        self.assertEqual('["month", 1, 3]', installation.quota_exceeded_reason)
 
     def test_ingest_updates_stored_event_counts(self):
         request = self.request_factory.post("/api/1/store/")
