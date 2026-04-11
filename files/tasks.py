@@ -318,12 +318,12 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
         remaining_budget = VACUUM_FILES_BATCH_SIZE - num_deleted
         if remaining_budget > 0:
             total_count, total_bytes = _get_file_totals()
-            ids_to_delete = []
+            files_to_delete = []
 
-            for file_id, file_size, accessed_at in (
+            for file_id, checksum, storage_backend, file_size, accessed_at in (
                 File.objects
                 .order_by("accessed_at", "id")
-                .values_list("id", "size", "accessed_at")
+                .values_list("id", "checksum", "storage_backend", "size", "accessed_at")
                 .iterator(chunk_size=remaining_budget)
             ):
                 if accessed_at >= file_cutoff and not _caps_exceeded(
@@ -331,16 +331,40 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
                     # we can stop only if the file is both "young enough" and we're under caps (i.e. not exceeded)
                     break
 
-                ids_to_delete.append(file_id)
+                files_to_delete.append((file_id, checksum, storage_backend))
                 total_count -= 1
                 total_bytes -= file_size
 
-                if len(ids_to_delete) == remaining_budget:
+                if len(files_to_delete) == remaining_budget:
                     break
 
-            if ids_to_delete:
-                File.objects.filter(id__in=ids_to_delete).delete()
-                num_deleted += len(ids_to_delete)
+            if files_to_delete:
+                using = File.objects.db
+
+                # Distinguish between DB-backed and object-storage-backed File rows.
+                #
+                # DB-backed rows are dangerous case memory-wise, and trivial cleanup-wise, i.e. File.objects.filter(..)
+                # eats up insane memory so must be avoided; but deletion is simpler because we don't need storage
+                # cleanup.
+                db_backed_ids = [
+                    file_id for file_id, _checksum, storage_backend in files_to_delete
+                    if storage_backend is None
+                ]
+
+                if db_backed_ids:
+                    FileMetadata.objects.filter(file_id__in=db_backed_ids)._raw_delete(using=using)
+                    File.objects.filter(id__in=db_backed_ids)._raw_delete(using=using)
+
+                # Object-storage-backed rows can just be loaded in-memory (don't have .data) and must trigger the
+                # cleanup path (i.e. use regular .delete())
+                stored_ids = [
+                    file_id for file_id, _checksum, storage_backend in files_to_delete
+                    if storage_backend is not None
+                ]
+                if stored_ids:
+                    File.objects.filter(id__in=stored_ids).delete()
+
+                num_deleted += len(files_to_delete)
 
         if num_deleted == VACUUM_FILES_BATCH_SIZE:
             return True
