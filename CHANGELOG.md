@@ -1,5 +1,10 @@
 # Changes
 
+## 2.1.2 (11 April 2026)
+
+* Add stored file count and byte caps, see #355
+* Error message readability in dark mode, see #362
+
 ## 2.1.1 (9 April 2026)
 
 ### Security
