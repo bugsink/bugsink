@@ -106,6 +106,8 @@ BUGSINK = {
     "TEAM_CREATION": CB_MEMBERS,  # who can create new teams. default: members, which means "any member of the site"
 
     # "MAX_EVENT_AGE_DAYS": 60,
+    # "MAX_STORED_FILE_COUNT": 10_000,
+    # "MAX_STORED_FILE_BYTES": 1_000_000_000,
 
     # "MAX_EVENT_SIZE": _MEBIBYTE,
     # "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,

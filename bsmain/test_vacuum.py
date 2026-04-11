@@ -6,9 +6,11 @@ from uuid import uuid4
 from django.core.management import call_command
 from django.utils import timezone
 
+from bugsink.app_settings import override_settings as bugsink_override_settings
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from events.factories import create_event
 from events.models import Event
+from files.tasks import vacuum_files_batch
 from files.models import Chunk, File, FileMetadata
 from issues.factories import get_or_create_issue
 from projects.models import Project
@@ -65,6 +67,87 @@ class VacuumCommandTestCase(TransactionTestCase):
         self.assertEqual([recent_file.id], list(File.objects.values_list("id", flat=True)))
         self.assertEqual([recent_file.id], list(FileMetadata.objects.values_list("file_id", flat=True)))
 
+    @patch("files.tasks.VACUUM_FILES_BATCH_SIZE", 2)
+    def test_vacuum_files_respects_max_file_count(self):
+        now = timezone.now()
+
+        oldest = File.objects.create(checksum="c" * 40, filename="oldest.js.map", size=1, data=b"x")
+        middle = File.objects.create(checksum="d" * 40, filename="middle.js.map", size=1, data=b"x")
+        newest = File.objects.create(checksum="e" * 40, filename="newest.js.map", size=1, data=b"x")
+        for file in [oldest, middle, newest]:
+            FileMetadata.objects.create(file=file, debug_id=uuid4(), file_type="source_map", data="{}")
+
+        File.objects.filter(id=oldest.id).update(accessed_at=now - timedelta(days=3))
+        File.objects.filter(id=middle.id).update(accessed_at=now - timedelta(days=2))
+        File.objects.filter(id=newest.id).update(accessed_at=now - timedelta(days=1))
+
+        call_command("vacuum", "--files", "--max-file-count", "2", stdout=io.StringIO())
+
+        self.assertEqual(
+            [middle.id, newest.id],
+            list(File.objects.order_by("accessed_at").values_list("id", flat=True)),
+        )
+        self.assertEqual(
+            [middle.id, newest.id],
+            list(FileMetadata.objects.order_by("file__accessed_at").values_list("file_id", flat=True)),
+        )
+
+    @patch("files.tasks.VACUUM_FILES_BATCH_SIZE", 2)
+    def test_vacuum_files_respects_max_file_bytes(self):
+        now = timezone.now()
+
+        oldest = File.objects.create(checksum="f" * 40, filename="oldest.js.map", size=3, data=b"xxx")
+        middle = File.objects.create(checksum="1" * 40, filename="middle.js.map", size=4, data=b"xxxx")
+        newest = File.objects.create(checksum="2" * 40, filename="newest.js.map", size=5, data=b"xxxxx")
+        for file in [oldest, middle, newest]:
+            FileMetadata.objects.create(file=file, debug_id=uuid4(), file_type="source_map", data="{}")
+
+        File.objects.filter(id=oldest.id).update(accessed_at=now - timedelta(days=3))
+        File.objects.filter(id=middle.id).update(accessed_at=now - timedelta(days=2))
+        File.objects.filter(id=newest.id).update(accessed_at=now - timedelta(days=1))
+
+        call_command("vacuum", "--files", "--max-file-bytes", "8", stdout=io.StringIO())
+
+        self.assertEqual([newest.id], list(File.objects.values_list("id", flat=True)))
+        self.assertEqual([newest.id], list(FileMetadata.objects.values_list("file_id", flat=True)))
+
+    @patch("files.tasks.VACUUM_FILES_BATCH_SIZE", 2)
+    def test_vacuum_files_uses_bugsink_file_caps_by_default(self):
+        now = timezone.now()
+
+        oldest = File.objects.create(checksum="3" * 40, filename="oldest.js.map", size=1, data=b"x")
+        newest = File.objects.create(checksum="4" * 40, filename="newest.js.map", size=1, data=b"x")
+        for file in [oldest, newest]:
+            FileMetadata.objects.create(file=file, debug_id=uuid4(), file_type="source_map", data="{}")
+
+        File.objects.filter(id=oldest.id).update(accessed_at=now - timedelta(days=2))
+        File.objects.filter(id=newest.id).update(accessed_at=now - timedelta(days=1))
+
+        with bugsink_override_settings(MAX_STORED_FILE_COUNT=1):
+            call_command("vacuum", "--files", stdout=io.StringIO())
+
+        self.assertEqual([newest.id], list(File.objects.values_list("id", flat=True)))
+
+    @patch("files.tasks.VACUUM_FILES_BATCH_SIZE", 2)
+    def test_vacuum_files_cli_cap_overrides_bugsink_setting(self):
+        now = timezone.now()
+
+        oldest = File.objects.create(checksum="5" * 40, filename="oldest.js.map", size=1, data=b"x")
+        newest = File.objects.create(checksum="6" * 40, filename="newest.js.map", size=1, data=b"x")
+        for file in [oldest, newest]:
+            FileMetadata.objects.create(file=file, debug_id=uuid4(), file_type="source_map", data="{}")
+
+        File.objects.filter(id=oldest.id).update(accessed_at=now - timedelta(days=2))
+        File.objects.filter(id=newest.id).update(accessed_at=now - timedelta(days=1))
+
+        with bugsink_override_settings(MAX_STORED_FILE_COUNT=1):
+            call_command("vacuum", "--files", "--max-file-count", "2", stdout=io.StringIO())
+
+        self.assertEqual(
+            [oldest.id, newest.id],
+            list(File.objects.order_by("accessed_at").values_list("id", flat=True)),
+        )
+
     @patch("tags.tasks.VACUUM_TAGS_BATCH_SIZE", 2)
     def test_vacuum_tags_runs_inline_to_completion(self):
         project = Project.objects.create(name="T")
@@ -115,3 +198,27 @@ class VacuumCommandTestCase(TransactionTestCase):
 
         self.assertFalse(Event.objects.filter(pk=old_event.pk).exists())
         self.assertEqual(1, Event.objects.filter(project=project).count())
+
+
+class VacuumFilesBatchTestCase(TransactionTestCase):
+    @patch("files.tasks.VACUUM_FILES_BATCH_SIZE", 10)
+    def test_vacuum_files_batch_applies_age_then_caps_in_oldest_first_order(self):
+        now = timezone.now()
+
+        very_old = File.objects.create(checksum="7" * 40, filename="very-old.js.map", size=3, data=b"xxx")
+        old = File.objects.create(checksum="8" * 40, filename="old.js.map", size=4, data=b"xxxx")
+        recent = File.objects.create(checksum="9" * 40, filename="recent.js.map", size=5, data=b"xxxxx")
+        newest = File.objects.create(checksum="a" * 39 + "b", filename="newest.js.map", size=6, data=b"xxxxxx")
+        for file in [very_old, old, recent, newest]:
+            FileMetadata.objects.create(file=file, debug_id=uuid4(), file_type="source_map", data="{}")
+
+        File.objects.filter(id=very_old.id).update(accessed_at=now - timedelta(days=95))
+        File.objects.filter(id=old.id).update(accessed_at=now - timedelta(days=91))
+        File.objects.filter(id=recent.id).update(accessed_at=now - timedelta(days=2))
+        File.objects.filter(id=newest.id).update(accessed_at=now - timedelta(days=1))
+
+        has_more_work = vacuum_files_batch(file_max_days=90, max_file_count=1)
+
+        self.assertFalse(has_more_work)
+        self.assertEqual([newest.id], list(File.objects.values_list("id", flat=True)))
+        self.assertEqual([newest.id], list(FileMetadata.objects.values_list("file_id", flat=True)))

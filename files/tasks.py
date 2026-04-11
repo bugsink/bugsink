@@ -7,6 +7,7 @@ import json
 from hashlib import sha1
 from os.path import basename
 from django.utils import timezone
+from django.db.models import Count, Sum
 
 from compat.timestamp import parse_timestamp
 from snappea.decorators import shared_task
@@ -244,43 +245,107 @@ def record_file_accesses(metadata_ids, accessed_at):
         File.objects.filter(id__in=file_ids).update(accessed_at=parsed_accessed_at)
 
 
+def _get_file_totals():
+    totals = File.objects.aggregate(total_count=Count("id"), total_bytes=Sum("size"))
+    return totals["total_count"] or 0, totals["total_bytes"] or 0
+
+
+def _caps_exceeded(total_count, total_bytes, max_file_count, max_file_bytes):
+    return (
+        (max_file_count is not None and total_count > max_file_count)
+        or (max_file_bytes is not None and total_bytes > max_file_bytes)
+    )
+
+
+def _more_file_work_exists(file_cutoff, max_file_count, max_file_bytes):
+    if File.objects.filter(accessed_at__lt=file_cutoff).exists():
+        return True
+
+    total_count, total_bytes = _get_file_totals()
+    return _caps_exceeded(total_count, total_bytes, max_file_count, max_file_bytes)
+
+
 @shared_task
-def vacuum_files(chunk_max_days=1, file_max_days=90):
-    if vacuum_files_batch(chunk_max_days=chunk_max_days, file_max_days=file_max_days):
+def vacuum_files(chunk_max_days=1, file_max_days=90, max_file_count=None, max_file_bytes=None):
+    if vacuum_files_batch(
+        chunk_max_days=chunk_max_days,
+        file_max_days=file_max_days,
+        max_file_count=max_file_count,
+        max_file_bytes=max_file_bytes,
+    ):
         # possibly more to delete, so we re-schedule the task
-        delay_on_commit(vacuum_files, chunk_max_days=chunk_max_days, file_max_days=file_max_days)
+        delay_on_commit(
+            vacuum_files,
+            chunk_max_days=chunk_max_days,
+            file_max_days=file_max_days,
+            max_file_count=max_file_count,
+            max_file_bytes=max_file_bytes,
+        )
 
 
-def vacuum_files_sync(chunk_max_days=1, file_max_days=90):
+def vacuum_files_sync(chunk_max_days=1, file_max_days=90, max_file_count=None, max_file_bytes=None):
     # possibly more to delete, so we re-schedule the task
-    while vacuum_files_batch(chunk_max_days=chunk_max_days, file_max_days=file_max_days):
+    while vacuum_files_batch(
+        chunk_max_days=chunk_max_days,
+        file_max_days=file_max_days,
+        max_file_count=max_file_count,
+        max_file_bytes=max_file_bytes,
+    ):
         pass
 
 
-def vacuum_files_batch(chunk_max_days=1, file_max_days=90):
+def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, max_file_bytes=None):
     # returns True when there may be more work to do.
     with immediate_atomic():
         now = timezone.now()
         num_deleted = 0
+        chunk_cutoff = now - timedelta(days=chunk_max_days)
+        file_cutoff = now - timedelta(days=file_max_days)
 
-        for model, field_name, max_days in [
-            (Chunk, 'created_at', chunk_max_days,),
-            (File, 'accessed_at', file_max_days),
-            # for FileMetadata we rely on cascading from File (which will always happen "eventually")
-                ]:
+        while num_deleted < VACUUM_FILES_BATCH_SIZE:
+            ids = list(
+                Chunk.objects
+                .filter(created_at__lt=chunk_cutoff)[:VACUUM_FILES_BATCH_SIZE - num_deleted]
+                .values_list("id", flat=True)
+            )
 
-            while num_deleted < VACUUM_FILES_BATCH_SIZE:
-                ids = list(
-                    model.objects
-                    .filter(**{f"{field_name}__lt": now - timedelta(days=max_days)})[:VACUUM_FILES_BATCH_SIZE]
-                    .values_list('id', flat=True)
-                )
+            if not ids:
+                break
 
-                if len(ids) == 0:
+            Chunk.objects.filter(id__in=ids).delete()
+            num_deleted += len(ids)
+
+        remaining_budget = VACUUM_FILES_BATCH_SIZE - num_deleted
+        if remaining_budget > 0:
+            total_count, total_bytes = _get_file_totals()
+            ids_to_delete = []
+
+            for file_id, file_size, accessed_at in (
+                File.objects
+                .order_by("accessed_at", "id")
+                .values_list("id", "size", "accessed_at")
+                .iterator(chunk_size=remaining_budget)
+            ):
+                if accessed_at >= file_cutoff and not _caps_exceeded(
+                    total_count, total_bytes, max_file_count, max_file_bytes):
+                    # we can stop only if the file is both "young enough" and we're under caps (i.e. not exceeded)
                     break
 
-                model.objects.filter(id__in=ids).delete()
-                num_deleted += len(ids)
+                ids_to_delete.append(file_id)
+                total_count -= 1
+                total_bytes -= file_size
 
-        # budget exhausted but possibly more to delete
-        return num_deleted == VACUUM_FILES_BATCH_SIZE
+                if len(ids_to_delete) == remaining_budget:
+                    break
+
+            if ids_to_delete:
+                File.objects.filter(id__in=ids_to_delete).delete()
+                num_deleted += len(ids_to_delete)
+
+        if num_deleted == VACUUM_FILES_BATCH_SIZE:
+            return True
+
+        return (
+            Chunk.objects.filter(created_at__lt=chunk_cutoff).exists()
+            or _more_file_work_exists(file_cutoff, max_file_count, max_file_bytes)
+        )
