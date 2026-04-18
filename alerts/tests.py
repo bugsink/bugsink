@@ -680,6 +680,26 @@ class TestTelegramBackend(DjangoTestCase):
         payload = json.loads(mock_post.call_args.kwargs["data"])
         self.assertNotIn("message_thread_id", payload)
 
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_telegram_test_message_omits_thread_id_for_channel_username(self, mock_post):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        telegram_backend_send_test_message(
+            f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
+            self.bot_token,
+            "@my_channel",
+            "Test project",
+            "Test Telegram",
+            self.config.id,
+            message_thread_id=123,
+        )
+
+        payload = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertNotIn("message_thread_id", payload)
+
 
 class TestWebhookSecurityValidation(DjangoTestCase):
     def test_rejects_private_ip_target(self):
@@ -826,6 +846,20 @@ class TestWebhookConfigForms(DjangoTestCase):
         )
 
         self.assertTrue(form.is_valid())
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_telegram_form_rejects_topic_id_for_channel_username(self, mock_resolve):
+        mock_resolve.return_value = {"149.154.167.220"}
+        form = TelegramConfigForm(
+            data={
+                "bot_token": "123456:ABCdef_test_token",
+                "chat_id": "@my_channel",
+                "message_thread_id": 99,
+            }
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("Topic ID can only be used with numeric chat IDs.", form.errors["message_thread_id"][0])
 
     def test_telegram_form_requires_bot_token(self):
         form = TelegramConfigForm(

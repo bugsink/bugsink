@@ -24,6 +24,13 @@ def _build_webhook_url(bot_token):
     return f"https://api.telegram.org/bot{bot_token}/sendMessage"
 
 
+def _chat_id_supports_message_thread_id(chat_id):
+    # Chat ID requirement is validated by form field
+    if chat_id is None:
+        return True
+    return not chat_id.startswith("@")
+
+
 class TelegramConfigForm(forms.Form):
     bot_token = forms.CharField(
         required=True,
@@ -77,6 +84,16 @@ class TelegramConfigForm(forms.Form):
         if not CHAT_ID_RE.fullmatch(chat_id):
             raise forms.ValidationError("Chat ID must be a numeric chat ID or @channelusername.")
         return chat_id
+
+    def clean(self):
+        cleaned_data = super().clean()
+        chat_id = cleaned_data.get("chat_id")
+        message_thread_id = cleaned_data.get("message_thread_id")
+
+        if not _chat_id_supports_message_thread_id(chat_id) and message_thread_id is not None:
+            self.add_error("message_thread_id", "Topic ID can only be used with numeric chat IDs.")
+
+        return cleaned_data
 
 
 def _safe_html(text):
@@ -174,7 +191,7 @@ def telegram_backend_send_test_message(
         "parse_mode": "HTML",
     }
 
-    if message_thread_id is not None:
+    if message_thread_id is not None and _chat_id_supports_message_thread_id(chat_id):
         data["message_thread_id"] = message_thread_id
 
     try:
@@ -219,7 +236,7 @@ def telegram_backend_send_alert(
         "parse_mode": "HTML",
     }
 
-    if message_thread_id is not None:
+    if message_thread_id is not None and _chat_id_supports_message_thread_id(chat_id):
         data["message_thread_id"] = message_thread_id
 
     try:
