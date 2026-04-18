@@ -92,7 +92,7 @@ BUGSINK = {
     "BASE_URL": "https://{{ host }}",  # no trailing slash
 
     # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
-    "SITE_TITLE": "Bugsink",  
+    "SITE_TITLE": "Bugsink",
 
     # Settings for Users, Teams and Projects
     "SINGLE_USER": False,
@@ -124,6 +124,7 @@ BUGSINK = {
 
     # Webhook outbound security:
     # "ALERTS_WEBHOOK_OUTBOUND_MODE": "open",  # or "allowlist_only"
+    # For Telegram alerts in allowlist_only mode, allow api.telegram.org.
     # "ALERTS_WEBHOOK_ALLOW_LIST": ["hooks.example.com", "203.0.113.0/24"],
     # "ALERTS_WEBHOOK_DENY_LIST": ["bad.example.com", "198.51.100.0/24"],
     # "ALERTS_WEBHOOK_DENY_NON_GLOBAL": True,

@@ -40,7 +40,7 @@ SNAPPEA = {
 # When running locally, it is recommended to configure the email backend to use the (quiet) console backend, which
 # prints the email to the console instead of sending it. The assumption is basically that you don't want to send emails
 # to yourself while developing locally, because the errors that you do trigger will already obvious.
-# 
+#
 EMAIL_BACKEND = "bugsink.email_backends.QuietConsoleEmailBackend"  # instead of sending, write the subject to console
 # EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"  # dump the whole email to the console (noisy)
 # EMAIL_BACKEND = "django.core.mail.backends.dummy.EmailBackend"  # do nothing (no email sent), not even to console
@@ -66,7 +66,7 @@ BUGSINK = {
     "BASE_URL": "http://{{ host }}:{{ port }}",  # no trailing slash
 
     # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
-    # "SITE_TITLE": "Bugsink",  
+    # "SITE_TITLE": "Bugsink",
 
     # You are licenced to run Bugsink locally in single-user mode. By changing the settings below, you may open the door
     # to more uses; make sure to buy a licence if you do.
@@ -83,6 +83,7 @@ BUGSINK = {
 
     # Webhook outbound security:
     # "ALERTS_WEBHOOK_OUTBOUND_MODE": "open",  # or "allowlist_only"
+    # For Telegram alerts in allowlist_only mode, allow api.telegram.org.
     # "ALERTS_WEBHOOK_ALLOW_LIST": ["hooks.example.com", "203.0.113.0/24"],
     # "ALERTS_WEBHOOK_DENY_LIST": ["bad.example.com", "198.51.100.0/24"],
     # "ALERTS_WEBHOOK_DENY_NON_GLOBAL": True,
