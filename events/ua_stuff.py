@@ -26,6 +26,7 @@ def get_contexts_enriched_with_ua(parsed_data):
     # import.
     from user_agents import parse as ua_parse
 
+    ua_string = None  # initialize for logging in the except block
     try:
         contexts = parsed_data.get("contexts", {})
 
