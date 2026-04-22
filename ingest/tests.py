@@ -554,6 +554,60 @@ class IngestViewTestCase(TransactionTestCase):
 
             self.assertEqual(0, Event.objects.count())
 
+    def test_envelope_endpoint_cleans_up_oversized_event_file(self):
+        project = Project.objects.create(name="test")
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+        event_id = uuid.uuid4().hex
+
+        event_bytes = json.dumps({"event_id": event_id, "message": "x" * 2000}).encode("utf-8")
+        data_bytes = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "event", "length": %d}\n' % len(event_bytes) +
+            event_bytes
+        )
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(
+                INGEST_STORE_BASE_DIR=tempdir, MAX_EVENT_SIZE=1500):
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                },
+                data=data_bytes,
+            )
+
+            self.assertEqual(413, response.status_code)
+            self.assertEqual([], os.listdir(tempdir))
+
+    def test_envelope_endpoint_cleans_up_multiple_event_files(self):
+        project = Project.objects.create(name="test")
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+        event_id = uuid.uuid4().hex
+        event_bytes = json.dumps({"event_id": event_id, "message": "hello"}).encode("utf-8")
+
+        data_bytes = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "event", "length": %d}\n' % len(event_bytes) +
+            event_bytes + b"\n" +
+            b'{"type": "event", "length": %d}\n' % len(event_bytes) +
+            event_bytes
+        )
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                },
+                data=data_bytes,
+            )
+
+            self.assertEqual(200, response.status_code)
+            self.assertEqual([], os.listdir(tempdir))
+            self.assertEqual(0, Event.objects.count())
+
     @tag("samples")
     def test_envelope_endpoint_reused_ids_different_exceptions(self):
         # dirty copy/paste from test_envelope_endpoint,
