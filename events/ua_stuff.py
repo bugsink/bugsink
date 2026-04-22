@@ -28,9 +28,13 @@ def get_contexts_enriched_with_ua(parsed_data):
 
     ua_string = None  # initialize for logging in the except block
     try:
-        contexts = parsed_data.get("contexts", {})
+        contexts = parsed_data["contexts"] if "contexts" in parsed_data and isinstance(parsed_data["contexts"], dict) \
+            else {}
 
-        ua_string = (parsed_data.get("request", {}).get("headers", {})).get("User-Agent")
+        request = parsed_data["request"] if "request" in parsed_data and isinstance(parsed_data["request"], dict) \
+            else {}
+        headers = request["headers"] if "headers" in request and isinstance(request["headers"], dict) else {}
+        ua_string = headers["User-Agent"] if "User-Agent" in headers else None
         if ua_string is None:
             return contexts
 
