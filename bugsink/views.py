@@ -80,9 +80,10 @@ def _phone_home():
 def home(request):
     _phone_home()
 
-    if request.user.project_set.filter(projectmembership__accepted=True).distinct().count() == 1:
+    accepted_projects = request.user.project_set.filter(projectmembership__accepted=True).distinct()
+    if accepted_projects.count() == 1:
         # if the user has exactly one project, we redirect them to that project
-        project = request.user.project_set.get()
+        project = accepted_projects.get()
         return redirect("issue_list_open", project_pk=project.id)
 
     if request.user.project_set.all().distinct().count() > 0:
