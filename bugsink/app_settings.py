@@ -56,6 +56,10 @@ DEFAULTS = {
     "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
     "MAX_FILE_SIZE": 2 * _GIBIBYTE,
 
+    # CSP violation reports are tiny by design. The spec doesn't pin a number, but real-world reports are <2KiB; we cap
+    # at 64KiB to leave headroom for unusual policies/URIs while still rejecting anything that looks like abuse.
+    "MAX_CSP_REPORT_SIZE": 64 * _KIBIBYTE,
+
     # Bugsink-specific limits:
     # The default values are 1_000, 5_000, 1M respectively; which corresponds to ~6%, ~2.7%, .8% of the total capacity
     # of 50/s (ingestion) on low-grade hardware that I measured.
