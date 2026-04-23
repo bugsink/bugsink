@@ -1,5 +1,11 @@
 # Changes
 
+## Unreleased
+
+* Add native support for CSP violation reports via a new `/api/<project_pk>/security/` endpoint, compatible with the
+  `report-uri` directive browsers emit. Reports are translated into events and pushed through the existing envelope
+  pipeline, grouped by `(effective-directive, blocked-uri)`.
+
 ## 2.1.2 (11 April 2026)
 
 * Add stored file count and byte caps, see #355

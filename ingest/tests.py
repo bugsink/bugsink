@@ -33,7 +33,7 @@ from compat.dsn import get_header_value
 from bsmain.management.commands.send_json import Command as SendJsonCommand
 from phonehome.models import Installation
 
-from .views import BaseIngestAPIView, MinidumpAPIView
+from .views import BaseIngestAPIView, IngestSecurityAPIView, MinidumpAPIView
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 from .event_counter import check_for_thresholds
 from .header_validators import (
@@ -1043,6 +1043,202 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).issue_count)
         self.assertEqual(2, Issue.objects.get().stored_event_count)
         self.assertEqual(2, Project.objects.get(id=self.quiet_project.id).stored_event_count)
+
+
+class IngestSecurityViewTestCase(TransactionTestCase):
+    # Tests for the CSP report endpoint (POST /api/<project_pk>/security/). Goes through self.client so we exercise the
+    # full URL routing, content-type check, auth, parse, digest path. TransactionTestCase because digest.delay() relies
+    # on on_commit() callbacks (TASK_ALWAYS_EAGER is on for tests but the real task still calls into digest_event which
+    # itself runs inside immediate_atomic).
+
+    SAMPLE_REPORT = {
+        "csp-report": {
+            "document-uri": "https://example.com/page",
+            "referrer": "https://example.com/",
+            "violated-directive": "script-src 'self'",
+            "effective-directive": "script-src",
+            "original-policy": "default-src 'self'; script-src 'self'; report-uri /api/1/security/",
+            "blocked-uri": "https://evil.example.com/x.js",
+            "source-file": "https://example.com/page",
+            "line-number": 12,
+            "column-number": 7,
+            "status-code": 200,
+        },
+    }
+
+    def setUp(self):
+        super().setUp()
+        self.project = Project.objects.create(name="csp-test")
+
+    def _post_report(self, body, sentry_key=None, content_type="application/csp-report"):
+        if sentry_key is None:
+            sentry_key = self.project.sentry_key
+        url = "/api/%d/security/?sentry_key=%s" % (self.project.id, sentry_key)
+        if isinstance(body, (dict, list)):
+            body = json.dumps(body)
+        if isinstance(body, str):
+            body = body.encode("utf-8")
+        return self.client.post(url, data=body, content_type=content_type)
+
+    def test_happy_path_creates_event(self):
+        response = self._post_report(self.SAMPLE_REPORT)
+
+        self.assertEqual(200, response.status_code, response.content)
+        self.assertEqual(1, Event.objects.count())
+        self.assertEqual(1, Issue.objects.count())
+
+        issue = Issue.objects.get()
+        self.assertEqual("CSP: blocked https://evil.example.com/x.js (script-src)", issue.title())
+
+    def test_groups_by_directive_and_blocked_uri(self):
+        # Two reports with the same (effective-directive, blocked-uri) but different document-uri should collapse to one
+        # issue. The whole point: don't drown in one-issue-per-page noise.
+        self._post_report(self.SAMPLE_REPORT)
+
+        second = json.loads(json.dumps(self.SAMPLE_REPORT))
+        second["csp-report"]["document-uri"] = "https://example.com/other-page"
+        self._post_report(second)
+
+        self.assertEqual(2, Event.objects.count())
+        self.assertEqual(1, Issue.objects.count())
+
+    def test_different_blocked_uris_create_separate_issues(self):
+        self._post_report(self.SAMPLE_REPORT)
+
+        other = json.loads(json.dumps(self.SAMPLE_REPORT))
+        other["csp-report"]["blocked-uri"] = "https://other.example.com/y.js"
+        self._post_report(other)
+
+        self.assertEqual(2, Event.objects.count())
+        self.assertEqual(2, Issue.objects.count())
+
+    def test_falls_back_to_violated_directive_when_no_effective_directive(self):
+        # Older browsers (e.g. some Safari versions) only send violated-directive. We should still group cleanly.
+        report = json.loads(json.dumps(self.SAMPLE_REPORT))
+        del report["csp-report"]["effective-directive"]
+        report["csp-report"]["violated-directive"] = "script-src 'self' https://cdn.example.com"
+
+        response = self._post_report(report)
+        self.assertEqual(200, response.status_code, response.content)
+
+        issue = Issue.objects.get()
+        self.assertEqual("CSP: blocked https://evil.example.com/x.js (script-src)", issue.title())
+
+    def test_csp_context_contains_report_fields(self):
+        self._post_report(self.SAMPLE_REPORT)
+
+        event = Event.objects.get()
+        data = json.loads(event.data)
+        csp_ctx = data["contexts"]["csp"]
+        self.assertEqual("https://evil.example.com/x.js", csp_ctx["blocked-uri"])
+        self.assertEqual("script-src", csp_ctx["effective-directive"])
+        self.assertEqual(12, csp_ctx["line-number"])
+        self.assertEqual(7, csp_ctx["column-number"])
+        self.assertEqual(
+            "default-src 'self'; script-src 'self'; report-uri /api/1/security/",
+            csp_ctx["original-policy"],
+        )
+
+    def test_missing_sentry_key_returns_403(self):
+        url = "/api/%d/security/" % self.project.id  # no ?sentry_key=
+        response = self.client.post(url, data=json.dumps(self.SAMPLE_REPORT), content_type="application/csp-report")
+        self.assertEqual(403, response.status_code)
+        self.assertEqual(0, Event.objects.count())
+
+    def test_wrong_sentry_key_returns_403(self):
+        # A syntactically valid UUID that doesn't match any project. (A non-UUID-shaped key would fail UUIDField
+        # validation upstream and be returned as 400; that's a separate behavior we don't try to specifically test.)
+        response = self._post_report(self.SAMPLE_REPORT, sentry_key=str(uuid.uuid4()))
+        self.assertEqual(403, response.status_code)
+        self.assertEqual(0, Event.objects.count())
+
+    def test_wrong_content_type_returns_400(self):
+        response = self._post_report(self.SAMPLE_REPORT, content_type="application/json")
+        self.assertEqual(400, response.status_code)
+        self.assertEqual(0, Event.objects.count())
+
+    def test_oversized_body_returns_413(self):
+        with override_settings(MAX_CSP_REPORT_SIZE=200):
+            big = json.loads(json.dumps(self.SAMPLE_REPORT))
+            big["csp-report"]["original-policy"] = "x" * 1000
+            response = self._post_report(big)
+        self.assertEqual(413, response.status_code)
+        self.assertEqual(0, Event.objects.count())
+
+    def test_malformed_json_returns_400(self):
+        response = self._post_report(b"{not json")
+        self.assertEqual(400, response.status_code)
+        self.assertEqual(0, Event.objects.count())
+
+    def test_missing_csp_report_key_returns_400(self):
+        response = self._post_report({"something-else": {}})
+        self.assertEqual(400, response.status_code)
+        self.assertEqual(0, Event.objects.count())
+
+    def test_csp_report_not_an_object_returns_400(self):
+        response = self._post_report({"csp-report": "not an object"})
+        self.assertEqual(400, response.status_code)
+        self.assertEqual(0, Event.objects.count())
+
+    def test_content_type_with_charset_is_accepted(self):
+        # Some browsers/proxies append "; charset=utf-8". Django strips parameters off request.content_type, so this
+        # should still work; this test guards against a future regression where we start matching the raw header.
+        response = self._post_report(self.SAMPLE_REPORT, content_type="application/csp-report; charset=utf-8")
+        self.assertEqual(200, response.status_code, response.content)
+
+
+class IngestSecurityViewUnitTestCase(RegularTestCase):
+    # Pure unit tests against the report->event_data translator. No DB, no client, just the shape contract.
+
+    def test_event_shape(self):
+        ingested_at = datetime.datetime(2026, 4, 23, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        report = {
+            "document-uri": "https://example.com/p",
+            "violated-directive": "img-src 'self'",
+            "effective-directive": "img-src",
+            "blocked-uri": "data:image/png;base64,xxx",
+            "original-policy": "img-src 'self'",
+            "referrer": "",
+        }
+        event_id = "0" * 32
+
+        result = IngestSecurityAPIView._csp_report_to_event_data(event_id, report, ingested_at)
+
+        self.assertEqual(event_id, result["event_id"])
+        self.assertEqual("javascript", result["platform"])
+        self.assertEqual("warning", result["level"])
+        self.assertEqual("CSP", result["exception"]["values"][0]["type"])
+        self.assertEqual(
+            "blocked data:image/png;base64,xxx (img-src)",
+            result["exception"]["values"][0]["value"],
+        )
+        self.assertEqual(["csp", "img-src", "data:image/png;base64,xxx"], result["fingerprint"])
+        self.assertEqual("https://example.com/p", result["request"]["url"])
+        # empty referrer -> no Referer header attached
+        self.assertNotIn("headers", result["request"])
+
+    def test_event_shape_with_referrer(self):
+        ingested_at = datetime.datetime(2026, 4, 23, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        report = {
+            "document-uri": "https://example.com/p",
+            "referrer": "https://example.com/r",
+            "effective-directive": "script-src",
+            "blocked-uri": "https://evil.example.com/x.js",
+        }
+
+        result = IngestSecurityAPIView._csp_report_to_event_data("0" * 32, report, ingested_at)
+
+        self.assertEqual({"Referer": "https://example.com/r"}, result["request"]["headers"])
+
+    def test_unknown_blocked_uri_falls_back_gracefully(self):
+        ingested_at = datetime.datetime(2026, 4, 23, 12, 0, 0, tzinfo=datetime.timezone.utc)
+
+        result = IngestSecurityAPIView._csp_report_to_event_data("0" * 32, {}, ingested_at)
+
+        self.assertEqual("CSP", result["exception"]["values"][0]["type"])
+        self.assertEqual("blocked <unknown> (<unknown>)", result["exception"]["values"][0]["value"])
+        self.assertEqual(["csp", "<unknown>", "<unknown>"], result["fingerprint"])
+        self.assertNotIn("request", result)
 
 
 class MinidumpAPIViewTestCase(TransactionTestCase):
