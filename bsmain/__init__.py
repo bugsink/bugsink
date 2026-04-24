@@ -5,6 +5,7 @@ from django.core.checks import Warning, register
 from django.conf import settings
 
 from bugsink.app_settings import get_settings
+from bugsink.utils import sends_email_as_bugsink_but_is_not_hosted_on_bugsink
 from events.storage_registry import get_write_storage
 from files.storage_registry import get_write_storage as get_object_write_storage
 
@@ -91,3 +92,23 @@ def check_proxy_env_vars_consistency(app_configs, **kwargs):
         )]
 
     return []
+
+
+@register("bsmain")
+def check_email_sender_domain(app_configs, **kwargs):
+    errors = []
+
+    for setting_name in ["DEFAULT_FROM_EMAIL", "SERVER_EMAIL"]:
+        if sends_email_as_bugsink_but_is_not_hosted_on_bugsink(
+            getattr(settings, setting_name),
+            settings.ALLOWED_HOSTS,
+        ):
+            errors.append(Warning(
+                f"{setting_name} uses the bugsink.com domain, but ALLOWED_HOSTS does not. This looks like a "
+                f"self-hosted Bugsink sending email as bugsink.com. That is effectively spam, deliverability will "
+                f"suffer badly, and those messages show up in Bugsink's DKIM reports. Configure your own sender "
+                f"address instead.",
+                id="bsmain.W006",
+            ))
+
+    return errors

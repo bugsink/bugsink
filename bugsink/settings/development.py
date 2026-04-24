@@ -79,7 +79,7 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 
-SERVER_EMAIL = DEFAULT_FROM_EMAIL = 'Klaas van Schelven <klaas@bugsink.com>'
+SERVER_EMAIL = DEFAULT_FROM_EMAIL = 'Bugsink Development Server <bugsink@example.org>'
 
 
 BUGSINK = {
