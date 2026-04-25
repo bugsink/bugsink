@@ -315,8 +315,8 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
             Chunk.objects.filter(id__in=ids).delete()
             num_deleted += len(ids)
 
-        remaining_budget = VACUUM_FILES_BATCH_SIZE - num_deleted
-        if remaining_budget > 0:
+        remaining_batch_budget = VACUUM_FILES_BATCH_SIZE - num_deleted
+        if remaining_batch_budget > 0:
             total_count, total_bytes = _get_file_totals()
             files_to_delete = []
 
@@ -324,7 +324,7 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
                 File.objects
                 .order_by("accessed_at", "id")
                 .values_list("id", "checksum", "storage_backend", "size", "accessed_at")
-                .iterator(chunk_size=remaining_budget)
+                .iterator(chunk_size=remaining_batch_budget)
             ):
                 if accessed_at >= file_cutoff and not _caps_exceeded(
                     total_count, total_bytes, max_file_count, max_file_bytes):
@@ -335,7 +335,7 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
                 total_count -= 1
                 total_bytes -= file_size
 
-                if len(files_to_delete) == remaining_budget:
+                if len(files_to_delete) == remaining_batch_budget:
                     break
 
             if files_to_delete:
@@ -367,6 +367,7 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
                 num_deleted += len(files_to_delete)
 
         if num_deleted == VACUUM_FILES_BATCH_SIZE:
+            # possibly more to delete (batch size limit hit), so we return True
             return True
 
         return (
