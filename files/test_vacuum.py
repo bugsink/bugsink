@@ -70,3 +70,13 @@ class VacuumFilesBatchTestCase(TransactionTestCase):
         self.assertFalse(has_more_work)
         self.assertEqual([second.id], list(File.objects.values_list("id", flat=True)))
         self.assertLess(first.id, second.id)
+
+    @patch("files.tasks.VACUUM_FILES_BATCH_SIZE", 1)
+    def test_vacuum_files_batch_deletes_before_reporting_more_work(self):
+        self._create_file("a" * 40, "oldest.js.map", 1, timezone.now() - timedelta(days=3))
+        newest = self._create_file("b" * 40, "newest.js.map", 1, timezone.now() - timedelta(days=1))
+
+        has_more_work = vacuum_files_batch(file_max_days=90, max_file_count=1)
+
+        self.assertTrue(has_more_work)
+        self.assertEqual([newest.id], list(File.objects.values_list("id", flat=True)))
