@@ -341,8 +341,6 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
                 break
 
         if files_to_delete:
-            using = File.objects.db
-
             # Distinguish between DB-backed and object-storage-backed File rows.
             #
             # DB-backed rows are dangerous case memory-wise, and trivial cleanup-wise, i.e. File.objects.filter(..)
@@ -354,8 +352,8 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
             ]
 
             if db_backed_ids:
-                FileMetadata.objects.filter(file_id__in=db_backed_ids)._raw_delete(using=using)
-                File.objects.filter(id__in=db_backed_ids)._raw_delete(using=using)
+                FileMetadata.objects.filter(file_id__in=db_backed_ids)._raw_delete(FileMetadata.objects.db)
+                File.objects.filter(id__in=db_backed_ids)._raw_delete(File.objects.db)
 
             # Object-storage-backed rows can just be loaded in-memory (don't have .data) and must trigger the
             # cleanup path (i.e. use regular .delete())
