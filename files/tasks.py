@@ -15,6 +15,7 @@ from snappea.decorators import shared_task
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.app_settings import get_settings
 from bugsink.streams import copy_stream_limited
+from bugsink.timed_sqlite_backend.base import allow_long_running_queries
 
 from .models import Chunk, File, FileMetadata, write_fileobj_to_storage, _binary_to_bytes
 from .storage_registry import get_write_storage
@@ -246,6 +247,13 @@ def record_file_accesses(metadata_ids, accessed_at):
 
 
 def _get_file_totals():
+    # the query below is known to be >5s in practice; rather than spending lots of time optimizing something that runs
+    # sparsely and async anyway, we just throw in allow_long_running_queries()
+    #
+    # NOTE: allow_long_running_queries() mutates global state (it's not a context manager) but we're still OK in
+    # practice: for commands polluting a one-off is fine; in snappea we rely on the fact that the global state is
+    # mutated per-thread and snappea creates a worker-thread for actual work first.
+    allow_long_running_queries()
     totals = File.objects.aggregate(total_count=Count("id"), total_bytes=Sum("size"))
     return totals["total_count"] or 0, totals["total_bytes"] or 0
 
@@ -315,6 +323,9 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
 
         total_count, total_bytes = None, None  # init with "something" (only fetched if needed, potentially expensive)
         if max_file_count is not None or max_file_bytes is not None:
+            # the below expensive is done for each batch (i.e. quadratic runtime) but given where immediate_atomic sits
+            # it's not worth it to try to be smarter about it (you'd have to pass counts around but those counts would
+            # escape their atomic contexts i.e. be non-thread-safe)
             total_count, total_bytes = _get_file_totals()
 
         files_to_delete = []
