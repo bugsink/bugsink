@@ -320,12 +320,13 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
             total_count, total_bytes = _get_file_totals()
             files_to_delete = []
 
-            for file_id, checksum, storage_backend, file_size, accessed_at in (
+            candidates = list(
                 File.objects
                 .order_by("accessed_at", "id")
-                .values_list("id", "checksum", "storage_backend", "size", "accessed_at")
-                .iterator(chunk_size=remaining_batch_budget)
-            ):
+                .values_list("id", "checksum", "storage_backend", "size", "accessed_at")[:remaining_batch_budget]
+            )
+
+            for file_id, checksum, storage_backend, file_size, accessed_at in candidates:
                 if accessed_at >= file_cutoff and not _caps_exceeded(
                     total_count, total_bytes, max_file_count, max_file_bytes):
                     # we can stop only if the file is both "young enough" and we're under caps (i.e. not exceeded)
