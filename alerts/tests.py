@@ -527,6 +527,13 @@ class TestWebhookSecurityValidation(DjangoTestCase):
         mock_resolve.return_value = {"93.184.216.34"}
         validate_webhook_url("https://hooks.example.com/webhook")
 
+    def test_rejects_backslash_exploit_that_tries_to_bypass_allowlist(self):
+        with override_bugsink_settings(
+                ALERTS_WEBHOOK_OUTBOUND_MODE="allowlist_only",
+                ALERTS_WEBHOOK_ALLOW_LIST=["whitelist.com"]):
+            with self.assertRaisesRegex(ValueError, "not allowlisted"):
+                validate_webhook_url(r"http://127.0.0.1:6666\@whitelist.com")
+
     @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
     def test_denied_when_allow_and_deny_both_match(self, mock_resolve):
         mock_resolve.return_value = {"93.184.216.34"}
