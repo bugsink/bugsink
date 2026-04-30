@@ -4,6 +4,7 @@ from django import template
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 
+from django.conf import settings
 from django.utils.html import escape
 from django.utils.safestring import SafeData, mark_safe
 from django.template.defaultfilters import date
@@ -266,7 +267,7 @@ def _date_with_milis_html(timestamp):
     # no_bandit_expl: constant string w/ substitution of dates/milis (escaped even), see also TimestampWithMillisTagTest
     return (
         mark_safe('<span class="whitespace-nowrap">') +  # nosec
-        escape(date(timestamp, "j M G:i:s")) + mark_safe(".") +  # nosec
+        escape(date(timestamp, settings.DATETIME_FORMAT)) + mark_safe(".") +  # nosec
         mark_safe('<span class="text-xs">') + escape(date(timestamp, "u")[:3]) +  # nosec
         mark_safe('</span></span>'))  # nosec
 
