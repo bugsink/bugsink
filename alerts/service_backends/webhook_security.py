@@ -9,6 +9,17 @@ from urllib3.util import parse_url as parse_url_from_urllib3
 
 from bugsink.app_settings import get_settings
 
+
+_URL_ALLOWED_CHARACTERS = set(
+    "abcdefghijklmnopqrstuvwxyz" +
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +  # ASCII letters
+    "0123456789" +  # ASCII digits
+    "-._~" +  # RFC 3986 unreserved marks
+    ":/?#[]@" +  # RFC 3986 gen-delims
+    "!$&'()*+,;=" +  # RFC 3986 sub-delims
+    "%"  # Percent-encoding marker
+)
+
 def _parse_hosts_and_networks(entries, setting_name):
     hosts = set()
     networks = []
@@ -44,6 +55,16 @@ def _match_entries(target_hostname, resolved_ips, hosts, networks):
 
     return False
 
+
+def _validate_raw_url_characters(webhook_url):
+    # There's no need to be user-friendly in accepting malformed URLs in code that is security-sensitive; we just want
+    # to be strict and reject anything that isn't a valid URL character. People will be able to set up their webhooks
+    # without the "friendlyness" of a browser's URL bar.
+    for char in webhook_url:
+        if char in _URL_ALLOWED_CHARACTERS:
+            continue
+        raise ValueError("Webhook URL must contain only ASCII URL characters.")
+
 def _prepare_webhook_url(webhook_url):
     try:
         return requests.Request("POST", webhook_url).prepare().url
@@ -52,9 +73,11 @@ def _prepare_webhook_url(webhook_url):
 
 
 def validate_webhook_url(webhook_url):
-    # Both the requests and the urllib3 make some attempts to normalize malformed URLs. We must make sure to apply the
-    # same normalization before we do our own parsing and checks, to avoid discrepancies between what we check and what
-    # then actually happens.
+    _validate_raw_url_characters(webhook_url)
+
+    # Both requests and urllib3 make some attempts to normalize malformed URLs. We must apply the
+    # same normalization before our own parsing and checks, to avoid discrepancies between what we
+    # check and what then actually happens.
     prepared_webhook_url = _prepare_webhook_url(webhook_url)
 
     try:
