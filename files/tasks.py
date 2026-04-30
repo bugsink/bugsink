@@ -15,6 +15,7 @@ from snappea.decorators import shared_task
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.app_settings import get_settings
 from bugsink.streams import copy_stream_limited
+from bugsink.timed_sqlite_backend.base import allow_long_running_queries
 
 from .models import Chunk, File, FileMetadata, write_fileobj_to_storage, _binary_to_bytes
 from .storage_registry import get_write_storage
@@ -246,6 +247,13 @@ def record_file_accesses(metadata_ids, accessed_at):
 
 
 def _get_file_totals():
+    # the query below is known to be >5s in practice; rather than spending lots of time optimizing something that runs
+    # sparsely and async anyway, we just throw in allow_long_running_queries()
+    #
+    # NOTE: allow_long_running_queries() mutates global state (it's not a context manager) but we're still OK in
+    # practice: for commands polluting a one-off is fine; in snappea we rely on the fact that the global state is
+    # mutated per-thread and snappea creates a worker-thread for actual work first.
+    allow_long_running_queries()
     totals = File.objects.aggregate(total_count=Count("id"), total_bytes=Sum("size"))
     return totals["total_count"] or 0, totals["total_bytes"] or 0
 
@@ -255,14 +263,6 @@ def _caps_exceeded(total_count, total_bytes, max_file_count, max_file_bytes):
         (max_file_count is not None and total_count > max_file_count)
         or (max_file_bytes is not None and total_bytes > max_file_bytes)
     )
-
-
-def _more_file_work_exists(file_cutoff, max_file_count, max_file_bytes):
-    if File.objects.filter(accessed_at__lt=file_cutoff).exists():
-        return True
-
-    total_count, total_bytes = _get_file_totals()
-    return _caps_exceeded(total_count, total_bytes, max_file_count, max_file_bytes)
 
 
 @shared_task
@@ -315,61 +315,65 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
             Chunk.objects.filter(id__in=ids).delete()
             num_deleted += len(ids)
 
-        remaining_budget = VACUUM_FILES_BATCH_SIZE - num_deleted
-        if remaining_budget > 0:
+        if num_deleted == VACUUM_FILES_BATCH_SIZE:
+            # possibly more chunk work to do (batch size limit hit), so we return True
+            return True
+
+        remaining_batch_budget = VACUUM_FILES_BATCH_SIZE - num_deleted
+
+        total_count, total_bytes = None, None  # init with "something" (only fetched if needed, potentially expensive)
+        if max_file_count is not None or max_file_bytes is not None:
+            # the below expensive is done for each batch (i.e. quadratic runtime) but given where immediate_atomic sits
+            # it's not worth it to try to be smarter about it (you'd have to pass counts around but those counts would
+            # escape their atomic contexts i.e. be non-thread-safe)
             total_count, total_bytes = _get_file_totals()
-            files_to_delete = []
 
-            for file_id, checksum, storage_backend, file_size, accessed_at in (
-                File.objects
-                .order_by("accessed_at", "id")
-                .values_list("id", "checksum", "storage_backend", "size", "accessed_at")
-                .iterator(chunk_size=remaining_budget)
-            ):
-                if accessed_at >= file_cutoff and not _caps_exceeded(
-                    total_count, total_bytes, max_file_count, max_file_bytes):
-                    # we can stop only if the file is both "young enough" and we're under caps (i.e. not exceeded)
-                    break
+        files_to_delete = []
 
-                files_to_delete.append((file_id, checksum, storage_backend))
+        candidates = list(
+            File.objects
+            .order_by("accessed_at", "id")
+            .values_list("id", "checksum", "storage_backend", "size", "accessed_at")[:remaining_batch_budget]
+        )
+
+        for file_id, checksum, storage_backend, file_size, accessed_at in candidates:
+            if accessed_at >= file_cutoff and not _caps_exceeded(
+                total_count, total_bytes, max_file_count, max_file_bytes):
+                # we can stop only if the file is both "young enough" and we're under caps (i.e. not exceeded)
+                break
+
+            files_to_delete.append((file_id, checksum, storage_backend))
+            if total_count is not None:
                 total_count -= 1
                 total_bytes -= file_size
 
-                if len(files_to_delete) == remaining_budget:
-                    break
+            remaining_batch_budget -= 1
+            if remaining_batch_budget == 0:
+                break
 
-            if files_to_delete:
-                using = File.objects.db
+        if files_to_delete:
+            # Distinguish between DB-backed and object-storage-backed File rows.
+            #
+            # DB-backed rows are dangerous case memory-wise, and trivial cleanup-wise, i.e. File.objects.filter(..)
+            # eats up insane memory so must be avoided; but deletion is simpler because we don't need storage
+            # cleanup.
+            db_backed_ids = [
+                file_id for file_id, _checksum, storage_backend in files_to_delete
+                if storage_backend is None
+            ]
 
-                # Distinguish between DB-backed and object-storage-backed File rows.
-                #
-                # DB-backed rows are dangerous case memory-wise, and trivial cleanup-wise, i.e. File.objects.filter(..)
-                # eats up insane memory so must be avoided; but deletion is simpler because we don't need storage
-                # cleanup.
-                db_backed_ids = [
-                    file_id for file_id, _checksum, storage_backend in files_to_delete
-                    if storage_backend is None
-                ]
+            if db_backed_ids:
+                FileMetadata.objects.filter(file_id__in=db_backed_ids)._raw_delete(FileMetadata.objects.db)
+                File.objects.filter(id__in=db_backed_ids)._raw_delete(File.objects.db)
 
-                if db_backed_ids:
-                    FileMetadata.objects.filter(file_id__in=db_backed_ids)._raw_delete(using=using)
-                    File.objects.filter(id__in=db_backed_ids)._raw_delete(using=using)
+            # Object-storage-backed rows can just be loaded in-memory (don't have .data) and must trigger the
+            # cleanup path (i.e. use regular .delete())
+            stored_ids = [
+                file_id for file_id, _checksum, storage_backend in files_to_delete
+                if storage_backend is not None
+            ]
+            if stored_ids:
+                File.objects.filter(id__in=stored_ids).delete()
 
-                # Object-storage-backed rows can just be loaded in-memory (don't have .data) and must trigger the
-                # cleanup path (i.e. use regular .delete())
-                stored_ids = [
-                    file_id for file_id, _checksum, storage_backend in files_to_delete
-                    if storage_backend is not None
-                ]
-                if stored_ids:
-                    File.objects.filter(id__in=stored_ids).delete()
-
-                num_deleted += len(files_to_delete)
-
-        if num_deleted == VACUUM_FILES_BATCH_SIZE:
-            return True
-
-        return (
-            Chunk.objects.filter(created_at__lt=chunk_cutoff).exists()
-            or _more_file_work_exists(file_cutoff, max_file_count, max_file_bytes)
-        )
+        # If we've exhausted the batch budget, we return True to indicate that there _may be_ more work to do.
+        return remaining_batch_budget == 0
