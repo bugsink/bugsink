@@ -527,6 +527,27 @@ class TestWebhookSecurityValidation(DjangoTestCase):
         mock_resolve.return_value = {"93.184.216.34"}
         validate_webhook_url("https://hooks.example.com/webhook")
 
+    @patch("alerts.service_backends.webhook_security._validate_raw_url_characters")
+    def test_rejects_backslash_exploit_that_tries_to_bypass_allowlist(self, mock_validate_raw_characters):
+        # We can't think of an exploit that would exploit discrepancies between requests' parser and other parsers but
+        # not already be caught by our raw character validation. Hence we need to turn off raw character validation in
+        # the test to test against the case of mismatch-exploiting that we do know to exist.
+        mock_validate_raw_characters.return_value = None
+
+        with override_bugsink_settings(
+                ALERTS_WEBHOOK_OUTBOUND_MODE="allowlist_only",
+                ALERTS_WEBHOOK_ALLOW_LIST=["whitelist.com"]):
+            with self.assertRaisesRegex(ValueError, "not allowlisted"):
+                validate_webhook_url(r"http://127.0.0.1:6666\@whitelist.com")
+
+    def test_rejects_raw_unicode_character(self):
+        with self.assertRaisesRegex(ValueError, "must contain only ASCII URL characters"):
+            validate_webhook_url("https://hooks.example.com/caf\xe9")
+
+    def test_rejects_raw_backslash_character(self):
+        with self.assertRaisesRegex(ValueError, "must contain only ASCII URL characters"):
+            validate_webhook_url(r"https://hooks.example.com\path")
+
     @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
     def test_denied_when_allow_and_deny_both_match(self, mock_resolve):
         mock_resolve.return_value = {"93.184.216.34"}
