@@ -267,12 +267,13 @@ def _caps_exceeded(total_count, total_bytes, max_file_count, max_file_bytes):
 
 @shared_task
 def vacuum_files(chunk_max_days=1, file_max_days=90, max_file_count=None, max_file_bytes=None):
-    if vacuum_files_batch(
+    has_more_work, _num_deleted = vacuum_files_batch(
         chunk_max_days=chunk_max_days,
         file_max_days=file_max_days,
         max_file_count=max_file_count,
         max_file_bytes=max_file_bytes,
-    ):
+    )
+    if has_more_work:
         # possibly more to delete, so we re-schedule the task
         delay_on_commit(
             vacuum_files,
@@ -283,15 +284,21 @@ def vacuum_files(chunk_max_days=1, file_max_days=90, max_file_count=None, max_fi
         )
 
 
-def vacuum_files_sync(chunk_max_days=1, file_max_days=90, max_file_count=None, max_file_bytes=None):
-    # possibly more to delete, so we re-schedule the task
-    while vacuum_files_batch(
-        chunk_max_days=chunk_max_days,
-        file_max_days=file_max_days,
-        max_file_count=max_file_count,
-        max_file_bytes=max_file_bytes,
-    ):
-        pass
+def vacuum_files_sync(chunk_max_days=1, file_max_days=90, max_file_count=None, max_file_bytes=None, log_progress=None):
+    if log_progress is None:
+        log_progress = lambda _message: None
+
+    while True:
+        has_more_work, num_deleted = vacuum_files_batch(
+            chunk_max_days=chunk_max_days,
+            file_max_days=file_max_days,
+            max_file_count=max_file_count,
+            max_file_bytes=max_file_bytes,
+        )
+        log_progress(f"  Deleted {num_deleted} chunks/files.")
+
+        if not has_more_work:
+            return
 
 
 def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, max_file_bytes=None):
@@ -317,7 +324,7 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
 
         if num_deleted == VACUUM_FILES_BATCH_SIZE:
             # possibly more chunk work to do (batch size limit hit), so we return True
-            return True
+            return True, num_deleted
 
         remaining_batch_budget = VACUUM_FILES_BATCH_SIZE - num_deleted
 
@@ -375,5 +382,7 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
             if stored_ids:
                 File.objects.filter(id__in=stored_ids).delete()
 
+            num_deleted += len(files_to_delete)
+
         # If we've exhausted the batch budget, we return True to indicate that there _may be_ more work to do.
-        return remaining_batch_budget == 0
+        return remaining_batch_budget == 0, num_deleted

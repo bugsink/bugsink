@@ -93,11 +93,14 @@ class Command(BaseCommand):
             max_file_count = options['max_file_count']
             max_file_bytes = options['max_file_bytes']
             self.stdout.write("Vacuuming files...")
+
+            log_progress = self.stdout.write if options["verbosity"] >= 2 else lambda _message: None
             vacuum_files_sync(
                 chunk_max_days=options['chunk_max_days'],
                 file_max_days=options['file_max_days'],
                 max_file_count=settings.MAX_STORED_FILE_COUNT if max_file_count is None else max_file_count,
                 max_file_bytes=settings.MAX_STORED_FILE_BYTES if max_file_bytes is None else max_file_bytes,
+                log_progress=log_progress,
             )
 
         if run_eventless_issuetags:

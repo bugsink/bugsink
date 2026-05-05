@@ -217,8 +217,9 @@ class VacuumFilesBatchTestCase(TransactionTestCase):
         File.objects.filter(id=recent.id).update(accessed_at=now - timedelta(days=2))
         File.objects.filter(id=newest.id).update(accessed_at=now - timedelta(days=1))
 
-        has_more_work = vacuum_files_batch(file_max_days=90, max_file_count=1)
+        has_more_work, num_deleted = vacuum_files_batch(file_max_days=90, max_file_count=1)
 
         self.assertFalse(has_more_work)
+        self.assertEqual(3, num_deleted)
         self.assertEqual([newest.id], list(File.objects.values_list("id", flat=True)))
         self.assertEqual([newest.id], list(FileMetadata.objects.values_list("file_id", flat=True)))
