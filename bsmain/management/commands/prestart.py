@@ -34,7 +34,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self._create_superuser_if_needed()
 
-        # Similar considerations apply here as those which are documented in bugsink.views._phone_home().
+        # Similar considerations apply here as those which are documented in phonehome.utils.phone_home().
         # By putting this in prestart, we add one more location to the list of kick-off locations; with the added
         # benefit that this particular location also gives some signal for (Docker) installations that are prematurely
         # aborted (i.e. we get a ping even if 'home' is never even reached).
