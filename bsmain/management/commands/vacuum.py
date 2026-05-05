@@ -6,6 +6,7 @@ from django.utils import timezone
 from bugsink.app_settings import get_settings
 from events.tasks import delete_events_older_than_sync
 from files.tasks import vacuum_files_sync
+from ingest.management.commands.vacuum_ingest_dir import vacuum_ingest_dir_sync
 from tags.tasks import vacuum_eventless_issuetags_sync, vacuum_tags_sync
 
 
@@ -34,6 +35,11 @@ class Command(BaseCommand):
             help="Delete events older than the configured maximum age.",
         )
         parser.add_argument(
+            '--ingest-dir',
+            action='store_true',
+            help="Clean up stale files from the ingest directory.",
+        )
+        parser.add_argument(
             '--chunk-max-days',
             type=int,
             default=1,
@@ -60,19 +66,27 @@ class Command(BaseCommand):
             type=int,
             help="Keep at most this many bytes across stored File objects. Defaults to MAX_STORED_FILE_BYTES.",
         )
+        parser.add_argument(
+            '--ingest-max-days',
+            type=int,
+            default=7,
+            help="Delete ingest-dir files older than this many days (default: 7).",
+        )
 
     def handle(self, *args, **options):
         run_files = options['files']
         run_tags = options['tags']
         run_eventless_issuetags = options['eventless_issuetags']
         run_old_events = options['old_events']
+        run_ingest_dir = options['ingest_dir']
 
-        if not any([run_files, run_tags, run_eventless_issuetags, run_old_events]):
+        if not any([run_files, run_tags, run_eventless_issuetags, run_old_events, run_ingest_dir]):
             # If no specific options were provided, run all vacuum tasks by default.
             run_files = True
             run_tags = True
             run_eventless_issuetags = True
             run_old_events = True
+            run_ingest_dir = True
 
         if run_files:
             settings = get_settings()
@@ -106,5 +120,9 @@ class Command(BaseCommand):
                 delete_events_older_than_sync(
                     cutoff=timezone.now() - timedelta(days=days),
                 )
+
+        if run_ingest_dir:
+            self.stdout.write("Vacuuming ingest dir...")
+            vacuum_ingest_dir_sync(days=options["ingest_max_days"], stdout=self.stdout, stderr=self.stderr)
 
         self.stdout.write(self.style.SUCCESS("Vacuum complete."))
