@@ -554,6 +554,35 @@ class IngestViewTestCase(TransactionTestCase):
 
             self.assertEqual(0, Event.objects.count())
 
+    def test_store_endpoint_generates_event_id_when_missing(self):
+        # The legacy /store/ endpoint must accept payloads without `event_id` and generate one server-side
+        # (matching real Sentry behavior). utopia-php/logger — used by Appwrite 1.9.0 — posts without `event_id`.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        data = {
+            "timestamp": time.time(),
+            "platform": "php",
+            "level": "error",
+            "logger": "app",
+            "message": {"message": "test"},
+            "exception": {"values": [{"type": "TestError", "stacktrace": {"frames": []}}]},
+        }
+        data_bytes = json.dumps(data).encode("utf-8")
+
+        response = self.client.post(
+            f"/api/{ project.id }/store/",
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+            },
+            data=data_bytes,
+        )
+        self.assertEqual(
+            200, response.status_code, response.content if response.status_code != 302 else response.url)
+        self.assertEqual(1, Event.objects.count())
+
     def test_envelope_endpoint_cleans_up_oversized_event_file(self):
         project = Project.objects.create(name="test")
         sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
