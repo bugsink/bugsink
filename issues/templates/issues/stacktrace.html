@@ -117,7 +117,7 @@
                         {% for line in frame.pre_context %}<li class="pl-6"><div class="whitespace-pre w-full inline pr-6">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
                         {# the gradient is a workaround, because I can't get a full-width elem going here inside the overflow #}
                         {# when some other line is overflowing. Using the gradient hides this fact (it happens to also look good) #}
-                        <li class="pl-6 bg-gradient-to-r from-slate-300 dark:from-slate-950 font-bold w-full"><div class="whitespace-pre w-full inline pr-6">{{ frame.context_line }} {# leave space to avoid collapse #}</div></li>
+                        <li class="pl-6 bg-gradient-to-r from-slate-300 dark:from-slate-950 font-bold w-full"><a href='{{ project.blame_template}}/{{ event.get_blameref }}/{{ frame.filename }}' class="whitespace-pre w-full inline pr-6">{{ frame.context_line }} {# leave space to avoid collapse #}</a></li>
                         {% for line in frame.post_context %}<li class="pl-6"><div class="whitespace-pre w-full inline pr-6">{{ line }} {# leave space to avoid collapse #}</div></li>{% endfor %}
                         </ol>
                     </div>
