@@ -182,9 +182,9 @@ the fact that we commented-out rather than clobbered reveals a small amount of d
         {# we have observed that (emperically) the keys in most of the above are sorted in some kind of meaningful way from important to non-important #}
         {# however, for modules I'd rather just have an alphabetical list. #}
         {% for key, value in parsed_data.modules|sorted_items %}
-            <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
-                <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
-                <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
+            <div class="flex flex-wrap {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
+                <div class="w-1/4 break-words {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
+                <div class="w-3/4 break-words {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
             </div>
         {% endfor %}
     </div>
