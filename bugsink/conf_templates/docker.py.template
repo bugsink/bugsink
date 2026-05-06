@@ -210,6 +210,7 @@ BUGSINK = {
     # Webhook outbound security:
     # * ALERTS_WEBHOOK_OUTBOUND_MODE=open|allowlist_only
     # * ALERTS_WEBHOOK_ALLOW_LIST / ALERTS_WEBHOOK_DENY_LIST accept comma-separated hostname/IP/CIDR entries.
+    #   For Telegram alerts in allowlist_only mode, allow api.telegram.org.
     # * ALERTS_WEBHOOK_DENY_NON_GLOBAL blocks non-global destination IPs by default.
     "ALERTS_WEBHOOK_OUTBOUND_MODE": os.getenv("ALERTS_WEBHOOK_OUTBOUND_MODE", "open").lower(),
     "ALERTS_WEBHOOK_ALLOW_LIST":
