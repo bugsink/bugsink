@@ -1044,6 +1044,33 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(2, Issue.objects.get().stored_event_count)
         self.assertEqual(2, Project.objects.get(id=self.quiet_project.id).stored_event_count)
 
+    def test_ingest_refreshes_issue_calculated_fields_on_subsequent_events(self):
+        # When a fingerprint groups events whose exception type/value differ, the issue's denormalized
+        # calculated_type/calculated_value should reflect the latest event so that the displayed title
+        # tracks reality instead of staying frozen on the first event.
+        request = self.request_factory.post("/api/1/store/")
+
+        first = create_event_data()
+        first["exception"] = {"values": [{"type": "FirstError", "value": "first message"}]}
+        first["fingerprint"] = ["shared-fingerprint"]
+        BaseIngestAPIView().digest_event(**_digest_params(first, self.quiet_project, request))
+
+        issue = Issue.objects.get()
+        self.assertEqual("FirstError", issue.calculated_type)
+        self.assertEqual("first message", issue.calculated_value)
+
+        second = create_event_data()
+        second["exception"] = {"values": [{"type": "SecondError", "value": "second message"}]}
+        second["fingerprint"] = ["shared-fingerprint"]
+        BaseIngestAPIView().digest_event(**_digest_params(second, self.quiet_project, request))
+
+        # still a single issue (same fingerprint), but its title fields now reflect the most recent event
+        self.assertEqual(1, Issue.objects.count())
+        issue.refresh_from_db()
+        self.assertEqual("SecondError", issue.calculated_type)
+        self.assertEqual("second message", issue.calculated_value)
+        self.assertEqual(2, issue.digested_event_count)
+
 
 class MinidumpAPIViewTestCase(TransactionTestCase):
     # NOTE: no tests for the _actual_ minidump processing just yet.
