@@ -11,7 +11,7 @@ inotify_simple==2.0.*
 Brotli==1.2.*
 python-dateutil==2.9.*
 whitenoise==6.12.*
-requests==2.33.*
+requests==2.34.*
 monofy==1.2.*
 user-agents==2.2.*
 fastjsonschema==2.21.*
