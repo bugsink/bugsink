@@ -26,32 +26,23 @@ logger = logging.getLogger("bugsink.phonehome")
 
 User = get_user_model()
 
-INTERVAL = 60 * 60  # phone-home once an hour
 
 
 @shared_task
 def send_if_due():
+    from .utils import phone_home_is_due
+
     # considered: not sending if DEBUG=True. But why? Expectation is: I'm the sole user of that setting. Better send
     # also, to keep symmetry, and indirectly check whether my own phone-home still works.
     if not get_settings().PHONEHOME:
         return
 
-    # Note on attempted_at / sent_at distinction: attempted_at is when we first tried to send the message, and sent_at
-    # is when we actually sent it. This allows us to try only once an hour, as well as track whether sending succeeded.
-    not_due_qs = OutboundMessage.objects.filter(
-        attempted_at__gte=timezone.now() - timezone.timedelta(seconds=INTERVAL)).exists()
-
     with durable_atomic():
-        # We check twice to see if there's any work: once in a simple read-only transaction (which doesn't block), and
-        # (below) then again in the durable transaction (which can block) to actually ensure no 2 processes
-        # simultaneously start the process of sending the message. This incurs the cost of 2 queries in the (less
-        # common) case where the work is due, but it avoids the cost of blocking the whole DB for the (more common) case
-        # where the work is not due.
-        if not_due_qs:
+        if not phone_home_is_due():
             return
 
     with immediate_atomic():
-        if not_due_qs:
+        if not phone_home_is_due():
             return
 
         # TODO: clean up old messages (perhaps older than 1 week)

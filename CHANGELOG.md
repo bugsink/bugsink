@@ -1,5 +1,30 @@
 # Changes
 
+## 2.1.3 (2 May 2026)
+
+### Security
+
+Fix: harden webhook URL validation parsing and reject non-RFC characters.
+
+In some malformed URLs, Python’s standard URL parser (urllib) and the HTTP
+client stack (requests / urllib3) do not agree on which host is actually being
+targeted. That could allow a webhook URL to pass Bugsink’s outbound-host checks
+while the actual HTTP request is sent somewhere else. See:
+
+https://github.com/bugsink/bugsink/security/advisories/GHSA-fp53-qcf8-2xx2
+
+### Smaller fixes
+
+* Add issue-level markdown, see #334.
+* Fix installation quota counting across projects, see #359.
+* When vacuuming files, don't load them in memory, and allow long-running totals queries, see #363, #373 and #372.
+* Refuse to send email as something@bugsink.com for self-hosters, see 3ff3a6fbeb6d.
+* Fix `MultipleObjectsReturned` when user has unaccepted project memberships, see 653be6968f6e.
+* Cleanup lingering files for `MAX_EVENT_SIZE` overshoots, see #370.
+* Fix some `.get(context, {})` usages and an exception-path double-exception, see #369.
+* Upgrade `gunicorn` requirement from `==25.1.*` to `==25.3.*`, see 2d5e0071cf66.
+* Upgrade monofy, see #367.
+
 ## 2.1.2 (11 April 2026)
 
 * Add stored file count and byte caps, see #355

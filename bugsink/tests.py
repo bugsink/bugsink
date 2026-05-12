@@ -4,9 +4,12 @@ import re
 import brotli
 
 from unittest import TestCase as RegularTestCase
+from unittest.mock import patch
 from django.test import TestCase as DjangoTestCase
+from django.test import SimpleTestCase
 from django.test import override_settings
 from django.core.exceptions import SuspiciousOperation
+from django.core import mail
 from django.contrib.auth import get_user_model
 from django.test.utils import CaptureQueriesContext
 from django.db import connection
@@ -15,6 +18,7 @@ from .wsgi import allowed_hosts_error_message
 from .test_utils import TransactionTestCase25251 as TransactionTestCase
 from .transaction import immediate_atomic
 from .volume_based_condition import VolumeBasedCondition
+from .utils import send_rendered_email
 from .streams import (
     compress_with_zlib, GeneratorReader, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE, MaxDataReader,
     MaxDataWriter, zlib_generator, brotli_generator, BrotliError)
@@ -36,6 +40,37 @@ class VolumeBasedConditionTestCase(RegularTestCase):
 
         vbc2 = VolumeBasedCondition.from_dict(vbc.to_dict())
         self.assertEqual(vbc, vbc2)
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class SendRenderedEmailTestCase(SimpleTestCase):
+    def setUp(self):
+        mail.outbox = []
+
+    @override_settings(DEFAULT_FROM_EMAIL="Bugsink <alerts@bugsink.com>", ALLOWED_HOSTS=["selfhosted.example.com"])
+    def test_send_rendered_email_refuses_self_hosted_bugsink_sender_domain(self):
+        with self.assertLogs("bugsink.email", level="ERROR") as logs:
+            send_rendered_email(
+                "Subject",
+                "mails/welcome_email",
+                ["user@example.com"],
+                {"reason": "Reason", "reset_url": "https://example.com/reset"},
+            )
+
+        self.assertEqual([], mail.outbox)
+        self.assertIn("Refusing to send email with subject 'Subject'", logs.output[0])
+
+    @override_settings(DEFAULT_FROM_EMAIL="Bugsink <alerts@bugsink.com>", ALLOWED_HOSTS=["tenant.bugsink.com"])
+    @patch("phonehome.models.Installation.check_and_inc_email_quota", return_value=True)
+    def test_send_rendered_email_allows_bugsink_sender_domain_when_hosted_on_bugsink_domain(self, _quota_ok):
+        send_rendered_email(
+            "Subject",
+            "mails/welcome_email",
+            ["user@example.com"],
+            {"reason": "Reason", "reset_url": "https://example.com/reset"},
+        )
+
+        self.assertEqual(1, len(mail.outbox))
 
 
 class StreamsTestCase(RegularTestCase):

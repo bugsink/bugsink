@@ -5,6 +5,7 @@ from collections import defaultdict
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.core.mail import EmailMultiAlternatives
+from django.conf import settings
 from django.template.loader import get_template
 from django.apps import apps
 from django.db.models import ForeignKey, F
@@ -33,6 +34,20 @@ def is_safe_next_url(url, request):
     )
 
 
+def sends_email_as_bugsink_but_is_not_hosted_on_bugsink(from_email, allowed_hosts):
+    if from_email is None:
+        return False
+
+    normalized_from_email = str(from_email).strip().lower()
+    if not (
+        normalized_from_email.endswith("@bugsink.com") or
+        normalized_from_email.endswith("@bugsink.com>")
+    ):
+        return False
+
+    return not any(str(host).strip().lower().lstrip(".").endswith("bugsink.com") for host in allowed_hosts)
+
+
 def send_rendered_email(subject, base_template_name, recipient_list, context=None):
     from phonehome.models import Installation
 
@@ -40,6 +55,17 @@ def send_rendered_email(subject, base_template_name, recipient_list, context=Non
     # However, by doing the filter here we avoid logging something that is not reflective of what will actually happen.
     recipient_list = [r for r in recipient_list if r]
     if not recipient_list:
+        return
+
+    if sends_email_as_bugsink_but_is_not_hosted_on_bugsink(settings.DEFAULT_FROM_EMAIL, settings.ALLOWED_HOSTS):
+        logger.error(
+            "Refusing to send email with subject '%s' to %s because DEFAULT_FROM_EMAIL=%r uses bugsink.com while "
+            "ALLOWED_HOSTS=%r does not. This looks like a self-hosted Bugsink trying to send as bugsink.com.",
+            subject,
+            recipient_list,
+            settings.DEFAULT_FROM_EMAIL,
+            settings.ALLOWED_HOSTS,
+        )
         return
 
     if not Installation.check_and_inc_email_quota(timezone.now()):

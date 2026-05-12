@@ -6,7 +6,8 @@ import logging
 from django.db.models import Q
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
-from django.http import HttpResponseRedirect, HttpResponseNotAllowed
+from django.http import HttpResponseRedirect, HttpResponseNotAllowed, HttpResponse
+from django.utils.http import content_disposition_header
 from django.urls import reverse
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
@@ -23,6 +24,7 @@ from bugsink.transaction import durable_atomic
 from bugsink.period_utils import add_periods_to_datetime
 from bugsink.timed_sqlite_backend.base import different_runtime_limit
 from bugsink.utils import assert_
+from phonehome.utils import phone_home
 
 from events.models import Event
 from events.ua_stuff import get_contexts_enriched_with_ua
@@ -36,6 +38,7 @@ from .models import Issue, IssueQuerysetStateManager, IssueStateManager, Turning
 from .forms import CommentForm
 from .utils import get_values, get_main_exception
 from events.utils import annotate_with_meta, apply_sourcemaps, get_sourcemap_images
+from .markdown_issue import render_issue_md
 
 logger = logging.getLogger("bugsink.issues")
 
@@ -271,6 +274,7 @@ def _apply_action(manager, issue_or_qs, action, user):
         manager.delete(issue_or_qs)
 
 
+@phone_home
 def issue_list(request, project_pk, state_filter="open"):
     # to keep the write lock as short as possible, issue_list is split up into 2 parts (read/write vs pure reading),
     # which take in the order of 5ms / 120ms respectively. Some info is passed between transactions (project and
@@ -447,6 +451,7 @@ def _event_count(request, issue, event_x_qs):
             return "many"
 
 
+@phone_home
 @atomic_for_request_method
 @issue_membership_required
 def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav=None):
@@ -543,6 +548,7 @@ def issue_event_404(request, issue, event_x_qs, tab, this_view):
     })
 
 
+@phone_home
 @atomic_for_request_method
 @issue_membership_required
 def issue_event_breadcrumbs(request, issue, event_pk=None, digest_order=None, nav=None):
@@ -584,6 +590,7 @@ def _first_last(qs_with_digest_order):
     return first, last
 
 
+@phone_home
 @atomic_for_request_method
 @issue_membership_required
 def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=None):
@@ -707,6 +714,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
     })
 
 
+@phone_home
 @atomic_for_request_method
 @issue_membership_required
 def issue_history(request, issue):
@@ -724,7 +732,19 @@ def issue_history(request, issue):
         "mute_options": GLOBAL_MUTE_OPTIONS,
     })
 
+@atomic_for_request_method
+@issue_membership_required
+def issue_markdown(request, issue):
+    text = render_issue_md(issue)
+    as_attachment = "download" in request.GET
+    result = HttpResponse(text, content_type="text/markdown; charset=utf-8")
+    if as_attachment:
+        result["Content-Disposition"] = content_disposition_header(
+            as_attachment=True, filename=f"issue-{issue.friendly_id()}.md"
+        )
+    return result
 
+@phone_home
 @atomic_for_request_method
 @issue_membership_required
 def issue_tags(request, issue):
@@ -743,6 +763,7 @@ def issue_tags(request, issue):
     })
 
 
+@phone_home
 @atomic_for_request_method
 @issue_membership_required
 def issue_grouping(request, issue):
@@ -761,6 +782,7 @@ def issue_grouping(request, issue):
     })
 
 
+@phone_home
 @atomic_for_request_method
 @issue_membership_required
 def issue_event_list(request, issue):

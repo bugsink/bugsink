@@ -236,7 +236,7 @@ class Event(models.Model):
                 # transaction=maybe_empty(parsed_data.get("transaction", "")), part of denormalized_fields
 
                 server_name=maybe_empty(parsed_data.get("server_name", ""))[:255],
-                release=maybe_empty(parsed_data.get("release", ""))[:250],
+                release=str(maybe_empty(parsed_data.get("release", "")))[:250],
                 dist=maybe_empty(parsed_data.get("dist", ""))[:64],
 
                 environment=maybe_empty(parsed_data.get("environment", ""))[:64],

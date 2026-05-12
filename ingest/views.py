@@ -194,6 +194,17 @@ class BaseIngestAPIView(View):
         return cls.get_project(project_pk, sentry_key)
 
     @classmethod
+    def cleanup_ingestion_files(cls, ingestion_id):
+        for filetype in ["event", "minidump"]:
+            filename = get_filename_for_event_id(ingestion_id, filetype=filetype)
+            try:
+                os.unlink(filename)
+            except FileNotFoundError:
+                pass
+            except OSError as e:
+                logger.warning("Failed to clean up ingestion file %s", filename, exc_info=e)
+
+    @classmethod
     def _minidump_post_data(cls, request):
         event_data = {}
         extra_data = {}
@@ -384,9 +395,12 @@ class BaseIngestAPIView(View):
             issue = grouping.issue
             issue_created = False
 
-            # update the denormalized fields
+            # update the denormalized fields; calculated_type/value track the latest event so the issue title
+            # reflects the most recent exception (otherwise it stays frozen to the first event's message).
             issue.last_seen = ingested_at
             issue.digested_event_count += 1
+            issue.calculated_type = calculated_type
+            issue.calculated_value = calculated_value
 
         except Grouping.DoesNotExist:
             # we don't have Project.issue_count here ('premature optimization') so we just do an aggregate instead.
@@ -721,6 +735,9 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
         try:
             return self._post2(request, input_stream, ingested_at, ingestion_id, project_pk)
+        except Exception:
+            self.cleanup_ingestion_files(ingestion_id)
+            raise
         finally:
             # storing stuff in the DB on-ingest (rather than on digest-only) is not "as architected"; it's only
             # acceptible because this is a debug-only thing which is turned off by default; but even for me and other
@@ -847,6 +864,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             logger.info(
                 "can only deal with one event/minidump per envelope but found %s/%s, ignoring this envelope.",
                 event_count, minidump_count)
+            self.cleanup_ingestion_files(ingestion_id)
             return HttpResponse()
 
         event_metadata = self.get_event_meta(envelope_headers["event_id"], ingested_at, ingestion_id, request, project)
