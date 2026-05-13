@@ -9,7 +9,7 @@ from projects.models import Project
 from releases.models import create_release_if_needed
 from issues.models import Issue, TurningPoint, TurningPointKind
 from issues.factories import get_or_create_issue
-from events.factories import create_event_data
+from events.factories import create_event, create_event_data
 
 from issues.api_views import IssueViewSet
 
@@ -65,6 +65,23 @@ class IssueApiTests(TransactionTestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], str(self.issue0.id))
+
+    def test_friendly_id_alias(self):
+        event = create_event(issue=self.issue0)
+        friendly_id = self.issue0.friendly_id().lower()
+
+        response = self.client.get(reverse("api:issue-detail", args=[friendly_id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["id"], str(self.issue0.id))
+        self.assertEqual(response.json()["friendly_id"], self.issue0.friendly_id())
+
+        response = self.client.post(reverse("api:issue-mute", args=[friendly_id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["is_muted"])
+
+        response = self.client.get(reverse("api:event-list"), {"issue": friendly_id})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["id"], str(event.id))
 
     def test_detail_ignores_query_filters(self):
         url = reverse("api:issue-detail", args=[self.issue0.id])

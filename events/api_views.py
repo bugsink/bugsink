@@ -9,6 +9,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes,
 from bugsink.utils import assert_
 from bugsink.api_pagination import AscDescCursorPagination
 from bugsink.api_mixins import AtomicRequestMixin
+from issues.api_views import issue_lookup_kwargs
 
 from .models import Event
 from .serializers import EventListSerializer, EventDetailSerializer
@@ -27,7 +28,7 @@ class EventPagination(AscDescCursorPagination):
 
 class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     """
-    LIST requires: ?issue=<uuid>
+    LIST requires: ?issue=<uuid-or-friendly-id>
     Optional: ?order=asc|desc   (default: desc)
     LIST omits `data`, ordered by digest_order
     RETRIEVE includes `data` (pure PK lookup; no filters/order applied)
@@ -42,16 +43,17 @@ class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         if "issue" not in query_params:
             raise ValidationError({"issue": ["This field is required."]})
 
-        return queryset.filter(issue=query_params["issue"])
+        lookup_kwargs = {"issue__" + k: v for k, v in issue_lookup_kwargs(query_params["issue"]).items()}
+        return queryset.filter(issue__is_deleted=False, **lookup_kwargs)
 
     @extend_schema(
         parameters=[
             OpenApiParameter(
                 name="issue",
-                type=OpenApiTypes.UUID,
+                type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
                 required=True,
-                description="Filter events by issue UUID (required).",
+                description="Filter events by issue UUID or friendly ID (required).",
             ),
             OpenApiParameter(
                 name="order",

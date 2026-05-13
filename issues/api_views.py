@@ -1,3 +1,6 @@
+import uuid
+
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -11,6 +14,22 @@ from bugsink.utils import assert_
 
 from .models import Issue, IssueStateManager, apply_issue_action
 from .serializers import IssueMuteForSerializer, IssueMuteUntilSerializer, IssueSerializer
+
+
+def issue_lookup_kwargs(value):
+    try:
+        uuid.UUID(str(value))
+        return {"id": value}
+    except ValueError:
+        pass
+
+    try:
+        project_slug, digest_order = str(value).rsplit("-", 1)
+        digest_order = int(digest_order)
+    except ValueError:
+        raise Http404
+
+    return {"project__slug__iexact": project_slug, "digest_order": digest_order}
 
 
 class IssuesCursorPagination(CursorPagination):
@@ -64,9 +83,9 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     LIST requires: ?project=<uuid>
     Optional: ?order=asc|desc        (default: desc)
     LIST ordered by last_seen
-    RETRIEVE is a pure PK lookup (soft-deletes implied)
+    RETRIEVE accepts either the issue UUID or friendly ID (soft-deletes implied)
     """
-    queryset = Issue.objects.filter(is_deleted=False)  # hide soft-deleted issues; also satisfies router
+    queryset = Issue.objects.filter(is_deleted=False).select_related("project")  # hide soft-deleted; router basename
     serializer_class = IssueSerializer
     pagination_class = IssuesCursorPagination
     http_method_names = ["get", "post", "delete", "head", "options"]
@@ -131,8 +150,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
             % (self.__class__.__name__, lookup_url_kwarg)
         )
 
-        filter_kwargs = {self.lookup_field: self.kwargs[lookup_url_kwarg]}
-        obj = get_object_or_404(queryset, **filter_kwargs)
+        obj = get_object_or_404(queryset, **issue_lookup_kwargs(self.kwargs[lookup_url_kwarg]))
         self.check_object_permissions(self.request, obj)
         return obj
 

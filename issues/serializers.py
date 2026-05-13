@@ -18,6 +18,7 @@ class IssueSerializer(UTCModelSerializer):
         # and when you're actually in the business of looking at a specific event, you want to see the data.
         fields = [
             "id",
+            "friendly_id",
             "project",
             "digest_order",
             "last_seen",
