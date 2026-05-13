@@ -157,18 +157,43 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         apply_issue_action(IssueStateManager, issue, action, user=None)
         return self._action_response(issue)
 
+    @extend_schema(
+        summary="Resolve an issue",
+        description="Mark this issue as resolved. The issue must not already be resolved. No request body is expected.",
+        request=OpenApiTypes.NONE,
+        responses=IssueSerializer,
+    )
     @action(detail=True, methods=["post"])
     def resolve(self, request, pk=None):
         issue = self.get_object()
         self._assert_unresolved(issue)
         return self._apply_issue_action(issue, "resolve")
 
+    @extend_schema(
+        summary="Resolve an issue in the next release",
+        description=(
+            "Mark this issue as resolved by the next release. "
+            "The issue must not already be resolved. No request body is expected."
+        ),
+        request=OpenApiTypes.NONE,
+        responses=IssueSerializer,
+    )
     @action(detail=True, methods=["post"], url_path="resolve-next")
     def resolve_next(self, request, pk=None):
         issue = self.get_object()
         self._assert_unresolved(issue)
         return self._apply_issue_action(issue, "resolved_next")
 
+    @extend_schema(
+        summary="Resolve an issue in the latest release",
+        description=(
+            "Mark this issue as resolved in the latest release. "
+            "The project must have releases, and the issue must not have occurred in the latest release. "
+            "No request body is expected."
+        ),
+        request=OpenApiTypes.NONE,
+        responses=IssueSerializer,
+    )
     @action(detail=True, methods=["post"], url_path="resolve-latest")
     def resolve_latest(self, request, pk=None):
         issue = self.get_object()
@@ -182,6 +207,12 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
 
         return self._apply_issue_action(issue, "resolved_release:" + latest_release.version)
 
+    @extend_schema(
+        summary="Mute an issue",
+        description="Mute this issue. The issue must be unresolved and not already muted. No request body is expected.",
+        request=OpenApiTypes.NONE,
+        responses=IssueSerializer,
+    )
     @action(detail=True, methods=["post"])
     def mute(self, request, pk=None):
         issue = self.get_object()
@@ -189,6 +220,12 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         self._assert_unmuted(issue)
         return self._apply_issue_action(issue, "mute")
 
+    @extend_schema(
+        summary="Mute an issue for a period",
+        description="Mute this issue for a relative period. The issue must be unresolved and not already muted.",
+        request=IssueMuteForSerializer,
+        responses=IssueSerializer,
+    )
     @action(detail=True, methods=["post"], url_path="mute-for")
     def mute_for(self, request, pk=None):
         serializer = IssueMuteForSerializer(data=request.data)
@@ -201,6 +238,12 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         self._assert_unmuted(issue)
         return self._apply_issue_action(issue, f"mute_for:{period_name},{nr_of_periods},")
 
+    @extend_schema(
+        summary="Mute an issue until a threshold is reached",
+        description="Mute this issue until a relative period has at least the given number of events.",
+        request=IssueMuteUntilSerializer,
+        responses=IssueSerializer,
+    )
     @action(detail=True, methods=["post"], url_path="mute-until")
     def mute_until(self, request, pk=None):
         serializer = IssueMuteUntilSerializer(data=request.data)
@@ -214,6 +257,12 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         self._assert_unmuted(issue)
         return self._apply_issue_action(issue, f"mute_until:{period_name},{nr_of_periods},{gte_threshold}")
 
+    @extend_schema(
+        summary="Unmute an issue",
+        description="Unmute this issue. The issue must be unresolved and muted. No request body is expected.",
+        request=OpenApiTypes.NONE,
+        responses=IssueSerializer,
+    )
     @action(detail=True, methods=["post"])
     def unmute(self, request, pk=None):
         issue = self.get_object()
