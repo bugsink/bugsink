@@ -10,6 +10,7 @@ from django.conf import settings
 from django.utils.functional import cached_property
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from rest_framework.exceptions import ValidationError
 
 from bugsink.period_utils import add_periods_to_datetime
 from bugsink.utils import assert_
@@ -213,6 +214,22 @@ class Issue(models.Model):
             models.Index(fields=["project", "is_resolved", "last_seen"], name="issue_list_resolved"),  # and unresolved
             models.Index(fields=["project", "last_seen"], name="issue_list_all"),  # all
         ]
+
+
+def issue_lookup_kwargs(value):
+    try:
+        uuid.UUID(str(value))
+        return {"id": value}
+    except ValueError:
+        pass
+
+    try:
+        project_slug, digest_order = str(value).rsplit("-", 1)
+        digest_order = int(digest_order)
+    except ValueError:
+        raise ValidationError("Invalid issue identifier.")
+
+    return {"project__slug__iexact": project_slug, "digest_order": digest_order}
 
 
 class Grouping(models.Model):

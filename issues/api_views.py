@@ -1,8 +1,5 @@
-import uuid
-
-from django.http import Http404
 from django.shortcuts import get_object_or_404
-from rest_framework import status, viewsets
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import CursorPagination
 from rest_framework.exceptions import ValidationError
@@ -12,24 +9,13 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 from bugsink.api_mixins import AtomicRequestMixin
 from bugsink.utils import assert_
 
-from .models import Issue, IssueStateManager, apply_issue_action
-from .serializers import IssueMuteForSerializer, IssueMuteUntilSerializer, IssueSerializer
-
-
-def issue_lookup_kwargs(value):
-    try:
-        uuid.UUID(str(value))
-        return {"id": value}
-    except ValueError:
-        pass
-
-    try:
-        project_slug, digest_order = str(value).rsplit("-", 1)
-        digest_order = int(digest_order)
-    except ValueError:
-        raise Http404
-
-    return {"project__slug__iexact": project_slug, "digest_order": digest_order}
+from .models import Issue, IssueStateManager, TurningPoint, apply_issue_action, issue_lookup_kwargs
+from .serializers import (
+    IssueCommentSerializer,
+    IssueMuteForSerializer,
+    IssueMuteUntilSerializer,
+    IssueSerializer,
+)
 
 
 class IssuesCursorPagination(CursorPagination):
@@ -243,3 +229,9 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     # NOTE: No 'unresolve' action: reopen is intentionally not exposed in the UI either. See apply_issue_action.
+
+
+class IssueCommentViewSet(AtomicRequestMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+    queryset = TurningPoint.objects.none()  # router basename only
+    serializer_class = IssueCommentSerializer
+    http_method_names = ["post", "head", "options"]

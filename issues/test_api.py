@@ -246,6 +246,43 @@ class IssueApiTests(TransactionTestCase):
         response = self.client.post("/api/canonical/0/issues/%s/unresolve/" % self.issue0.id)
         self.assertEqual(response.status_code, 404)
 
+    def test_create_comment(self):
+        response = self.client.post(
+            reverse("api:issue-comment-list"),
+            {"issue": self.issue0.friendly_id(), "comment": "Needs a closer look."},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+
+        turningpoint = TurningPoint.objects.get(issue=self.issue0)
+        self.assertEqual(turningpoint.kind, TurningPointKind.MANUAL_ANNOTATION)
+        self.assertEqual(turningpoint.project, self.project)
+        self.assertEqual(turningpoint.comment, "Needs a closer look.")
+        self.assertIsNone(turningpoint.user)
+
+        self.assertEqual(response.json()["id"], turningpoint.id)
+        self.assertEqual(response.json()["issue"], str(self.issue0.id))
+        self.assertEqual(response.json()["project"], self.project.id)
+        self.assertEqual(response.json()["user"], None)
+
+    def test_create_comment_rejects_bad_issue_identifier(self):
+        response = self.client.post(
+            reverse("api:issue-comment-list"),
+            {"issue": "not-an-issue", "comment": "Needs a closer look."},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"issue": ["Invalid issue identifier."]})
+
+    def test_create_comment_rejects_missing_issue(self):
+        response = self.client.post(
+            reverse("api:issue-comment-list"),
+            {"issue": "00000000-0000-0000-0000-000000000000", "comment": "Needs a closer look."},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"issue": ["Issue not found."]})
+
 
 class IssuePaginationTests(TransactionTestCase):
     last_seen_deltas = [3, 1, 4, 0, 2]

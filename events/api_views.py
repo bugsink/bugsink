@@ -9,7 +9,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes,
 from bugsink.utils import assert_
 from bugsink.api_pagination import AscDescCursorPagination
 from bugsink.api_mixins import AtomicRequestMixin
-from issues.api_views import issue_lookup_kwargs
+from issues.models import issue_lookup_kwargs
 
 from .models import Event
 from .serializers import EventListSerializer, EventDetailSerializer

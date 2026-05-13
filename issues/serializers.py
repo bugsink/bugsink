@@ -1,9 +1,12 @@
+import datetime
+
+from django.utils import timezone
 from rest_framework import serializers
 
 from bugsink.api_serializers import UTCModelSerializer
 from bugsink.period_utils import DATEUTIL_KWARGS_MAP
 
-from .models import Issue
+from .models import Issue, TurningPoint, TurningPointKind, issue_lookup_kwargs
 
 
 class IssueSerializer(UTCModelSerializer):
@@ -52,3 +55,35 @@ class IssueMuteForSerializer(serializers.Serializer):
 
 class IssueMuteUntilSerializer(IssueMuteForSerializer):
     gte_threshold = serializers.IntegerField(min_value=1)
+
+
+class IssueField(serializers.CharField):
+    def to_internal_value(self, value):
+        value = super().to_internal_value(value)
+        try:
+            return Issue.objects.filter(is_deleted=False).select_related("project").get(**issue_lookup_kwargs(value))
+        except Issue.DoesNotExist:
+            raise serializers.ValidationError("Issue not found.")
+
+    def to_representation(self, issue):
+        return str(issue.id)  # JSON wants strings, not UUIDs.
+
+
+class IssueCommentSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    issue = IssueField()
+    project = serializers.IntegerField(source="project_id", read_only=True)
+    timestamp = serializers.DateTimeField(read_only=True, default_timezone=datetime.timezone.utc)
+    comment = serializers.CharField(allow_blank=False, trim_whitespace=True)
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    def create(self, validated_data):
+        issue = validated_data["issue"]
+        return TurningPoint.objects.create(
+            project=issue.project,
+            issue=issue,
+            kind=TurningPointKind.MANUAL_ANNOTATION,
+            user=None,  # Bearer-token API auth currently represents a global token, not a user.
+            comment=validated_data["comment"],
+            timestamp=timezone.now(),
+        )
