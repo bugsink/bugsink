@@ -708,6 +708,8 @@ class IngestEventAPIView(BaseIngestAPIView):
         performance_logger.info("ingested event with %s bytes", len(event_data_bytes))
 
         event_data = json.loads(event_data_bytes)
+        if "event_id" not in event_data:
+            event_data["event_id"] = uuid.uuid4().hex
         filename = get_filename_for_event_id(ingestion_id)
         b108_makedirs(os.path.dirname(filename))
         with open(filename, 'w') as f:
