@@ -1,4 +1,7 @@
+from rest_framework import serializers
+
 from bugsink.api_serializers import UTCModelSerializer
+from bugsink.period_utils import DATEUTIL_KWARGS_MAP
 
 from .models import Issue
 
@@ -39,3 +42,12 @@ class IssueSerializer(UTCModelSerializer):
     # def get_grouping_keys(self, obj):
     #     # TODO: prefetch grouping_key in IssueViewSet
     #     return list(obj.grouping_set.values_list("grouping_key", flat=True))
+
+
+class IssueMuteForSerializer(serializers.Serializer):
+    period_name = serializers.ChoiceField(choices=tuple(DATEUTIL_KWARGS_MAP.keys()))
+    nr_of_periods = serializers.IntegerField(min_value=1)
+
+
+class IssueMuteUntilSerializer(IssueMuteForSerializer):
+    gte_threshold = serializers.IntegerField(min_value=1)

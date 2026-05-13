@@ -1,14 +1,16 @@
 from django.shortcuts import get_object_or_404
-from rest_framework import viewsets
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.pagination import CursorPagination
 from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_mixins import AtomicRequestMixin
 from bugsink.utils import assert_
 
-from .models import Issue
-from .serializers import IssueSerializer
+from .models import Issue, IssueStateManager, apply_issue_action
+from .serializers import IssueMuteForSerializer, IssueMuteUntilSerializer, IssueSerializer
 
 
 class IssuesCursorPagination(CursorPagination):
@@ -67,6 +69,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     queryset = Issue.objects.filter(is_deleted=False)  # hide soft-deleted issues; also satisfies router
     serializer_class = IssueSerializer
     pagination_class = IssuesCursorPagination
+    http_method_names = ["get", "post", "delete", "head", "options"]
 
     def get_queryset(self):
         return self.queryset
@@ -132,3 +135,93 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         obj = get_object_or_404(queryset, **filter_kwargs)
         self.check_object_permissions(self.request, obj)
         return obj
+
+    def _action_response(self, issue):
+        issue.save()
+        return Response(self.get_serializer(issue).data)
+
+    def _assert_unresolved(self, issue):
+        if issue.is_resolved:
+            raise ValidationError({"detail": "Issue is already resolved."})
+
+    def _assert_unmuted(self, issue):
+        if issue.is_muted:
+            raise ValidationError({"detail": "Issue is already muted."})
+
+    def _apply_issue_action(self, issue, action):
+        # Bearer-token API auth currently represents a global token, not a user.
+        apply_issue_action(IssueStateManager, issue, action, user=None)
+        return self._action_response(issue)
+
+    @action(detail=True, methods=["post"])
+    def resolve(self, request, pk=None):
+        issue = self.get_object()
+        self._assert_unresolved(issue)
+        return self._apply_issue_action(issue, "resolve")
+
+    @action(detail=True, methods=["post"], url_path="resolve-next")
+    def resolve_next(self, request, pk=None):
+        issue = self.get_object()
+        self._assert_unresolved(issue)
+        return self._apply_issue_action(issue, "resolved_next")
+
+    @action(detail=True, methods=["post"], url_path="resolve-latest")
+    def resolve_latest(self, request, pk=None):
+        issue = self.get_object()
+        self._assert_unresolved(issue)
+        if not issue.project.has_releases:
+            raise ValidationError({"detail": "Project has no releases."})
+
+        latest_release = issue.project.get_latest_release()
+        if latest_release.version + "\n" in issue.events_at:
+            raise ValidationError({"detail": "Issue has already occurred in the latest release."})
+
+        return self._apply_issue_action(issue, "resolved_release:" + latest_release.version)
+
+    @action(detail=True, methods=["post"])
+    def mute(self, request, pk=None):
+        issue = self.get_object()
+        self._assert_unresolved(issue)
+        self._assert_unmuted(issue)
+        return self._apply_issue_action(issue, "mute")
+
+    @action(detail=True, methods=["post"], url_path="mute-for")
+    def mute_for(self, request, pk=None):
+        serializer = IssueMuteForSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        period_name = serializer.validated_data["period_name"]
+        nr_of_periods = serializer.validated_data["nr_of_periods"]
+
+        issue = self.get_object()
+        self._assert_unresolved(issue)
+        self._assert_unmuted(issue)
+        return self._apply_issue_action(issue, f"mute_for:{period_name},{nr_of_periods},")
+
+    @action(detail=True, methods=["post"], url_path="mute-until")
+    def mute_until(self, request, pk=None):
+        serializer = IssueMuteUntilSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        period_name = serializer.validated_data["period_name"]
+        nr_of_periods = serializer.validated_data["nr_of_periods"]
+        gte_threshold = serializer.validated_data["gte_threshold"]
+
+        issue = self.get_object()
+        self._assert_unresolved(issue)
+        self._assert_unmuted(issue)
+        return self._apply_issue_action(issue, f"mute_until:{period_name},{nr_of_periods},{gte_threshold}")
+
+    @action(detail=True, methods=["post"])
+    def unmute(self, request, pk=None):
+        issue = self.get_object()
+        self._assert_unresolved(issue)
+        if not issue.is_muted:
+            raise ValidationError({"detail": "Issue is not muted."})
+
+        return self._apply_issue_action(issue, "unmute")
+
+    def destroy(self, request, *args, **kwargs):
+        issue = self.get_object()
+        issue.delete_deferred()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # NOTE: No 'unresolve' action: reopen is intentionally not exposed in the UI either. See apply_issue_action.
