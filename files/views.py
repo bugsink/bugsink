@@ -369,11 +369,11 @@ def api_catch_all(request, subpath):
             lines.append(f"  FILES:  {[f.name for f in request.FILES.values()]}")
 
     else:
+        shown_pretty = False
         body = request.read(MAX_API_CATCH_ALL_SIZE)
         decoded = body.decode("utf-8", errors="replace").strip()
 
         if content_type == "application/json":
-            shown_pretty = False
             try:
                 parsed = json.loads(decoded)
                 pretty = json.dumps(parsed, indent=2)
