@@ -11,6 +11,7 @@ from .models import Issue, TurningPoint, TurningPointKind, issue_lookup_kwargs
 
 class IssueSerializer(UTCModelSerializer):
     # grouping_keys = serializers.SerializerMethodField()  # read-only list of strings
+    friendly_id = serializers.CharField(read_only=True)
 
     class Meta:
         model = Issue
@@ -75,7 +76,7 @@ class IssueCommentSerializer(serializers.Serializer):
     project = serializers.IntegerField(source="project_id", read_only=True)
     timestamp = serializers.DateTimeField(read_only=True, default_timezone=datetime.timezone.utc)
     comment = serializers.CharField(allow_blank=False, trim_whitespace=True)
-    user = serializers.PrimaryKeyRelatedField(read_only=True)
+    user = serializers.IntegerField(source="user_id", read_only=True, allow_null=True)
 
     def create(self, validated_data):
         issue = validated_data["issue"]
