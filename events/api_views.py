@@ -3,7 +3,7 @@ from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes, OpenApiResponse
+from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiParameter, OpenApiTypes, OpenApiResponse
 
 
 from bugsink.utils import assert_
@@ -27,12 +27,6 @@ class EventPagination(AscDescCursorPagination):
 
 
 class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
-    """
-    LIST requires: ?issue=<uuid-or-friendly-id>
-    Optional: ?order=asc|desc   (default: desc)
-    LIST omits `data`, ordered by digest_order
-    RETRIEVE includes `data` (pure PK lookup; no filters/order applied)
-    """
     queryset = Event.objects.all()  # router requirement for basename inference
     serializer_class = EventListSerializer
     pagination_class = EventPagination
@@ -47,6 +41,8 @@ class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         return queryset.filter(issue__is_deleted=False, **lookup_kwargs)
 
     @extend_schema(
+        summary="List events",
+        description="List events for an issue. The list response omits the full event `data` payload.",
         parameters=[
             OpenApiParameter(
                 name="issue",
@@ -67,6 +63,17 @@ class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     )
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Retrieve an event",
+        description=(
+            "Retrieve an event by internal Bugsink event UUID. "
+            "The detail response includes the full `data` payload."
+        ),
+        responses=EventDetailSerializer,
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
 
     def get_object(self):
         """
@@ -96,8 +103,21 @@ class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         return EventDetailSerializer if self.action == "retrieve" else EventListSerializer
 
     @extend_schema(
+        summary="Render an event stacktrace",
         description="Render the event's stacktrace (frames, source, locals) as Markdown-like text.",
-        responses={200: OpenApiResponse(response=str, description="Stacktrace as Markdown")},
+        responses={
+            200: OpenApiResponse(
+                response=str,
+                description="Stacktrace as Markdown",
+                examples=[
+                    OpenApiExample(
+                        "Stacktrace",
+                        value="Traceback (most rece...",
+                        response_only=True,
+                    ),
+                ],
+            )
+        },
     )
     @action(
         detail=True,

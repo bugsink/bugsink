@@ -65,12 +65,6 @@ class IssuesCursorPagination(CursorPagination):
 
 
 class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
-    """
-    LIST requires: ?project=<uuid>
-    Optional: ?order=asc|desc        (default: desc)
-    LIST ordered by last_seen
-    RETRIEVE accepts either the issue UUID or friendly ID (soft-deletes implied)
-    """
     queryset = Issue.objects.filter(is_deleted=False).select_related("project")  # hide soft-deleted; router basename
     serializer_class = IssueSerializer
     pagination_class = IssuesCursorPagination
@@ -80,6 +74,8 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         return self.queryset
 
     @extend_schema(
+        summary="List issues",
+        description="List issues for a project.",
         parameters=[
             OpenApiParameter(
                 name="project",
@@ -108,6 +104,23 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     )
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Retrieve an issue",
+        description="Retrieve an issue by issue UUID or friendly ID.",
+        responses=IssueSerializer,
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Delete an issue",
+        description="Delete an issue.",
+    )
+    def destroy(self, request, *args, **kwargs):
+        issue = self.get_object()
+        issue.delete_deferred()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def filter_queryset(self, queryset):
         queryset = super().filter_queryset(queryset)
@@ -159,7 +172,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
 
     @extend_schema(
         summary="Resolve an issue",
-        description="Mark this issue as resolved. The issue must not already be resolved. No request body is expected.",
+        description="Mark this issue as resolved.",
         request=OpenApiTypes.NONE,
         responses=IssueSerializer,
     )
@@ -171,10 +184,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
 
     @extend_schema(
         summary="Resolve an issue in the next release",
-        description=(
-            "Mark this issue as resolved by the next release. "
-            "The issue must not already be resolved. No request body is expected."
-        ),
+        description="Mark this issue as resolved by the next release.",
         request=OpenApiTypes.NONE,
         responses=IssueSerializer,
     )
@@ -186,11 +196,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
 
     @extend_schema(
         summary="Resolve an issue in the latest release",
-        description=(
-            "Mark this issue as resolved in the latest release. "
-            "The project must have releases, and the issue must not have occurred in the latest release. "
-            "No request body is expected."
-        ),
+        description="Mark this issue as resolved in the latest release.",
         request=OpenApiTypes.NONE,
         responses=IssueSerializer,
     )
@@ -209,7 +215,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
 
     @extend_schema(
         summary="Mute an issue",
-        description="Mute this issue. The issue must be unresolved and not already muted. No request body is expected.",
+        description="Mute this issue.",
         request=OpenApiTypes.NONE,
         responses=IssueSerializer,
     )
@@ -222,7 +228,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
 
     @extend_schema(
         summary="Mute an issue for a period",
-        description="Mute this issue for a relative period. The issue must be unresolved and not already muted.",
+        description="Mute this issue for a relative period, e.g. for 3 days.",
         request=IssueMuteForSerializer,
         responses=IssueSerializer,
     )
@@ -240,7 +246,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
 
     @extend_schema(
         summary="Mute an issue until a threshold is reached",
-        description="Mute this issue until a relative period has at least the given number of events.",
+        description="Mute this issue until a threshold is reached, e.g. more than 10 events in 1 hour.",
         request=IssueMuteUntilSerializer,
         responses=IssueSerializer,
     )
@@ -259,7 +265,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
 
     @extend_schema(
         summary="Unmute an issue",
-        description="Unmute this issue. The issue must be unresolved and muted. No request body is expected.",
+        description="Unmute this issue.",
         request=OpenApiTypes.NONE,
         responses=IssueSerializer,
     )
@@ -272,11 +278,6 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
 
         return self._apply_issue_action(issue, "unmute")
 
-    def destroy(self, request, *args, **kwargs):
-        issue = self.get_object()
-        issue.delete_deferred()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
     # NOTE: No 'unresolve' action: reopen is intentionally not exposed in the UI either. See apply_issue_action.
 
 
@@ -284,3 +285,12 @@ class IssueCommentViewSet(AtomicRequestMixin, mixins.CreateModelMixin, viewsets.
     queryset = TurningPoint.objects.none()  # router basename only
     serializer_class = IssueCommentSerializer
     http_method_names = ["post", "head", "options"]
+
+    @extend_schema(
+        summary="Create an issue comment",
+        description="Add a comment to an issue. `issue` accepts an issue UUID or friendly ID.",
+        request=IssueCommentSerializer,
+        responses=IssueCommentSerializer,
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)

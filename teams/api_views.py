@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
+from drf_spectacular.utils import extend_schema
 
 from bugsink.api_pagination import AscDescCursorPagination
 from bugsink.api_mixins import AtomicRequestMixin
@@ -21,17 +22,43 @@ class TeamPagination(AscDescCursorPagination):
 
 
 class TeamViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
-    """
-    /api/canonical/0/teams/
-    GET /teams/           → list ordered by name ASC
-    GET /teams/{pk}/      → detail (pure PK)
-    POST /teams/          → create {name, visibility?}
-    PATCH /teams/{pk}/    → minimal updates
-    DELETE                → 405
-    """
     queryset = Team.objects.all()
     http_method_names = ["get", "post", "patch", "head", "options"]
     pagination_class = TeamPagination
+
+    @extend_schema(
+        summary="List teams",
+        description="List teams ordered by name.",
+        responses=TeamListSerializer,
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Create a team",
+        description="Create a team. `visibility` is optional and defaults to `discoverable`.",
+        request=TeamCreateUpdateSerializer,
+        responses=TeamCreateUpdateSerializer,
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Retrieve a team",
+        description="Retrieve a team by UUID.",
+        responses=TeamDetailSerializer,
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Update a team",
+        description="Partially update a team by UUID.",
+        request=TeamCreateUpdateSerializer,
+        responses=TeamCreateUpdateSerializer,
+    )
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
 
     def get_object(self):
         # Pure PK lookup (bypass filter_queryset)

@@ -22,19 +22,13 @@ class ProjectPagination(AscDescCursorPagination):
 
 
 class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewSet):
-    """
-    /api/canonical/0/projects/
-    GET /projects/           → list ordered by name ASC, hides soft-deleted, optional ?team=<uuid> filter
-    GET /projects/{pk}/      → detail (pure PK)
-    POST /projects/          → create {team, name, visibility?}
-    PATCH /projects/{pk}/    → minimal updates
-    DELETE                   → 405
-    """
     queryset = Project.objects.all()
     http_method_names = ["get", "post", "patch", "head", "options"]
     pagination_class = ProjectPagination
 
     @extend_schema(
+        summary="List projects",
+        description="List projects ordered by name.",
         parameters=[
             OpenApiParameter(
                 name="team",
@@ -47,6 +41,42 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
     )
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Create a project",
+        description="Create a project. `team` is the team UUID. `visibility` and alert settings are optional.",
+        request=ProjectCreateUpdateSerializer,
+        responses=ProjectCreateUpdateSerializer,
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Retrieve a project",
+        description="Retrieve a project by integer project ID. Use `expand=team` to include the team object.",
+        parameters=[
+            OpenApiParameter(
+                name="expand",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                enum=["team"],
+                description="Optional related object expansion.",
+            ),
+        ],
+        responses=ProjectDetailSerializer,
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Update a project",
+        description="Partially update a project by integer project ID.",
+        request=ProjectCreateUpdateSerializer,
+        responses=ProjectCreateUpdateSerializer,
+    )
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
 
     def filter_queryset(self, queryset):
         if self.action != "list":
