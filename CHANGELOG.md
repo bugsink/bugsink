@@ -1,5 +1,47 @@
 # Changes
 
+## 2.2.0 (19 May 2026)
+
+### Security
+
+Fix: scope issue actions and event lookups to the authorized project/issue.
+
+A project member who knew UUIDs from another project could use some issue-list
+bulk actions and issue event views through a project or issue they were allowed
+to access. These views now require the selected issues/events to belong to the
+authorized parent. See:
+
+https://github.com/bugsink/bugsink/security/advisories/GHSA-g5vc-q7qc-v939
+https://github.com/bugsink/bugsink/security/advisories/GHSA-vx2f-6m6h-9frf
+
+Fix: scope sourcemap and minidump debug-file metadata to projects.
+
+Sourcemap and debug-file IDs are client-provided and were previously resolved
+globally. That could let events in one project use uploaded debug metadata from
+another project. Newly uploaded files now store project information and lookup
+prefers project-scoped metadata. Already-uploaded legacy sourcemaps/debug files
+keep working through a fallback. See:
+
+https://github.com/bugsink/bugsink/security/advisories/GHSA-5389-f7vh-wxj8
+
+### Smaller fixes
+
+* Generate an `event_id` on `/store/` when the SDK does not send one, see #383.
+* Refresh issue title fields on every event digest, see #378.
+* Include ingest-dir cleanup in the `vacuum` command and warn about stale ingest-dir files, see 772fb1a9bff6 and
+  1ee34c574b7d.
+* Add more verbose output to file vacuuming, see #372.
+* Broaden phonehome triggers and avoid unnecessary queueing, see 2f76eacfbf68.
+* Fix API catch-all logging for non-JSON bodies, see d13e5eff132b.
+* Ensure `release` is a string before ingesting, see 374914c96f62.
+* Fix direct minidump endpoint calls, see 5324d802cc50.
+
+### Upgrading
+
+Sourcemap uploads should include a meaningful project slug. Existing unscoped
+sourcemaps keep working, but installations that prefer to remove that fallback
+can run `delete_legacy_sourcemaps` and re-upload sourcemaps with project slugs.
+
 ## 2.1.3 (2 May 2026)
 
 ### Security
