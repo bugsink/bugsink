@@ -420,6 +420,19 @@ class ViewTests(TransactionTestCase):
         response = self.client.get(f"/issues/{self.project.id}/")
         self.assertContains(response, self.issue.title())
 
+    def test_issue_list_bulk_action_ignores_issues_from_other_projects(self):
+        other_project = Project.objects.create(name="other")
+        other_issue, _ = get_or_create_issue(other_project)
+
+        response = self.client.post(
+            f"/issues/{self.project.id}/",
+            {"issue_ids[]": [str(other_issue.id)], "action": "resolve"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        other_issue.refresh_from_db()
+        self.assertFalse(other_issue.is_resolved)
+
     def test_issue_stacktrace(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/")
         self.assertContains(response, self.issue.title())

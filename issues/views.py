@@ -291,7 +291,7 @@ def issue_list(request, project_pk, state_filter="open"):
 def _issue_list_pt_1(request, project, state_filter="open"):
     if request.method == "POST":
         issue_ids = request.POST.getlist('issue_ids[]')
-        issue_qs = Issue.objects.filter(pk__in=issue_ids)
+        issue_qs = Issue.objects.filter(project=project, is_deleted=False, pk__in=issue_ids)
         illegal_conditions = _q_for_invalid_for_action(request.POST["action"])
         # list() is necessary because we need to evaluate the qs before any actions are actually applied (if we don't,
         # actions are always marked as illegal, because they are applied first, then checked (and applying twice is
