@@ -6,8 +6,8 @@ import symbolic
 from files.minidump import build_cfi_map_from_minidump_bytes, event_threads_for_process_state
 
 
-def merge_minidump_event(data, minidump_bytes):
-    frame_info_map = build_cfi_map_from_minidump_bytes(minidump_bytes)
+def merge_minidump_event(data, minidump_bytes, project):
+    frame_info_map = build_cfi_map_from_minidump_bytes(minidump_bytes, project)
     process_state = symbolic.ProcessState.from_minidump_buffer(minidump_bytes, frame_infos=frame_info_map)
 
     data['level'] = 'fatal' if process_state.crashed else 'info'
@@ -26,7 +26,7 @@ def merge_minidump_event(data, minidump_bytes):
     os['version'] = info.os_version
     device['arch'] = info.cpu_family
 
-    threads = event_threads_for_process_state(process_state)
+    threads = event_threads_for_process_state(process_state, project)
     data.setdefault("threads", {})["values"] = threads
 
     if process_state.requesting_thread > -1:

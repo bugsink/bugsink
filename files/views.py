@@ -263,6 +263,10 @@ def difs_assemble(request, organization_slug, project_slug):
     if not get_settings().FEATURE_MINIDUMPS:
         return JsonResponse({"detail": "minidumps not enabled"}, status=404)
 
+    project = Project.objects.filter(slug=project_slug, is_deleted=False).first()
+    if project is None:
+        return JsonResponse({"detail": "Project not found: %s" % project_slug}, status=404)
+
     # TODO move to tasks.something.delay
     # TODO think about the right transaction around this
     data = json.loads(request.body)
@@ -288,39 +292,33 @@ def difs_assemble(request, organization_slug, project_slug):
 
     for file_checksum, file_info in data.items():
         if file_checksum in existing_files:
-            response[file_checksum] = {
-                "state": ChunkFileState.OK,
-                "missingChunks": [],
-                # if it is ever needed, we could add something akin to the below, but so far we've not seen client-side
-                # actually using this; let's add it on-demand.
-                # "dif": json_repr_with_key_info_about(existing_files[file_checksum]),
-            }
-            continue
+            file = existing_files[file_checksum]
+        else:
+            file_chunks = file_info.get("chunks", [])
 
-        file_chunks = file_info.get("chunks", [])
+            # the sentry-cli sends an empty "chunks" list when just polling for file existence; since we already handled
+            # the case of existing files above, we can simply return NOT_FOUND here.
+            if not file_chunks:
+                response[file_checksum] = {
+                    "state": ChunkFileState.NOT_FOUND,
+                    "missingChunks": [],
+                }
+                continue
 
-        # the sentry-cli sends an empty "chunks" list when just polling for file existence; since we already handled the
-        # case of existing files above, we can simply return NOT_FOUND here.
-        if not file_chunks:
-            response[file_checksum] = {
-                "state": ChunkFileState.NOT_FOUND,
-                "missingChunks": [],
-            }
-            continue
+            missing_chunks = [c for c in file_chunks if c not in available_chunks]
+            if missing_chunks:
+                response[file_checksum] = {
+                    "state": ChunkFileState.NOT_FOUND,
+                    "missingChunks": missing_chunks,
+                }
+                continue
 
-        missing_chunks = [c for c in file_chunks if c not in available_chunks]
-        if missing_chunks:
-            response[file_checksum] = {
-                "state": ChunkFileState.NOT_FOUND,
-                "missingChunks": missing_chunks,
-            }
-            continue
-
-        file, _ = assemble_file(file_checksum, file_chunks, filename=file_info["name"])
+            file, _ = assemble_file(file_checksum, file_chunks, filename=file_info["name"])
 
         symbolic_metadata = extract_dif_metadata(file.get_raw_data())
 
         FileMetadata.objects.get_or_create(
+            project=project,
             debug_id=file_info.get("debug_id"),  # TODO : .get implies "no debug_id", but in that case it's useless
             file_type=symbolic_metadata["kind"],  # NOTE: symbolic's kind goes into file_type...
             defaults={

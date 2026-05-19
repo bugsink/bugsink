@@ -248,7 +248,7 @@ class BaseIngestAPIView(View):
         event_data["platform"] = "native"
         event_data["errors"] = []
 
-        merge_minidump_event(event_data, minidump_bytes)
+        merge_minidump_event(event_data, minidump_bytes, project)
 
         # write the event data to disk:
         filename = get_filename_for_event_id(ingestion_id)
@@ -374,7 +374,7 @@ class BaseIngestAPIView(View):
             # we merge after validation: validation is about what's provided _externally_, not our own merging.
             # TODO error handling
             # TODO should not be inside immediate_atomic if it turns out to be slow
-            merge_minidump_event(event_data, minidump_bytes)
+            merge_minidump_event(event_data, minidump_bytes, project)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
