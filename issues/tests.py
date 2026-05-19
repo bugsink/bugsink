@@ -441,6 +441,29 @@ class ViewTests(TransactionTestCase):
         response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/details/")
         self.assertContains(response, self.issue.title())
 
+    def test_issue_event_views_do_not_show_events_from_other_projects(self):
+        other_project = Project.objects.create(name="other")
+        other_issue, _ = get_or_create_issue(other_project)
+        other_event = create_event(other_project, other_issue, event_data={
+            "event_id": uuid.uuid4().hex,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "platform": "python",
+            "exception": {"values": [{"type": "OtherProjectError", "value": "other project stack value"}]},
+            "request": {"headers": {"X-Secret": "other-project-header-value"}},
+            "breadcrumbs": {"values": [{"category": "other-project", "message": "other project breadcrumb"}]},
+        })
+
+        cases = [
+            (f"/issues/issue/{self.issue.id}/event/{other_event.id}/", "other project stack value"),
+            (f"/issues/issue/{self.issue.id}/event/{other_event.id}/details/", "other-project-header-value"),
+            (f"/issues/issue/{self.issue.id}/event/{other_event.id}/breadcrumbs/", "other project breadcrumb"),
+        ]
+        for url, marker in cases:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertNotContains(response, marker)
+
     def test_issue_tags(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/tags/")
         self.assertContains(response, self.issue.title())

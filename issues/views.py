@@ -422,11 +422,12 @@ def _get_event(qs, issue, event_pk, digest_order, nav, bounds):
     elif event_pk is not None:
         # we match on both internal and external id, trying internal first
         try:
-            return Event.objects.get(pk=event_pk)
+            return Event.objects.get(issue=issue, pk=event_pk)
         except Event.DoesNotExist:
             # we match on external id "for user ergonomics"; notes as in `event_by_id` apply, except for the fact that
-            # in this case we have project availab, guaranteeing uniqueness & fast lookup.
-            return Event.objects.get(project=issue.project, event_id=event_pk)
+            # in this case we have the project available, guaranteeing uniqueness & fast lookup.
+            # We also filter by issue to guarantee we do not escape the URL's issue scope.
+            return Event.objects.get(project=issue.project, issue=issue, event_id=event_pk)
 
     elif digest_order is not None:
         # "ergonomics" when people type this in the URL bar
