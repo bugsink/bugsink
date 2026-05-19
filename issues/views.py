@@ -482,7 +482,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
         sentry_sdk.capture_exception(e)
 
     try:
-        apply_sourcemaps(parsed_data)
+        apply_sourcemaps(parsed_data, issue.project)
     except Exception as e:
         if settings.DEBUG or settings.I_AM_RUNNING == "TEST":
             # when developing/testing, I _do_ want to get notified
@@ -683,7 +683,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
     contexts = get_contexts_enriched_with_ua(parsed_data)
 
     try:
-        sourcemaps_images = get_sourcemap_images(parsed_data)
+        sourcemaps_images = get_sourcemap_images(parsed_data, issue.project)
     except Exception as e:
         if settings.DEBUG or settings.I_AM_RUNNING == "TEST":
             # when developing/testing, I _do_ want to get notified

@@ -27,6 +27,6 @@ class FileAdmin(admin.ModelAdmin):
 
 @admin.register(FileMetadata)
 class FileMetadataAdmin(admin.ModelAdmin):
-    list_display = ('debug_id', 'file_type', 'file', 'created_at')
-    search_fields = ('file__checksum', 'debug_id', 'file_type')
-    readonly_fields = ('file', 'debug_id', 'file_type', 'data', 'created_at')
+    list_display = ('debug_id', 'file_type', 'project', 'file', 'created_at')
+    search_fields = ('file__checksum', 'debug_id', 'file_type', 'project__name', 'project__slug')
+    readonly_fields = ('file', 'project', 'debug_id', 'file_type', 'data', 'created_at')

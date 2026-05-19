@@ -15,6 +15,7 @@ from bugsink.app_settings import get_settings
 from bugsink.transaction import durable_atomic, immediate_atomic
 from bugsink.streams import handle_request_content_encoding, copy_stream_limited, MaxLengthExceeded
 from bsmain.models import AuthToken
+from projects.models import Project
 
 from .models import Chunk, File, FileMetadata
 from .tasks import assemble_artifact_bundle, assemble_file
@@ -26,6 +27,10 @@ logger = logging.getLogger("bugsink.api")
 _KIBIBYTE = 1024
 _MEBIBYTE = 1024 * _KIBIBYTE
 CHUNK_UPLOAD_SIZE = 2 * _MEBIBYTE
+PROJECT_REQUIRED_MESSAGE = (
+    "Starting with Bugsink 2.2.0, sourcemap uploads must name existing Bugsink project slugs. "
+    "Use sentry-cli --project <project-slug>."
+)
 
 
 def get_chunk_upload_settings(request, organization_slug):
@@ -135,6 +140,23 @@ def requires_auth_token(view_function):
     return first_require_auth_token
 
 
+def get_artifact_bundle_projects(data):
+    project_slugs = data.get("projects") or []
+    if not isinstance(project_slugs, list):
+        return None, PROJECT_REQUIRED_MESSAGE
+
+    if not project_slugs:
+        return None, PROJECT_REQUIRED_MESSAGE
+
+    projects = list(Project.objects.filter(slug__in=project_slugs, is_deleted=False))
+    projects_by_slug = {project.slug: project for project in projects}
+    unknown_slugs = sorted(set(project_slugs) - set(projects_by_slug))
+    if unknown_slugs:
+        return None, PROJECT_REQUIRED_MESSAGE + " Unknown project(s): %s." % ", ".join(unknown_slugs)
+
+    return [projects_by_slug[slug] for slug in dict.fromkeys(project_slugs)], None
+
+
 @csrf_exempt
 @requires_auth_token
 def chunk_upload(request, organization_slug):
@@ -214,6 +236,9 @@ def artifact_bundle_assemble(request, organization_slug):
     data = json.loads(request.body)
     checksum = data["checksum"]
     chunk_checksums = data["chunks"]
+    projects, error = get_artifact_bundle_projects(data)
+    if error is not None:
+        return JsonResponse({"error": error}, status=400)
 
     # sentry-cli >= 3.x calls this endpoint before uploading chunks (to learn which ones are missing), then uploads
     # only the missing chunks, and then polls this endpoint again. We must return the actual missing chunks; returning
@@ -226,7 +251,7 @@ def artifact_bundle_assemble(request, organization_slug):
     if missing_chunks:
         return JsonResponse({"state": ChunkFileState.NOT_FOUND, "missingChunks": missing_chunks})
 
-    assemble_artifact_bundle.delay(checksum, chunk_checksums)
+    assemble_artifact_bundle.delay(checksum, chunk_checksums, [project.id for project in projects])
     # In the ALWAYS_EAGER setup, we process the bundle inline, so arguably we could return "OK" here too; "CREATED" is
     # what sentry returns though, so for faithful mimicking it's the safest bet.
     return JsonResponse({"state": ChunkFileState.CREATED, "missingChunks": []})

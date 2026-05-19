@@ -109,7 +109,7 @@ def find_in_code_debug_ids(local_file):
 
 
 @shared_task
-def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
+def assemble_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
     # arguably, you could just wrap-around each operation, "around everything" guarantees a fully consistent update on
     # the data and we don't do this that often that it's assumed to matter.
     with immediate_atomic():
@@ -119,6 +119,7 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
         # support that, but if we ever were to support it we'd need a separate method/param to distinguish it.
 
         bundle_file, _ = assemble_file(bundle_checksum, chunk_checksums, filename=f"{bundle_checksum}.zip")
+
         max_file_size = get_settings().MAX_FILE_SIZE
         with tempfile.TemporaryDirectory() as tempdir:
             with bundle_file.open_for_read() as f:
@@ -153,14 +154,16 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums):
 
                                 continue
 
-                            FileMetadata.objects.get_or_create(
-                                debug_id=debug_id,
-                                file_type=file_type,
-                                defaults={
-                                    "file": file,
-                                    "data": json.dumps(manifest_entry),
-                                }
-                            )
+                            for project_id in project_ids:
+                                FileMetadata.objects.get_or_create(
+                                    project_id=project_id,
+                                    debug_id=debug_id,
+                                    file_type=file_type,
+                                    defaults={
+                                        "file": file,
+                                        "data": json.dumps(manifest_entry),
+                                    }
+                                )
 
                             # the in-code regexes show up in the _minified_ source only (the sourcemap's original source
                             # code will not have been "polluted" with it yet, since it's the original).
@@ -188,7 +191,11 @@ def assemble_file(checksum, chunk_checksums, filename):
     # NOTE: unimplemented checks/tricks
     # * total file-size v.s. some max
     # * explicit check chunk availability
-    # * skip this whole thing when the (whole-file) checksum exists
+
+    try:
+        return File.objects.get(checksum=checksum), False
+    except File.DoesNotExist:
+        pass  # i.e. continue below
 
     chunks = Chunk.objects.filter(checksum__in=chunk_checksums)
     chunks_dicts = {chunk.checksum: chunk for chunk in chunks}

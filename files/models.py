@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from io import BytesIO
 from django.db import models
 from django.db import transaction
+from django.db.models import Q
 
 from functools import partial
 
@@ -137,6 +138,11 @@ def _cleanup_objects_on_storage(todos):
 class FileMetadata(models.Model):
     file = models.ForeignKey(File, null=False, on_delete=models.CASCADE, related_name="metadatas")
 
+    # FileMetadata as provided by the client (e.g. in a manifest); security-wise any facts noted here are not guaranteed
+    # to be correct / cannot be trusted. Our security boundary is: FileMetadata is bound to a Project, so you can only
+    # pollute your own Project's FileMetadata.
+    project = models.ForeignKey("projects.Project", null=True, blank=True, on_delete=models.CASCADE)
+
     # debug_id & file_type nullability: such data exists in manifest.json; we are future-proof for it although we
     # currently don't store it as such.
     debug_id = models.UUIDField(max_length=40, null=True, blank=True)
@@ -149,7 +155,64 @@ class FileMetadata(models.Model):
         return f"debug_id: {self.debug_id} ({self.file_type})"
 
     class Meta:
-        # it's _imaginable_ that the below does not actually hold (we just trust the CLI, after all), but that wouldn't
-        # make any sense, so we just enforce a property that makes sense. Pro: lookups work. Con: if the client sends
-        # garbage, this is not exposed.
-        unique_together = (("debug_id", "file_type"),)
+        # The below is basically the ["project", "debug_id", "file_type"] uniqueness constraint we want, but with a
+        # twist to allow legacy data without project. We can remove the legacy constraint after a long transition
+        # period, e.g. May 2027, at which point the first constraint can be simplified to a normal uniqueness constraint
+        # on the three fields. (just the single unique_together constraint doesn't work because of the nullability of
+        # project, which would allow multiple entries with the same debug_id and file_type but null project because
+        # nulls are not considered equal in SQL)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "debug_id", "file_type"],
+                condition=Q(project__isnull=False, debug_id__isnull=False, file_type__isnull=False),
+                name="filemeta_project_debug_type",
+            ),
+            models.UniqueConstraint(
+                fields=["debug_id", "file_type"],
+                condition=Q(project__isnull=True, debug_id__isnull=False, file_type__isnull=False),
+                name="filemeta_legacy_debug_type",
+            ),
+        ]
+
+
+def get_file_metadata_for_debug_ids(project, debug_ids, file_type):
+    """Return {debug_id: FileMetadata} for debug files visible to project."""
+    debug_ids = set(debug_ids)
+    if not debug_ids:
+        return {}
+
+    result = {
+        metadata.debug_id: metadata
+        for metadata in FileMetadata.objects.filter(
+            project=project,
+            debug_id__in=debug_ids,
+            file_type=file_type,
+        ).select_related("file")
+    }
+
+    missing_debug_ids = debug_ids - set(result)
+    if missing_debug_ids:
+        # Compatibility for sourcemaps/debug files uploaded before project-scoped metadata existed. This keeps old
+        # installs working for now, but should be removed after a long transition period, e.g. May 2027.
+        result.update({
+            metadata.debug_id: metadata
+            for metadata in FileMetadata.objects.filter(
+                project__isnull=True,
+                debug_id__in=missing_debug_ids,
+                file_type=file_type,
+            ).select_related("file")
+        })
+
+    return result
+
+
+def get_file_metadata_for_debug_id(project, debug_id, file_type):
+    result = list(get_file_metadata_for_debug_ids(project, [debug_id], file_type).values())
+    if len(result) == 0:
+        return None
+
+    if len(result) > 1:
+        # Should be prevented by database constraints; getting here would mean our lookup logic is wrong.
+        raise RuntimeError("Multiple FileMetadata objects found for one debug_id")
+
+    return result[0]
