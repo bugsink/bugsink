@@ -927,7 +927,7 @@ class MinidumpAPIView(BaseIngestAPIView):
                 return JsonResponse({"detail": "upload_file_minidump not found"}, status=HTTP_400_BAD_REQUEST)
 
             minidump_bytes = request.FILES["upload_file_minidump"].read()
-            event_id = self.process_minidump(ingested_at, minidump_bytes, project, request)
+            event_id = self.process_minidump(ingested_at, uuid.uuid4().hex, minidump_bytes, project, request)
 
             return JsonResponse({"id": event_id})
         except Exception as e:
