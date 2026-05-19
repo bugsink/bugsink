@@ -141,7 +141,7 @@ class FileMetadata(models.Model):
     # FileMetadata as provided by the client (e.g. in a manifest); security-wise any facts noted here are not guaranteed
     # to be correct / cannot be trusted. Our security boundary is: FileMetadata is bound to a Project, so you can only
     # pollute your own Project's FileMetadata.
-    project = models.ForeignKey("projects.Project", null=True, blank=True, on_delete=models.CASCADE)
+    project = models.ForeignKey("projects.Project", null=True, blank=True, on_delete=models.DO_NOTHING)
 
     # debug_id & file_type nullability: such data exists in manifest.json; we are future-proof for it although we
     # currently don't store it as such.
