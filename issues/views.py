@@ -355,6 +355,7 @@ def event_by_id(request, event_pk):
     # needing that event's issue id when rendering the link, and [b] For external id, it's a useful way to construct
     # links: the external id is all that's known SDK-side and may show up in a log or be stored in a DB.
     # Note that no Auth is needed here because nothing is actually shown.
+    # The redirect may reveal an issue UUID, but does not render event data; issue UUIDs are not treated as secrets.
     try:
         event = Event.objects.get(pk=event_pk)
     except Event.DoesNotExist:

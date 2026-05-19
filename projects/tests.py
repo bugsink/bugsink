@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.utils import get_model_topography
-from projects.models import Project, ProjectMembership
+from projects.models import Project, ProjectMembership, ProjectRole
 from events.factories import create_event
 from issues.factories import get_or_create_issue, denormalized_issue_fields
 from tags.models import store_tags
@@ -176,3 +176,39 @@ class ProjectListOpenIssueCountTestCase(TransactionTestCase):
 
         issue_filter.assert_not_called()
         self.assertNotContains(response, "open issues")
+
+
+class ProjectScopedActionTestCase(TransactionTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(username="project-admin", password="test")
+        self.project = Project.objects.create(name="owned")
+        ProjectMembership.objects.create(
+            project=self.project, user=self.user, role=ProjectRole.ADMIN, accepted=True)
+        self.client.force_login(self.user)
+
+    def test_member_remove_scopes_to_project(self):
+        other_user = User.objects.create_user(username="other", password="test")
+        other_project = Project.objects.create(name="other")
+        other_membership = ProjectMembership.objects.create(project=other_project, user=other_user)
+
+        response = self.client.post(
+            f"/projects/{self.project.id}/members/",
+            {"action": f"remove:{other_user.id}"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(ProjectMembership.objects.filter(id=other_membership.id).exists())
+
+    def test_alert_service_remove_scopes_to_project(self):
+        other_project = Project.objects.create(name="other")
+        other_service = MessagingServiceConfig.objects.create(project=other_project)
+
+        response = self.client.post(
+            f"/projects/{self.project.id}/alerts/",
+            {"action": f"remove:{other_service.id}"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(MessagingServiceConfig.objects.filter(id=other_service.id).exists())

@@ -22,7 +22,7 @@ from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.utils import get_model_topography
 from projects.models import Project, ProjectMembership
 from releases.models import create_release_if_needed
-from events.factories import create_event
+from events.factories import create_event, create_event_data
 from bsmain.management.commands.send_json import Command as SendJsonCommand
 from compat.dsn import get_header_value
 from events.models import Event
@@ -475,6 +475,28 @@ class ViewTests(TransactionTestCase):
     def test_issue_history(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/history/")
         self.assertContains(response, self.issue.title())
+
+    def test_history_comment_edit_and_delete_scope_to_issue(self):
+        other_issue, _ = get_or_create_issue(self.project, create_event_data(exception_type="OtherIssue"))
+        other_comment = TurningPoint.objects.create(
+            project=self.project,
+            issue=other_issue,
+            kind=TurningPointKind.MANUAL_ANNOTATION,
+            user=self.user,
+            comment="leave me alone",
+            timestamp=datetime.now(timezone.utc),
+        )
+
+        response = self.client.post(
+            f"/issues/issue/{self.issue.id}/history/comment/{other_comment.id}/",
+            {"comment": "changed"},
+        )
+        self.assertEqual(response.status_code, 404)
+
+        response = self.client.post(f"/issues/issue/{self.issue.id}/history/comment/{other_comment.id}/delete/")
+        self.assertEqual(response.status_code, 404)
+        other_comment.refresh_from_db()
+        self.assertEqual(other_comment.comment, "leave me alone")
 
     def test_issue_event_list(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/events/")
