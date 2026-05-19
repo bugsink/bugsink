@@ -219,10 +219,6 @@ def artifact_bundle_assemble(request, organization_slug):
     # only the missing chunks, and then polls this endpoint again. We must return the actual missing chunks; returning
     # an empty list causes sentry-cli 3.x to skip uploading, and the subsequent assembly fails with a KeyError.
 
-    if File.objects.filter(checksum=checksum).exists():
-        # short-circuit if the file already exists; nothing to do
-        return JsonResponse({"state": ChunkFileState.OK, "missingChunks": []})
-
     available_checksums = set(
         Chunk.objects.filter(checksum__in=chunk_checksums).values_list("checksum", flat=True)
     )
