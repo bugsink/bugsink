@@ -26,6 +26,7 @@ https://github.com/bugsink/bugsink/security/advisories/GHSA-5389-f7vh-wxj8
 
 ### Smaller fixes
 
+* Fix health-check `ALLOWED_HOSTS`-ignore, see #140, #397
 * Generate an `event_id` on `/store/` when the SDK does not send one, see #383.
 * Refresh issue title fields on every event digest, see #378.
 * Include ingest-dir cleanup in the `vacuum` command and warn about stale ingest-dir files, see 772fb1a9bff6 and
