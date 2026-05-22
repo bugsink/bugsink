@@ -4,7 +4,8 @@ from django.contrib.auth import get_user_model
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.utils import get_model_topography
-from projects.models import Project, ProjectMembership
+from projects.forms import ProjectForm
+from projects.models import Project, ProjectMembership, ProjectVisibility
 from events.factories import create_event
 from issues.factories import get_or_create_issue
 from tags.models import store_tags
@@ -136,3 +137,26 @@ class ProjectDeletionTestCase(TransactionTestCase):
             (apps.get_model('releases', 'Release'), 'project'),
             (apps.get_model('issues', 'Issue'), 'project')
         ])
+
+
+class ProjectFormTestCase(TransactionTestCase):
+
+    def test_slug_is_read_only_on_edit(self):
+        # Slug is exposed on the edit form for visibility but must not be editable: it's part of the issue's short
+        # identifier, so changing it would break external references.
+        project = Project.objects.create(name="Original Name", slug="original-slug")
+
+        form = ProjectForm(
+            data={
+                "name": "Renamed",
+                "slug": "tampered-slug",
+                "visibility": ProjectVisibility.JOINABLE,
+                "retention_max_event_count": 10000,
+            },
+            instance=project,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        saved = form.save()
+        self.assertEqual(saved.slug, "original-slug")
+        self.assertEqual(saved.name, "Renamed")
