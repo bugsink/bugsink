@@ -28,7 +28,7 @@ class Command(BaseCommand):
 
             return
 
-        User.objects.create_superuser(username=username, password=password)
+        User.objects.create_superuser(username=username, email=username, password=password)
         print(f"Superuser created: {username}")
 
     def handle(self, *args, **options):
