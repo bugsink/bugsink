@@ -140,7 +140,17 @@
             {% for key, value in context|items %}
                 <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
                     <div class="w-1/4 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ key }}</div>
-                    <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ value|linebreaks }}</div>
+                    <div class="w-3/4 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">
+                        {% if context_key == "Memory Info" %}
+                            {% if key == "total_allocated_bytes" or key == "fragmented_bytes" or key == "heap_size_bytes" or key == "high_memory_load_threshold_bytes" or key == "total_available_memory_bytes" or key == "memory_load_bytes" or key == "total_committed_bytes" or key == "promoted_bytes" %}
+                                {{ value|intcomma }} bytes ({{ value|filesizeformat }})
+                            {% else %}
+                                {{ value|linebreaks }}
+                            {% endif %}
+                        {% else %}
+                            {{ value|linebreaks }}
+                        {% endif %}
+                    </div>
                 </div>
             {% endfor %}
         {% endfor %}
