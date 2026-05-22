@@ -236,3 +236,7 @@ jobs:
           fi
 
           echo "Login OK and / redirects to /teams/"
+
+      - name: Show Docker logs
+        if: always()
+        run: docker logs bugsink-ci || true
