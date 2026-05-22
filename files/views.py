@@ -238,6 +238,7 @@ def artifact_bundle_assemble(request, organization_slug):
     chunk_checksums = data["chunks"]
     projects, error = get_artifact_bundle_projects(data)
     if error is not None:
+        logger.warning("Rejected artifact bundle: project slug is missing or does not match an existing project.")
         return JsonResponse({"error": error}, status=400)
 
     # sentry-cli >= 3.x calls this endpoint before uploading chunks (to learn which ones are missing), then uploads
