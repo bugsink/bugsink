@@ -1,5 +1,23 @@
 # Changes
 
+## 2.2.1 (22 May 2026)
+
+### API
+
+* Add issue actions to the canonical API, see #214 and #401.
+* Add canonical API issue comment creation, see #352 and #401.
+* Accept issue friendly IDs in the canonical API, see #389 and #401.
+* Improve OpenAPI endpoint docs, see #390 and #401.
+* Use Bugsink's version as the OpenAPI spec version, see #307.
+
+### Smaller fixes
+
+* Fix long module names overlapping version values on event detail pages, see #377 and #382.
+* Validate `CREATE_SUPERUSER` email addresses and use the email as username in Docker server-start setup, see #394.
+* Development server: do not send email by default, see d6d5190441b3.
+* Docker: disable Gunicorn's unused control socket, see #405.
+* Sourcemap uploads without a project slug now log server-side context before returning `400`, see #404 and #408.
+
 ## 2.2.0 (21 May 2026)
 
 ### Security
