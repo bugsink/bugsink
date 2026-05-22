@@ -3,13 +3,16 @@ import uuid
 from functools import partial
 
 from django.db import models, transaction
-from django.db.models import F, Value
+from django.db.models import F, Q, Value
 from django.db.models.functions import Concat
 from django.template.defaultfilters import date as default_date_filter
 from django.conf import settings
 from django.utils.functional import cached_property
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from rest_framework.exceptions import ValidationError
 
+from bugsink.period_utils import add_periods_to_datetime
 from bugsink.utils import assert_
 from bugsink.volume_based_condition import VolumeBasedCondition
 from bugsink.transaction import delay_on_commit
@@ -211,6 +214,22 @@ class Issue(models.Model):
             models.Index(fields=["project", "is_resolved", "last_seen"], name="issue_list_resolved"),  # and unresolved
             models.Index(fields=["project", "last_seen"], name="issue_list_all"),  # all
         ]
+
+
+def issue_lookup_kwargs(value):
+    try:
+        uuid.UUID(str(value))
+        return {"id": value}
+    except ValueError:
+        pass
+
+    try:
+        project_slug, digest_order = str(value).rsplit("-", 1)
+        digest_order = int(digest_order)
+    except ValueError:
+        raise ValidationError("Invalid issue identifier.")
+
+    return {"project__slug__iexact": project_slug, "digest_order": digest_order}
 
 
 class Grouping(models.Model):
@@ -488,6 +507,149 @@ class IssueQuerysetStateManager(object):
     def delete(issue_qs):
         for issue in issue_qs:
             issue.delete_deferred()
+
+
+def is_valid_issue_action(action, issue):
+    """We take the 'strict' approach of complaining even when the action is simply a no-op, because you're already in
+    the desired state."""
+
+    if action == "delete":
+        # any type of issue can be deleted
+        return True
+
+    if issue.is_resolved:
+        # any action is illegal on resolved issues (as per our current UI)
+        return False
+
+    if action.startswith("resolved_release:"):
+        release_version = action.split(":", 1)[1]
+        if release_version + "\n" in issue.events_at:
+            return False
+
+    elif action.startswith("mute"):
+        if issue.is_muted:
+            return False
+
+        # TODO muting with a VBC that is already met should be invalid. See 'Exception("The unmute condition is already'
+
+    elif action == "unmute":
+        if not issue.is_muted:
+            return False
+
+    return True
+
+
+def q_for_invalid_issue_action(action):
+    """returns a Q obj of issues for which the action is not valid."""
+
+    if action == "delete":
+        # delete is always valid, so we don't want any issues to be returned, https://stackoverflow.com/a/39001190
+        return Q(pk__in=[])
+
+    illegal_conditions = Q(is_resolved=True)  # any action is illegal on resolved issues (as per our current UI)
+
+    if action.startswith("resolved_release:"):
+        release_version = action.split(":", 1)[1]
+        illegal_conditions = illegal_conditions | Q(events_at__contains=release_version + "\n")
+
+    elif action.startswith("mute"):
+        illegal_conditions = illegal_conditions | Q(is_muted=True)
+
+    elif action == "unmute":
+        illegal_conditions = illegal_conditions | Q(is_muted=False)
+
+    return illegal_conditions
+
+
+def make_issue_history(issue_or_qs, action, user):
+    if action == "delete":
+        return  # we're about to delete the issue, so no history is needed (nor possible)
+
+    elif action == "resolve":
+        kind = TurningPointKind.RESOLVED
+    elif action.startswith("resolved"):
+        kind = TurningPointKind.RESOLVED
+    elif action.startswith("mute"):
+        kind = TurningPointKind.MUTED
+    elif action == "unmute":
+        kind = TurningPointKind.UNMUTED
+    else:
+        raise ValueError(f"unknown action: {action}")
+
+    if action.startswith("mute_for:"):
+        mute_for_params = action.split(":", 1)[1]
+        period_name, nr_of_periods, _ = mute_for_params.split(",")
+        unmute_after = add_periods_to_datetime(timezone.now(), int(nr_of_periods), period_name)
+        metadata = {"mute_for": {
+            "period_name": period_name, "nr_of_periods": int(nr_of_periods),
+            "unmute_after": format_timestamp(unmute_after)}}
+
+    elif action.startswith("mute_until:"):
+        mute_for_params = action.split(":", 1)[1]
+        period_name, nr_of_periods, gte_threshold = mute_for_params.split(",")
+        metadata = {"mute_until": {
+            "period_name": period_name, "nr_of_periods": int(nr_of_periods), "gte_threshold": gte_threshold}}
+
+    elif action == "mute":
+        metadata = {"mute_unconditionally": True}
+
+    elif action.startswith("resolved_release:"):
+        release_version = action.split(":", 1)[1]
+        metadata = {"resolved_release": release_version}
+    elif action == "resolved_next":
+        metadata = {"resolve_by_next": True}
+    elif action == "resolve":
+        metadata = {"resolved_unconditionally": True}
+    else:
+        metadata = {}
+
+    now = timezone.now()
+    if isinstance(issue_or_qs, Issue):
+        TurningPoint.objects.create(
+            project=issue_or_qs.project,
+            issue=issue_or_qs, kind=kind, user=user, metadata=json.dumps(metadata), timestamp=now)
+    else:
+        TurningPoint.objects.bulk_create([
+            TurningPoint(
+                project_id=issue.project_id, issue=issue, kind=kind, user=user, metadata=json.dumps(metadata),
+                timestamp=now)
+            for issue in issue_or_qs
+        ])
+
+
+def apply_issue_action(manager, issue_or_qs, action, user):
+    make_issue_history(issue_or_qs, action, user)
+
+    if action == "resolve":
+        manager.resolve(issue_or_qs)
+    elif action.startswith("resolved_release:"):
+        release_version = action.split(":", 1)[1]
+        manager.resolve_by_release(issue_or_qs, release_version)
+    elif action == "resolved_next":
+        manager.resolve_by_next(issue_or_qs)
+    # elif action == "reopen":  # not allowed from the UI
+    #     manager.reopen(issue_or_qs)
+    elif action == "mute":
+        manager.mute(issue_or_qs)
+    elif action.startswith("mute_for:"):
+        mute_for_params = action.split(":", 1)[1]
+        period_name, nr_of_periods, _ = mute_for_params.split(",")
+        unmute_after = add_periods_to_datetime(timezone.now(), int(nr_of_periods), period_name)
+        manager.mute(issue_or_qs, unmute_after=unmute_after)
+
+    elif action.startswith("mute_until:"):
+        mute_for_params = action.split(":", 1)[1]
+        period_name, nr_of_periods, gte_threshold = mute_for_params.split(",")
+
+        manager.mute(issue_or_qs, unmute_on_volume_based_conditions=json.dumps([{
+            "period": period_name,
+            "nr_of_periods": int(nr_of_periods),
+            "volume": int(gte_threshold),
+        }]))
+    elif action == "unmute":
+        manager.unmute(issue_or_qs)
+    elif action == "delete":
+        manager.delete(issue_or_qs)
 
 
 class TurningPointKind(models.IntegerChoices):

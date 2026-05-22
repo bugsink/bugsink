@@ -1,14 +1,21 @@
 from django.shortcuts import get_object_or_404
-from rest_framework import viewsets
+from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.pagination import CursorPagination
 from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_mixins import AtomicRequestMixin
 from bugsink.utils import assert_
 
-from .models import Issue
-from .serializers import IssueSerializer
+from .models import Issue, IssueStateManager, TurningPoint, apply_issue_action, issue_lookup_kwargs
+from .serializers import (
+    IssueCommentSerializer,
+    IssueMuteForSerializer,
+    IssueMuteUntilSerializer,
+    IssueSerializer,
+)
 
 
 class IssuesCursorPagination(CursorPagination):
@@ -58,20 +65,17 @@ class IssuesCursorPagination(CursorPagination):
 
 
 class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
-    """
-    LIST requires: ?project=<uuid>
-    Optional: ?order=asc|desc        (default: desc)
-    LIST ordered by last_seen
-    RETRIEVE is a pure PK lookup (soft-deletes implied)
-    """
-    queryset = Issue.objects.filter(is_deleted=False)  # hide soft-deleted issues; also satisfies router
+    queryset = Issue.objects.filter(is_deleted=False).select_related("project")  # hide soft-deleted; router basename
     serializer_class = IssueSerializer
     pagination_class = IssuesCursorPagination
+    http_method_names = ["get", "post", "delete", "head", "options"]
 
     def get_queryset(self):
         return self.queryset
 
     @extend_schema(
+        summary="List issues",
+        description="List issues for a project.",
         parameters=[
             OpenApiParameter(
                 name="project",
@@ -101,6 +105,23 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
 
+    @extend_schema(
+        summary="Retrieve an issue",
+        description="Retrieve an issue by issue UUID or friendly ID.",
+        responses=IssueSerializer,
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Delete an issue",
+        description="Delete an issue.",
+    )
+    def destroy(self, request, *args, **kwargs):
+        issue = self.get_object()
+        issue.delete_deferred()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     def filter_queryset(self, queryset):
         queryset = super().filter_queryset(queryset)
         if self.action != "list":
@@ -128,7 +149,148 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
             % (self.__class__.__name__, lookup_url_kwarg)
         )
 
-        filter_kwargs = {self.lookup_field: self.kwargs[lookup_url_kwarg]}
-        obj = get_object_or_404(queryset, **filter_kwargs)
+        obj = get_object_or_404(queryset, **issue_lookup_kwargs(self.kwargs[lookup_url_kwarg]))
         self.check_object_permissions(self.request, obj)
         return obj
+
+    def _action_response(self, issue):
+        issue.save()
+        return Response(self.get_serializer(issue).data)
+
+    def _assert_unresolved(self, issue):
+        if issue.is_resolved:
+            raise ValidationError({"detail": "Issue is already resolved."})
+
+    def _assert_unmuted(self, issue):
+        if issue.is_muted:
+            raise ValidationError({"detail": "Issue is already muted."})
+
+    def _apply_issue_action(self, issue, action):
+        # Bearer-token API auth currently represents a global token, not a user.
+        apply_issue_action(IssueStateManager, issue, action, user=None)
+        return self._action_response(issue)
+
+    @extend_schema(
+        summary="Resolve an issue",
+        description="Mark this issue as resolved.",
+        request=OpenApiTypes.NONE,
+        responses=IssueSerializer,
+    )
+    @action(detail=True, methods=["post"])
+    def resolve(self, request, pk=None):
+        issue = self.get_object()
+        self._assert_unresolved(issue)
+        return self._apply_issue_action(issue, "resolve")
+
+    @extend_schema(
+        summary="Resolve an issue in the next release",
+        description="Mark this issue as resolved by the next release.",
+        request=OpenApiTypes.NONE,
+        responses=IssueSerializer,
+    )
+    @action(detail=True, methods=["post"], url_path="resolve-next")
+    def resolve_next(self, request, pk=None):
+        issue = self.get_object()
+        self._assert_unresolved(issue)
+        return self._apply_issue_action(issue, "resolved_next")
+
+    @extend_schema(
+        summary="Resolve an issue in the latest release",
+        description="Mark this issue as resolved in the latest release.",
+        request=OpenApiTypes.NONE,
+        responses=IssueSerializer,
+    )
+    @action(detail=True, methods=["post"], url_path="resolve-latest")
+    def resolve_latest(self, request, pk=None):
+        issue = self.get_object()
+        self._assert_unresolved(issue)
+        if not issue.project.has_releases:
+            raise ValidationError({"detail": "Project has no releases."})
+
+        latest_release = issue.project.get_latest_release()
+        if latest_release.version + "\n" in issue.events_at:
+            raise ValidationError({"detail": "Issue has already occurred in the latest release."})
+
+        return self._apply_issue_action(issue, "resolved_release:" + latest_release.version)
+
+    @extend_schema(
+        summary="Mute an issue",
+        description="Mute this issue.",
+        request=OpenApiTypes.NONE,
+        responses=IssueSerializer,
+    )
+    @action(detail=True, methods=["post"])
+    def mute(self, request, pk=None):
+        issue = self.get_object()
+        self._assert_unresolved(issue)
+        self._assert_unmuted(issue)
+        return self._apply_issue_action(issue, "mute")
+
+    @extend_schema(
+        summary="Mute an issue for a period",
+        description="Mute this issue for a relative period, e.g. for 3 days.",
+        request=IssueMuteForSerializer,
+        responses=IssueSerializer,
+    )
+    @action(detail=True, methods=["post"], url_path="mute-for")
+    def mute_for(self, request, pk=None):
+        serializer = IssueMuteForSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        period_name = serializer.validated_data["period_name"]
+        nr_of_periods = serializer.validated_data["nr_of_periods"]
+
+        issue = self.get_object()
+        self._assert_unresolved(issue)
+        self._assert_unmuted(issue)
+        return self._apply_issue_action(issue, f"mute_for:{period_name},{nr_of_periods},")
+
+    @extend_schema(
+        summary="Mute an issue until a threshold is reached",
+        description="Mute this issue until a threshold is reached, e.g. more than 10 events in 1 hour.",
+        request=IssueMuteUntilSerializer,
+        responses=IssueSerializer,
+    )
+    @action(detail=True, methods=["post"], url_path="mute-until")
+    def mute_until(self, request, pk=None):
+        serializer = IssueMuteUntilSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        period_name = serializer.validated_data["period_name"]
+        nr_of_periods = serializer.validated_data["nr_of_periods"]
+        gte_threshold = serializer.validated_data["gte_threshold"]
+
+        issue = self.get_object()
+        self._assert_unresolved(issue)
+        self._assert_unmuted(issue)
+        return self._apply_issue_action(issue, f"mute_until:{period_name},{nr_of_periods},{gte_threshold}")
+
+    @extend_schema(
+        summary="Unmute an issue",
+        description="Unmute this issue.",
+        request=OpenApiTypes.NONE,
+        responses=IssueSerializer,
+    )
+    @action(detail=True, methods=["post"])
+    def unmute(self, request, pk=None):
+        issue = self.get_object()
+        self._assert_unresolved(issue)
+        if not issue.is_muted:
+            raise ValidationError({"detail": "Issue is not muted."})
+
+        return self._apply_issue_action(issue, "unmute")
+
+    # NOTE: No 'unresolve' action: reopen is intentionally not exposed in the UI either. See apply_issue_action.
+
+
+class IssueCommentViewSet(AtomicRequestMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+    queryset = TurningPoint.objects.none()  # router basename only
+    serializer_class = IssueCommentSerializer
+    http_method_names = ["post", "head", "options"]
+
+    @extend_schema(
+        summary="Create an issue comment",
+        description="Add a comment to an issue. `issue` accepts an issue UUID or friendly ID.",
+        request=IssueCommentSerializer,
+        responses=IssueCommentSerializer,
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)

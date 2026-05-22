@@ -1,9 +1,7 @@
 from collections import namedtuple
-import json
 import sentry_sdk
 import logging
 
-from django.db.models import Q
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponseRedirect, HttpResponseNotAllowed, HttpResponse
@@ -21,7 +19,6 @@ from sentry_sdk_extensions import capture_or_log_exception
 
 from bugsink.decorators import project_membership_required, issue_membership_required, atomic_for_request_method
 from bugsink.transaction import durable_atomic
-from bugsink.period_utils import add_periods_to_datetime
 from bugsink.timed_sqlite_backend.base import different_runtime_limit
 from bugsink.utils import assert_
 from phonehome.utils import phone_home
@@ -29,12 +26,13 @@ from phonehome.utils import phone_home
 from events.models import Event
 from events.ua_stuff import get_contexts_enriched_with_ua
 
-from compat.timestamp import format_timestamp
 from projects.models import ProjectMembership
 from tags.search import search_issues, search_events, search_events_optimized
 from theme.templatetags.issues import timestamp_with_millis
 
-from .models import Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind
+from .models import (
+    Issue, IssueQuerysetStateManager, IssueStateManager, TurningPoint, TurningPointKind,
+    apply_issue_action, is_valid_issue_action, q_for_invalid_issue_action)
 from .forms import CommentForm
 from .utils import get_values, get_main_exception
 from events.utils import annotate_with_meta, apply_sourcemaps, get_sourcemap_images
@@ -131,149 +129,6 @@ def _request_repr(parsed_data):
     return method + " " + url
 
 
-def _is_valid_action(action, issue):
-    """We take the 'strict' approach of complaining even when the action is simply a no-op, because you're already in
-    the desired state."""
-
-    if action == "delete":
-        # any type of issue can be deleted
-        return True
-
-    if issue.is_resolved:
-        # any action is illegal on resolved issues (as per our current UI)
-        return False
-
-    if action.startswith("resolved_release:"):
-        release_version = action.split(":", 1)[1]
-        if release_version + "\n" in issue.events_at:
-            return False
-
-    elif action.startswith("mute"):
-        if issue.is_muted:
-            return False
-
-        # TODO muting with a VBC that is already met should be invalid. See 'Exception("The unmute condition is already'
-
-    elif action == "unmute":
-        if not issue.is_muted:
-            return False
-
-    return True
-
-
-def _q_for_invalid_for_action(action):
-    """returns a Q obj of issues for which the action is not valid."""
-
-    if action == "delete":
-        # delete is always valid, so we don't want any issues to be returned, https://stackoverflow.com/a/39001190
-        return Q(pk__in=[])
-
-    illegal_conditions = Q(is_resolved=True)  # any action is illegal on resolved issues (as per our current UI)
-
-    if action.startswith("resolved_release:"):
-        release_version = action.split(":", 1)[1]
-        illegal_conditions = illegal_conditions | Q(events_at__contains=release_version + "\n")
-
-    elif action.startswith("mute"):
-        illegal_conditions = illegal_conditions | Q(is_muted=True)
-
-    elif action == "unmute":
-        illegal_conditions = illegal_conditions | Q(is_muted=False)
-
-    return illegal_conditions
-
-
-def _make_history(issue_or_qs, action, user):
-    if action == "delete":
-        return  # we're about to delete the issue, so no history is needed (nor possible)
-
-    elif action == "resolve":
-        kind = TurningPointKind.RESOLVED
-    elif action.startswith("resolved"):
-        kind = TurningPointKind.RESOLVED
-    elif action.startswith("mute"):
-        kind = TurningPointKind.MUTED
-    elif action == "unmute":
-        kind = TurningPointKind.UNMUTED
-    else:
-        raise ValueError(f"unknown action: {action}")
-
-    if action.startswith("mute_for:"):
-        mute_for_params = action.split(":", 1)[1]
-        period_name, nr_of_periods, _ = mute_for_params.split(",")
-        unmute_after = add_periods_to_datetime(timezone.now(), int(nr_of_periods), period_name)
-        metadata = {"mute_for": {
-            "period_name": period_name, "nr_of_periods": int(nr_of_periods),
-            "unmute_after": format_timestamp(unmute_after)}}
-
-    elif action.startswith("mute_until:"):
-        mute_for_params = action.split(":", 1)[1]
-        period_name, nr_of_periods, gte_threshold = mute_for_params.split(",")
-        metadata = {"mute_until": {
-            "period_name": period_name, "nr_of_periods": int(nr_of_periods), "gte_threshold": gte_threshold}}
-
-    elif action == "mute":
-        metadata = {"mute_unconditionally": True}
-
-    elif action.startswith("resolved_release:"):
-        release_version = action.split(":", 1)[1]
-        metadata = {"resolved_release": release_version}
-    elif action == "resolved_next":
-        metadata = {"resolve_by_next": True}
-    elif action == "resolve":
-        metadata = {"resolved_unconditionally": True}
-    else:
-        metadata = {}
-
-    now = timezone.now()
-    if isinstance(issue_or_qs, Issue):
-        TurningPoint.objects.create(
-            project=issue_or_qs.project,
-            issue=issue_or_qs, kind=kind, user=user, metadata=json.dumps(metadata), timestamp=now)
-    else:
-        TurningPoint.objects.bulk_create([
-            TurningPoint(
-                project_id=issue.project_id, issue=issue, kind=kind, user=user, metadata=json.dumps(metadata),
-                timestamp=now)
-            for issue in issue_or_qs
-        ])
-
-
-def _apply_action(manager, issue_or_qs, action, user):
-    _make_history(issue_or_qs, action, user)
-
-    if action == "resolve":
-        manager.resolve(issue_or_qs)
-    elif action.startswith("resolved_release:"):
-        release_version = action.split(":", 1)[1]
-        manager.resolve_by_release(issue_or_qs, release_version)
-    elif action == "resolved_next":
-        manager.resolve_by_next(issue_or_qs)
-    # elif action == "reopen":  # not allowed from the UI
-    #     manager.reopen(issue_or_qs)
-    elif action == "mute":
-        manager.mute(issue_or_qs)
-    elif action.startswith("mute_for:"):
-        mute_for_params = action.split(":", 1)[1]
-        period_name, nr_of_periods, _ = mute_for_params.split(",")
-        unmute_after = add_periods_to_datetime(timezone.now(), int(nr_of_periods), period_name)
-        manager.mute(issue_or_qs, unmute_after=unmute_after)
-
-    elif action.startswith("mute_until:"):
-        mute_for_params = action.split(":", 1)[1]
-        period_name, nr_of_periods, gte_threshold = mute_for_params.split(",")
-
-        manager.mute(issue_or_qs, unmute_on_volume_based_conditions=json.dumps([{
-            "period": period_name,
-            "nr_of_periods": int(nr_of_periods),
-            "volume": int(gte_threshold),
-        }]))
-    elif action == "unmute":
-        manager.unmute(issue_or_qs)
-    elif action == "delete":
-        manager.delete(issue_or_qs)
-
-
 @phone_home
 def issue_list(request, project_pk, state_filter="open"):
     # to keep the write lock as short as possible, issue_list is split up into 2 parts (read/write vs pure reading),
@@ -292,12 +147,12 @@ def _issue_list_pt_1(request, project, state_filter="open"):
     if request.method == "POST":
         issue_ids = request.POST.getlist('issue_ids[]')
         issue_qs = Issue.objects.filter(project=project, is_deleted=False, pk__in=issue_ids)
-        illegal_conditions = _q_for_invalid_for_action(request.POST["action"])
+        illegal_conditions = q_for_invalid_issue_action(request.POST["action"])
         # list() is necessary because we need to evaluate the qs before any actions are actually applied (if we don't,
         # actions are always marked as illegal, because they are applied first, then checked (and applying twice is
         # illegal)
         unapplied_issue_ids = list(issue_qs.filter(illegal_conditions).values_list("id", flat=True))
-        _apply_action(
+        apply_issue_action(
             IssueQuerysetStateManager, issue_qs.exclude(illegal_conditions), request.POST["action"], request.user)
 
     else:
@@ -373,8 +228,8 @@ def event_by_id(request, event_pk):
 
 
 def _handle_post(request, issue):
-    if _is_valid_action(request.POST["action"], issue):
-        _apply_action(IssueStateManager, issue, request.POST["action"], request.user)
+    if is_valid_issue_action(request.POST["action"], issue):
+        apply_issue_action(IssueStateManager, issue, request.POST["action"], request.user)
         issue.save()
 
     # note that if the action is not valid, we just ignore it (i.e. we don't show any error message or anything)

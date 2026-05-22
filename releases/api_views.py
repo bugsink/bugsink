@@ -1,6 +1,6 @@
 from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
+from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_pagination import AscDescCursorPagination
 from bugsink.api_mixins import AtomicRequestMixin
@@ -19,17 +19,17 @@ class ReleasePagination(AscDescCursorPagination):
 
 
 class ReleaseViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
-    """
-    LIST requires: ?project=<id>
-    Ordered by sort_epoch.
-    CREATE allowed. DELETE potential TODO.
-    """
     queryset = Release.objects.all()
     serializer_class = ReleaseListSerializer
     http_method_names = ["get", "post", "head", "options"]
     pagination_class = ReleasePagination
 
     @extend_schema(
+        summary="List releases",
+        description=(
+            "List releases for a project. "
+            "Pass the integer project ID in the required `project` query parameter."
+        ),
         parameters=[
             OpenApiParameter(
                 name="project",
@@ -42,6 +42,33 @@ class ReleaseViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
     )
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Create a release",
+        description=(
+            "Create a release for a project. "
+            "`project` is the integer project ID. `version` is the release version string."
+        ),
+        request=ReleaseCreateSerializer,
+        responses=ReleaseDetailSerializer,
+        examples=[
+            OpenApiExample(
+                "Create release",
+                value={"project": 1, "version": "my-package@1.2.3"},
+                request_only=True,
+            ),
+        ],
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Retrieve a release",
+        description="Retrieve a release by release UUID.",
+        responses=ReleaseDetailSerializer,
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
 
     def filter_queryset(self, queryset):
         queryset = super().filter_queryset(queryset)
