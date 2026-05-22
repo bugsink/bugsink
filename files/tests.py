@@ -1,23 +1,57 @@
 from hashlib import sha1
-from uuid import UUID
+from uuid import UUID, uuid4
 import json
 import gzip
+import io
 from io import BytesIO
 import os
 from glob import glob
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+from types import SimpleNamespace
+from zipfile import ZipFile, ZIP_DEFLATED
+
+from django.test import tag
 from django.contrib.auth import get_user_model
+from django.test import LiveServerTestCase, override_settings
+from django.core.management.base import CommandError
+from django.core.management import call_command
+from unittest.mock import patch
 
 from compat.dsn import get_header_value
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
+from bugsink.transaction import immediate_atomic
 from projects.models import Project, ProjectMembership
 from events.models import Event
 from bsmain.models import AuthToken
 from bugsink.moreiterutils import batched
+from bugsink.app_settings import override_settings as bugsink_override_settings
+from bugsink.streams import MaxLengthExceeded
 
-from .models import File, FileMetadata
+from .models import Chunk, File, FileMetadata, get_file_metadata_for_debug_ids
+from .minidump import event_threads_for_process_state
+from .storage_registry import override_object_storages
+from .tasks import assemble_file
+from .views import CHUNK_UPLOAD_SIZE
 
 
 User = get_user_model()
+
+
+def get_test_object_storages(basepath, use_for_write):
+    return {
+        "file": {
+            "local": {
+                "STORAGE": "files.storage.ObjectFileStorage",
+                "OPTIONS": {
+                    "basepath": basepath,
+                },
+                "USE_FOR_WRITE": use_for_write,
+            },
+        },
+    }
 
 
 class FilesTests(TransactionTestCase):
@@ -26,7 +60,7 @@ class FilesTests(TransactionTestCase):
     def setUp(self):
         super().setUp()
         self.user = User.objects.create_user(username='test', password='test')
-        self.project = Project.objects.create()
+        self.project = Project.objects.create(name="test")
         ProjectMembership.objects.create(project=self.project, user=self.user)
         self.client.force_login(self.user)
         self.auth_token = AuthToken.objects.create()
@@ -52,6 +86,323 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(401, response.status_code)
         self.assertEqual({"error": "Invalid token"}, response.json())
 
+    def test_chunk_upload_settings_use_real_limits(self):
+        with bugsink_override_settings(MAX_FILE_SIZE=1234):
+            response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers=self.token_headers)
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(CHUNK_UPLOAD_SIZE, response.json()["chunkSize"])
+        self.assertEqual(CHUNK_UPLOAD_SIZE, response.json()["maxRequestSize"])
+        self.assertEqual(1234, response.json()["maxFileSize"])
+
+    def test_chunk_upload_rejects_plain_chunk_larger_than_advertised(self):
+        data = b"x" * (CHUNK_UPLOAD_SIZE + 1)
+        upload = BytesIO(data)
+        upload.name = sha1(data, usedforsecurity=False).hexdigest()
+
+        response = self.client.post(
+            "/api/0/organizations/anyorg/chunk-upload/",
+            data={"file": upload},
+            headers=self.token_headers,
+        )
+
+        self.assertEqual(413, response.status_code)
+        self.assertIn("chunk upload size", response.json()["error"])
+
+    def test_chunk_upload_rejects_gzipped_chunk_larger_than_advertised_after_decompression(self):
+        data = b"x" * (CHUNK_UPLOAD_SIZE + 1)
+        upload = BytesIO(gzip.compress(data))
+        upload.name = sha1(data, usedforsecurity=False).hexdigest()
+
+        response = self.client.post(
+            "/api/0/organizations/anyorg/chunk-upload/",
+            data={"file_gzip": upload},
+            headers=self.token_headers,
+        )
+
+        self.assertEqual(413, response.status_code)
+        self.assertIn("chunk upload size", response.json()["error"])
+
+    def test_assemble_file_to_object_storage(self):
+        data = b"hello world"
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with override_object_storages(get_test_object_storages(tempdir, use_for_write=True)):
+                Chunk.objects.create(checksum=checksum, size=len(data), data=data)
+
+                file, created = assemble_file(checksum, [checksum], filename="hello.txt")
+
+                self.assertTrue(created)
+                self.assertEqual("local", file.storage_backend)
+                self.assertEqual(data, file.get_raw_data())
+                self.assertEqual(data, Path(tempdir, checksum).read_bytes())
+
+    def test_open_for_read_works_for_db_and_object_storage(self):
+        data = b"hello world"
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+
+        file = File.objects.create(checksum=checksum, filename="hello.txt", size=len(data), data=data)
+        with file.open_for_read() as f:
+            self.assertEqual(data, f.read())
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with override_object_storages(get_test_object_storages(tempdir, use_for_write=True)):
+                call_command("migrate_to_current_objectstorage", "file", stdout=io.StringIO())
+
+                file.refresh_from_db()
+                with file.open_for_read() as f:
+                    self.assertEqual(data, f.read())
+
+    def test_assemble_file_enforces_max_file_size(self):
+        chunk_a = b"hello "
+        chunk_b = b"world"
+        checksum = sha1(chunk_a + chunk_b, usedforsecurity=False).hexdigest()
+
+        Chunk.objects.create(checksum=sha1(chunk_a, usedforsecurity=False).hexdigest(), size=len(chunk_a), data=chunk_a)
+        Chunk.objects.create(checksum=sha1(chunk_b, usedforsecurity=False).hexdigest(), size=len(chunk_b), data=chunk_b)
+
+        with bugsink_override_settings(MAX_FILE_SIZE=len(chunk_a + chunk_b) - 1):
+            with self.assertRaisesMessage(ValueError, "MAX_FILE_SIZE"):
+                assemble_file(
+                    checksum,
+                    [
+                        sha1(chunk_a, usedforsecurity=False).hexdigest(),
+                        sha1(chunk_b, usedforsecurity=False).hexdigest(),
+                    ],
+                    filename="hello.txt",
+                )
+
+    def test_artifact_bundle_rejects_extracted_file_larger_than_max_file_size(self):
+        bundle = BytesIO()
+        with tempfile.TemporaryDirectory() as tempdir:
+            extracted_data = b"0" * 1000
+            manifest = {
+                "files": {
+                    "~/app.min.js": {
+                        "url": "~/app.min.js",
+                        "type": "minified_source",
+                        "headers": {"debug-id": "12345678-1234-5678-1234-567812345678"},
+                    },
+                },
+            }
+
+            with bugsink_override_settings(MAX_FILE_SIZE=900, KEEP_ARTIFACT_BUNDLES=False):
+                with override_object_storages(get_test_object_storages(tempdir, use_for_write=True)):
+                    with ZipFile(bundle, "w", compression=ZIP_DEFLATED) as zf:
+                        zf.writestr("manifest.json", json.dumps(manifest))
+                        zf.writestr("~/app.min.js", extracted_data)
+
+                    bundle_data = bundle.getvalue()
+                    checksum = sha1(bundle_data, usedforsecurity=False).hexdigest()
+                    upload = BytesIO(gzip.compress(bundle_data))
+                    upload.name = checksum
+
+                    response = self.client.post(
+                        "/api/0/organizations/anyorg/chunk-upload/",
+                        data={"file_gzip": upload},
+                        headers=self.token_headers,
+                    )
+                    self.assertEqual(200, response.status_code)
+
+                    with self.assertRaises(MaxLengthExceeded):
+                        self.client.post(
+                            "/api/0/organizations/anyorg/artifactbundle/assemble/",
+                            json.dumps({"checksum": checksum, "chunks": [checksum], "projects": [self.project.slug]}),
+                            content_type="application/json",
+                            headers=self.token_headers,
+                        )
+
+    def test_artifact_bundle_assemble_does_not_use_checksum_as_temp_filename(self):
+        data = b"hello world"
+        real_checksum = sha1(data, usedforsecurity=False).hexdigest()
+        Chunk.objects.create(checksum=real_checksum, size=len(data), data=data)
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            probe_path = Path(tempdir, f"probe-{uuid4().hex}.txt")
+
+            try:
+                self.client.post(
+                    "/api/0/organizations/anyorg/artifactbundle/assemble/",
+                    json.dumps({
+                        "checksum": str(probe_path),
+                        "chunks": [real_checksum],
+                        "projects": [self.project.slug],
+                    }),
+                    content_type="application/json",
+                    headers=self.token_headers,
+                )
+            except Exception:
+                pass  # we don't care about the details of failure, we just care about the probe file not being created
+
+            self.assertFalse(probe_path.exists())
+
+    def test_assemble_file_does_not_use_checksum_as_temp_filename(self):
+        data = b"hello world"
+        real_checksum = sha1(data, usedforsecurity=False).hexdigest()
+        Chunk.objects.create(checksum=real_checksum, size=len(data), data=data)
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            probe_path = Path(tempdir, f"probe-{uuid4().hex}.txt")
+
+            try:
+                assemble_file(str(probe_path), [real_checksum], filename="hello.txt")
+            except Exception:
+                pass  # we don't care about the details of failure, we just care about the probe file not being created
+
+            self.assertFalse(probe_path.exists())
+
+    def test_migrate_file_to_and_from_object_storage(self):
+        data = b"hello world"
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+
+        file = File.objects.create(checksum=checksum, filename="hello.txt", size=len(data), data=data)
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            with override_object_storages(get_test_object_storages(tempdir, use_for_write=True)):
+                call_command("migrate_to_current_objectstorage", "file", stdout=io.StringIO())
+
+                file.refresh_from_db()
+                self.assertEqual("local", file.storage_backend)
+                self.assertEqual(b"", file.data)
+                self.assertEqual(data, Path(tempdir, checksum).read_bytes())
+                self.assertEqual(data, file.get_raw_data())
+
+            with override_object_storages(get_test_object_storages(tempdir, use_for_write=False)):
+                call_command("migrate_to_current_objectstorage", "file", stdout=io.StringIO())
+
+                file.refresh_from_db()
+                self.assertIsNone(file.storage_backend)
+                self.assertEqual(data, file.get_raw_data())
+
+    def test_migrate_file_hard_fails_when_source_storage_is_missing(self):
+        checksum = "a" * 40
+        file = File.objects.create(
+            checksum=checksum,
+            filename="hello.txt",
+            size=0,
+            data=b"",
+            storage_backend="missing",
+        )
+
+        with self.assertRaisesMessage(
+            CommandError,
+            "Cannot migrate file objects; Unknown storages found for file: missing",
+        ):
+            call_command("migrate_to_current_objectstorage", "file", stdout=io.StringIO())
+
+        file.refresh_from_db()
+        self.assertEqual("missing", file.storage_backend)
+        self.assertEqual(b"", file.data)
+
+    def test_migrate_file_does_not_delete_source_before_commit(self):
+        data = b"hello world"
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+
+        file = File.objects.create(
+            checksum=checksum,
+            filename="hello.txt",
+            size=len(data),
+            data=b"",
+            storage_backend="source",
+        )
+
+        with tempfile.TemporaryDirectory() as source_dir, tempfile.TemporaryDirectory() as target_dir:
+            Path(source_dir, checksum).write_bytes(data)
+            storages = {
+                "file": {
+                    "source": {
+                        "STORAGE": "files.storage.ObjectFileStorage",
+                        "OPTIONS": {"basepath": source_dir},
+                    },
+                    "target": {
+                        "STORAGE": "files.storage.ObjectFileStorage",
+                        "OPTIONS": {"basepath": target_dir},
+                        "USE_FOR_WRITE": True,
+                    },
+                },
+            }
+
+            with override_object_storages(storages):
+                with patch.object(File, "save", autospec=True, side_effect=Exception("boom")):
+                    with self.assertRaisesMessage(Exception, "boom"):
+                        call_command("migrate_to_current_objectstorage", "file", stdout=io.StringIO())
+
+            file.refresh_from_db()
+            self.assertEqual("source", file.storage_backend)
+            self.assertTrue(Path(source_dir, checksum).exists())
+            self.assertEqual(data, Path(source_dir, checksum).read_bytes())
+
+    def test_cleanup_objectstorage_deletes_orphans(self):
+        live_checksum = "a" * 40
+        orphan_checksum = "b" * 40
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            Path(tempdir, live_checksum).write_bytes(b"live")
+            Path(tempdir, orphan_checksum).write_bytes(b"orphan")
+
+            File.objects.create(
+                checksum=live_checksum,
+                filename="live.txt",
+                size=4,
+                data=b"",
+                storage_backend="local",
+            )
+
+            with override_object_storages(get_test_object_storages(tempdir, use_for_write=False)):
+                call_command("cleanup_objectstorage", "file", "local", stdout=io.StringIO())
+
+            self.assertTrue(Path(tempdir, live_checksum).exists())
+            self.assertFalse(Path(tempdir, orphan_checksum).exists())
+
+    def test_external_file_cleanup_happens_after_commit(self):
+        checksum = "a" * 40
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            Path(tempdir, checksum).write_bytes(b"live")
+
+            with override_object_storages(get_test_object_storages(tempdir, use_for_write=False)):
+                file = File.objects.create(
+                    checksum=checksum,
+                    filename="live.txt",
+                    size=4,
+                    data=b"",
+                    storage_backend="local",
+                )
+
+                with patch("files.models._cleanup_objects_on_storage") as cleanup:
+                    with immediate_atomic():
+                        file.delete()
+                        cleanup.assert_not_called()
+
+                    cleanup.assert_called_once_with([("file", checksum, "local")])
+
+    def test_external_file_queryset_cleanup_is_not_run_on_rollback(self):
+        checksum = "a" * 40
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            Path(tempdir, checksum).write_bytes(b"live")
+
+            with override_object_storages(get_test_object_storages(tempdir, use_for_write=False)):
+                File.objects.create(
+                    checksum=checksum,
+                    filename="live.txt",
+                    size=4,
+                    data=b"",
+                    storage_backend="local",
+                )
+
+                with patch("files.models._cleanup_objects_on_storage") as cleanup:
+                    with self.assertRaises(Exception):
+                        with immediate_atomic():
+                            File.objects.filter(checksum=checksum).delete()
+                            raise Exception("rollback")
+
+                    cleanup.assert_not_called()
+
+                self.assertTrue(File.objects.filter(checksum=checksum).exists())
+                self.assertTrue(Path(tempdir, checksum).exists())
+
     def test_uuid_behavior_of_django(self):
         # test to check Django is doing the thing of converting various UUID-like things on "both sides" before
         # comparing. "this probably shouldn't be necessary" to test, but I'd rather have a test that proves it works
@@ -76,6 +427,110 @@ class FilesTests(TransactionTestCase):
                 fms = FileMetadata.objects.filter(debug_id__in=[test_with])
                 self.assertEqual(1, fms.count())
 
+    def test_get_file_metadata_for_debug_ids_uses_project_scope_before_legacy_fallback(self):
+        scoped_debug_id = uuid4()
+        legacy_debug_id = uuid4()
+        file = File.objects.create(checksum="a" * 40, filename="scoped.js.map", size=0)
+        legacy_file = File.objects.create(checksum="b" * 40, filename="legacy.js.map", size=0)
+
+        scoped_metadata = FileMetadata.objects.create(
+            project=self.project,
+            debug_id=scoped_debug_id,
+            file_type="source_map",
+            file=file,
+        )
+        FileMetadata.objects.create(debug_id=scoped_debug_id, file_type="source_map", file=legacy_file)
+        legacy_metadata = FileMetadata.objects.create(debug_id=legacy_debug_id, file_type="source_map", file=file)
+
+        result = get_file_metadata_for_debug_ids(
+            self.project,
+            [scoped_debug_id, legacy_debug_id],
+            "source_map",
+        )
+
+        self.assertEqual(scoped_metadata, result[scoped_debug_id])
+        self.assertEqual(legacy_metadata, result[legacy_debug_id])
+
+    @patch("files.views.extract_dif_metadata")
+    def test_difs_assemble_stores_project_scoped_metadata(self, mock_extract_dif_metadata):
+        debug_id = uuid4()
+        data = b"debug"
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+        Chunk.objects.create(checksum=checksum, size=len(data), data=data)
+        mock_extract_dif_metadata.return_value = {"kind": "dbg"}
+
+        with bugsink_override_settings(FEATURE_MINIDUMPS=True):
+            response = self.client.post(
+                f"/api/0/projects/anyorg/{self.project.slug}/files/difs/assemble/",
+                json.dumps({
+                    checksum: {
+                        "chunks": [checksum],
+                        "debug_id": str(debug_id),
+                        "name": "debug-file",
+                    },
+                }),
+                content_type="application/json",
+                headers=self.token_headers,
+            )
+
+        self.assertEqual(200, response.status_code)
+        metadata = FileMetadata.objects.get(debug_id=debug_id, file_type="dbg")
+        self.assertEqual(self.project, metadata.project)
+        self.assertEqual("debug-file", metadata.file.filename)
+
+    @patch("files.minidump.extract_source_context")
+    @patch("files.minidump.symbolic.debuginfo.Archive.from_bytes")
+    @patch("files.minidump.symbolic.debuginfo.id_from_breakpad")
+    def test_minidump_symbolication_uses_project_scoped_debug_files(
+        self,
+        mock_id_from_breakpad,
+        mock_archive_from_bytes,
+        mock_extract_source_context,
+    ):
+        debug_id = uuid4()
+        other_project = Project.objects.create(name="other")
+        dbg_file = File.objects.create(checksum="d" * 40, filename="debug-file", size=0, data=b"debug")
+        src_file = File.objects.create(checksum="e" * 40, filename="source-bundle", size=0, data=b"source")
+
+        FileMetadata.objects.create(project=other_project, debug_id=debug_id, file_type="dbg", file=dbg_file)
+        FileMetadata.objects.create(project=other_project, debug_id=debug_id, file_type="src", file=src_file)
+
+        line_info = SimpleNamespace(function_name="otherFunction", filename="other.c", line=7)
+        symcache = SimpleNamespace(lookup=lambda rel: [line_info])
+        debug_object = SimpleNamespace(make_symcache=lambda: symcache)
+        archive = SimpleNamespace(iter_objects=lambda: [debug_object])
+        mock_id_from_breakpad.return_value = str(debug_id)
+        mock_archive_from_bytes.return_value = archive
+        mock_extract_source_context.return_value = (["pre"], "context", ["post"])
+
+        module = SimpleNamespace(addr=1000, size=100, debug_id="breakpad-debug-id")
+        frame = SimpleNamespace(instruction=1010)
+        thread = SimpleNamespace(thread_id=1, frames=lambda: [frame])
+        process_state = SimpleNamespace(
+            modules=lambda: [module],
+            threads=lambda: [thread],
+            requesting_thread=0,
+        )
+
+        # Positive case: the debug files work for the project they were uploaded to.
+        threads = event_threads_for_process_state(process_state, other_project)
+        rendered_frame = threads[0]["stacktrace"]["frames"][0]
+        self.assertEqual("otherFunction", rendered_frame["function"])
+        self.assertEqual("other.c", rendered_frame["filename"])
+        self.assertEqual(7, rendered_frame["lineno"])
+        self.assertEqual("context", rendered_frame["context_line"])
+
+        # Negative case: the same debug ID does not resolve across project boundaries.
+        mock_archive_from_bytes.reset_mock()
+        mock_extract_source_context.reset_mock()
+
+        threads = event_threads_for_process_state(process_state, self.project)
+        rendered_frame = threads[0]["stacktrace"]["frames"][0]
+        self.assertEqual({"instruction_addr": "0x3f2"}, rendered_frame)
+        mock_archive_from_bytes.assert_not_called()
+        mock_extract_source_context.assert_not_called()
+
+    @tag("samples")
     def test_assemble_artifact_bundle(self):
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
         event_samples = [SAMPLES_DIR + fn for fn in [
@@ -115,7 +570,7 @@ class FilesTests(TransactionTestCase):
                     checksum,  # single-chunk upload, so this works
                 ],
                 "projects": [
-                    "unused_for_now"
+                    self.project.slug
                 ]
             }
 
@@ -168,6 +623,7 @@ class FilesTests(TransactionTestCase):
                 # we want to know _which_ event failed, hence the raise-from-e here
                 raise AssertionError("Error rendering event %s" % event.event_id) from e
 
+    @tag("samples")
     def test_assemble_artifact_bundle_small_chunks(self):
         # Copy-paste of test_assemble_artifact_bundle, but checking _only_ that bundle assembly works with small chunks.
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
@@ -204,7 +660,7 @@ class FilesTests(TransactionTestCase):
             "checksum": checksum,
             "chunks": seen_checksums,
             "projects": [
-                "unused_for_now"
+                self.project.slug
             ]
         }
 
@@ -218,3 +674,162 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(
             200, response.status_code, "Error in %s: %s" % (
                 filename, response.content if response.status_code != 302 else response.url))
+
+
+class EnterContextMixin:
+    # https://docs.python.org/3.11/library/unittest.html#unittest.TestCase.enterContext but we support 3.10 too
+    def enterContext(self, cm):
+        result = cm.__enter__()
+
+        def _exit(exc_type=None, exc=None, tb=None):
+            cm.__exit__(exc_type, exc, tb)
+
+        self.addCleanup(_exit)
+        return result
+
+
+class SentryCLITest(EnterContextMixin, LiveServerTestCase):
+    # Test that the _actual_ sentry-cli tool can upload files to our chunk-upload endpoint, and that the files are
+    # correctly assembled and processed.
+
+    def setUp(self):
+        super().setUp()
+        auth = AuthToken.objects.create(description="test token")
+        self.token = auth.token
+        self.project = Project.objects.create(name="test")
+
+        # sentry-cli asks _us_ for our own URL...
+        self.enterContext(bugsink_override_settings(BASE_URL=self.live_server_url))
+
+        # propagate exceptions so that we get the errors "from inside the server" instead of just sentry-cli reporting
+        # about a 500 error (the setting just makes it end up on the output, it does not actually "escape" in such a
+        # way that it fails the test itself (but sentry-cli will fail so we get both).
+        self.enterContext(override_settings(DEBUG_PROPAGATE_EXCEPTIONS=True))
+        self.tempdir = self.enterContext(tempfile.TemporaryDirectory())
+
+    def _run(self, args, expect_success=True):
+        sp = subprocess.run(
+            args,
+            cwd=self.tempdir,
+            env={
+                "SENTRY_AUTH_TOKEN": self.token,
+                "HOME": str(self.tempdir),  # avoid reading any config from the user's real home dir
+            },
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # merge stderr into stdout so we can see it in test failures
+        )
+        output = sp.stdout.decode('utf-8')
+        if expect_success and sp.returncode != 0:
+            raise Exception(f"Command {args} failed with output:\n{output}")
+        if not expect_success and sp.returncode == 0:
+            raise Exception(f"Command {args} unexpectedly succeeded with output:\n{output}")
+        return output
+
+    def test_sentry_cli_upload(self):
+        # Test-the-test (these things should live in your env, as per requirements.development.txt)
+        sentry_cli = shutil.which("sentry-cli")
+        identity = shutil.which("identity-sourcemap")
+        assert sentry_cli, "sentry-cli not found on PATH (venv?)"
+        assert identity, "identity-sourcemap not found on PATH (pip install ecma426)"
+
+        ptempdir = Path(self.tempdir)
+        js_path = ptempdir / "captureException.js"
+        map_path = ptempdir / "captureException.js.map"
+
+        js_path.write_text(MINIMAL_JS, encoding="utf-8")
+
+        # generate sourcemap with identity-sourcemap
+        self._run([identity, str(js_path)])
+        assert map_path.exists(), "identity-sourcemap did not produce captureException.js.map"
+
+        # sentry-cli sourcemaps inject
+        self._run([sentry_cli, "sourcemaps", "inject", str(js_path), str(map_path)])
+
+        injected_js = js_path.read_text(encoding="utf-8")
+        assert "debugId=" in injected_js, injected_js[-500:]
+
+        sourcemap = json.loads(map_path.read_text(encoding="utf-8"))
+        assert ("debugId" in sourcemap) or ("debug_id" in sourcemap), sourcemap.keys()
+
+        # sentry-cli sourcemaps upload
+        self._run([
+            sentry_cli,
+            "--log-level=debug",
+            "--url",
+            self.live_server_url,
+            "sourcemaps",
+            "--org",
+            "bugsinkhasnoorgs",
+            "--project",
+            self.project.slug,
+            "upload",
+            str(map_path),
+        ])
+
+        self.assertEqual(2, File.objects.count())
+        self.assertTrue(File.objects.filter(filename="captureException.js.map").exists())
+        self.assertTrue(File.objects.filter(filename__endswith=".zip").exists())
+
+        # > When using sentry-cli or [..] Debug IDs are deterministically generated based on the source file contents.
+        self.assertEqual(
+            UUID('9b40e0f3-8084-5931-94d4-8d941780a177'),
+            FileMetadata.objects.get(file__filename="captureException.js.map").debug_id)
+        self.assertEqual(self.project, FileMetadata.objects.get(file__filename="captureException.js.map").project)
+
+        # sentry-cli sourcemaps upload with bogus project
+        output = self._run([
+            sentry_cli,
+            "--log-level=debug",
+            "--url",
+            self.live_server_url,
+            "sourcemaps",
+            "--org",
+            "bugsinkhasnoorgs",
+            "--project",
+            "intentionallynonexistentproject",
+            "upload",
+            str(map_path),
+        ], expect_success=False)
+        self.assertIn("Unknown project(s): intentionallynonexistentproject", output)
+
+        # sentry-cli sourcemaps upload with multiple projects
+        other_project = Project.objects.create(name="other")
+        self._run([
+            sentry_cli,
+            "--log-level=debug",
+            "--url",
+            self.live_server_url,
+            "sourcemaps",
+            "--org",
+            "bugsinkhasnoorgs",
+            "--project",
+            self.project.slug,
+            "--project",
+            other_project.slug,
+            "upload",
+            str(map_path),
+        ])
+
+        self.assertEqual(
+            {self.project.id, other_project.id},
+            set(
+                FileMetadata.objects
+                .filter(file__filename="captureException.js.map")
+                .values_list("project", flat=True)
+            ),
+        )
+
+
+MINIMAL_JS = """\
+function bar() {
+Sentry.captureException(new Error("Test Error"));
+}
+
+function foo() {
+bar();
+}
+
+function captureException() {
+foo();
+}
+"""

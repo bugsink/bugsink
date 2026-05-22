@@ -14,6 +14,7 @@ class AuthToken(models.Model):
     token = models.CharField(max_length=40, unique=True, default=generate_token, validators=[
         RegexValidator(regex=r'^[a-f0-9]{40}$', message='Token must be a 40-character hexadecimal string.'),
     ])
+    description = models.CharField(max_length=255, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
 
     def __str__(self):

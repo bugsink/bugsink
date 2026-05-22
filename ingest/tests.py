@@ -31,6 +31,7 @@ from bugsink.streams import UnclosableBytesIO
 from compat.timestamp import format_timestamp
 from compat.dsn import get_header_value
 from bsmain.management.commands.send_json import Command as SendJsonCommand
+from phonehome.models import Installation
 
 from .views import BaseIngestAPIView, MinidumpAPIView
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
@@ -111,6 +112,26 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual("\n", Issue.objects.get().events_at)
         self.assertEqual(1, TurningPoint.objects.count())
         self.assertEqual(TurningPointKind.FIRST_SEEN, TurningPoint.objects.first().kind)
+
+    @patch("ingest.views.BaseIngestAPIView.count_project_periods_and_act_on_it")
+    @patch("ingest.views.BaseIngestAPIView.count_installation_periods_and_act_on_it")
+    @patch("ingest.views.evict_for_max_events")
+    @patch("events.tasks.delete_by_age_until_under_retention_max.delay")
+    def test_ingest_view_zero_retention_short_circuits(
+            self, cleanup_delay, evict_for_max_events, count_installation, count_project):
+        self.quiet_project.retention_max_event_count = 0
+        self.quiet_project.save(update_fields=["retention_max_event_count"])
+
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
+
+        self.assertFalse(count_installation.called)
+        self.assertFalse(count_project.called)
+        self.assertFalse(evict_for_max_events.called)
+        self.assertFalse(cleanup_delay.called)
+        self.assertEqual(0, Event.objects.filter(project=self.quiet_project).count())
+        self.assertEqual(0, Issue.objects.filter(project=self.quiet_project).count())
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
@@ -207,6 +228,32 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(TurningPointKind.UNMUTED, TurningPoint.objects.first().kind)
         self.assertEqual(send_unmute_alert.delay.call_args[0][0], str(issue.id))
         self.assertTrue("An event was observed after the mute-deadline of" in send_unmute_alert.delay.call_args[0][1])
+
+    @patch("ingest.views.BaseIngestAPIView.count_project_periods_and_act_on_it")
+    @patch("ingest.views.BaseIngestAPIView.count_installation_periods_and_act_on_it")
+    @patch("ingest.views.evict_for_max_events")
+    @patch("events.tasks.delete_by_age_until_under_retention_max.delay")
+    def test_ingest_view_zero_retention_schedules_cleanup_for_stored_events(
+            self, cleanup_delay, evict_for_max_events, count_installation, count_project):
+        self.quiet_project.retention_max_event_count = 0
+        self.quiet_project.save(update_fields=["retention_max_event_count"])
+
+        event_data = create_event_data()
+        issue, _ = get_or_create_issue(self.quiet_project, event_data)
+        create_event(self.quiet_project, issue, event_data=event_data)
+        issue.stored_event_count = 1
+        issue.save(update_fields=["stored_event_count"])
+        self.quiet_project.stored_event_count = 1
+        self.quiet_project.save(update_fields=["stored_event_count"])
+
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        self.assertFalse(count_installation.called)
+        self.assertFalse(count_project.called)
+        self.assertFalse(evict_for_max_events.called)
+        cleanup_delay.assert_called_once_with(self.quiet_project.id)
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
@@ -505,6 +552,89 @@ class IngestViewTestCase(TransactionTestCase):
             self.assertEqual(
                 200, response.status_code, response.content if response.status_code != 302 else response.url)
 
+            self.assertEqual(0, Event.objects.count())
+
+    def test_store_endpoint_generates_event_id_when_missing(self):
+        # The legacy /store/ endpoint must accept payloads without `event_id` and generate one server-side
+        # (matching real Sentry behavior). utopia-php/logger — used by Appwrite 1.9.0 — posts without `event_id`.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        data = {
+            "timestamp": time.time(),
+            "platform": "php",
+            "level": "error",
+            "logger": "app",
+            "message": {"message": "test"},
+            "exception": {"values": [{"type": "TestError", "stacktrace": {"frames": []}}]},
+        }
+        data_bytes = json.dumps(data).encode("utf-8")
+
+        response = self.client.post(
+            f"/api/{ project.id }/store/",
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+            },
+            data=data_bytes,
+        )
+        self.assertEqual(
+            200, response.status_code, response.content if response.status_code != 302 else response.url)
+        self.assertEqual(1, Event.objects.count())
+
+    def test_envelope_endpoint_cleans_up_oversized_event_file(self):
+        project = Project.objects.create(name="test")
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+        event_id = uuid.uuid4().hex
+
+        event_bytes = json.dumps({"event_id": event_id, "message": "x" * 2000}).encode("utf-8")
+        data_bytes = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "event", "length": %d}\n' % len(event_bytes) +
+            event_bytes
+        )
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(
+                INGEST_STORE_BASE_DIR=tempdir, MAX_EVENT_SIZE=1500):
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                },
+                data=data_bytes,
+            )
+
+            self.assertEqual(413, response.status_code)
+            self.assertEqual([], os.listdir(tempdir))
+
+    def test_envelope_endpoint_cleans_up_multiple_event_files(self):
+        project = Project.objects.create(name="test")
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+        event_id = uuid.uuid4().hex
+        event_bytes = json.dumps({"event_id": event_id, "message": "hello"}).encode("utf-8")
+
+        data_bytes = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "event", "length": %d}\n' % len(event_bytes) +
+            event_bytes + b"\n" +
+            b'{"type": "event", "length": %d}\n' % len(event_bytes) +
+            event_bytes
+        )
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                },
+                data=data_bytes,
+            )
+
+            self.assertEqual(200, response.status_code)
+            self.assertEqual([], os.listdir(tempdir))
             self.assertEqual(0, Event.objects.count())
 
     @tag("samples")
@@ -901,6 +1031,33 @@ class IngestViewTestCase(TransactionTestCase):
             # but at least this closes the door for the next event
             self.assertEqual(now + relativedelta(minutes=5), project.quota_exceeded_until)
 
+    @override_settings(MAX_EVENTS_PER_5_MINUTES=1_000, MAX_EVENTS_PER_HOUR=1_000, MAX_EVENTS_PER_MONTH=3)
+    def test_count_installation_periods_and_act_on_it_sums_project_spans(self):
+        now = timezone.now()
+        installation = Installation.objects.get()
+
+        project_a = Project.objects.create(name="installation-a")
+        project_b = Project.objects.create(name="installation-b")
+
+        create_event(project_a, timestamp=now, project_digest_order=100)
+        create_event(project_b, timestamp=now + relativedelta(seconds=1), project_digest_order=1)
+
+        project_a.digested_event_count = 1
+        project_a.save(update_fields=["digested_event_count"])
+        project_b.digested_event_count = 1
+        project_b.save(update_fields=["digested_event_count"])
+
+        result = BaseIngestAPIView.count_installation_periods_and_act_on_it(
+            installation,
+            now + relativedelta(seconds=2),
+        )
+
+        installation.refresh_from_db()
+
+        self.assertEqual(True, result)
+        self.assertEqual(now + relativedelta(months=1), installation.quota_exceeded_until)
+        self.assertEqual('["month", 1, 3]', installation.quota_exceeded_reason)
+
     def test_ingest_updates_stored_event_counts(self):
         request = self.request_factory.post("/api/1/store/")
 
@@ -908,11 +1065,40 @@ class IngestViewTestCase(TransactionTestCase):
 
         self.assertEqual(1, Issue.objects.count())
         self.assertEqual(1, Issue.objects.get().stored_event_count)
+        self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).issue_count)
         self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).stored_event_count)
 
         BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
+        self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).issue_count)
         self.assertEqual(2, Issue.objects.get().stored_event_count)
         self.assertEqual(2, Project.objects.get(id=self.quiet_project.id).stored_event_count)
+
+    def test_ingest_refreshes_issue_calculated_fields_on_subsequent_events(self):
+        # When a fingerprint groups events whose exception type/value differ, the issue's denormalized
+        # calculated_type/calculated_value should reflect the latest event so that the displayed title
+        # tracks reality instead of staying frozen on the first event.
+        request = self.request_factory.post("/api/1/store/")
+
+        first = create_event_data()
+        first["exception"] = {"values": [{"type": "FirstError", "value": "first message"}]}
+        first["fingerprint"] = ["shared-fingerprint"]
+        BaseIngestAPIView().digest_event(**_digest_params(first, self.quiet_project, request))
+
+        issue = Issue.objects.get()
+        self.assertEqual("FirstError", issue.calculated_type)
+        self.assertEqual("first message", issue.calculated_value)
+
+        second = create_event_data()
+        second["exception"] = {"values": [{"type": "SecondError", "value": "second message"}]}
+        second["fingerprint"] = ["shared-fingerprint"]
+        BaseIngestAPIView().digest_event(**_digest_params(second, self.quiet_project, request))
+
+        # still a single issue (same fingerprint), but its title fields now reflect the most recent event
+        self.assertEqual(1, Issue.objects.count())
+        issue.refresh_from_db()
+        self.assertEqual("SecondError", issue.calculated_type)
+        self.assertEqual("second message", issue.calculated_value)
+        self.assertEqual(2, issue.digested_event_count)
 
 
 class MinidumpAPIViewTestCase(TransactionTestCase):

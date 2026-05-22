@@ -10,6 +10,7 @@ from bugsink.utils import assert_
 
 _KIBIBYTE = 1024
 _MEBIBYTE = 1024 * _KIBIBYTE
+_GIBIBYTE = 1024 * _MEBIBYTE
 
 
 # CB means "create by"
@@ -53,6 +54,7 @@ DEFAULTS = {
     "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,  # Note: this only applies to the deprecated "store" endpoint.
     "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
     "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
+    "MAX_FILE_SIZE": 2 * _GIBIBYTE,
 
     # Bugsink-specific limits:
     # The default values are 1_000, 5_000, 1M respectively; which corresponds to ~6%, ~2.7%, .8% of the total capacity
@@ -69,6 +71,9 @@ DEFAULTS = {
 
     "MAX_RETENTION_PER_PROJECT_EVENT_COUNT": None,  # None means "no limit"
     "MAX_RETENTION_EVENT_COUNT": None,  # None means "no limit"
+    "MAX_EVENT_AGE_DAYS": None,  # None means "disabled"
+    "MAX_STORED_FILE_COUNT": None,  # None means "no max"
+    "MAX_STORED_FILE_BYTES": None,  # None means "no max"
 
     # I don't think Sentry specifies this one, but we do: given the spec 8KiB should be enough by an order of magnitude.
     "MAX_HEADER_SIZE": 8 * _KIBIBYTE,
@@ -77,11 +82,19 @@ DEFAULTS = {
     # no_bandit_expl: the usage of this path (via get_filename_for_event_id) is protected with `b108_makedirs`
     "INGEST_STORE_BASE_DIR": "/tmp/bugsink/ingestion",  # nosec
     "EVENT_STORAGES": {},
+    "OBJECT_STORAGES": {},
 
     # Security:
     "MINIMIZE_INFORMATION_EXPOSURE": False,
     "PHONEHOME": True,
     "USE_ADMIN": False,
+    # Webhook outbound policy:
+    # * open            : allow by default unless denied
+    # * allowlist_only  : deny by default unless allow-matched
+    "ALERTS_WEBHOOK_OUTBOUND_MODE": "open",
+    "ALERTS_WEBHOOK_ALLOW_LIST": [],
+    "ALERTS_WEBHOOK_DENY_LIST": [],
+    "ALERTS_WEBHOOK_DENY_NON_GLOBAL": True,
 
     # Feature flags:
     "FEATURE_MINIDUMPS": False,  # minidumps are experimental/early-stage and likely a DOS-magnet; disabled by default
@@ -121,6 +134,12 @@ def _sanitize(settings):
         settings["USER_REGISTRATION"] = CB_NOBODY
         settings["TEAM_CREATION"] = CB_NOBODY
 
+    settings["ALERTS_WEBHOOK_OUTBOUND_MODE"] = settings["ALERTS_WEBHOOK_OUTBOUND_MODE"].lower()
+    assert_(
+        settings["ALERTS_WEBHOOK_OUTBOUND_MODE"] in ["open", "allowlist_only"],
+        "ALERTS_WEBHOOK_OUTBOUND_MODE must be one of: open, allowlist_only"
+    )
+
 
 def get_settings():
     global _settings
@@ -143,5 +162,8 @@ def override_settings(**new_settings):
     for k in new_settings:
         assert_(k in old_settings, "Unknown setting (likely error in tests): %s" % k)
     _settings.update(new_settings)
-    yield
-    _settings = old_settings
+    _sanitize(_settings)
+    try:
+        yield
+    finally:
+        _settings = old_settings

@@ -84,7 +84,7 @@ class SuperDurableAtomic(django_db_transaction.Atomic):
 
 
 def durable_atomic(using=None, savepoint=True):
-    # this is the Django 4.2 db.transaction.atomic but with durable=True by default
+    # this is the Django db.transaction.atomic but with durable=True by default. (based on 4.2, unchanged until 6.0)
 
     # the model of "just having outer transactions" is one that I can wrap my head around, and I would like to make sure
     # it's the one I've implemented.

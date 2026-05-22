@@ -13,5 +13,4 @@ class SeparateSnappeaDBRouter(object):
     def allow_migrate(self, db, app_label, model_name=None, **hints):
         if db == "snappea":
             return app_label == "snappea"
-
-        return app_label != "snappea"
+        return None

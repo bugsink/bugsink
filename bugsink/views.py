@@ -14,7 +14,7 @@ from django.conf import settings
 from django.db.utils import OperationalError
 
 from django.template.defaultfilters import filesizeformat
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.cache import cache_control
 from django.views.defaults import permission_denied as django_permission_denied, page_not_found as django_page_not_found
 from django.http import FileResponse, HttpRequest, HttpResponse
@@ -29,8 +29,9 @@ from bugsink.decorators import login_exempt
 from bugsink.app_settings import get_settings as get_bugsink_settings
 from bugsink.decorators import atomic_for_request_method
 from bugsink.timed_sqlite_backend.base import different_runtime_limit
+from bugsink.utils import is_safe_next_url
 
-from phonehome.tasks import send_if_due
+from phonehome.utils import phone_home
 from phonehome.models import Installation
 
 from ingest.views import BaseIngestAPIView
@@ -57,31 +58,12 @@ debug.technical_404_response = cors_for_api_view(debug.technical_404_response)
 debug.technical_500_response = cors_for_api_view(debug.technical_500_response)
 
 
-def _phone_home():
-    # I need a way to cron-like run tasks that works for the setup with and without snappea. With snappea it's straight-
-    # forward (though not part of snappea _yet_). Without snappea, you'd need _some_ location to do a "poor man's cron"
-    # check. Server-start would be the first thing to consider, but how to do this across gunicorn, debugserver, and
-    # possibly even non-standard (for Bugsink) wsgi servers? Better go the "just pick some request to do the check"
-    # route. I've picked "home", because [a] it's assumed to be somewhat regularly visited [b] there's no transaction
-    # logic in it, which leaves space for transaction-logic in the phone-home task itself and [c] some alternatives are
-    # a no-go (ingestion: on a tight budget; login: not visited when a long-lived session is active).
-    #
-    # having chosen the solution for the non-snappea case, I got the crazy idea of using it for the snappea case too,
-    # i.e. just put a .delay() here and let the config choose. Not so crazy though, because [a] saves us from new
-    # features in snappea, [b] we introduce a certain symmetry of measurement between the 2 setups, i.e. the choice of
-    # lazyness does not influence counting and [c] do I really want to get pings for sites where nobody visits home()?
-
-    # NOTE: each time this function is called, it will schedule a new task, even when the task would quickly return
-    # (nothing due, or configured to never send). We _could_ improve that, but doesn't seem performance-critical enough.
-    send_if_due.delay()  # _phone_home() wrapper serves as a place for the comment above
-
-
+@phone_home
 def home(request):
-    _phone_home()
-
-    if request.user.project_set.filter(projectmembership__accepted=True).distinct().count() == 1:
+    accepted_projects = request.user.project_set.filter(projectmembership__accepted=True).distinct()
+    if accepted_projects.count() == 1:
         # if the user has exactly one project, we redirect them to that project
-        project = request.user.project_set.get()
+        project = accepted_projects.get()
         return redirect("issue_list_open", project_pk=project.id)
 
     if request.user.project_set.all().distinct().count() > 0:
@@ -229,14 +211,17 @@ def counts(request):
 
 
 @user_passes_test(lambda u: u.is_superuser)
+@require_POST
 @atomic_for_request_method
 def silence_email_system_warning(request):
     installation = Installation.objects.get()
     installation.silence_email_system_warning = True
     installation.save()
 
-    next = request.POST.get("next", "/")
-    return HttpResponseRedirect(next)
+    next_url = request.POST.get("next", "/")
+    if not is_safe_next_url(next_url, request):
+        next_url = "/"
+    return HttpResponseRedirect(next_url)
 
 
 @requires_csrf_token

@@ -3,7 +3,7 @@ from tags.tasks import vacuum_tagvalues
 
 
 class Command(BaseCommand):
-    help = "Kick off tag cleanup by vacuuming orphaned TagValue and TagKey entries."
+    help = "Kick off (async, in snappea) tag cleanup by vacuuming orphaned TagValue and TagKey entries."
 
     def handle(self, *args, **options):
         vacuum_tagvalues.delay()

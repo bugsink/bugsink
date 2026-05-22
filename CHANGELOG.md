@@ -1,5 +1,151 @@
 # Changes
 
+## 2.2.0 (21 May 2026)
+
+### Security
+
+Fix: scope issue actions and event lookups to the authorized project/issue.
+
+A project member who knew UUIDs from another project could use some issue-list
+bulk actions and issue event views through a project or issue they were allowed
+to access. These views now require the selected issues/events to belong to the
+authorized parent. See:
+
+https://github.com/bugsink/bugsink/security/advisories/GHSA-g5vc-q7qc-v939
+https://github.com/bugsink/bugsink/security/advisories/GHSA-vx2f-6m6h-9frf
+
+Fix: scope sourcemap and minidump debug-file metadata to projects.
+
+Sourcemap and debug-file IDs are client-provided and were previously resolved
+globally. That could let events in one project use uploaded debug metadata from
+another project. Newly uploaded files now store project information and lookup
+prefers project-scoped metadata. Already-uploaded legacy sourcemaps/debug files
+keep working through a fallback. See:
+
+https://github.com/bugsink/bugsink/security/advisories/GHSA-5389-f7vh-wxj8
+
+### Smaller fixes
+
+* Fix health-check `ALLOWED_HOSTS`-ignore, see #140, #397
+* Generate an `event_id` on `/store/` when the SDK does not send one, see #383.
+* Refresh issue title fields on every event digest, see #378.
+* Include ingest-dir cleanup in the `vacuum` command and warn about stale ingest-dir files, see 772fb1a9bff6 and
+  1ee34c574b7d.
+* Add more verbose output to file vacuuming, see #372.
+* Broaden phonehome triggers and avoid unnecessary queueing, see 2f76eacfbf68.
+* Fix API catch-all logging for non-JSON bodies, see d13e5eff132b.
+* Ensure `release` is a string before ingesting, see 374914c96f62.
+* Fix direct minidump endpoint calls, see 5324d802cc50.
+
+### Upgrading
+
+Sourcemap uploads should include a meaningful project slug. Existing unscoped
+sourcemaps keep working, but installations that prefer to remove that fallback
+can run `delete_legacy_sourcemaps` and re-upload sourcemaps with project slugs.
+
+## 2.1.3 (2 May 2026)
+
+### Security
+
+Fix: harden webhook URL validation parsing and reject non-RFC characters.
+
+In some malformed URLs, Python’s standard URL parser (urllib) and the HTTP
+client stack (requests / urllib3) do not agree on which host is actually being
+targeted. That could allow a webhook URL to pass Bugsink’s outbound-host checks
+while the actual HTTP request is sent somewhere else. See:
+
+https://github.com/bugsink/bugsink/security/advisories/GHSA-fp53-qcf8-2xx2
+
+### Smaller fixes
+
+* Add issue-level markdown, see #334.
+* Fix installation quota counting across projects, see #359.
+* When vacuuming files, don't load them in memory, and allow long-running totals queries, see #363, #373 and #372.
+* Refuse to send email as something@bugsink.com for self-hosters, see 3ff3a6fbeb6d.
+* Fix `MultipleObjectsReturned` when user has unaccepted project memberships, see 653be6968f6e.
+* Cleanup lingering files for `MAX_EVENT_SIZE` overshoots, see #370.
+* Fix some `.get(context, {})` usages and an exception-path double-exception, see #369.
+* Upgrade `gunicorn` requirement from `==25.1.*` to `==25.3.*`, see 2d5e0071cf66.
+* Upgrade monofy, see #367.
+
+## 2.1.2 (11 April 2026)
+
+* Add stored file count and byte caps, see #355
+* Error message readability in dark mode, see #362
+
+## 2.1.1 (9 April 2026)
+
+### Security
+
+Fix: avoid using upload checksums as temporary filenames.
+
+The recent temp-file assembly change made checksum values part of path
+construction before they had been validated. An authenticated caller could
+thereby reach a write-before-checksum-mismatch path during file assembly.
+
+### Smaller fixes
+
+* AuthToken deletion is now idempotent, so mashing the delete button no longer results in a spurious 500.
+* Disable phonehome in development, see #357.
+* Allow enabling `USE_ADMIN` via environment variable, see #361.
+* Fix sourcemap application when `sourcesContent` contains `null`, see #360.
+
+## 2.1.0 (4 April 2026)
+
+* Show open issue counts on project list (skipping very large projects), see #228
+
+* Add outbound webhook destination policy: destinations can be filtered by hostname/IP/CIDR allow/deny lists and
+  non-global IPs are blocked by default. See #339 and [the docs](https://www.bugsink.com/docs/webhook-outbound-policy/).
+
+* Add object storage for uploaded files via `OBJECT_STORAGES`, including `migrate_to_current_objectstorage` and
+  `cleanup_objectstorage`, see #354.
+
+* File uploads and artifact bundle assembly now enforce server-side limits more strictly: chunk uploads are checked
+  server-side, `MAX_FILE_SIZE` applies to assembled files too, and artifact bundles no longer need to be loaded fully
+  into memory during extraction, see #356.
+
+* Add a synchronous `vacuum` command as a single entry point for cleanup tasks, and add `MAX_EVENT_AGE_DAYS` /
+  `delete_old_events` for age-based event cleanup, see #350 and #48.
+
+* Docker config: add `USE_X_FORWARDED_HOST` and `USE_X_FORWARDED_FOR`, see #336 and d3e743d.
+
+* Sourcemaps: handle unmappable frames per-frame, so mixed mapped/unmapped stacktraces keep rendering, see #330.
+
+* Reject events at ingest when retention is configured as zero, see #341.
+
+## 2.0.14 (3 March 2026)
+
+* sourcemaps upload now works for sentry-cli >= 3.0.0, See #290
+* Add `chunk_max_days` and `file_max_days parameters` to `vacuum_files` command and task
+
+* Update whitenoise requirement from ==6.11.* to ==6.12.*
+* Fix `FEATURE_MINIDUMPS` env-parsing in docker template
+* mobile menu: somewhat workable, See #120
+* Add index on `(digested_at, digest_order)` Fix #322
+* Move `mark_safe` closer to actual escaping
+
+## 2.0.13 (21 February 20206)
+
+### Security
+
+Fix: escape output for pygments fallback.
+
+An unauthenticated attacker could store arbitrary JavaScript in a bugsink
+project by sending a crafted Sentry event. Any admin who views the stacktrace
+will execute the payload.
+
+### Other
+
+* annotate with meta: when meta-keys are not actually in the var
+* Reduce Slack title length from 200 to 150 characters (See #318)
+* fix dbrouter `allow_migrate` for more than 2 databases
+* Distinguish installation-quota warning message from the project-level ones
+* fix unsupported operand type(s) for +: 'NoneType' and 'str' in request.url display
+* Add a `description` field to authtoken (See #312)
+* 400 template should say 'bad request' not 'server error'
+* Max retention: default per-project of 20% per project to avoid out-of-room on project 2
+* Allow editing of project when global `max_rention` settings have recently been decreased
+
 ## 2.0.12 (26 January 2026)
 
 ### Fixes:

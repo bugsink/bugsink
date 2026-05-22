@@ -1,20 +1,27 @@
 import json
 import datetime
+import io
 
+from django.core.management import call_command
 from django.test import TestCase as DjangoTestCase
 from unittest import TestCase as RegularTestCase
+from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.utils import timezone
 
+from bugsink.app_settings import override_settings as override_bugsink_settings
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project, ProjectMembership
 from issues.factories import get_or_create_issue
+from issues.models import Issue, TurningPoint, TurningPointKind
 
+from .models import Event
 from .factories import create_event
 from .retention import (
     eviction_target, should_evict, evict_for_max_events, get_epoch_bounds_with_irrelevance, filter_for_work)
-from .utils import annotate_with_meta
+from .utils import annotate_with_meta, annotate_var_with_meta
+from tags.models import EventTag, store_tags
 
 User = get_user_model()
 
@@ -47,6 +54,16 @@ class ViewTests(TransactionTestCase):
         response = self.client.get(f"/events/event/{self.event.pk}/plain/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'text/plain')
+
+    def test_event_views_forbid_events_from_other_projects(self):
+        other_project = Project.objects.create(name="other")
+        other_issue, _ = get_or_create_issue(project=other_project)
+        other_event = create_event(other_project, other_issue)
+
+        for suffix in ["download/", "raw/", "plain/", "md/"]:
+            with self.subTest(suffix=suffix):
+                response = self.client.get(f"/events/event/{other_event.pk}/{suffix}")
+                self.assertEqual(response.status_code, 403)
 
 
 class TimeZoneTestCase(DjangoTestCase):
@@ -252,6 +269,141 @@ class AnnotateWithMetaTestCase(RegularTestCase):
              len(frames[2]["vars"]["args"][1]["__builtins__"])),
             frames[2]["vars"]["args"][1]["__builtins__"].incomplete)
 
+    def test_annotate_var_with_meta_when_meta_not_in_var(self):
+        # something I saw crashing in the wild and want to be robust for"
+        # (I didn't see the equivalent case for lists; the code has been made robust for both but I don't want to
+        # suggest something is "seen in the wild" when I actually haven't seen it so 1 test only
+        result = annotate_var_with_meta(
+            {},  # note: no "auth"
+            {'auth': {'': {'rem': [['!config', 's']]}}},
+        )
+
+        # alternative here would be to interpret the "!config" instruction and display it as "[Filtered]" but I'd like
+        # to have someone on-hand who tells me exactly what happened SDK-side before I make that step.
+        self.assertEqual({}, result)
+
+
+class DeleteOldEventsCommandTestCase(TransactionTestCase):
+    # Auto-generated tests; not carefully reviewed but "at least this touches some code paths"
+
+    def setUp(self):
+        super().setUp()
+        self.project = Project.objects.create(name="Delete Old Events Project")
+        self.issue, _ = get_or_create_issue(project=self.project)
+
+    def _run_command(self, **kwargs):
+        stdout = io.StringIO()
+        call_command("delete_old_events", stdout=stdout, **kwargs)
+        return stdout.getvalue()
+
+    def _sync_counts(self):
+        self.project.stored_event_count = Event.objects.filter(project=self.project).count()
+        self.project.save(update_fields=["stored_event_count"])
+
+        for issue in Issue.objects.filter(project=self.project):
+            issue.stored_event_count = Event.objects.filter(issue=issue).count()
+            issue.save(update_fields=["stored_event_count"])
+
+    def test_command_deletes_events_older_than_cutoff_and_keeps_newer(self):
+        now = timezone.now()
+        old_event = create_event(self.project, self.issue, timestamp=now - datetime.timedelta(days=11))
+        new_event = create_event(self.project, self.issue, timestamp=now - datetime.timedelta(days=9))
+        self._sync_counts()
+
+        self._run_command(days=10)
+
+        self.assertFalse(Event.objects.filter(pk=old_event.pk).exists())
+        self.assertTrue(Event.objects.filter(pk=new_event.pk).exists())
+        self.issue.refresh_from_db()
+        self.project.refresh_from_db()
+        self.assertEqual(1, self.issue.stored_event_count)
+        self.assertEqual(1, self.project.stored_event_count)
+
+    def test_command_uses_digested_at(self):
+        now = timezone.now()
+        old_digested = create_event(self.project, self.issue, timestamp=now - datetime.timedelta(days=11))
+        old_digested.ingested_at = now - datetime.timedelta(days=1)
+        old_digested.save(update_fields=["ingested_at"])
+
+        new_digested = create_event(self.project, self.issue, timestamp=now - datetime.timedelta(days=9))
+        new_digested.ingested_at = now - datetime.timedelta(days=20)
+        new_digested.save(update_fields=["ingested_at"])
+        self._sync_counts()
+
+        self._run_command(days=10)
+
+        self.assertFalse(Event.objects.filter(pk=old_digested.pk).exists())
+        self.assertTrue(Event.objects.filter(pk=new_digested.pk).exists())
+
+    def test_command_ignores_never_evict_and_detaches_turning_points(self):
+        old_event = create_event(self.project, self.issue, timestamp=timezone.now() - datetime.timedelta(days=11))
+        old_event.never_evict = True
+        old_event.save(update_fields=["never_evict"])
+        turning_point = TurningPoint.objects.create(
+            project=self.project,
+            issue=self.issue,
+            triggering_event=old_event,
+            timestamp=old_event.ingested_at,
+            kind=TurningPointKind.FIRST_SEEN,
+        )
+        self._sync_counts()
+
+        self._run_command(days=10)
+
+        self.assertFalse(Event.objects.filter(pk=old_event.pk).exists())
+        turning_point.refresh_from_db()
+        self.assertIsNone(turning_point.triggering_event)
+        self.issue.refresh_from_db()
+        self.project.refresh_from_db()
+        self.assertEqual(0, self.issue.stored_event_count)
+        self.assertEqual(0, self.project.stored_event_count)
+
+    def test_command_triggers_storage_cleanup_and_updates_counts(self):
+        old_event = create_event(self.project, self.issue, timestamp=timezone.now() - datetime.timedelta(days=11))
+        old_event.storage_backend = "dummy-storage"
+        old_event.save(update_fields=["storage_backend"])
+        store_tags(old_event, self.issue, {"foo": "bar"})
+
+        other_issue, _ = get_or_create_issue(
+            project=self.project,
+            event_data={"exception": {"values": [{"type": "Other"}]}},
+        )
+        kept_event = create_event(self.project, other_issue, timestamp=timezone.now() - datetime.timedelta(days=1))
+        self._sync_counts()
+
+        with patch("events.retention._cleanup_events_on_storage") as cleanup:
+            self._run_command(days=10)
+
+        cleanup.assert_called_once_with([(old_event.id, "dummy-storage")])
+        self.assertFalse(Event.objects.filter(pk=old_event.pk).exists())
+        self.assertTrue(Event.objects.filter(pk=kept_event.pk).exists())
+        self.assertEqual(0, EventTag.objects.filter(event_id=old_event.id).count())
+
+        self.issue.refresh_from_db()
+        other_issue.refresh_from_db()
+        self.project.refresh_from_db()
+        self.assertEqual(0, self.issue.stored_event_count)
+        self.assertEqual(1, other_issue.stored_event_count)
+        self.assertEqual(1, self.project.stored_event_count)
+
+    def test_command_uses_configured_max_event_age_days(self):
+        old_event = create_event(self.project, self.issue, timestamp=timezone.now() - datetime.timedelta(days=11))
+        self._sync_counts()
+
+        with override_bugsink_settings(MAX_EVENT_AGE_DAYS=10):
+            self._run_command()
+
+        self.assertFalse(Event.objects.filter(pk=old_event.pk).exists())
+
+    def test_command_completes_synchronously_without_reenqueue(self):
+        old_event = create_event(self.project, self.issue, timestamp=timezone.now() - datetime.timedelta(days=11))
+        self._sync_counts()
+
+        with patch("events.tasks.delete_by_age_until_under_retention_max.delay") as delay:
+            self._run_command(days=10)
+
+        delay.assert_not_called()
+        self.assertFalse(Event.objects.filter(pk=old_event.pk).exists())
 
 EXAMPLE_META = r'''{
   "exception": {

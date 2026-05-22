@@ -72,7 +72,9 @@
                 <div>
                     {{ project.team.name }}
                     | {{ project.member_count }} {% translate "members" %}
-                    {# | {{ project.open_issue_count }} open issues #}
+                    {% if project.open_issue_count != None %}
+                    | {{ project.open_issue_count }} {% translate "open issues" %}
+                    {% endif %}
                     {% if project.member %}
                     | <a href="{% url 'project_member_settings' project_pk=project.id user_pk=request.user.id %}" class="font-bold text-cyan-500 dark:text-cyan-300">{% translate "my settings" %}</a>
                     {% endif %}

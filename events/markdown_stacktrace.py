@@ -136,7 +136,7 @@ def _select_frames(frames, in_app_only):
 def render_stacktrace_md(event, in_app_only=False, include_locals=True):
     parsed = event.get_parsed_data()
     try:
-        apply_sourcemaps(parsed)
+        apply_sourcemaps(parsed, event.project)
     except Exception as e:
         if settings.DEBUG or settings.I_AM_RUNNING == "TEST":
             # when developing/testing, I _do_ want to get notified

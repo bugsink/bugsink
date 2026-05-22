@@ -4,7 +4,7 @@ import symbolic
 from sentry_sdk_extensions import capture_or_log_exception
 
 from bugsink.utils import assert_
-from .models import FileMetadata
+from .models import get_file_metadata_for_debug_id
 
 
 def get_single_object(archive):
@@ -15,7 +15,7 @@ def get_single_object(archive):
     return objects[0]
 
 
-def build_cfi_map_from_minidump_bytes(minidump_bytes):
+def build_cfi_map_from_minidump_bytes(minidump_bytes, project):
     process_state = symbolic.minidump.ProcessState.from_minidump_buffer(minidump_bytes)
 
     frame_info_map = symbolic.minidump.FrameInfoMap.new()
@@ -25,10 +25,11 @@ def build_cfi_map_from_minidump_bytes(minidump_bytes):
             continue
 
         dashed_debug_id = symbolic.debuginfo.id_from_breakpad(module.debug_id)
-        if FileMetadata.objects.filter(debug_id=dashed_debug_id, file_type="dbg").count() == 0:
+        file_metadata = get_file_metadata_for_debug_id(project, dashed_debug_id, "dbg")
+        if file_metadata is None:
             continue
 
-        dif_bytes = FileMetadata.objects.get(debug_id=dashed_debug_id, file_type="dbg").file.data
+        dif_bytes = file_metadata.file.get_raw_data()
         archive = symbolic.debuginfo.Archive.from_bytes(dif_bytes)
 
         debug_object = get_single_object(archive)
@@ -86,7 +87,7 @@ def _find_module_for_address(process_state, abs_addr: int):
     return None
 
 
-def event_threads_for_process_state(process_state):
+def event_threads_for_process_state(process_state, project):
     threads = []
     for thread_index, symbolic_thread in enumerate(process_state.threads()):
         frames = []
@@ -99,9 +100,9 @@ def event_threads_for_process_state(process_state):
             if module and module.debug_id:
                 dashed_debug_id = symbolic.debuginfo.id_from_breakpad(module.debug_id)
 
-                file_metadata = FileMetadata.objects.filter(debug_id=dashed_debug_id, file_type="dbg").first()
+                file_metadata = get_file_metadata_for_debug_id(project, dashed_debug_id, "dbg")
                 if file_metadata:
-                    dif_bytes = file_metadata.file.data
+                    dif_bytes = file_metadata.file.get_raw_data()
 
                     archive = symbolic.debuginfo.Archive.from_bytes(dif_bytes)
 
@@ -121,10 +122,10 @@ def event_threads_for_process_state(process_state):
                             frame["filename"] = line_info.filename
                         frame["lineno"] = line_info.line
 
-                        src_meta = FileMetadata.objects.filter(debug_id=dashed_debug_id, file_type="src").first()
+                        src_meta = get_file_metadata_for_debug_id(project, dashed_debug_id, "src")
                         if src_meta and line_info.filename and line_info.line:
                             frame["pre_context"], frame["context_line"], frame["post_context"] = extract_source_context(
-                                src_meta.file.data, line_info.filename, line_info.line)
+                                src_meta.file.get_raw_data(), line_info.filename, line_info.line)
 
             frames.append(frame)
 

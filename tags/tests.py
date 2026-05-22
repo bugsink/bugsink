@@ -19,6 +19,7 @@ class DeduceTagsTestCase(RegularTestCase):
     def test_deduce_tags(self):
         self.assertEqual(deduce_tags({}), {})
         self.assertEqual(deduce_tags({"tags": {"foo": "bar"}}), {"foo": "bar"})
+        self.assertEqual(deduce_tags({"contexts": None, "request": None}), {})
 
         event_data = {
             "server_name": "server",

@@ -22,6 +22,7 @@ from bugsink.utils import assert_
 
 from alerts.models import MessagingServiceConfig, get_alert_service_backend_class, get_alert_service_kind_choices
 from alerts.forms import MessagingServiceConfigNewForm, MessagingServiceConfigEditForm
+from phonehome.utils import phone_home
 
 from .models import Project, ProjectMembership, ProjectRole, ProjectVisibility
 from .forms import ProjectMembershipForm, MyProjectMembershipForm, ProjectMemberInviteForm, ProjectForm
@@ -29,8 +30,10 @@ from .tasks import send_project_invite_email, send_project_invite_email_new_user
 
 
 User = get_user_model()
+OPEN_ISSUE_COUNT_SHOW_THRESHOLD = 25_000
 
 
+@phone_home
 @atomic_for_request_method
 def project_list(request, ownership_filter=None):
     my_memberships = ProjectMembership.objects.filter(user=request.user)
@@ -94,12 +97,31 @@ def project_list(request, ownership_filter=None):
     else:
         raise ValueError(f"Invalid ownership_filter: {ownership_filter}")
 
-    project_list = base_qs.annotate(
-        # open_issue_count disabled, it's too expensive
-        # open_issue_count=models.Count('issue', filter=models.Q(issue__is_resolved=False, issue__is_muted=False)),
+    project_list = list(base_qs.annotate(
         member_count=models.Count(
             'projectmembership', distinct=True, filter=models.Q(projectmembership__accepted=True)),
-    ).select_related('team')
+    ).select_related('team'))
+
+    for project in project_list:
+        project.open_issue_count = None
+
+    projects_for_open_counts = [p for p in project_list if p.issue_count <= OPEN_ISSUE_COUNT_SHOW_THRESHOLD]
+    if projects_for_open_counts:
+        from issues.models import Issue
+        open_counts_by_project_id = dict(
+            Issue.objects.filter(
+                project_id__in=[p.id for p in projects_for_open_counts],
+                is_deleted=False,
+                is_resolved=False,
+                is_muted=False,
+            )
+            .values("project_id")
+            .annotate(open_issue_count=models.Count("id"))
+            .values_list("project_id", "open_issue_count")
+        )
+
+        for project in projects_for_open_counts:
+            project.open_issue_count = open_counts_by_project_id.get(project.id, 0)
 
     if ownership_filter == "mine":
         # Perhaps there's some Django-native way of doing this, but I can't figure it out soon enough, and this also

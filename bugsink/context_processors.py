@@ -141,7 +141,7 @@ def useful_settings_processor(request):
             per_fmt = "%s %ss" % (nr_of_periods, period_name) if nr_of_periods != 1 else period_name
             date_fmt = date(localtime(installation.quota_exceeded_until), "j M G:i T")
             system_warnings.append(SystemWarning(
-                "Event ingestion stopped until %s. Reason: project quota (%s events per %s) exceeded." % (
+                "Event ingestion stopped until %s. Reason: installation quota (%s events per %s) exceeded." % (
                       date_fmt, gte_threshold, per_fmt), None))
 
         return system_warnings + get_snappea_warnings()

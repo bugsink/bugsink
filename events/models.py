@@ -167,8 +167,9 @@ class Event(models.Model):
         ]
         indexes = [
             models.Index(fields=["project", "never_evict", "digested_at", "irrelevance_for_retention"]),  # eviction
-            models.Index(fields=["issue", "digested_at"]),
+            models.Index(fields=["issue", "digested_at"]),  # issue-based check_for_thresholds
             models.Index(fields=["project", "digested_at"]),  # project-wide quota check
+            models.Index(fields=["digested_at", "digest_order"]),  # check_for_thresholds, see #322
         ]
 
     def get_raw_data(self):
@@ -235,13 +236,13 @@ class Event(models.Model):
                 # transaction=maybe_empty(parsed_data.get("transaction", "")), part of denormalized_fields
 
                 server_name=maybe_empty(parsed_data.get("server_name", ""))[:255],
-                release=maybe_empty(parsed_data.get("release", ""))[:250],
+                release=str(maybe_empty(parsed_data.get("release", "")))[:250],
                 dist=maybe_empty(parsed_data.get("dist", ""))[:64],
 
                 environment=maybe_empty(parsed_data.get("environment", ""))[:64],
 
-                sdk_name=maybe_empty(parsed_data.get("", {}).get("name", ""))[:255],
-                sdk_version=maybe_empty(parsed_data.get("", {}).get("version", ""))[:255],
+                sdk_name=maybe_empty(parsed_data.get("sdk", {}).get("name", ""))[:255],
+                sdk_version=maybe_empty(parsed_data.get("sdk", {}).get("version", ""))[:255],
 
                 # just getting from the dict would be more precise, since we always add this info, but doing the .get()
                 # allows for backwards compatability (digesting events for which the info was not added on-ingest) so

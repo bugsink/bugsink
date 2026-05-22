@@ -16,6 +16,9 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Note: slightly 
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 USE_X_REAL_IP = True
+# If your reverse proxy must overwrite the Host header when talking to Bugsink, you can pass the original host
+# through X-Forwarded-Host and uncomment the setting below.
+# USE_X_FORWARDED_HOST = True
 # Alternatively, you can use X-Forwarded-For. (Set the number of proxies in the settings below.)
 # USE_X_FORWARDED_FOR = True
 # X_FORWARDED_FOR_PROXY_COUNT = 1
@@ -74,8 +77,7 @@ EMAIL_BACKEND = "bugsink.email_backends.QuietConsoleEmailBackend"  # instead of 
 # Uncomment the line below to show all sent emails in the logs
 # LOGGING['loggers']['bugsink.email']['level'] = "INFO"
 
-
-SERVER_EMAIL = DEFAULT_FROM_EMAIL = "Bugsink <bugsink@example.org>"
+SERVER_EMAIL = DEFAULT_FROM_EMAIL = "Bugsink <bugsink@example.org>"  # don't use ...@bugsink.com if you're not bugsink
 
 # constants for "create by" (user/team/project) settings
 CB_ANYBODY = "CB_ANYBODY"
@@ -102,16 +104,28 @@ BUGSINK = {
     "SINGLE_TEAM": False,
     "TEAM_CREATION": CB_MEMBERS,  # who can create new teams. default: members, which means "any member of the site"
 
+    # "MAX_EVENT_AGE_DAYS": 60,
+    # "MAX_STORED_FILE_COUNT": 10_000,
+    # "MAX_STORED_FILE_BYTES": 1_000_000_000,
+
     # "MAX_EVENT_SIZE": _MEBIBYTE,
     # "MAX_EVENT_COMPRESSED_SIZE": 200 * _KIBIBYTE,
     # "MAX_ENVELOPE_SIZE": 100 * _MEBIBYTE,
     # "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
+    # For large MAX_FILE_SIZE values, you may want OBJECT_STORAGES["file"] configured too.
+    # "MAX_FILE_SIZE": 2 * _GIBIBYTE,
 
     "INGEST_STORE_BASE_DIR": "{{ base_dir }}/ingestion",
 
     # Optionally, you can set the following to True to further minimize information exposure in the UI. (The default is
     # False, which we've judged to still not expose too much in most cases, but you might have different requirements.)
     "MINIMIZE_INFORMATION_EXPOSURE": False,
+
+    # Webhook outbound security:
+    # "ALERTS_WEBHOOK_OUTBOUND_MODE": "open",  # or "allowlist_only"
+    # "ALERTS_WEBHOOK_ALLOW_LIST": ["hooks.example.com", "203.0.113.0/24"],
+    # "ALERTS_WEBHOOK_DENY_LIST": ["bad.example.com", "198.51.100.0/24"],
+    # "ALERTS_WEBHOOK_DENY_NON_GLOBAL": True,
 
     # "EVENT_STORAGES": {
     #     "local_flat_files": {  # a meaningful name of your choosing
@@ -120,6 +134,18 @@ BUGSINK = {
     #             "basepath": "{{ base_dir }}/event_storage",
     #         },
     #         "USE_FOR_WRITE": True,
+    #     },
+    # },
+    #
+    # "OBJECT_STORAGES": {
+    #     "file": {
+    #         "local_files": {
+    #             "STORAGE": "files.storage.ObjectFileStorage",
+    #             "OPTIONS": {
+    #                 "basepath": "{{ base_dir }}/file_storage",
+    #             },
+    #             "USE_FOR_WRITE": True,
+    #         },
     #     },
     # },
 

@@ -1,2 +1,4 @@
 # testing/development only:
 coverage
+sentry-cli
+ruff

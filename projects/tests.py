@@ -1,17 +1,19 @@
 from django.conf import settings
 from django.apps import apps
 from django.contrib.auth import get_user_model
+from unittest.mock import patch
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.utils import get_model_topography
 from projects.forms import ProjectForm
-from projects.models import Project, ProjectMembership, ProjectVisibility
+from projects.models import Project, ProjectMembership, ProjectRole, ProjectVisibility
 from events.factories import create_event
-from issues.factories import get_or_create_issue
+from issues.factories import get_or_create_issue, denormalized_issue_fields
 from tags.models import store_tags
-from issues.models import TurningPoint, TurningPointKind
+from issues.models import TurningPoint, TurningPointKind, Issue
 from alerts.models import MessagingServiceConfig
 from releases.models import Release
+from files.models import File, FileMetadata
 
 from .tasks import get_model_topography_with_project_override
 
@@ -22,7 +24,8 @@ class ProjectDeletionTestCase(TransactionTestCase):
 
     def setUp(self):
         super().setUp()
-        self.project = Project.objects.create(name="Test Project", stored_event_count=1)  # 1, in prep. of the below
+        self.project = Project.objects.create(
+            name="Test Project", stored_event_count=1, issue_count=1)  # 1, in prep. of the below
         self.issue, _ = get_or_create_issue(self.project)
         self.event = create_event(self.project, issue=self.issue)
         self.user = User.objects.create_user(username='test', password='test')
@@ -35,6 +38,8 @@ class ProjectDeletionTestCase(TransactionTestCase):
         MessagingServiceConfig.objects.create(project=self.project)
         ProjectMembership.objects.create(project=self.project, user=self.user)
         Release.objects.create(project=self.project, version="1.0.0")
+        file = File.objects.create(checksum="a" * 40, filename="test.js.map", size=0)
+        FileMetadata.objects.create(project=self.project, file=file)
 
         self.event.never_evict = True
         self.event.save()
@@ -50,6 +55,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
                   "issues.TurningPoint",
                   "events.Event",
                   "issues.Grouping",
+                  "files.FileMetadata",
                   "alerts.MessagingServiceConfig",
                   "projects.ProjectMembership",
                   "releases.Release",
@@ -67,7 +73,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
         # correct for bugsink/transaction.py's select_for_update for non-sqlite databases
         correct_for_select_for_update = 1 if 'sqlite' not in settings.DATABASES['default']['ENGINE'] else 0
 
-        with self.assertNumQueries(27 + correct_for_select_for_update):
+        with self.assertNumQueries(29 + correct_for_select_for_update):
             self.project.delete_deferred()
 
         # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly
@@ -108,6 +114,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
             (apps.get_model('issues', 'TurningPoint'), 'triggering_event'),
             (apps.get_model('tags', 'EventTag'), 'event'),
             (apps.get_model('issues', 'TurningPoint'), 'project'),
+            (apps.get_model('files', 'FileMetadata'), 'project'),
             (apps.get_model('events', 'Event'), 'project'),
             (apps.get_model('issues', 'TurningPoint'), 'triggering_event'),
             (apps.get_model('tags', 'EventTag'), 'event'),
@@ -135,7 +142,8 @@ class ProjectDeletionTestCase(TransactionTestCase):
             (apps.get_model('alerts', 'MessagingServiceConfig'), 'project'),
             (apps.get_model('projects', 'ProjectMembership'), 'project'),
             (apps.get_model('releases', 'Release'), 'project'),
-            (apps.get_model('issues', 'Issue'), 'project')
+            (apps.get_model('issues', 'Issue'), 'project'),
+            (apps.get_model('files', 'FileMetadata'), 'project'),
         ])
 
 
@@ -160,3 +168,77 @@ class ProjectFormTestCase(TransactionTestCase):
         saved = form.save()
         self.assertEqual(saved.slug, "original-slug")
         self.assertEqual(saved.name, "Renamed")
+
+
+class ProjectListOpenIssueCountTestCase(TransactionTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(username="project-list-user", password="test")
+        self.project = Project.objects.create(name="OpenCount Project", issue_count=3)
+        ProjectMembership.objects.create(project=self.project, user=self.user, accepted=True)
+        self.client.force_login(self.user)
+
+        Issue.objects.create(
+            project=self.project, digest_order=1, is_resolved=False, is_muted=False, **denormalized_issue_fields())
+        Issue.objects.create(
+            project=self.project, digest_order=2, is_resolved=True, is_muted=False, **denormalized_issue_fields())
+        Issue.objects.create(
+            project=self.project, digest_order=3, is_resolved=False, is_muted=True, **denormalized_issue_fields())
+
+    def test_project_list_shows_open_issue_count_when_under_threshold(self):
+        with patch.object(Issue.objects, "filter", wraps=Issue.objects.filter) as issue_filter:
+            response = self.client.get("/projects/mine/")
+
+        issue_filter.assert_called_once()
+        self.assertContains(response, "1 open issues")
+
+    def test_project_list_shows_zero_open_issues(self):
+        Issue.objects.filter(project=self.project, is_resolved=False, is_muted=False).update(is_resolved=True)
+
+        response = self.client.get("/projects/mine/")
+        self.assertContains(response, "0 open issues")
+
+    @patch("projects.views.OPEN_ISSUE_COUNT_SHOW_THRESHOLD", 2)
+    def test_project_list_skips_open_issue_query_when_over_threshold(self):
+        with patch.object(Issue.objects, "filter", wraps=Issue.objects.filter) as issue_filter:
+            response = self.client.get("/projects/mine/")
+
+        issue_filter.assert_not_called()
+        self.assertNotContains(response, "open issues")
+
+
+class ProjectScopedActionTestCase(TransactionTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(username="project-admin", password="test")
+        self.project = Project.objects.create(name="owned")
+        ProjectMembership.objects.create(
+            project=self.project, user=self.user, role=ProjectRole.ADMIN, accepted=True)
+        self.client.force_login(self.user)
+
+    def test_member_remove_scopes_to_project(self):
+        other_user = User.objects.create_user(username="other", password="test")
+        other_project = Project.objects.create(name="other")
+        other_membership = ProjectMembership.objects.create(project=other_project, user=other_user)
+
+        response = self.client.post(
+            f"/projects/{self.project.id}/members/",
+            {"action": f"remove:{other_user.id}"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(ProjectMembership.objects.filter(id=other_membership.id).exists())
+
+    def test_alert_service_remove_scopes_to_project(self):
+        other_project = Project.objects.create(name="other")
+        other_service = MessagingServiceConfig.objects.create(project=other_project)
+
+        response = self.client.post(
+            f"/projects/{self.project.id}/alerts/",
+            {"action": f"remove:{other_service.id}"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(MessagingServiceConfig.objects.filter(id=other_service.id).exists())

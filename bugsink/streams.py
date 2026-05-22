@@ -208,6 +208,27 @@ def compress_with_zlib(input_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
     return output_stream.getvalue()
 
 
+def copy_stream_limited(input_stream, output_stream, *, max_bytes=None, reason=None, chunk_size=DEFAULT_CHUNK_SIZE,
+                        digest=None):
+
+    bytes_copied = 0
+
+    while True:
+        chunk = input_stream.read(chunk_size)
+        if not chunk:
+            return bytes_copied
+
+        next_size = bytes_copied + len(chunk)
+        if max_bytes is not None and next_size > max_bytes:
+            raise MaxLengthExceeded("Max length (%s) exceeded" % (reason or max_bytes))
+
+        output_stream.write(chunk)
+        if digest is not None:
+            digest.update(chunk)
+
+        bytes_copied = next_size
+
+
 class MaxDataReader:
 
     def __init__(self, max_length, stream):
