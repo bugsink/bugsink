@@ -79,6 +79,7 @@ class ProjectMembershipForm(forms.ModelForm):
 
 class ProjectForm(forms.ModelForm):
 
+    slug = forms.CharField(label="Slug", disabled=True)
     dsn = forms.CharField(label="DSN", disabled=True)
 
     def __init__(self, *args, **kwargs):
@@ -101,6 +102,10 @@ class ProjectForm(forms.ModelForm):
             # for authorization are (from the user's perspective).
             del self.fields["team"]
 
+            # for editing, the slug is available, but read-only (editing affects the issue's short identifier)
+            self.fields["slug"].initial = self.instance.slug
+            self.fields["slug"].label = _("Slug (read-only)")
+
             # for editing, the DSN is availabe, but read-only
             self.fields["dsn"].initial = self.instance.dsn
             self.fields["dsn"].label = _("DSN (read-only)")
@@ -110,10 +115,6 @@ class ProjectForm(forms.ModelForm):
                 _("Use the DSN to {link}."),
                 link=format_html('<a href="{}" class="text-cyan-800 font-bold">{}</a>', href, _("set up the SDK")),
             )
-
-            # if we ever push slug to the form, editing it should probably be disallowed as well (but mainly because it
-            # has consequences on the issue's short identifier)
-            # del self.fields["slug"]
         else:
             # for creation, we allow changing the team; (as an additional improvement we _could_ consider hiding this
             # field if there is only one team, and especially if SINGLE_TEAM is True, but being explicit is fine too as
@@ -128,16 +129,16 @@ class ProjectForm(forms.ModelForm):
             elif team_qs.count() == 1:
                 self.fields["team"].initial = team_qs.first()
 
-            # for creation, we don't show the DSN field
+            # for creation, we don't show the slug or DSN fields
+            del self.fields["slug"]
             del self.fields["dsn"]
 
     class Meta:
         model = Project
 
         fields = ["team", "name", "visibility", "retention_max_event_count"]
-        # "slug",  <= for now, we just do this in the model; if we want to do it in the form, I would want to have some
-        # JS in place like we have in the admin. django/contrib/admin/static/admin/js/prepopulate.js is an example of
-        # how Django does this (but it requires JQuery)
+        # slug is shown read-only via an explicit (declared) field for edit; creation auto-generates it on the model.
+        # If we ever make slug editable, we'd want JS like django/contrib/admin/static/admin/js/prepopulate.js.
 
         # "alert_on_new_issue", "alert_on_regression", "alert_on_unmute" later
 
