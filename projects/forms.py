@@ -102,7 +102,7 @@ class ProjectForm(forms.ModelForm):
             # for authorization are (from the user's perspective).
             del self.fields["team"]
 
-            # for editing, the slug is available, but read-only (editing has consequences on the issue's short identifier)
+            # for editing, the slug is available, but read-only (editing affects the issue's short identifier)
             self.fields["slug"].initial = self.instance.slug
             self.fields["slug"].label = _("Slug (read-only)")
 
