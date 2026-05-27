@@ -1,4 +1,4 @@
-gunicorn==25.3.*
+gunicorn==26.0.*
 Django==5.2.*
 verbose_csrf_middleware==5.2.*
 sentry-sdk==2.*
@@ -11,7 +11,7 @@ inotify_simple==2.0.*
 Brotli==1.2.*
 python-dateutil==2.9.*
 whitenoise==6.12.*
-requests==2.33.*
+requests==2.34.*
 monofy==1.2.*
 user-agents==2.2.*
 fastjsonschema==2.21.*

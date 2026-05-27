@@ -248,7 +248,7 @@ class BaseIngestAPIView(View):
         event_data["platform"] = "native"
         event_data["errors"] = []
 
-        merge_minidump_event(event_data, minidump_bytes)
+        merge_minidump_event(event_data, minidump_bytes, project)
 
         # write the event data to disk:
         filename = get_filename_for_event_id(ingestion_id)
@@ -374,7 +374,7 @@ class BaseIngestAPIView(View):
             # we merge after validation: validation is about what's provided _externally_, not our own merging.
             # TODO error handling
             # TODO should not be inside immediate_atomic if it turns out to be slow
-            merge_minidump_event(event_data, minidump_bytes)
+            merge_minidump_event(event_data, minidump_bytes, project)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
@@ -708,6 +708,8 @@ class IngestEventAPIView(BaseIngestAPIView):
         performance_logger.info("ingested event with %s bytes", len(event_data_bytes))
 
         event_data = json.loads(event_data_bytes)
+        if "event_id" not in event_data:
+            event_data["event_id"] = uuid.uuid4().hex
         filename = get_filename_for_event_id(ingestion_id)
         b108_makedirs(os.path.dirname(filename))
         with open(filename, 'w') as f:
@@ -925,7 +927,7 @@ class MinidumpAPIView(BaseIngestAPIView):
                 return JsonResponse({"detail": "upload_file_minidump not found"}, status=HTTP_400_BAD_REQUEST)
 
             minidump_bytes = request.FILES["upload_file_minidump"].read()
-            event_id = self.process_minidump(ingested_at, minidump_bytes, project, request)
+            event_id = self.process_minidump(ingested_at, uuid.uuid4().hex, minidump_bytes, project, request)
 
             return JsonResponse({"id": event_id})
         except Exception as e:

@@ -5,13 +5,15 @@ from unittest.mock import patch
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.utils import get_model_topography
-from projects.models import Project, ProjectMembership
+from projects.forms import ProjectForm
+from projects.models import Project, ProjectMembership, ProjectRole, ProjectVisibility
 from events.factories import create_event
 from issues.factories import get_or_create_issue, denormalized_issue_fields
 from tags.models import store_tags
 from issues.models import TurningPoint, TurningPointKind, Issue
 from alerts.models import MessagingServiceConfig
 from releases.models import Release
+from files.models import File, FileMetadata
 
 from .tasks import get_model_topography_with_project_override
 
@@ -36,6 +38,8 @@ class ProjectDeletionTestCase(TransactionTestCase):
         MessagingServiceConfig.objects.create(project=self.project)
         ProjectMembership.objects.create(project=self.project, user=self.user)
         Release.objects.create(project=self.project, version="1.0.0")
+        file = File.objects.create(checksum="a" * 40, filename="test.js.map", size=0)
+        FileMetadata.objects.create(project=self.project, file=file)
 
         self.event.never_evict = True
         self.event.save()
@@ -51,6 +55,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
                   "issues.TurningPoint",
                   "events.Event",
                   "issues.Grouping",
+                  "files.FileMetadata",
                   "alerts.MessagingServiceConfig",
                   "projects.ProjectMembership",
                   "releases.Release",
@@ -68,7 +73,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
         # correct for bugsink/transaction.py's select_for_update for non-sqlite databases
         correct_for_select_for_update = 1 if 'sqlite' not in settings.DATABASES['default']['ENGINE'] else 0
 
-        with self.assertNumQueries(27 + correct_for_select_for_update):
+        with self.assertNumQueries(29 + correct_for_select_for_update):
             self.project.delete_deferred()
 
         # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly
@@ -109,6 +114,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
             (apps.get_model('issues', 'TurningPoint'), 'triggering_event'),
             (apps.get_model('tags', 'EventTag'), 'event'),
             (apps.get_model('issues', 'TurningPoint'), 'project'),
+            (apps.get_model('files', 'FileMetadata'), 'project'),
             (apps.get_model('events', 'Event'), 'project'),
             (apps.get_model('issues', 'TurningPoint'), 'triggering_event'),
             (apps.get_model('tags', 'EventTag'), 'event'),
@@ -136,8 +142,32 @@ class ProjectDeletionTestCase(TransactionTestCase):
             (apps.get_model('alerts', 'MessagingServiceConfig'), 'project'),
             (apps.get_model('projects', 'ProjectMembership'), 'project'),
             (apps.get_model('releases', 'Release'), 'project'),
-            (apps.get_model('issues', 'Issue'), 'project')
+            (apps.get_model('issues', 'Issue'), 'project'),
+            (apps.get_model('files', 'FileMetadata'), 'project'),
         ])
+
+
+class ProjectFormTestCase(TransactionTestCase):
+
+    def test_slug_is_read_only_on_edit(self):
+        # Slug is exposed on the edit form for visibility but must not be editable: it's part of the issue's short
+        # identifier, so changing it would break external references.
+        project = Project.objects.create(name="Original Name", slug="original-slug")
+
+        form = ProjectForm(
+            data={
+                "name": "Renamed",
+                "slug": "tampered-slug",
+                "visibility": ProjectVisibility.JOINABLE,
+                "retention_max_event_count": 10000,
+            },
+            instance=project,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        saved = form.save()
+        self.assertEqual(saved.slug, "original-slug")
+        self.assertEqual(saved.name, "Renamed")
 
 
 class ProjectListOpenIssueCountTestCase(TransactionTestCase):
@@ -176,3 +206,39 @@ class ProjectListOpenIssueCountTestCase(TransactionTestCase):
 
         issue_filter.assert_not_called()
         self.assertNotContains(response, "open issues")
+
+
+class ProjectScopedActionTestCase(TransactionTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(username="project-admin", password="test")
+        self.project = Project.objects.create(name="owned")
+        ProjectMembership.objects.create(
+            project=self.project, user=self.user, role=ProjectRole.ADMIN, accepted=True)
+        self.client.force_login(self.user)
+
+    def test_member_remove_scopes_to_project(self):
+        other_user = User.objects.create_user(username="other", password="test")
+        other_project = Project.objects.create(name="other")
+        other_membership = ProjectMembership.objects.create(project=other_project, user=other_user)
+
+        response = self.client.post(
+            f"/projects/{self.project.id}/members/",
+            {"action": f"remove:{other_user.id}"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(ProjectMembership.objects.filter(id=other_membership.id).exists())
+
+    def test_alert_service_remove_scopes_to_project(self):
+        other_project = Project.objects.create(name="other")
+        other_service = MessagingServiceConfig.objects.create(project=other_project)
+
+        response = self.client.post(
+            f"/projects/{self.project.id}/alerts/",
+            {"action": f"remove:{other_service.id}"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(MessagingServiceConfig.objects.filter(id=other_service.id).exists())

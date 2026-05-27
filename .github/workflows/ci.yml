@@ -25,9 +25,9 @@ jobs:
   ruff:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: "Set up Python 3.12"
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: "3.12"
     - name: Install Ruff
@@ -40,10 +40,10 @@ jobs:
   bandit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: 3.12
 
@@ -106,9 +106,9 @@ jobs:
       DB_USER: ${{ matrix.db_user }}
       DB_PASSWORD: ${{ matrix.db_password }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
     - name: Start MySQL If Needed
@@ -134,7 +134,7 @@ jobs:
         pip install -r requirements.development.txt
         pip install mysqlclient psycopg2
     - name: Check out event-samples
-      uses: actions/checkout@master
+      uses: actions/checkout@v6
       with:
         repository: bugsink/event-samples
         path: "event-samples"
@@ -169,17 +169,17 @@ jobs:
     # Build the Docker image, start it, wait for readiness, log in at /accounts/login/,
     # and verify that / redirects to /teams/.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build Docker image
         run: docker build -t bugsink-ci .
 
-      - name: Run container (admin:admin)
+      - name: Run container (no-reply@bugsink.com:admin)
         run: |
           docker rm -f bugsink-ci || true
           docker run -d --name bugsink-ci \
             -e SECRET_KEY=UtdHATKzQKLkz3izFFpxCKamhEdspeHmCQFvLx1DAwskqEuyKL \
-            -e CREATE_SUPERUSER=admin:admin \
+            -e CREATE_SUPERUSER=no-reply@bugsink.com:admin \
             -e PORT=8000 \
             -p 8000:8000 \
             bugsink-ci
@@ -214,7 +214,7 @@ jobs:
           CODE=$(curl -sS -b cookies.txt -c cookies.txt \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -H "Referer: http://localhost:8000/accounts/login/" \
-            -d "username=admin&password=admin&csrfmiddlewaretoken=${CSRF}&next=/" \
+            -d "username=no-reply@bugsink.com&password=admin&csrfmiddlewaretoken=${CSRF}&next=/" \
             -o /dev/null -w "%{http_code}" \
             http://localhost:8000/accounts/login/)
 
@@ -236,3 +236,7 @@ jobs:
           fi
 
           echo "Login OK and / redirects to /teams/"
+
+      - name: Show Docker logs
+        if: always()
+        run: docker logs bugsink-ci || true

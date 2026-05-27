@@ -2,6 +2,8 @@ import os
 
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 
 from phonehome.tasks import send_if_due
 
@@ -17,7 +19,7 @@ class Command(BaseCommand):
             return
 
         if ":" not in os.getenv("CREATE_SUPERUSER"):
-            raise ValueError("CREATE_SUPERUSER should be in the format 'username:password'")
+            raise ValueError("CREATE_SUPERUSER should be in the format 'email:password'")
 
         username, password = os.getenv("CREATE_SUPERUSER").split(":", 1)
 
@@ -28,7 +30,14 @@ class Command(BaseCommand):
 
             return
 
-        User.objects.create_superuser(username=username, password=password)
+        # Validate only when we're actually creating the user, so existing installations with a stale
+        # CREATE_SUPERUSER value keep starting normally.
+        try:
+            validate_email(username)
+        except ValidationError as e:
+            raise ValueError("CREATE_SUPERUSER email should be a valid email address") from e
+
+        User.objects.create_superuser(username=username, email=username, password=password)
         print(f"Superuser created: {username}")
 
     def handle(self, *args, **options):
