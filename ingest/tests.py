@@ -375,6 +375,7 @@ class IngestViewTestCase(TransactionTestCase):
             )
             self.assertEqual(
                 200, response.status_code, response.content if response.status_code != 302 else response.url)
+            self.assertEqual({"id": event_id}, response.json())
 
             self.assertEqual(1 + i, Event.objects.count())
 
