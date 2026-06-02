@@ -29,7 +29,7 @@ from tags.utils import deduce_tags, is_mostly_unique
 from bugsink.moreiterutils import batched
 from bugsink.app_settings import get_settings
 
-logger = logging.getLogger("bugsink.tags")
+logger = logging.getLogger("bugsink.ingest")
 
 # Notes on .project as it lives on TagValue, IssueTag and EventTag:
 # In all cases, project could be derived through other means: for TagValue it's implied by TagKey.project; for IssueTag
@@ -181,7 +181,8 @@ def digest_tags(event_data, event, issue):
                 tags[key] = event.remote_addr
 
     # An event may carry an unbounded number of tags; without a cap a single event becomes ~4x that many row
-    # writes inside the (single-writer) digest transaction. Bound it, mirroring the per-value [:200] cap above.
+    # writes inside the (single-writer) digest transaction. Keep the first tags from deduce_tags(), which means
+    # user-provided tags are kept before later synthetic tags.
     max_tags = get_settings().MAX_EVENT_TAGS
     if len(tags) > max_tags:
         logger.warning("event has %d tags; storing %d and dropping the rest", len(tags), max_tags)
