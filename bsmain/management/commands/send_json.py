@@ -132,6 +132,8 @@ class Command(BaseCommand):
         if options["valid_only"] and not self.is_valid(data, identifier):
             return False
 
+        data_bytes = json.dumps(data, separators=(",", ":")).encode("utf-8")
+
         try:
             headers = {
                 "Content-Type": "application/json",
@@ -141,7 +143,6 @@ class Command(BaseCommand):
             if options["x_forwarded_for"]:
                 headers["X-Forwarded-For"] = options["x_forwarded_for"]
 
-            data_bytes = json.dumps(data).encode("utf-8")
             if use_envelope:
                 event_id = data.get("event_id", uuid.uuid4().hex)
 
