@@ -856,7 +856,11 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
         if event_count + minidump_count == 0:
             logger.info("no event or minidump found in envelope, ignoring this envelope.")
-            return JsonResponse({"id": envelope_headers["event_id"]})
+            # event_id is only required in envelope headers when event/attachment items are present (enforced in
+            # factory), so it may be absent here; only echo it back when the SDK actually provided one.
+            if "event_id" in envelope_headers:
+                return JsonResponse({"id": envelope_headers["event_id"]})
+            return HttpResponse()
 
         if event_count > 1 or minidump_count > 1:
             # TODO: we do 2 passes (one for storing, one for calling the right task), and we check certain conditions
