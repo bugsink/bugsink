@@ -583,6 +583,10 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(
             200, response.status_code, response.content if response.status_code != 302 else response.url)
         self.assertEqual(1, Event.objects.count())
+        # server-generated event_id is echoed back per the Sentry response contract; we can't predict it but it must
+        # be a valid UUID hex string.
+        self.assertIn("id", response.json())
+        uuid.UUID(response.json()["id"])
 
     def test_envelope_endpoint_cleans_up_oversized_event_file(self):
         project = Project.objects.create(name="test")

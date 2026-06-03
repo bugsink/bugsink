@@ -719,7 +719,7 @@ class IngestEventAPIView(BaseIngestAPIView):
 
         digest.delay(event_data["event_id"], event_metadata)
 
-        return HttpResponse()
+        return JsonResponse({"id": event_data["event_id"]})
 
 
 class IngestEnvelopeAPIView(BaseIngestAPIView):
