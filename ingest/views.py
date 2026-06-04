@@ -719,7 +719,7 @@ class IngestEventAPIView(BaseIngestAPIView):
 
         digest.delay(event_data["event_id"], event_metadata)
 
-        return HttpResponse()
+        return JsonResponse({"id": event_data["event_id"]})
 
 
 class IngestEnvelopeAPIView(BaseIngestAPIView):
@@ -856,6 +856,10 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
         if event_count + minidump_count == 0:
             logger.info("no event or minidump found in envelope, ignoring this envelope.")
+            # event_id is only required in envelope headers when event/attachment items are present (enforced in
+            # factory), so it may be absent here; only echo it back when the SDK actually provided one.
+            if "event_id" in envelope_headers:
+                return JsonResponse({"id": envelope_headers["event_id"]})
             return HttpResponse()
 
         if event_count > 1 or minidump_count > 1:
@@ -867,7 +871,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
                 "can only deal with one event/minidump per envelope but found %s/%s, ignoring this envelope.",
                 event_count, minidump_count)
             self.cleanup_ingestion_files(ingestion_id)
-            return HttpResponse()
+            return JsonResponse({"id": envelope_headers["event_id"]})
 
         event_metadata = self.get_event_meta(envelope_headers["event_id"], ingested_at, ingestion_id, request, project)
 
@@ -886,7 +890,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             # NOTE "The file should start with the MDMP magic bytes." is not checked yet.
             self.process_minidump(ingested_at, ingestion_id, minidump_bytes, project, request)
 
-        return HttpResponse()
+        return JsonResponse({"id": envelope_headers["event_id"]})
 
 
 # Just a few thoughts on the relative performance of the main building blocks of dealing with Envelopes, and how this
