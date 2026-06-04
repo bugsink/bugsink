@@ -1,6 +1,6 @@
 # Changes
 
-## 2.2.2 (in development)
+## 2.2.2 (4 June 2026)
 
 ### Security
 
