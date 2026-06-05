@@ -1,5 +1,11 @@
 # Changes
 
+## Unreleased
+
+* Add native support for CSP violation reports via a new `/api/<project_pk>/security/` endpoint, compatible with the
+  `report-uri` directive browsers emit. Reports are translated into events and pushed through the existing envelope
+  pipeline, grouped by `(effective-directive, blocked-uri)`.
+
 ## 2.2.2 (4 June 2026)
 
 ### Security
