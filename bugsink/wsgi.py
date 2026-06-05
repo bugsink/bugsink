@@ -94,7 +94,7 @@ class CustomWSGIRequest(WSGIRequest):
         We're leaking a bit of information here, but I don't think it's too much TBH -- especially in the light of ssl
         certificates being specifically tied to the domain name.
         """
-        if self.path.startswith == "/health/":
+        if self.path.startswith("/health/"):
             # For /health/ endpoints, we skip the ALLOWED_HOSTS validation (see #140).
             return self._get_raw_host()
 

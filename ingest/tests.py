@@ -375,6 +375,7 @@ class IngestViewTestCase(TransactionTestCase):
             )
             self.assertEqual(
                 200, response.status_code, response.content if response.status_code != 302 else response.url)
+            self.assertEqual({"id": event_id}, response.json())
 
             self.assertEqual(1 + i, Event.objects.count())
 
@@ -553,6 +554,39 @@ class IngestViewTestCase(TransactionTestCase):
                 200, response.status_code, response.content if response.status_code != 302 else response.url)
 
             self.assertEqual(0, Event.objects.count())
+
+    def test_store_endpoint_generates_event_id_when_missing(self):
+        # The legacy /store/ endpoint must accept payloads without `event_id` and generate one server-side
+        # (matching real Sentry behavior). utopia-php/logger — used by Appwrite 1.9.0 — posts without `event_id`.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        data = {
+            "timestamp": time.time(),
+            "platform": "php",
+            "level": "error",
+            "logger": "app",
+            "message": {"message": "test"},
+            "exception": {"values": [{"type": "TestError", "stacktrace": {"frames": []}}]},
+        }
+        data_bytes = json.dumps(data).encode("utf-8")
+
+        response = self.client.post(
+            f"/api/{ project.id }/store/",
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+            },
+            data=data_bytes,
+        )
+        self.assertEqual(
+            200, response.status_code, response.content if response.status_code != 302 else response.url)
+        self.assertEqual(1, Event.objects.count())
+        # server-generated event_id is echoed back per the Sentry response contract; we can't predict it but it must
+        # be a valid UUID hex string.
+        self.assertIn("id", response.json())
+        uuid.UUID(response.json()["id"])
 
     def test_envelope_endpoint_cleans_up_oversized_event_file(self):
         project = Project.objects.create(name="test")
@@ -1043,6 +1077,33 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).issue_count)
         self.assertEqual(2, Issue.objects.get().stored_event_count)
         self.assertEqual(2, Project.objects.get(id=self.quiet_project.id).stored_event_count)
+
+    def test_ingest_refreshes_issue_calculated_fields_on_subsequent_events(self):
+        # When a fingerprint groups events whose exception type/value differ, the issue's denormalized
+        # calculated_type/calculated_value should reflect the latest event so that the displayed title
+        # tracks reality instead of staying frozen on the first event.
+        request = self.request_factory.post("/api/1/store/")
+
+        first = create_event_data()
+        first["exception"] = {"values": [{"type": "FirstError", "value": "first message"}]}
+        first["fingerprint"] = ["shared-fingerprint"]
+        BaseIngestAPIView().digest_event(**_digest_params(first, self.quiet_project, request))
+
+        issue = Issue.objects.get()
+        self.assertEqual("FirstError", issue.calculated_type)
+        self.assertEqual("first message", issue.calculated_value)
+
+        second = create_event_data()
+        second["exception"] = {"values": [{"type": "SecondError", "value": "second message"}]}
+        second["fingerprint"] = ["shared-fingerprint"]
+        BaseIngestAPIView().digest_event(**_digest_params(second, self.quiet_project, request))
+
+        # still a single issue (same fingerprint), but its title fields now reflect the most recent event
+        self.assertEqual(1, Issue.objects.count())
+        issue.refresh_from_db()
+        self.assertEqual("SecondError", issue.calculated_type)
+        self.assertEqual("second message", issue.calculated_value)
+        self.assertEqual(2, issue.digested_event_count)
 
 
 class IngestSecurityViewTestCase(TransactionTestCase):

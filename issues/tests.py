@@ -4,11 +4,13 @@ import inspect
 import uuid
 import json
 import hashlib
-from io import StringIO
+import gzip
+from io import BytesIO, StringIO
 from glob import glob
 from unittest import TestCase as RegularTestCase
 from unittest.mock import patch
 from datetime import datetime, timezone
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from django.test import TestCase as DjangoTestCase
 from django.contrib.auth import get_user_model
@@ -20,10 +22,11 @@ from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.utils import get_model_topography
 from projects.models import Project, ProjectMembership
 from releases.models import create_release_if_needed
-from events.factories import create_event
+from events.factories import create_event, create_event_data
 from bsmain.management.commands.send_json import Command as SendJsonCommand
 from compat.dsn import get_header_value
 from events.models import Event
+from bsmain.models import AuthToken
 from ingest.views import BaseIngestAPIView
 from issues.factories import get_or_create_issue
 from tags.models import store_tags
@@ -407,7 +410,7 @@ class ViewTests(TransactionTestCase):
     def setUp(self):
         super().setUp()
         self.user = User.objects.create_user(username='test', password='test')
-        self.project = Project.objects.create()
+        self.project = Project.objects.create(name="test")
         ProjectMembership.objects.create(project=self.project, user=self.user)
         self.issue, _ = get_or_create_issue(self.project)
         self.event = create_event(self.project, self.issue, project_digest_order=1)
@@ -417,6 +420,19 @@ class ViewTests(TransactionTestCase):
         response = self.client.get(f"/issues/{self.project.id}/")
         self.assertContains(response, self.issue.title())
 
+    def test_issue_list_bulk_action_ignores_issues_from_other_projects(self):
+        other_project = Project.objects.create(name="other")
+        other_issue, _ = get_or_create_issue(other_project)
+
+        response = self.client.post(
+            f"/issues/{self.project.id}/",
+            {"issue_ids[]": [str(other_issue.id)], "action": "resolve"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        other_issue.refresh_from_db()
+        self.assertFalse(other_issue.is_resolved)
+
     def test_issue_stacktrace(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/")
         self.assertContains(response, self.issue.title())
@@ -424,6 +440,29 @@ class ViewTests(TransactionTestCase):
     def test_issue_details(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/details/")
         self.assertContains(response, self.issue.title())
+
+    def test_issue_event_views_do_not_show_events_from_other_projects(self):
+        other_project = Project.objects.create(name="other")
+        other_issue, _ = get_or_create_issue(other_project)
+        other_event = create_event(other_project, other_issue, event_data={
+            "event_id": uuid.uuid4().hex,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "platform": "python",
+            "exception": {"values": [{"type": "OtherProjectError", "value": "other project stack value"}]},
+            "request": {"headers": {"X-Secret": "other-project-header-value"}},
+            "breadcrumbs": {"values": [{"category": "other-project", "message": "other project breadcrumb"}]},
+        })
+
+        cases = [
+            (f"/issues/issue/{self.issue.id}/event/{other_event.id}/", "other project stack value"),
+            (f"/issues/issue/{self.issue.id}/event/{other_event.id}/details/", "other-project-header-value"),
+            (f"/issues/issue/{self.issue.id}/event/{other_event.id}/breadcrumbs/", "other project breadcrumb"),
+        ]
+        for url, marker in cases:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertNotContains(response, marker)
 
     def test_issue_tags(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/tags/")
@@ -436,6 +475,28 @@ class ViewTests(TransactionTestCase):
     def test_issue_history(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/history/")
         self.assertContains(response, self.issue.title())
+
+    def test_history_comment_edit_and_delete_scope_to_issue(self):
+        other_issue, _ = get_or_create_issue(self.project, create_event_data(exception_type="OtherIssue"))
+        other_comment = TurningPoint.objects.create(
+            project=self.project,
+            issue=other_issue,
+            kind=TurningPointKind.MANUAL_ANNOTATION,
+            user=self.user,
+            comment="leave me alone",
+            timestamp=datetime.now(timezone.utc),
+        )
+
+        response = self.client.post(
+            f"/issues/issue/{self.issue.id}/history/comment/{other_comment.id}/",
+            {"comment": "changed"},
+        )
+        self.assertEqual(response.status_code, 404)
+
+        response = self.client.post(f"/issues/issue/{self.issue.id}/history/comment/{other_comment.id}/delete/")
+        self.assertEqual(response.status_code, 404)
+        other_comment.refresh_from_db()
+        self.assertEqual(other_comment.comment, "leave me alone")
 
     def test_issue_event_list(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/events/")
@@ -606,6 +667,96 @@ class ViewTests(TransactionTestCase):
         self.assertEqual(200, response.status_code)
         self.assertContains(response, "good-source.ts")
         self.assertContains(response, "mappedFunction</span> line <span class=\"font-bold\">11</span>")
+
+    @patch("events.utils.ecma426.loads")
+    def test_sourcemap_uploads_are_project_scoped_when_rendering_events(self, mock_ecma426_loads):
+        debug_id = uuid.uuid4()
+        auth_token = AuthToken.objects.create()
+        other_project = Project.objects.create(name="other")
+        ProjectMembership.objects.create(project=other_project, user=self.user)
+        other_issue, _ = get_or_create_issue(other_project)
+        sourcemap = json.dumps({
+            "version": 3,
+            "sources": ["other-project-source.ts"],
+            "sourcesContent": ["other project source"],
+            "names": [],
+            "mappings": "",
+        })
+        bundle = BytesIO()
+        with ZipFile(bundle, "w", compression=ZIP_DEFLATED) as zf:
+            zf.writestr("manifest.json", json.dumps({
+                "files": {
+                    "~/app.js.map": {
+                        "url": "~/app.js.map",
+                        "type": "source_map",
+                        "headers": {"debug-id": str(debug_id)},
+                    },
+                },
+            }))
+            zf.writestr("~/app.js.map", sourcemap)
+
+        bundle_data = bundle.getvalue()
+        checksum = hashlib.sha1(bundle_data, usedforsecurity=False).hexdigest()
+        upload = BytesIO(gzip.compress(bundle_data))
+        upload.name = checksum
+
+        response = self.client.post(
+            "/api/0/organizations/anyorg/chunk-upload/",
+            data={"file_gzip": upload},
+            headers={"Authorization": f"Bearer {auth_token.token}"},
+        )
+        self.assertEqual(200, response.status_code)
+
+        response = self.client.post(
+            "/api/0/organizations/anyorg/artifactbundle/assemble/",
+            json.dumps({"checksum": checksum, "chunks": [checksum], "projects": [other_project.slug]}),
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {auth_token.token}"},
+        )
+        self.assertEqual(200, response.status_code)
+
+        class FakeMapping:
+            source = "other-project-source.ts"
+            original_line = 0
+            name = "mappedFunction"
+
+        class GoodSourceMap:
+            def lookup_left(self, line, column):
+                if (line, column) == (5, 12):
+                    return FakeMapping()
+
+        mock_ecma426_loads.return_value = GoodSourceMap()
+
+        event_data = {
+            "event_id": uuid.uuid4().hex,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "platform": "javascript",
+            "exception": {
+                "values": [{
+                    "type": "Error",
+                    "value": "test",
+                    "stacktrace": {"frames": [{"filename": "good.js", "lineno": 6, "colno": 12, "in_app": True}]},
+                }]
+            },
+            "debug_meta": {
+                "images": [{"type": "sourcemap", "code_file": "good.js", "debug_id": str(debug_id)}]
+            },
+        }
+
+        # Positive case: the sourcemap works for the project it was uploaded to.
+        other_event = create_event(other_project, other_issue, event_data=event_data, project_digest_order=1)
+        response = self.client.get(f"/issues/issue/{other_issue.id}/event/{other_event.id}/")
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, "other-project-source.ts")
+        self.assertContains(response, "mappedFunction</span> line <span class=\"font-bold\">1</span>")
+
+        # Negative case: the same debug ID does not resolve across project boundaries.
+        event = create_event(self.project, self.issue, event_data=event_data, project_digest_order=2)
+
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{event.id}/")
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, f"No sourcemaps found for Debug ID {debug_id}")
+        self.assertNotContains(response, "other project source")
 
 
 @tag("samples")

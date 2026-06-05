@@ -248,7 +248,7 @@ class BaseIngestAPIView(View):
         event_data["platform"] = "native"
         event_data["errors"] = []
 
-        merge_minidump_event(event_data, minidump_bytes)
+        merge_minidump_event(event_data, minidump_bytes, project)
 
         # write the event data to disk:
         filename = get_filename_for_event_id(ingestion_id)
@@ -374,7 +374,7 @@ class BaseIngestAPIView(View):
             # we merge after validation: validation is about what's provided _externally_, not our own merging.
             # TODO error handling
             # TODO should not be inside immediate_atomic if it turns out to be slow
-            merge_minidump_event(event_data, minidump_bytes)
+            merge_minidump_event(event_data, minidump_bytes, project)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
@@ -395,9 +395,12 @@ class BaseIngestAPIView(View):
             issue = grouping.issue
             issue_created = False
 
-            # update the denormalized fields
+            # update the denormalized fields; calculated_type/value track the latest event so the issue title
+            # reflects the most recent exception (otherwise it stays frozen to the first event's message).
             issue.last_seen = ingested_at
             issue.digested_event_count += 1
+            issue.calculated_type = calculated_type
+            issue.calculated_value = calculated_value
 
         except Grouping.DoesNotExist:
             # we don't have Project.issue_count here ('premature optimization') so we just do an aggregate instead.
@@ -705,6 +708,8 @@ class IngestEventAPIView(BaseIngestAPIView):
         performance_logger.info("ingested event with %s bytes", len(event_data_bytes))
 
         event_data = json.loads(event_data_bytes)
+        if "event_id" not in event_data:
+            event_data["event_id"] = uuid.uuid4().hex
         filename = get_filename_for_event_id(ingestion_id)
         b108_makedirs(os.path.dirname(filename))
         with open(filename, 'w') as f:
@@ -714,7 +719,7 @@ class IngestEventAPIView(BaseIngestAPIView):
 
         digest.delay(event_data["event_id"], event_metadata)
 
-        return HttpResponse()
+        return JsonResponse({"id": event_data["event_id"]})
 
 
 class IngestEnvelopeAPIView(BaseIngestAPIView):
@@ -851,6 +856,10 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
         if event_count + minidump_count == 0:
             logger.info("no event or minidump found in envelope, ignoring this envelope.")
+            # event_id is only required in envelope headers when event/attachment items are present (enforced in
+            # factory), so it may be absent here; only echo it back when the SDK actually provided one.
+            if "event_id" in envelope_headers:
+                return JsonResponse({"id": envelope_headers["event_id"]})
             return HttpResponse()
 
         if event_count > 1 or minidump_count > 1:
@@ -862,7 +871,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
                 "can only deal with one event/minidump per envelope but found %s/%s, ignoring this envelope.",
                 event_count, minidump_count)
             self.cleanup_ingestion_files(ingestion_id)
-            return HttpResponse()
+            return JsonResponse({"id": envelope_headers["event_id"]})
 
         event_metadata = self.get_event_meta(envelope_headers["event_id"], ingested_at, ingestion_id, request, project)
 
@@ -881,7 +890,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             # NOTE "The file should start with the MDMP magic bytes." is not checked yet.
             self.process_minidump(ingested_at, ingestion_id, minidump_bytes, project, request)
 
-        return HttpResponse()
+        return JsonResponse({"id": envelope_headers["event_id"]})
 
 
 # Just a few thoughts on the relative performance of the main building blocks of dealing with Envelopes, and how this
@@ -1036,7 +1045,7 @@ class MinidumpAPIView(BaseIngestAPIView):
                 return JsonResponse({"detail": "upload_file_minidump not found"}, status=HTTP_400_BAD_REQUEST)
 
             minidump_bytes = request.FILES["upload_file_minidump"].read()
-            event_id = self.process_minidump(ingested_at, minidump_bytes, project, request)
+            event_id = self.process_minidump(ingested_at, uuid.uuid4().hex, minidump_bytes, project, request)
 
             return JsonResponse({"id": event_id})
         except Exception as e:

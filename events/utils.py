@@ -10,7 +10,7 @@ from bugsink.utils import assert_
 
 from compat.timestamp import format_timestamp
 
-from files.models import FileMetadata
+from files.models import get_file_metadata_for_debug_ids
 from files.tasks import record_file_accesses
 
 
@@ -113,7 +113,7 @@ def _postgres_fix(memoryview_or_bytes):
     return memoryview_or_bytes
 
 
-def apply_sourcemaps(event_data):
+def apply_sourcemaps(event_data, project):
     images = event_data.get("debug_meta", {}).get("images", [])
     if not images:
         return
@@ -124,11 +124,7 @@ def apply_sourcemaps(event_data):
         if "debug_id" in image and "code_file" in image and image["type"] == "sourcemap"
     }
 
-    metadata_obj_lookup = {
-        metadata_obj.debug_id: metadata_obj
-        for metadata_obj in FileMetadata.objects.filter(
-            debug_id__in=debug_id_for_filename.values(), file_type="source_map").select_related("file")
-    }
+    metadata_obj_lookup = get_file_metadata_for_debug_ids(project, debug_id_for_filename.values(), "source_map")
 
     metadata_ids = [metadata_obj.id for metadata_obj in metadata_obj_lookup.values()]
     delay_on_commit(record_file_accesses, metadata_ids, format_timestamp(datetime.now(timezone.utc)))
@@ -190,7 +186,7 @@ def apply_sourcemaps(event_data):
                 frame["debug_id"] = str(debug_id_for_filename[frame["filename"]])
 
 
-def get_sourcemap_images(event_data):
+def get_sourcemap_images(event_data, project):
     # NOTE: butchered copy/paste of apply_sourcemaps; refactoring for DRY is a TODO
     images = event_data.get("debug_meta", {}).get("images", [])
     if not images:
@@ -202,11 +198,7 @@ def get_sourcemap_images(event_data):
         if "debug_id" in image and "code_file" in image and image["type"] == "sourcemap"
     }
 
-    metadata_obj_lookup = {
-        metadata_obj.debug_id: metadata_obj
-        for metadata_obj in FileMetadata.objects.filter(
-            debug_id__in=debug_id_for_filename.values(), file_type="source_map").select_related("file")
-    }
+    metadata_obj_lookup = get_file_metadata_for_debug_ids(project, debug_id_for_filename.values(), "source_map")
 
     return [
         (basename(filename),

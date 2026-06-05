@@ -15,6 +15,7 @@ from bugsink.app_settings import get_settings
 from bugsink.transaction import durable_atomic, immediate_atomic
 from bugsink.streams import handle_request_content_encoding, copy_stream_limited, MaxLengthExceeded
 from bsmain.models import AuthToken
+from projects.models import Project
 
 from .models import Chunk, File, FileMetadata
 from .tasks import assemble_artifact_bundle, assemble_file
@@ -26,6 +27,10 @@ logger = logging.getLogger("bugsink.api")
 _KIBIBYTE = 1024
 _MEBIBYTE = 1024 * _KIBIBYTE
 CHUNK_UPLOAD_SIZE = 2 * _MEBIBYTE
+PROJECT_REQUIRED_MESSAGE = (
+    "Starting with Bugsink 2.2.0, sourcemap uploads must name existing Bugsink project slugs. "
+    "Use sentry-cli --project <project-slug>."
+)
 
 
 def get_chunk_upload_settings(request, organization_slug):
@@ -135,6 +140,23 @@ def requires_auth_token(view_function):
     return first_require_auth_token
 
 
+def get_artifact_bundle_projects(data):
+    project_slugs = data.get("projects") or []
+    if not isinstance(project_slugs, list):
+        return None, PROJECT_REQUIRED_MESSAGE
+
+    if not project_slugs:
+        return None, PROJECT_REQUIRED_MESSAGE
+
+    projects = list(Project.objects.filter(slug__in=project_slugs, is_deleted=False))
+    projects_by_slug = {project.slug: project for project in projects}
+    unknown_slugs = sorted(set(project_slugs) - set(projects_by_slug))
+    if unknown_slugs:
+        return None, PROJECT_REQUIRED_MESSAGE + " Unknown project(s): %s." % ", ".join(unknown_slugs)
+
+    return [projects_by_slug[slug] for slug in dict.fromkeys(project_slugs)], None
+
+
 @csrf_exempt
 @requires_auth_token
 def chunk_upload(request, organization_slug):
@@ -214,14 +236,14 @@ def artifact_bundle_assemble(request, organization_slug):
     data = json.loads(request.body)
     checksum = data["checksum"]
     chunk_checksums = data["chunks"]
+    projects, error = get_artifact_bundle_projects(data)
+    if error is not None:
+        logger.warning("Rejected artifact bundle: project slug is missing or does not match an existing project.")
+        return JsonResponse({"error": error}, status=400)
 
     # sentry-cli >= 3.x calls this endpoint before uploading chunks (to learn which ones are missing), then uploads
     # only the missing chunks, and then polls this endpoint again. We must return the actual missing chunks; returning
     # an empty list causes sentry-cli 3.x to skip uploading, and the subsequent assembly fails with a KeyError.
-
-    if File.objects.filter(checksum=checksum).exists():
-        # short-circuit if the file already exists; nothing to do
-        return JsonResponse({"state": ChunkFileState.OK, "missingChunks": []})
 
     available_checksums = set(
         Chunk.objects.filter(checksum__in=chunk_checksums).values_list("checksum", flat=True)
@@ -230,7 +252,7 @@ def artifact_bundle_assemble(request, organization_slug):
     if missing_chunks:
         return JsonResponse({"state": ChunkFileState.NOT_FOUND, "missingChunks": missing_chunks})
 
-    assemble_artifact_bundle.delay(checksum, chunk_checksums)
+    assemble_artifact_bundle.delay(checksum, chunk_checksums, [project.id for project in projects])
     # In the ALWAYS_EAGER setup, we process the bundle inline, so arguably we could return "OK" here too; "CREATED" is
     # what sentry returns though, so for faithful mimicking it's the safest bet.
     return JsonResponse({"state": ChunkFileState.CREATED, "missingChunks": []})
@@ -241,6 +263,10 @@ def artifact_bundle_assemble(request, organization_slug):
 def difs_assemble(request, organization_slug, project_slug):
     if not get_settings().FEATURE_MINIDUMPS:
         return JsonResponse({"detail": "minidumps not enabled"}, status=404)
+
+    project = Project.objects.filter(slug=project_slug, is_deleted=False).first()
+    if project is None:
+        return JsonResponse({"detail": "Project not found: %s" % project_slug}, status=404)
 
     # TODO move to tasks.something.delay
     # TODO think about the right transaction around this
@@ -267,39 +293,33 @@ def difs_assemble(request, organization_slug, project_slug):
 
     for file_checksum, file_info in data.items():
         if file_checksum in existing_files:
-            response[file_checksum] = {
-                "state": ChunkFileState.OK,
-                "missingChunks": [],
-                # if it is ever needed, we could add something akin to the below, but so far we've not seen client-side
-                # actually using this; let's add it on-demand.
-                # "dif": json_repr_with_key_info_about(existing_files[file_checksum]),
-            }
-            continue
+            file = existing_files[file_checksum]
+        else:
+            file_chunks = file_info.get("chunks", [])
 
-        file_chunks = file_info.get("chunks", [])
+            # the sentry-cli sends an empty "chunks" list when just polling for file existence; since we already handled
+            # the case of existing files above, we can simply return NOT_FOUND here.
+            if not file_chunks:
+                response[file_checksum] = {
+                    "state": ChunkFileState.NOT_FOUND,
+                    "missingChunks": [],
+                }
+                continue
 
-        # the sentry-cli sends an empty "chunks" list when just polling for file existence; since we already handled the
-        # case of existing files above, we can simply return NOT_FOUND here.
-        if not file_chunks:
-            response[file_checksum] = {
-                "state": ChunkFileState.NOT_FOUND,
-                "missingChunks": [],
-            }
-            continue
+            missing_chunks = [c for c in file_chunks if c not in available_chunks]
+            if missing_chunks:
+                response[file_checksum] = {
+                    "state": ChunkFileState.NOT_FOUND,
+                    "missingChunks": missing_chunks,
+                }
+                continue
 
-        missing_chunks = [c for c in file_chunks if c not in available_chunks]
-        if missing_chunks:
-            response[file_checksum] = {
-                "state": ChunkFileState.NOT_FOUND,
-                "missingChunks": missing_chunks,
-            }
-            continue
-
-        file, _ = assemble_file(file_checksum, file_chunks, filename=file_info["name"])
+            file, _ = assemble_file(file_checksum, file_chunks, filename=file_info["name"])
 
         symbolic_metadata = extract_dif_metadata(file.get_raw_data())
 
         FileMetadata.objects.get_or_create(
+            project=project,
             debug_id=file_info.get("debug_id"),  # TODO : .get implies "no debug_id", but in that case it's useless
             file_type=symbolic_metadata["kind"],  # NOTE: symbolic's kind goes into file_type...
             defaults={
@@ -369,11 +389,11 @@ def api_catch_all(request, subpath):
             lines.append(f"  FILES:  {[f.name for f in request.FILES.values()]}")
 
     else:
+        shown_pretty = False
         body = request.read(MAX_API_CATCH_ALL_SIZE)
         decoded = body.decode("utf-8", errors="replace").strip()
 
         if content_type == "application/json":
-            shown_pretty = False
             try:
                 parsed = json.loads(decoded)
                 pretty = json.dumps(parsed, indent=2)

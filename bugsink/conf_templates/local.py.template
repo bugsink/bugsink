@@ -52,7 +52,7 @@ EMAIL_BACKEND = "bugsink.email_backends.QuietConsoleEmailBackend"  # instead of 
 # EMAIL_PORT = ...
 # EMAIL_USE_TLS = ...
 # EMAIL_USE_SSL = ...
-# SERVER_EMAIL = DEFAULT_FROM_EMAIL = "Bugsink <bugsink@example.org>"
+# SERVER_EMAIL = DEFAULT_FROM_EMAIL = "Bugsink <bugsink@example.org>"  # don't use ...@bugsink.com if you're not bugsink
 
 # constants for "create by" (user/team/project) settings
 CB_ANYBODY = "CB_ANYBODY"
@@ -80,6 +80,7 @@ BUGSINK = {
 
     # For large MAX_FILE_SIZE values, you may want OBJECT_STORAGES["file"] configured too.
     # "MAX_FILE_SIZE": 2 * _GIBIBYTE,
+    # "MAX_EVENT_TAGS": 100,
 
     # Webhook outbound security:
     # "ALERTS_WEBHOOK_OUTBOUND_MODE": "open",  # or "allowlist_only"

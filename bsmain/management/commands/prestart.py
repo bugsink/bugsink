@@ -2,6 +2,8 @@ import os
 
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 
 from phonehome.tasks import send_if_due
 
@@ -17,7 +19,7 @@ class Command(BaseCommand):
             return
 
         if ":" not in os.getenv("CREATE_SUPERUSER"):
-            raise ValueError("CREATE_SUPERUSER should be in the format 'username:password'")
+            raise ValueError("CREATE_SUPERUSER should be in the format 'email:password'")
 
         username, password = os.getenv("CREATE_SUPERUSER").split(":", 1)
 
@@ -28,13 +30,20 @@ class Command(BaseCommand):
 
             return
 
-        User.objects.create_superuser(username=username, password=password)
+        # Validate only when we're actually creating the user, so existing installations with a stale
+        # CREATE_SUPERUSER value keep starting normally.
+        try:
+            validate_email(username)
+        except ValidationError as e:
+            raise ValueError("CREATE_SUPERUSER email should be a valid email address") from e
+
+        User.objects.create_superuser(username=username, email=username, password=password)
         print(f"Superuser created: {username}")
 
     def handle(self, *args, **options):
         self._create_superuser_if_needed()
 
-        # Similar considerations apply here as those which are documented in bugsink.views._phone_home().
+        # Similar considerations apply here as those which are documented in phonehome.utils.phone_home().
         # By putting this in prestart, we add one more location to the list of kick-off locations; with the added
         # benefit that this particular location also gives some signal for (Docker) installations that are prematurely
         # aborted (i.e. we get a ping even if 'home' is never even reached).

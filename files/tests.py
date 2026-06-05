@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 from zipfile import ZipFile, ZIP_DEFLATED
 
 from django.test import tag
@@ -29,7 +30,8 @@ from bugsink.moreiterutils import batched
 from bugsink.app_settings import override_settings as bugsink_override_settings
 from bugsink.streams import MaxLengthExceeded
 
-from .models import Chunk, File, FileMetadata
+from .models import Chunk, File, FileMetadata, get_file_metadata_for_debug_ids
+from .minidump import event_threads_for_process_state
 from .storage_registry import override_object_storages
 from .tasks import assemble_file
 from .views import CHUNK_UPLOAD_SIZE
@@ -58,7 +60,7 @@ class FilesTests(TransactionTestCase):
     def setUp(self):
         super().setUp()
         self.user = User.objects.create_user(username='test', password='test')
-        self.project = Project.objects.create()
+        self.project = Project.objects.create(name="test")
         ProjectMembership.objects.create(project=self.project, user=self.user)
         self.client.force_login(self.user)
         self.auth_token = AuthToken.objects.create()
@@ -206,7 +208,7 @@ class FilesTests(TransactionTestCase):
                     with self.assertRaises(MaxLengthExceeded):
                         self.client.post(
                             "/api/0/organizations/anyorg/artifactbundle/assemble/",
-                            json.dumps({"checksum": checksum, "chunks": [checksum], "projects": ["unused"]}),
+                            json.dumps({"checksum": checksum, "chunks": [checksum], "projects": [self.project.slug]}),
                             content_type="application/json",
                             headers=self.token_headers,
                         )
@@ -222,7 +224,11 @@ class FilesTests(TransactionTestCase):
             try:
                 self.client.post(
                     "/api/0/organizations/anyorg/artifactbundle/assemble/",
-                    json.dumps({"checksum": str(probe_path), "chunks": [real_checksum], "projects": ["unused"]}),
+                    json.dumps({
+                        "checksum": str(probe_path),
+                        "chunks": [real_checksum],
+                        "projects": [self.project.slug],
+                    }),
                     content_type="application/json",
                     headers=self.token_headers,
                 )
@@ -421,6 +427,109 @@ class FilesTests(TransactionTestCase):
                 fms = FileMetadata.objects.filter(debug_id__in=[test_with])
                 self.assertEqual(1, fms.count())
 
+    def test_get_file_metadata_for_debug_ids_uses_project_scope_before_legacy_fallback(self):
+        scoped_debug_id = uuid4()
+        legacy_debug_id = uuid4()
+        file = File.objects.create(checksum="a" * 40, filename="scoped.js.map", size=0)
+        legacy_file = File.objects.create(checksum="b" * 40, filename="legacy.js.map", size=0)
+
+        scoped_metadata = FileMetadata.objects.create(
+            project=self.project,
+            debug_id=scoped_debug_id,
+            file_type="source_map",
+            file=file,
+        )
+        FileMetadata.objects.create(debug_id=scoped_debug_id, file_type="source_map", file=legacy_file)
+        legacy_metadata = FileMetadata.objects.create(debug_id=legacy_debug_id, file_type="source_map", file=file)
+
+        result = get_file_metadata_for_debug_ids(
+            self.project,
+            [scoped_debug_id, legacy_debug_id],
+            "source_map",
+        )
+
+        self.assertEqual(scoped_metadata, result[scoped_debug_id])
+        self.assertEqual(legacy_metadata, result[legacy_debug_id])
+
+    @patch("files.views.extract_dif_metadata")
+    def test_difs_assemble_stores_project_scoped_metadata(self, mock_extract_dif_metadata):
+        debug_id = uuid4()
+        data = b"debug"
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+        Chunk.objects.create(checksum=checksum, size=len(data), data=data)
+        mock_extract_dif_metadata.return_value = {"kind": "dbg"}
+
+        with bugsink_override_settings(FEATURE_MINIDUMPS=True):
+            response = self.client.post(
+                f"/api/0/projects/anyorg/{self.project.slug}/files/difs/assemble/",
+                json.dumps({
+                    checksum: {
+                        "chunks": [checksum],
+                        "debug_id": str(debug_id),
+                        "name": "debug-file",
+                    },
+                }),
+                content_type="application/json",
+                headers=self.token_headers,
+            )
+
+        self.assertEqual(200, response.status_code)
+        metadata = FileMetadata.objects.get(debug_id=debug_id, file_type="dbg")
+        self.assertEqual(self.project, metadata.project)
+        self.assertEqual("debug-file", metadata.file.filename)
+
+    @patch("files.minidump.extract_source_context")
+    @patch("files.minidump.symbolic.debuginfo.Archive.from_bytes")
+    @patch("files.minidump.symbolic.debuginfo.id_from_breakpad")
+    def test_minidump_symbolication_uses_project_scoped_debug_files(
+        self,
+        mock_id_from_breakpad,
+        mock_archive_from_bytes,
+        mock_extract_source_context,
+    ):
+        debug_id = uuid4()
+        other_project = Project.objects.create(name="other")
+        dbg_file = File.objects.create(checksum="d" * 40, filename="debug-file", size=0, data=b"debug")
+        src_file = File.objects.create(checksum="e" * 40, filename="source-bundle", size=0, data=b"source")
+
+        FileMetadata.objects.create(project=other_project, debug_id=debug_id, file_type="dbg", file=dbg_file)
+        FileMetadata.objects.create(project=other_project, debug_id=debug_id, file_type="src", file=src_file)
+
+        line_info = SimpleNamespace(function_name="otherFunction", filename="other.c", line=7)
+        symcache = SimpleNamespace(lookup=lambda rel: [line_info])
+        debug_object = SimpleNamespace(make_symcache=lambda: symcache)
+        archive = SimpleNamespace(iter_objects=lambda: [debug_object])
+        mock_id_from_breakpad.return_value = str(debug_id)
+        mock_archive_from_bytes.return_value = archive
+        mock_extract_source_context.return_value = (["pre"], "context", ["post"])
+
+        module = SimpleNamespace(addr=1000, size=100, debug_id="breakpad-debug-id")
+        frame = SimpleNamespace(instruction=1010)
+        thread = SimpleNamespace(thread_id=1, frames=lambda: [frame])
+        process_state = SimpleNamespace(
+            modules=lambda: [module],
+            threads=lambda: [thread],
+            requesting_thread=0,
+        )
+
+        # Positive case: the debug files work for the project they were uploaded to.
+        threads = event_threads_for_process_state(process_state, other_project)
+        rendered_frame = threads[0]["stacktrace"]["frames"][0]
+        self.assertEqual("otherFunction", rendered_frame["function"])
+        self.assertEqual("other.c", rendered_frame["filename"])
+        self.assertEqual(7, rendered_frame["lineno"])
+        self.assertEqual("context", rendered_frame["context_line"])
+
+        # Negative case: the same debug ID does not resolve across project boundaries.
+        mock_archive_from_bytes.reset_mock()
+        mock_extract_source_context.reset_mock()
+
+        threads = event_threads_for_process_state(process_state, self.project)
+        rendered_frame = threads[0]["stacktrace"]["frames"][0]
+        self.assertEqual({"instruction_addr": "0x3f2"}, rendered_frame)
+        mock_archive_from_bytes.assert_not_called()
+        mock_extract_source_context.assert_not_called()
+
     @tag("samples")
     def test_assemble_artifact_bundle(self):
         SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
@@ -461,7 +570,7 @@ class FilesTests(TransactionTestCase):
                     checksum,  # single-chunk upload, so this works
                 ],
                 "projects": [
-                    "unused_for_now"
+                    self.project.slug
                 ]
             }
 
@@ -551,7 +660,7 @@ class FilesTests(TransactionTestCase):
             "checksum": checksum,
             "chunks": seen_checksums,
             "projects": [
-                "unused_for_now"
+                self.project.slug
             ]
         }
 
@@ -587,6 +696,7 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
         super().setUp()
         auth = AuthToken.objects.create(description="test token")
         self.token = auth.token
+        self.project = Project.objects.create(name="test")
 
         # sentry-cli asks _us_ for our own URL...
         self.enterContext(bugsink_override_settings(BASE_URL=self.live_server_url))
@@ -597,7 +707,7 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
         self.enterContext(override_settings(DEBUG_PROPAGATE_EXCEPTIONS=True))
         self.tempdir = self.enterContext(tempfile.TemporaryDirectory())
 
-    def _run(self, args):
+    def _run(self, args, expect_success=True):
         sp = subprocess.run(
             args,
             cwd=self.tempdir,
@@ -608,8 +718,12 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,  # merge stderr into stdout so we can see it in test failures
         )
-        if sp.returncode != 0:
-            raise Exception(f"Command {args} failed with output:\n{sp.stdout.decode('utf-8')}")
+        output = sp.stdout.decode('utf-8')
+        if expect_success and sp.returncode != 0:
+            raise Exception(f"Command {args} failed with output:\n{output}")
+        if not expect_success and sp.returncode == 0:
+            raise Exception(f"Command {args} unexpectedly succeeded with output:\n{output}")
+        return output
 
     def test_sentry_cli_upload(self):
         # Test-the-test (these things should live in your env, as per requirements.development.txt)
@@ -647,7 +761,7 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
             "--org",
             "bugsinkhasnoorgs",
             "--project",
-            "ignoredfornow",
+            self.project.slug,
             "upload",
             str(map_path),
         ])
@@ -660,6 +774,50 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
         self.assertEqual(
             UUID('9b40e0f3-8084-5931-94d4-8d941780a177'),
             FileMetadata.objects.get(file__filename="captureException.js.map").debug_id)
+        self.assertEqual(self.project, FileMetadata.objects.get(file__filename="captureException.js.map").project)
+
+        # sentry-cli sourcemaps upload with bogus project
+        output = self._run([
+            sentry_cli,
+            "--log-level=debug",
+            "--url",
+            self.live_server_url,
+            "sourcemaps",
+            "--org",
+            "bugsinkhasnoorgs",
+            "--project",
+            "intentionallynonexistentproject",
+            "upload",
+            str(map_path),
+        ], expect_success=False)
+        self.assertIn("Unknown project(s): intentionallynonexistentproject", output)
+
+        # sentry-cli sourcemaps upload with multiple projects
+        other_project = Project.objects.create(name="other")
+        self._run([
+            sentry_cli,
+            "--log-level=debug",
+            "--url",
+            self.live_server_url,
+            "sourcemaps",
+            "--org",
+            "bugsinkhasnoorgs",
+            "--project",
+            self.project.slug,
+            "--project",
+            other_project.slug,
+            "upload",
+            str(map_path),
+        ])
+
+        self.assertEqual(
+            {self.project.id, other_project.id},
+            set(
+                FileMetadata.objects
+                .filter(file__filename="captureException.js.map")
+                .values_list("project", flat=True)
+            ),
+        )
 
 
 MINIMAL_JS = """\
