@@ -29,29 +29,50 @@
 
 {% for exception in exceptions %}
 
-    <div class="flex items-start flex-col-reverse lg:flex-row">
-        <div class="overflow-hidden">
+    <div class="{% if forloop.counter0 > 0 %}mt-4{% endif %}">
+        <div class="flex items-start flex-col-reverse lg:flex-row xl:flex-col-reverse 2xl:flex-row"> {# buttons above titles, or not? 'flips', because at 'xl:...' some space is eaten by the "Key Issue Info" box #}
+            <div class="min-w-0 overflow-hidden">
+                {% if forloop.counter0 == 0 %}
+                <div class="italic text-ellipsis whitespace-nowrap overflow-hidden">{{ event.ingested_at|date:"j M G:i T" }} (Event {{ event.digest_order|intcomma }} of {{ issue.digested_event_count|intcomma }} total{% if q %} — {{ event_qs_count|intcomma }} found by search{% endif %})</div>
+                {% endif %}
+                <h1 class="text-2xl font-bold text-ellipsis whitespace-nowrap overflow-hidden">{{ exception.type }}</h1>
+            </div>
+
             {% if forloop.counter0 == 0 %}
-            <div class="italic text-ellipsis whitespace-nowrap overflow-hidden">{{ event.ingested_at|date:"j M G:i T" }} (Event {{ event.digest_order|intcomma }} of {{ issue.digested_event_count|intcomma }} total{% if q %} — {{ event_qs_count|intcomma }} found by search{% endif %})</div>
+            <div class="ml-auto flex flex-none place-content-end pb-4 lg:pb-0 xl:pb-4 2xl:pb-0"> {# pb-.. matches: 'buttons above titles, or not?' #}
+                <div class="hidden 3xl:flex place-content-end">
+                    <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3" onclick="showAllFrames()">Show all</button>
+                    <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3" onclick="showInAppFrames()">Show in-app</button>
+                    <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3" onclick="showRaisingFrame()">Show raise</button>
+                    <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3" onclick="hideAllFrames()">Collapse all</button>
+                </div>
+
+                <div class="3xl:hidden relative">
+                    <details class="relative">
+                        <summary class="list-none cursor-pointer font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3">
+                            Show
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 inline">
+                                <path d="M6.5,8.5l6,7l6-7H6.5z"/>
+                            </svg>
+                        </summary>
+
+                        <div class="absolute right-2 z-10 mt-1 min-w-40 bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 rounded-md shadow-lg">
+                            <button class="block w-full text-left font-bold text-slate-500 dark:text-slate-300 pl-4 pr-4 pb-2 pt-2 hover:bg-slate-200 dark:hover:bg-slate-700" onclick="showAllFrames(); this.parentNode.parentNode.open = false;">Show all</button>
+                            <button class="block w-full text-left font-bold text-slate-500 dark:text-slate-300 pl-4 pr-4 pb-2 pt-2 hover:bg-slate-200 dark:hover:bg-slate-700" onclick="showInAppFrames(); this.parentNode.parentNode.open = false;">Show in-app</button>
+                            <button class="block w-full text-left font-bold text-slate-500 dark:text-slate-300 pl-4 pr-4 pb-2 pt-2 hover:bg-slate-200 dark:hover:bg-slate-700" onclick="showRaisingFrame(); this.parentNode.parentNode.open = false;">Show raise</button>
+                            <button class="block w-full text-left font-bold text-slate-500 dark:text-slate-300 pl-4 pr-4 pb-2 pt-2 hover:bg-slate-200 dark:hover:bg-slate-700" onclick="hideAllFrames(); this.parentNode.parentNode.open = false;">Collapse all</button>
+                        </div>
+                    </details>
+                </div>
+
+                <div class="flex place-content-end">
+                    {% include "issues/_event_nav.html" %}
+                </div>
+            </div>
             {% endif %}
-            <h1 class="text-2xl font-bold {% if forloop.counter0 > 0 %}mt-4{% endif %} text-ellipsis whitespace-nowrap overflow-hidden">{{ exception.type }}</h1>
-            <div class="text-lg mb-4 text-ellipsis whitespace-nowrap overflow-hidden">{{ exception.value }}</div>
-
         </div>
-        {% if forloop.counter0 == 0 %}
-        <div class="ml-auto flex flex-none flex-col-reverse 3xl:flex-row"> {# container of 2 divs: one for buttons, one for event-nav; on smaller screens these are 2 rows; on bigger they are side-by-side  #}
-            <div class="flex place-content-end self-stretch pt-2 3xl:pt-0 {# <= to keep the buttons apart #} pb-4 lg:pb-0 {# <= to keep the buttons & h1-block apart #}">
-                <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3" onclick="showAllFrames()">Show all</button>
-                <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3" onclick="showInAppFrames()">Show in-app</button>
-                <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3" onclick="showRaisingFrame()">Show raise</button>
-                <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-1 pt-1 mr-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3" onclick="hideAllFrames()">Collapse all</button>
 
-            </div>
-            <div class="flex place-content-end">
-                {% include "issues/_event_nav.html" %}
-            </div>
-        </div>
-        {% endif %}
+        <div class="text-lg mb-4 text-ellipsis whitespace-nowrap overflow-hidden">{{ exception.value }}</div>
     </div>
 
     {% for frame in exception.stacktrace.frames %}

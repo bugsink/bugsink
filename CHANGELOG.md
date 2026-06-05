@@ -1,5 +1,26 @@
 # Changes
 
+## Unreleased
+
+* Add native support for CSP violation reports via a new `/api/<project_pk>/security/` endpoint, compatible with the
+  `report-uri` directive browsers emit. Reports are translated into events and pushed through the existing envelope
+  pipeline, grouped by `(effective-directive, blocked-uri)`.
+
+## 2.2.2 (4 June 2026)
+
+### Security
+
+Fix: cap the number of tags stored per event.
+
+Events with very many tags could keep the single write transaction busy for longer than intended during digestion.
+Bugsink now stores at most `MAX_EVENT_TAGS` tags per event, defaulting to 100.
+
+https://github.com/bugsink/bugsink/security/advisories/GHSA-5x67-j5xg-c5gj
+
+### Smaller fixes
+
+* Show project slugs as read-only on project settings pages, see #402.
+
 ## 2.2.1 (22 May 2026)
 
 ### API

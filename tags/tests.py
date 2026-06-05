@@ -2,6 +2,7 @@ from unittest import TestCase as RegularTestCase
 from django.test import TestCase as DjangoTestCase
 from django.conf import settings
 
+from bugsink.app_settings import override_settings as override_bugsink_settings
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project
 from issues.factories import get_or_create_issue, denormalized_issue_fields
@@ -178,6 +179,30 @@ class DigestTagsTestCase(DjangoTestCase):
         digest_tags(event_data, event, issue)
 
         self.assertEqual([], [e.value.value for e in event.get_tags])
+
+    def test_max_event_tags_keeps_first_user_tags(self):
+        project = Project.objects.create(name="Test Project")
+        issue, _ = get_or_create_issue(project)
+        event = create_event(project, issue=issue)
+
+        event_data = {
+            "tags": {
+                "user_tag_1": "one",
+                "user_tag_2": "two",
+                "user_tag_3": "three",
+            },
+            "server_name": "synthetic",
+        }
+
+        with override_bugsink_settings(MAX_EVENT_TAGS=2):
+            with self.assertLogs("bugsink.ingest", level="WARNING"):
+                digest_tags(event_data, event, issue)
+
+        self.assertEqual(["user_tag_1", "user_tag_2"], [
+            tag.value.key.key for tag in event.tags.order_by("value__key__key")
+        ])
+        self.assertFalse(event.tags.filter(value__key__key="user_tag_3").exists())
+        self.assertFalse(event.tags.filter(value__key__key="server_name").exists())
 
 
 class SearchParserTestCase(RegularTestCase):

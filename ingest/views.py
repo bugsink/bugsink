@@ -719,7 +719,7 @@ class IngestEventAPIView(BaseIngestAPIView):
 
         digest.delay(event_data["event_id"], event_metadata)
 
-        return HttpResponse()
+        return JsonResponse({"id": event_data["event_id"]})
 
 
 class IngestEnvelopeAPIView(BaseIngestAPIView):
@@ -856,6 +856,10 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
         if event_count + minidump_count == 0:
             logger.info("no event or minidump found in envelope, ignoring this envelope.")
+            # event_id is only required in envelope headers when event/attachment items are present (enforced in
+            # factory), so it may be absent here; only echo it back when the SDK actually provided one.
+            if "event_id" in envelope_headers:
+                return JsonResponse({"id": envelope_headers["event_id"]})
             return HttpResponse()
 
         if event_count > 1 or minidump_count > 1:
@@ -867,7 +871,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
                 "can only deal with one event/minidump per envelope but found %s/%s, ignoring this envelope.",
                 event_count, minidump_count)
             self.cleanup_ingestion_files(ingestion_id)
-            return HttpResponse()
+            return JsonResponse({"id": envelope_headers["event_id"]})
 
         event_metadata = self.get_event_meta(envelope_headers["event_id"], ingested_at, ingestion_id, request, project)
 
@@ -886,7 +890,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             # NOTE "The file should start with the MDMP magic bytes." is not checked yet.
             self.process_minidump(ingested_at, ingestion_id, minidump_bytes, project, request)
 
-        return HttpResponse()
+        return JsonResponse({"id": envelope_headers["event_id"]})
 
 
 # Just a few thoughts on the relative performance of the main building blocks of dealing with Envelopes, and how this
@@ -904,6 +908,128 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 # more stuff that we don't care about (up to 20MiB compressed) whereas the max event size (uncompressed) is 1MiB.
 # Another advantage: this allows us to raise the relevant Header parsing and size limitation Exceptions to the SDKs.
 #
+
+
+class IngestSecurityAPIView(BaseIngestAPIView):
+    # Browser-emitted CSP violation reports, posted via the `report-uri` directive. We translate the report into an
+    # event and run it through the same digest pipeline as everything else so it reuses quota, retention, grouping, etc.
+    #
+    # Two shape decisions worth calling out:
+    #
+    # * Auth via `?sentry_key=` query param. Browsers can't set custom headers on CSP report POSTs, so the X-Sentry-Auth
+    #   path isn't available to us here. `BaseIngestAPIView.get_sentry_key_for_request` already prefers the query param,
+    #   so this falls out for free.
+    #
+    # * Strict on Content-Type: we only accept `application/csp-report` (the value the spec mandates and that browsers
+    #   actually send). The `report-uri` flow is tightly defined; accepting `application/json` too would silently mask
+    #   misconfigured emitters/proxies and we'd rather reject early.
+    #
+    # Not yet supported: `application/reports+json` (the newer Reporting API / `report-to` directive). Browsers still
+    # emit the old `report-uri` format widely enough that the minimum viable version covers most cases.
+
+    CONTENT_TYPE = "application/csp-report"
+
+    def _post(self, request, project_pk=None):
+        if request.content_type != self.CONTENT_TYPE:
+            return JsonResponse(
+                {"message": "Content-Type must be %s" % self.CONTENT_TYPE},
+                status=HTTP_400_BAD_REQUEST,
+            )
+
+        ingested_at = datetime.now(timezone.utc)
+        ingestion_id = str(uuid.uuid4())
+
+        installation = Installation.objects.get()
+        if self.is_quota_still_exceeded(installation, ingested_at):
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
+
+        project = self.get_project_for_request(project_pk, request)
+        if self.is_quota_still_exceeded(project, ingested_at):
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
+
+        # CSP reports are small by spec; the cap is a defense against abuse, not a real-world ceiling. Oversized bodies
+        # raise MaxLengthExceeded, which BaseIngestAPIView.post turns into a 413.
+        body_bytes = MaxDataReader("MAX_CSP_REPORT_SIZE", request).read()
+        performance_logger.info("ingested CSP report with %s bytes", len(body_bytes))
+
+        try:
+            payload = json.loads(body_bytes)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise ParseError("invalid JSON in CSP report: %s" % e)
+
+        if not isinstance(payload, dict) or not isinstance(payload.get("csp-report"), dict):
+            raise ParseError("CSP report must be a JSON object with a 'csp-report' object")
+
+        report = payload["csp-report"]
+
+        event_id = uuid.uuid4().hex
+        event_data = self._csp_report_to_event_data(event_id, report, ingested_at)
+
+        filename = get_filename_for_event_id(ingestion_id)
+        b108_makedirs(os.path.dirname(filename))
+        with open(filename, 'w') as f:
+            json.dump(event_data, f)
+
+        event_metadata = self.get_event_meta(event_id, ingested_at, ingestion_id, request, project)
+        digest.delay(event_id, event_metadata)
+
+        return HttpResponse()
+
+    @staticmethod
+    def _report_value_as_string(report, key):
+        value = report.get(key)
+        if value is None:
+            return None
+        return str(value)
+
+    @staticmethod
+    def _csp_report_to_event_data(event_id, report, ingested_at):
+        # Older browsers only send `violated-directive` (which includes the source list, e.g. "script-src 'self'");
+        # newer ones also send `effective-directive` (just the directive name). Prefer the latter, fall back to the
+        # first token of the former. This is the value we group on, so consistency across browsers matters.
+        violated_directive = IngestSecurityAPIView._report_value_as_string(report, "violated-directive") or ""
+        effective_directive = (
+            IngestSecurityAPIView._report_value_as_string(report, "effective-directive")
+            or violated_directive.split(" ", 1)[0]
+            or "<unknown>"
+        )
+        blocked_uri = IngestSecurityAPIView._report_value_as_string(report, "blocked-uri") or "<unknown>"
+
+        # type/value drive the title via get_title_for_exception_type_and_value -> "CSP: blocked X (directive)".
+        # fingerprint drives grouping (overrides the default grouper) so each unique (directive, blocked-uri) pair
+        # becomes one issue rather than one per page that triggered it.
+        event_data = {
+            "event_id": event_id,
+            "timestamp": ingested_at.timestamp(),
+            "platform": "javascript",
+            "logger": "csp",
+            "level": "warning",
+            "exception": {
+                "values": [{
+                    "type": "CSP",
+                    "value": "blocked %s (%s)" % (blocked_uri, effective_directive),
+                }],
+            },
+            "fingerprint": ["csp", effective_directive, blocked_uri],
+            "contexts": {
+                "csp": {
+                    k: report[k] for k in (
+                        "document-uri", "referrer", "blocked-uri", "violated-directive", "effective-directive",
+                        "original-policy", "disposition", "source-file", "line-number", "column-number",
+                        "status-code", "script-sample",
+                    ) if k in report
+                },
+            },
+        }
+
+        document_uri = IngestSecurityAPIView._report_value_as_string(report, "document-uri")
+        if document_uri:
+            event_data["request"] = {"url": document_uri}
+            referrer = IngestSecurityAPIView._report_value_as_string(report, "referrer")
+            if referrer:
+                event_data["request"]["headers"] = {"Referer": referrer}
+
+        return event_data
 
 
 class MinidumpAPIView(BaseIngestAPIView):

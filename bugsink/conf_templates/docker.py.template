@@ -175,6 +175,8 @@ BUGSINK = {
     "MAX_EVENT_COMPRESSED_SIZE": int(os.getenv("MAX_EVENT_COMPRESSED_SIZE", 200 * _KIBIBYTE)),
     "MAX_ENVELOPE_SIZE": int(os.getenv("MAX_ENVELOPE_SIZE", 100 * _MEBIBYTE)),
     "MAX_ENVELOPE_COMPRESSED_SIZE": int(os.getenv("MAX_ENVELOPE_COMPRESSED_SIZE", 20 * _MEBIBYTE)),
+    "MAX_CSP_REPORT_SIZE": int(os.getenv("MAX_CSP_REPORT_SIZE", 64 * _KIBIBYTE)),
+    "MAX_EVENT_TAGS": int(os.getenv("MAX_EVENT_TAGS", 100)),
     # For large MAX_FILE_SIZE values, you may want FILE_OBJECT_STORAGE_PATH configured too.
     "MAX_FILE_SIZE": int(os.getenv("MAX_FILE_SIZE", 2 * _GIBIBYTE)),
 

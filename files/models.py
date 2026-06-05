@@ -177,6 +177,9 @@ class FileMetadata(models.Model):
 
 def get_file_metadata_for_debug_ids(project, debug_ids, file_type):
     """Return {debug_id: FileMetadata} for debug files visible to project."""
+    # TODO: this function is called in the loop, i.e. once i.e. once per minidump module/frame; this is inefficient and
+    # potentially a target for DOS attacks (since the length of the loop is under attacker control).
+
     debug_ids = set(debug_ids)
     if not debug_ids:
         return {}

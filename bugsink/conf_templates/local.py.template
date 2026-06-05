@@ -80,6 +80,8 @@ BUGSINK = {
 
     # For large MAX_FILE_SIZE values, you may want OBJECT_STORAGES["file"] configured too.
     # "MAX_FILE_SIZE": 2 * _GIBIBYTE,
+    # "MAX_CSP_REPORT_SIZE": 64 * _KIBIBYTE,
+    # "MAX_EVENT_TAGS": 100,
 
     # Webhook outbound security:
     # "ALERTS_WEBHOOK_OUTBOUND_MODE": "open",  # or "allowlist_only"

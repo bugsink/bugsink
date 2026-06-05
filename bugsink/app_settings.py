@@ -56,6 +56,10 @@ DEFAULTS = {
     "MAX_ENVELOPE_COMPRESSED_SIZE": 20 * _MEBIBYTE,
     "MAX_FILE_SIZE": 2 * _GIBIBYTE,
 
+    # CSP violation reports are tiny by design. The spec doesn't pin a number, but real-world reports are <2KiB; we cap
+    # at 64KiB to leave headroom for unusual policies/URIs while still rejecting anything that looks like abuse.
+    "MAX_CSP_REPORT_SIZE": 64 * _KIBIBYTE,
+
     # Bugsink-specific limits:
     # The default values are 1_000, 5_000, 1M respectively; which corresponds to ~6%, ~2.7%, .8% of the total capacity
     # of 50/s (ingestion) on low-grade hardware that I measured.
@@ -77,6 +81,10 @@ DEFAULTS = {
 
     # I don't think Sentry specifies this one, but we do: given the spec 8KiB should be enough by an order of magnitude.
     "MAX_HEADER_SIZE": 8 * _KIBIBYTE,
+
+    # Cap on the number of tags stored per event. Without it, a single event with very many tags becomes ~4x that
+    # many row-writes inside the (single-writer) digest transaction. 100 is well above any realistic event.
+    "MAX_EVENT_TAGS": 100,
 
     # Locations of files & directories:
     # no_bandit_expl: the usage of this path (via get_filename_for_event_id) is protected with `b108_makedirs`
