@@ -1231,6 +1231,11 @@ class IngestSecurityViewTestCase(TransactionTestCase):
         self.assertEqual(400, response.status_code)
         self.assertEqual(0, Event.objects.count())
 
+    def test_non_utf8_json_returns_400(self):
+        response = self._post_report(b"\xff")
+        self.assertEqual(400, response.status_code)
+        self.assertEqual(0, Event.objects.count())
+
     def test_missing_csp_report_key_returns_400(self):
         response = self._post_report({"something-else": {}})
         self.assertEqual(400, response.status_code)
@@ -1300,6 +1305,19 @@ class IngestSecurityViewUnitTestCase(RegularTestCase):
         self.assertEqual("blocked <unknown> (<unknown>)", result["exception"]["values"][0]["value"])
         self.assertEqual(["csp", "<unknown>", "<unknown>"], result["fingerprint"])
         self.assertNotIn("request", result)
+
+    def test_unexpected_report_value_types_are_stringified(self):
+        ingested_at = datetime.datetime(2026, 4, 23, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        report = {
+            "document-uri": 123,
+            "violated-directive": ["script-src", "'self'"],
+            "blocked-uri": {"uri": "https://evil.example.com/x.js"},
+        }
+
+        result = IngestSecurityAPIView._csp_report_to_event_data("0" * 32, report, ingested_at)
+
+        self.assertEqual(["csp", "['script-src',", "{'uri': 'https://evil.example.com/x.js'}"], result["fingerprint"])
+        self.assertEqual("123", result["request"]["url"])
 
 
 class MinidumpAPIViewTestCase(TransactionTestCase):

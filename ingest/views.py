@@ -954,7 +954,7 @@ class IngestSecurityAPIView(BaseIngestAPIView):
 
         try:
             payload = json.loads(body_bytes)
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
             raise ParseError("invalid JSON in CSP report: %s" % e)
 
         if not isinstance(payload, dict) or not isinstance(payload.get("csp-report"), dict):
@@ -976,16 +976,24 @@ class IngestSecurityAPIView(BaseIngestAPIView):
         return HttpResponse()
 
     @staticmethod
+    def _report_value_as_string(report, key):
+        value = report.get(key)
+        if value is None:
+            return None
+        return str(value)
+
+    @staticmethod
     def _csp_report_to_event_data(event_id, report, ingested_at):
         # Older browsers only send `violated-directive` (which includes the source list, e.g. "script-src 'self'");
         # newer ones also send `effective-directive` (just the directive name). Prefer the latter, fall back to the
         # first token of the former. This is the value we group on, so consistency across browsers matters.
+        violated_directive = IngestSecurityAPIView._report_value_as_string(report, "violated-directive") or ""
         effective_directive = (
-            report.get("effective-directive")
-            or (report.get("violated-directive") or "").split(" ", 1)[0]
+            IngestSecurityAPIView._report_value_as_string(report, "effective-directive")
+            or violated_directive.split(" ", 1)[0]
             or "<unknown>"
         )
-        blocked_uri = report.get("blocked-uri") or "<unknown>"
+        blocked_uri = IngestSecurityAPIView._report_value_as_string(report, "blocked-uri") or "<unknown>"
 
         # type/value drive the title via get_title_for_exception_type_and_value -> "CSP: blocked X (directive)".
         # fingerprint drives grouping (overrides the default grouper) so each unique (directive, blocked-uri) pair
@@ -1014,10 +1022,10 @@ class IngestSecurityAPIView(BaseIngestAPIView):
             },
         }
 
-        document_uri = report.get("document-uri")
+        document_uri = IngestSecurityAPIView._report_value_as_string(report, "document-uri")
         if document_uri:
             event_data["request"] = {"url": document_uri}
-            referrer = report.get("referrer")
+            referrer = IngestSecurityAPIView._report_value_as_string(report, "referrer")
             if referrer:
                 event_data["request"]["headers"] = {"Referer": referrer}
 
