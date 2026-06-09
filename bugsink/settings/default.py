@@ -103,6 +103,10 @@ SPECTACULAR_SETTINGS = {
         "TeamVisibilityEnum": ["joinable", "discoverable", "hidden"],
         "ProjectVisibilityEnum": ["joinable", "discoverable", "team_members"],
     },
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "bugsink.api_schema.add_sentry_compatible_api",
+    ],
 }
 
 BUGSINK_APPS = [
