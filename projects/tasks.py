@@ -60,7 +60,7 @@ def get_model_topography_with_project_override():
     The preference is encoded via an explicit list of models, which are visited early and only via their .project path.
     """
     from issues.models import Issue, TurningPoint, Grouping
-    from events.models import Event
+    from events.models import Event, IssueEventCountsPerHour, ProjectEventCountsPerHour
     from tags.models import IssueTag, EventTag, TagValue, TagKey
     from alerts.models import MessagingServiceConfig
     from releases.models import Release
@@ -74,6 +74,8 @@ def get_model_topography_with_project_override():
         TagKey,
 
         TurningPoint,  # above Event, to avoid deletions via .triggering_event
+        IssueEventCountsPerHour,
+        ProjectEventCountsPerHour,
         Event,         # above Grouping, to avoid deletions via .grouping
         Grouping,
 

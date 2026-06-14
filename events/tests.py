@@ -16,10 +16,11 @@ from projects.models import Project, ProjectMembership
 from issues.factories import get_or_create_issue
 from issues.models import Issue, TurningPoint, TurningPointKind
 
-from .models import Event
+from .models import InstallationEventCountsPerHour, IssueEventCountsPerHour, ProjectEventCountsPerHour, Event
 from .factories import create_event
 from .retention import (
     eviction_target, should_evict, evict_for_max_events, get_epoch_bounds_with_irrelevance, filter_for_work)
+from .usage import EVENT_COUNTS_PER_HOUR_MAX_AGE, hour_bucket, record_event_counts
 from .utils import annotate_with_meta, annotate_var_with_meta
 from tags.models import EventTag, store_tags
 
@@ -91,6 +92,51 @@ class TimeZoneTestCase(DjangoTestCase):
             # different timezone is active
             e = create_event()
             self.assertEqual(datetime.timezone.utc, e.timestamp.tzinfo)
+
+
+class EventUsageTestCase(DjangoTestCase):
+    def test_record_event_counts(self):
+        project = Project.objects.create()
+        issue, _ = get_or_create_issue(project=project)
+        first_hour = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        next_hour = datetime.datetime(2026, 6, 14, 13, 1, tzinfo=datetime.timezone.utc)
+
+        record_event_counts(project, issue, first_hour)
+        record_event_counts(project, issue, first_hour)
+        record_event_counts(project, issue, next_hour)
+
+        self.assertEqual(2, InstallationEventCountsPerHour.objects.get(bucket=hour_bucket(first_hour)).count)
+        self.assertEqual(1, InstallationEventCountsPerHour.objects.get(bucket=hour_bucket(next_hour)).count)
+        self.assertEqual(
+            2,
+            ProjectEventCountsPerHour.objects.get(project=project, bucket=hour_bucket(first_hour)).count,
+        )
+        self.assertEqual(2, IssueEventCountsPerHour.objects.get(issue=issue, bucket=hour_bucket(first_hour)).count)
+
+    def test_record_event_counts_cleans_up_old_buckets(self):
+        project = Project.objects.create(name="usage cleanup")
+        issue, _ = get_or_create_issue(project=project)
+        other_project = Project.objects.create(name="usage cleanup other")
+        other_issue, _ = get_or_create_issue(project=other_project)
+        new_hour = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        old_bucket = hour_bucket(new_hour - EVENT_COUNTS_PER_HOUR_MAX_AGE - datetime.timedelta(hours=1))
+        recent_bucket = hour_bucket(new_hour - EVENT_COUNTS_PER_HOUR_MAX_AGE + datetime.timedelta(hours=1))
+
+        InstallationEventCountsPerHour.objects.create(bucket=old_bucket, count=1)
+        InstallationEventCountsPerHour.objects.create(bucket=recent_bucket, count=1)
+        ProjectEventCountsPerHour.objects.create(project=other_project, bucket=old_bucket, count=1)
+        ProjectEventCountsPerHour.objects.create(project=project, bucket=recent_bucket, count=1)
+        IssueEventCountsPerHour.objects.create(project=other_project, issue=other_issue, bucket=old_bucket, count=1)
+        IssueEventCountsPerHour.objects.create(project=project, issue=issue, bucket=recent_bucket, count=1)
+
+        record_event_counts(project, issue, new_hour)
+
+        self.assertFalse(InstallationEventCountsPerHour.objects.filter(bucket=old_bucket).exists())
+        self.assertFalse(ProjectEventCountsPerHour.objects.filter(bucket=old_bucket).exists())
+        self.assertFalse(IssueEventCountsPerHour.objects.filter(bucket=old_bucket).exists())
+        self.assertTrue(InstallationEventCountsPerHour.objects.filter(bucket=recent_bucket).exists())
+        self.assertTrue(ProjectEventCountsPerHour.objects.filter(bucket=recent_bucket).exists())
+        self.assertTrue(IssueEventCountsPerHour.objects.filter(bucket=recent_bucket).exists())
 
 
 class RetentionUtilsTestCase(RegularTestCase):
