@@ -22,7 +22,8 @@ from projects.models import Project
 from events.factories import create_event_data, create_event
 from events.retention import evict_for_max_events
 from events.storage_registry import override_event_storages
-from events.models import Event
+from events.models import InstallationEventCountsPerHour, IssueEventCountsPerHour, ProjectEventCountsPerHour, Event
+from events.usage import hour_bucket
 from issues.factories import get_or_create_issue
 from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
 from issues.utils import get_values
@@ -1065,18 +1066,39 @@ class IngestViewTestCase(TransactionTestCase):
 
     def test_ingest_updates_stored_event_counts(self):
         request = self.request_factory.post("/api/1/store/")
+        first_hour = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        second_event = first_hour + datetime.timedelta(minutes=1)
 
-        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
+        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request, first_hour))
 
         self.assertEqual(1, Issue.objects.count())
         self.assertEqual(1, Issue.objects.get().stored_event_count)
         self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).issue_count)
         self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).stored_event_count)
+        self.assertEqual(1, InstallationEventCountsPerHour.objects.get(bucket=hour_bucket(first_hour)).count)
+        self.assertEqual(
+            1,
+            ProjectEventCountsPerHour.objects.get(project=self.quiet_project, bucket=hour_bucket(first_hour)).count,
+        )
+        self.assertEqual(
+            1,
+            IssueEventCountsPerHour.objects.get(issue=Issue.objects.get(), bucket=hour_bucket(first_hour)).count,
+        )
 
-        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
+        BaseIngestAPIView().digest_event(
+            **_digest_params(create_event_data(), self.quiet_project, request, second_event))
         self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).issue_count)
         self.assertEqual(2, Issue.objects.get().stored_event_count)
         self.assertEqual(2, Project.objects.get(id=self.quiet_project.id).stored_event_count)
+        self.assertEqual(2, InstallationEventCountsPerHour.objects.get(bucket=hour_bucket(first_hour)).count)
+        self.assertEqual(
+            2,
+            ProjectEventCountsPerHour.objects.get(project=self.quiet_project, bucket=hour_bucket(first_hour)).count,
+        )
+        self.assertEqual(
+            2,
+            IssueEventCountsPerHour.objects.get(issue=Issue.objects.get(), bucket=hour_bucket(first_hour)).count,
+        )
 
     def test_ingest_refreshes_issue_calculated_fields_on_subsequent_events(self):
         # When a fingerprint groups events whose exception type/value differ, the issue's denormalized
