@@ -19,7 +19,7 @@ docker pull bugsink/bugsink:latest
 
 docker run \
   -e SECRET_KEY=PUT_AN_ACTUAL_RANDOM_SECRET_HERE_OF_AT_LEAST_50_CHARS \
-  -e CREATE_SUPERUSER=admin:admin \
+  -e CREATE_SUPERUSER=admin@example.org:admin \
   -e PORT=8000 \
   -p 8000:8000 \
   bugsink/bugsink
