@@ -169,6 +169,13 @@ class EventSparklineTestCase(DjangoTestCase):
 
         self.assertEqual(5, sparkline["buckets"][0])
         self.assertEqual(100, sparkline["bar_data"][0])
+        self.assertEqual(start, sparkline["event_buckets"][0]["bucket_start"])
+        self.assertEqual(start + datetime.timedelta(hours=4), sparkline["event_buckets"][0]["bucket_end"])
+        self.assertEqual("17 May 12:00 - 16:00", sparkline["event_buckets"][0]["label"])
+        self.assertEqual(5, sparkline["event_buckets"][0]["count"])
+        self.assertEqual(100, sparkline["event_buckets"][0]["pct"])
+        self.assertEqual(0, sparkline["event_buckets"][1]["count"])
+        self.assertEqual(0, sparkline["event_buckets"][1]["pct"])
 
 
 class RetentionUtilsTestCase(RegularTestCase):

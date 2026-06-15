@@ -1,3 +1,4 @@
+{% load humanize %}
 {% if issue_sparkline %}
 <div class="mt-8 grid"
      style="grid-template-columns: 2rem 1fr; grid-template-rows: auto auto; column-gap: 0.5rem;">
@@ -40,13 +41,22 @@
     <div class="row-span-1">
         {# bars #}
         <div class="grid h-24"
-             style="grid-template-columns: repeat({{ issue_sparkline.bar_data|length }}, minmax(0,1fr)); gap: 2px;">
-            {% for pct in issue_sparkline.bar_data %}
-                <div class="flex items-end">
-                    <div class="bg-slate-400 dark:bg-slate-400 w-full"
-                         style="height: {{ pct }}%;">
+             style="grid-template-columns: repeat({{ issue_sparkline.event_buckets|length }}, minmax(0,1fr)); gap: 2px;">
+            {% for bucket in issue_sparkline.event_buckets %}
+                {% if bucket.count %}
+                    <div class="group flex items-end"
+                         title="{{ bucket.label }}: {{ bucket.count|intcomma }} event{{ bucket.count|pluralize }}">
+                        <div class="bg-slate-400 dark:bg-slate-400 group-hover:bg-slate-500 dark:group-hover:bg-slate-300 w-full"
+                             style="height: {{ bucket.pct }}%;">
+                        </div>
                     </div>
-                </div>
+                {% else %}
+                    <div class="flex items-end">
+                        <div class="bg-slate-400 dark:bg-slate-400 w-full"
+                             style="height: {{ bucket.pct }}%;">
+                        </div>
+                    </div>
+                {% endif %}
             {% endfor %}
         </div>
 

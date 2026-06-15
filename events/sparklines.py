@@ -57,13 +57,23 @@ def get_issue_event_sparkline(issue_id, now):
         curr += interval
 
     buckets = []
+    event_buckets = []
     for i in range(1, len(bucket_edges)):
         count = IssueEventCountsPerHour.objects.filter(
             issue_id=issue_id,
             bucket__gte=bucket_edges[i - 1],
             bucket__lt=bucket_edges[i],
         ).values_list("count", flat=True)
-        buckets.append(sum(count))
+        count = sum(count)
+        buckets.append(count)
+        bucket_start = bucket_edges[i - 1]
+        bucket_end = bucket_edges[i]
+        event_buckets.append({
+            "bucket_start": bucket_start,
+            "bucket_end": bucket_end,
+            "count": count,
+            "label": f"{bucket_start.day} {bucket_start:%b %H:%M} - {bucket_end:%H:%M}",
+        })
 
     max_value = max(buckets) or 0
     if max_value == 0:
@@ -71,9 +81,13 @@ def get_issue_event_sparkline(issue_id, now):
     else:
         bar_data = [(v / max_value) * 100 for v in buckets]
 
+    for bucket, pct in zip(event_buckets, bar_data, strict=True):
+        bucket["pct"] = pct
+
     return {
         "bar_data": bar_data,
         "buckets": buckets,
+        "event_buckets": event_buckets,
         "x_labels": get_x_labels(start, end),
         "y_labels": get_y_labels(max_value, 4),
     }
