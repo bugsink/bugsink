@@ -15,11 +15,12 @@ def get_model_topography_with_issue_override():
     The preference is encoded via an explicit list of models, which are visited early and only via their .issue path.
     """
     from issues.models import TurningPoint, Grouping
-    from events.models import Event
+    from events.models import Event, IssueEventCountsPerHour
     from tags.models import IssueTag, EventTag
 
     preferred = [
         TurningPoint,  # above Event, to avoid deletions via .triggering_event
+        IssueEventCountsPerHour,
         EventTag,      # above Event, to avoid deletions via .event
         Event,         # above Grouping, to avoid deletions via .grouping
         Grouping,
