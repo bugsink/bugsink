@@ -24,6 +24,7 @@ from bugsink.utils import assert_
 from phonehome.utils import phone_home
 
 from events.models import Event
+from events.sparklines import get_issue_event_sparkline
 from events.ua_stuff import get_contexts_enriched_with_ua
 
 from projects.models import ProjectMembership
@@ -386,6 +387,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
         "event_qs_count": _event_count(request, issue, event_x_qs) if request.GET.get("q") else None,
         "has_prev": event.digest_order > first_do,
         "has_next": event.digest_order < last_do,
+        "issue_sparkline": get_issue_event_sparkline(issue.id, timezone.now()),
     })
 
 
@@ -568,6 +570,7 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         "event_qs_count": _event_count(request, issue, event_x_qs) if request.GET.get("q") else None,
         "has_prev": event.digest_order > first_do,
         "has_next": event.digest_order < last_do,
+        "issue_sparkline": get_issue_event_sparkline(issue.id, timezone.now()),
     })
 
 

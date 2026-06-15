@@ -20,6 +20,7 @@ from .models import InstallationEventCountsPerHour, IssueEventCountsPerHour, Pro
 from .factories import create_event
 from .retention import (
     eviction_target, should_evict, evict_for_max_events, get_epoch_bounds_with_irrelevance, filter_for_work)
+from .sparklines import get_issue_event_sparkline, get_sparkline_range
 from .usage import EVENT_COUNTS_PER_HOUR_MAX_AGE, hour_bucket, record_event_counts
 from .utils import annotate_with_meta, annotate_var_with_meta
 from tags.models import EventTag, store_tags
@@ -137,6 +138,37 @@ class EventUsageTestCase(DjangoTestCase):
         self.assertTrue(InstallationEventCountsPerHour.objects.filter(bucket=recent_bucket).exists())
         self.assertTrue(ProjectEventCountsPerHour.objects.filter(bucket=recent_bucket).exists())
         self.assertTrue(IssueEventCountsPerHour.objects.filter(bucket=recent_bucket).exists())
+
+
+class EventSparklineTestCase(DjangoTestCase):
+    def test_issue_event_sparkline_uses_hourly_buckets(self):
+        project = Project.objects.create(name="sparkline")
+        issue, _ = get_or_create_issue(project=project)
+        other_issue, _ = get_or_create_issue(
+            project=project,
+            event_data={"exception": {"values": [{"type": "Other", "value": "Other"}]}},
+        )
+        now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        start, _, _ = get_sparkline_range(now)
+
+        IssueEventCountsPerHour.objects.create(project=project, issue=issue, bucket=start, count=2)
+        IssueEventCountsPerHour.objects.create(
+            project=project,
+            issue=issue,
+            bucket=start + datetime.timedelta(hours=1),
+            count=3,
+        )
+        IssueEventCountsPerHour.objects.create(
+            project=project,
+            issue=other_issue,
+            bucket=start,
+            count=99,
+        )
+
+        sparkline = get_issue_event_sparkline(issue.id, now)
+
+        self.assertEqual(5, sparkline["buckets"][0])
+        self.assertEqual(100, sparkline["bar_data"][0])
 
 
 class RetentionUtilsTestCase(RegularTestCase):

@@ -75,6 +75,10 @@
         <div class="text-lg mb-4 text-ellipsis whitespace-nowrap overflow-hidden">{{ exception.value }}</div>
     </div>
 
+    {% if forloop.first %}
+        {% include "issues/_event_sparkline.html" with issue_sparkline_extra_classes="mb-8" %}
+    {% endif %}
+
     {% for frame in exception.stacktrace.frames %}
         {% with frame=frame|pygmentize:event.platform %}
 
