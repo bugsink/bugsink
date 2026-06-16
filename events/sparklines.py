@@ -4,10 +4,9 @@ from datetime import timedelta, timezone
 from events.models import IssueEventCountsPerHour
 
 
-def get_sparkline_range(now):
-    # align on 4-hour boundary; round up from now
+def get_sparkline_range(now, hour_step=6):
+    # align on the display bucket boundary; round up from now
     now = now.astimezone(timezone.utc)
-    hour_step = 4
     boundary = math.ceil(now.hour / hour_step) * hour_step
     end = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=boundary)
 
@@ -47,32 +46,46 @@ def get_y_labels(max_value, num_labels=5):
     return reversed(labels)
 
 
-def get_issue_event_sparkline(issue_id, now):
-    start, end, interval = get_sparkline_range(now)
+def _format_bucket_label(bucket_start, bucket_end):
+    if bucket_start.hour == 0 and bucket_start.minute == 0 and bucket_end == bucket_start + timedelta(days=1):
+        return f"{bucket_start.day} {bucket_start:%b}"
 
+    if bucket_start.date() == bucket_end.date():
+        return f"{bucket_start.day} {bucket_start:%b %H:%M} - {bucket_end:%H:%M}"
+
+    return f"{bucket_start.day} {bucket_start:%b %H:%M} - {bucket_end.day} {bucket_end:%b %H:%M}"
+
+
+def _get_bucket_edges(start, end, interval):
     bucket_edges = []
     curr = start
     while curr <= end:
         bucket_edges.append(curr)
         curr += interval
 
+    return bucket_edges
+
+
+def _build_variant(start, end, interval, counts_by_hour):
+    bucket_edges = _get_bucket_edges(start, end, interval)
+
     buckets = []
     event_buckets = []
     for i in range(1, len(bucket_edges)):
-        count = IssueEventCountsPerHour.objects.filter(
-            issue_id=issue_id,
-            bucket__gte=bucket_edges[i - 1],
-            bucket__lt=bucket_edges[i],
-        ).values_list("count", flat=True)
-        count = sum(count)
-        buckets.append(count)
         bucket_start = bucket_edges[i - 1]
         bucket_end = bucket_edges[i]
+        count = 0
+        curr = bucket_start
+        while curr < bucket_end:
+            count += counts_by_hour.get(curr, 0)
+            curr += timedelta(hours=1)
+
+        buckets.append(count)
         event_buckets.append({
             "bucket_start": bucket_start,
             "bucket_end": bucket_end,
             "count": count,
-            "label": f"{bucket_start.day} {bucket_start:%b %H:%M} - {bucket_end:%H:%M}",
+            "label": _format_bucket_label(bucket_start, bucket_end),
         })
 
     max_value = max(buckets) or 0
@@ -85,9 +98,35 @@ def get_issue_event_sparkline(issue_id, now):
         bucket["pct"] = pct
 
     return {
+        "interval_hours": int(interval / timedelta(hours=1)),
         "bar_data": bar_data,
         "buckets": buckets,
         "event_buckets": event_buckets,
         "x_labels": get_x_labels(start, end),
         "y_labels": get_y_labels(max_value, 4),
+    }
+
+
+def get_issue_event_sparkline(issue_id, now):
+    variants = []
+    ranges = []
+    for hour_step in (24, 12, 6):
+        start, end, interval = get_sparkline_range(now, hour_step=hour_step)
+        ranges.append((start, end, interval))
+
+    query_start = min(start for start, _, _ in ranges)
+    query_end = max(end for _, end, _ in ranges)
+    counts_by_hour = dict(IssueEventCountsPerHour.objects.filter(
+        issue_id=issue_id,
+        bucket__gte=query_start,
+        bucket__lt=query_end,
+    ).values_list("bucket", "count"))
+
+    for start, end, interval in ranges:
+        variants.append(_build_variant(start, end, interval, counts_by_hour))
+
+    large_variant = variants[-1]
+    return {
+        **large_variant,
+        "variants": variants,
     }

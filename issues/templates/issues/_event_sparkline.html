@@ -1,13 +1,14 @@
 {% load humanize %}
 {% if issue_sparkline %}
-<div class="mt-8 grid"
+{% for sparkline_variant in issue_sparkline.variants %}
+<div class="mt-8 {% if sparkline_variant.interval_hours == 24 %}grid md:hidden{% elif sparkline_variant.interval_hours == 12 %}hidden md:grid 2xl:hidden{% else %}hidden 2xl:grid{% endif %}"
      style="grid-template-columns: 2rem 1fr; grid-template-rows: auto auto; column-gap: 0.5rem;">
 
     {# y-axis #}
     <div class="flex flex-col justify-between h-24 {# h matches chart height #} mr-2 text-xs text-slate-700 dark:text-slate-200">
     {# basic idea: first and last are half-cells, middle are full-width; this way the outermost labels are aligned with the outsides #}
 
-    {% for y_label in issue_sparkline.y_labels %}
+    {% for y_label in sparkline_variant.y_labels %}
 
         {% if forloop.first %}
             {#-- top half-cell #}
@@ -41,8 +42,8 @@
     <div class="row-span-1">
         {# bars #}
         <div class="grid h-24"
-             style="grid-template-columns: repeat({{ issue_sparkline.event_buckets|length }}, minmax(0,1fr)); gap: 2px;">
-            {% for bucket in issue_sparkline.event_buckets %}
+             style="grid-template-columns: repeat({{ sparkline_variant.event_buckets|length }}, minmax(0,1fr)); gap: 2px;">
+            {% for bucket in sparkline_variant.event_buckets %}
                 {% if bucket.count %}
                     <div class="group flex items-end"
                          title="{{ bucket.label }}: {{ bucket.count|intcomma }} event{{ bucket.count|pluralize }}">
@@ -67,7 +68,7 @@
         <div class="mt-1 flex text-xs">
             {# basic idea: as the y-axis, but without the float-out #}
 
-            {% for x_label in issue_sparkline.x_labels %}
+            {% for x_label in sparkline_variant.x_labels %}
                 {% if forloop.first %}
                     <!-- Left half-cell -->
                     <div class="flex-[0.5] flex justify-start">
@@ -99,4 +100,5 @@
     <div></div>
 
 </div>
+{% endfor %}
 {% endif %}
