@@ -66,7 +66,7 @@ def _get_bucket_edges(start, end, interval):
     return bucket_edges
 
 
-def _build_variant(start, end, interval, counts_by_hour):
+def _build_variant(start, end, interval, counts_by_hour, active_event_digested_at):
     bucket_edges = _get_bucket_edges(start, end, interval)
 
     buckets = []
@@ -80,12 +80,18 @@ def _build_variant(start, end, interval, counts_by_hour):
             count += counts_by_hour.get(curr, 0)
             curr += timedelta(hours=1)
 
+        contains_active_event = (
+            active_event_digested_at is not None and
+            bucket_start <= active_event_digested_at < bucket_end
+        )
+
         buckets.append(count)
         event_buckets.append({
             "bucket_start": bucket_start,
             "bucket_end": bucket_end,
             "count": count,
             "label": _format_bucket_label(bucket_start, bucket_end),
+            "contains_active_event": contains_active_event,
         })
 
     max_value = max(buckets) or 0
@@ -107,7 +113,10 @@ def _build_variant(start, end, interval, counts_by_hour):
     }
 
 
-def get_issue_event_sparkline(issue_id, now):
+def get_issue_event_sparkline(issue_id, now, active_event_digested_at=None):
+    if active_event_digested_at is not None:
+        active_event_digested_at = active_event_digested_at.astimezone(timezone.utc)
+
     variants = []
     ranges = []
     for hour_step in (24, 12, 6):
@@ -123,7 +132,7 @@ def get_issue_event_sparkline(issue_id, now):
     ).values_list("bucket", "count"))
 
     for start, end, interval in ranges:
-        variants.append(_build_variant(start, end, interval, counts_by_hour))
+        variants.append(_build_variant(start, end, interval, counts_by_hour, active_event_digested_at))
 
     large_variant = variants[-1]
     return {

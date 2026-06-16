@@ -178,6 +178,13 @@ class EventSparklineTestCase(DjangoTestCase):
         self.assertEqual(0, sparkline["event_buckets"][1]["pct"])
         self.assertEqual([24, 12, 6], [variant["interval_hours"] for variant in sparkline["variants"]])
         self.assertEqual("18 May", sparkline["variants"][0]["event_buckets"][0]["label"])
+        self.assertFalse(any(bucket["contains_active_event"] for bucket in sparkline["event_buckets"]))
+
+        sparkline = get_issue_event_sparkline(issue.id, now, start + datetime.timedelta(hours=1))
+
+        self.assertFalse(any(bucket["contains_active_event"] for bucket in sparkline["variants"][0]["event_buckets"]))
+        self.assertTrue(sparkline["variants"][1]["event_buckets"][0]["contains_active_event"])
+        self.assertTrue(sparkline["event_buckets"][0]["contains_active_event"])
 
 
 class RetentionUtilsTestCase(RegularTestCase):

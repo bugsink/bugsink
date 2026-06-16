@@ -45,14 +45,20 @@
              style="grid-template-columns: repeat({{ sparkline_variant.event_buckets|length }}, minmax(0,1fr)); gap: 2px;">
             {% for bucket in sparkline_variant.event_buckets %}
                 {% if bucket.count %}
-                    <div class="group flex items-end"
+                    <div class="group relative flex items-end"
                          title="{{ bucket.label }}: {{ bucket.count|intcomma }} event{{ bucket.count|pluralize }}">
+                        {% if bucket.contains_active_event %}
+                            <div class="absolute top-0 bottom-0 left-1/2 z-10 w-[2px] -translate-x-1/2 bg-red-500 dark:bg-red-400"></div>
+                        {% endif %}
                         <div class="bg-slate-400 dark:bg-slate-400 group-hover:bg-slate-500 dark:group-hover:bg-slate-300 w-full"
                              style="height: {{ bucket.pct }}%;">
                         </div>
                     </div>
                 {% else %}
-                    <div class="flex items-end">
+                    <div class="relative flex items-end">
+                        {% if bucket.contains_active_event %}
+                            <div class="absolute top-0 bottom-0 left-1/2 z-10 w-[2px] -translate-x-1/2 bg-red-500 dark:bg-red-400"></div>
+                        {% endif %}
                         <div class="bg-slate-400 dark:bg-slate-400 w-full"
                              style="height: {{ bucket.pct }}%;">
                         </div>
