@@ -1,4 +1,5 @@
 {% load humanize %}
+{% load add_to_qs %}
 {% if issue_sparkline %}
 {% for sparkline_variant in issue_sparkline.variants %}
 <div class="mt-8 {% if sparkline_variant.interval_hours == 24 %}grid md:hidden{% elif sparkline_variant.interval_hours == 12 %}hidden md:grid 2xl:hidden{% else %}hidden 2xl:grid{% endif %}"
@@ -44,7 +45,18 @@
         <div class="grid h-24"
              style="grid-template-columns: repeat({{ sparkline_variant.event_buckets|length }}, minmax(0,1fr)); gap: 2px;">
             {% for bucket in sparkline_variant.event_buckets %}
-                {% if bucket.count %}
+                {% if bucket.count and bucket.digest_order %}
+                    <a class="group relative flex items-end cursor-pointer"
+                       href="{% url this_view issue_pk=issue.pk digest_order=bucket.digest_order %}{% current_qs %}"
+                       title="{{ bucket.label }}: {{ bucket.count|intcomma }} event{{ bucket.count|pluralize }}">
+                        {% if bucket.contains_active_event %}
+                            <div class="absolute top-0 bottom-0 left-1/2 z-10 w-[2px] -translate-x-1/2 bg-red-500 dark:bg-red-400"></div>
+                        {% endif %}
+                        <div class="bg-slate-400 dark:bg-slate-400 group-hover:bg-slate-500 dark:group-hover:bg-slate-300 w-full"
+                             style="height: {{ bucket.pct }}%;">
+                        </div>
+                    </a>
+                {% elif bucket.count %}
                     <div class="group relative flex items-end"
                          title="{{ bucket.label }}: {{ bucket.count|intcomma }} event{{ bucket.count|pluralize }}">
                         {% if bucket.contains_active_event %}

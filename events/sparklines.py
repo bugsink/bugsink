@@ -66,7 +66,7 @@ def _get_bucket_edges(start, end, interval):
     return bucket_edges
 
 
-def _build_variant(start, end, interval, counts_by_hour, active_event_digested_at):
+def _build_variant(start, end, interval, buckets_by_hour, active_event_digested_at):
     bucket_edges = _get_bucket_edges(start, end, interval)
 
     buckets = []
@@ -75,9 +75,13 @@ def _build_variant(start, end, interval, counts_by_hour, active_event_digested_a
         bucket_start = bucket_edges[i - 1]
         bucket_end = bucket_edges[i]
         count = 0
+        digest_order = None
         curr = bucket_start
         while curr < bucket_end:
-            count += counts_by_hour.get(curr, 0)
+            hour_bucket = buckets_by_hour.get(curr)
+            if hour_bucket is not None:
+                count += hour_bucket["count"]
+                digest_order = hour_bucket["digest_order"]
             curr += timedelta(hours=1)
 
         contains_active_event = (
@@ -90,6 +94,7 @@ def _build_variant(start, end, interval, counts_by_hour, active_event_digested_a
             "bucket_start": bucket_start,
             "bucket_end": bucket_end,
             "count": count,
+            "digest_order": digest_order,
             "label": _format_bucket_label(bucket_start, bucket_end),
             "contains_active_event": contains_active_event,
         })
@@ -125,14 +130,17 @@ def get_issue_event_sparkline(issue_id, now, active_event_digested_at=None):
 
     query_start = min(start for start, _, _ in ranges)
     query_end = max(end for _, end, _ in ranges)
-    counts_by_hour = dict(IssueEventCountsPerHour.objects.filter(
-        issue_id=issue_id,
-        bucket__gte=query_start,
-        bucket__lt=query_end,
-    ).values_list("bucket", "count"))
+    buckets_by_hour = {
+        bucket: {"count": count, "digest_order": digest_order}
+        for bucket, count, digest_order in IssueEventCountsPerHour.objects.filter(
+            issue_id=issue_id,
+            bucket__gte=query_start,
+            bucket__lt=query_end,
+        ).values_list("bucket", "count", "digest_order")
+    }
 
     for start, end, interval in ranges:
-        variants.append(_build_variant(start, end, interval, counts_by_hour, active_event_digested_at))
+        variants.append(_build_variant(start, end, interval, buckets_by_hour, active_event_digested_at))
 
     large_variant = variants[-1]
     return {

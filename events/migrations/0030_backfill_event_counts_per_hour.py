@@ -50,6 +50,18 @@ def get_total_events_in_period(qs_for_period, order_field, add_for_current=0):
                 + 1 + add_for_current)  # +1: not the difference, but the count incl. both ends
 
 
+def get_total_events_in_period_and_digest_order(qs_for_period):
+    first_in_period = qs_for_period.order_by("digested_at", "digest_order").first()
+    if first_in_period is None:
+        return 0, None
+
+    last_in_period = qs_for_period.order_by("-digested_at", "-digest_order").first()
+    return (
+        last_in_period.digest_order - first_in_period.digest_order + 1,
+        last_in_period.digest_order,
+    )
+
+
 def _hour_qs(Event, bucket):
     return Event.objects.filter(digested_at__gte=bucket, digested_at__lt=bucket + timedelta(hours=1))
 
@@ -98,20 +110,25 @@ def backfill_event_counts_per_hour(apps, schema_editor):
         ),
     )
 
+    issue_rows = []
+    for row in _hourly_groups(hourly_events, "project_id", "issue_id"):
+        count, digest_order = get_total_events_in_period_and_digest_order(
+            _hour_qs(Event, row["bucket"]).filter(issue_id=row["issue_id"]),
+        )
+        if count == 0:
+            continue
+
+        issue_rows.append({
+            "project_id": row["project_id"],
+            "issue_id": row["issue_id"],
+            "bucket": row["bucket"],
+            "count": count,
+            "digest_order": digest_order,
+        })
+
     _bulk_create(
         IssueEventCountsPerHour,
-        (
-            {
-                "project_id": row["project_id"],
-                "issue_id": row["issue_id"],
-                "bucket": row["bucket"],
-                "count": get_total_events_in_period(
-                    _hour_qs(Event, row["bucket"]).filter(issue_id=row["issue_id"]),
-                    "digest_order",
-                ),
-            }
-            for row in _hourly_groups(hourly_events, "project_id", "issue_id")
-        ),
+        issue_rows,
     )
 
 

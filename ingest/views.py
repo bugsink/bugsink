@@ -484,7 +484,7 @@ class BaseIngestAPIView(View):
             # albeit with considerable wasted work in that scenario).
             raise ValidationError("Event already exists", code="event_already_exists")
 
-        record_event_counts(project, issue, digested_at)
+        record_event_counts(project, issue, digested_at, event.digest_order)
 
         release, _ = create_release_if_needed(project, event.release, event.ingested_at, issue)
 

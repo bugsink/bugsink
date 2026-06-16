@@ -102,9 +102,9 @@ class EventUsageTestCase(DjangoTestCase):
         first_hour = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
         next_hour = datetime.datetime(2026, 6, 14, 13, 1, tzinfo=datetime.timezone.utc)
 
-        record_event_counts(project, issue, first_hour)
-        record_event_counts(project, issue, first_hour)
-        record_event_counts(project, issue, next_hour)
+        record_event_counts(project, issue, first_hour, 1)
+        record_event_counts(project, issue, first_hour, 2)
+        record_event_counts(project, issue, next_hour, 3)
 
         self.assertEqual(2, InstallationEventCountsPerHour.objects.get(bucket=hour_bucket(first_hour)).count)
         self.assertEqual(1, InstallationEventCountsPerHour.objects.get(bucket=hour_bucket(next_hour)).count)
@@ -112,7 +112,9 @@ class EventUsageTestCase(DjangoTestCase):
             2,
             ProjectEventCountsPerHour.objects.get(project=project, bucket=hour_bucket(first_hour)).count,
         )
-        self.assertEqual(2, IssueEventCountsPerHour.objects.get(issue=issue, bucket=hour_bucket(first_hour)).count)
+        issue_bucket = IssueEventCountsPerHour.objects.get(issue=issue, bucket=hour_bucket(first_hour))
+        self.assertEqual(2, issue_bucket.count)
+        self.assertEqual(2, issue_bucket.digest_order)
 
     def test_record_event_counts_cleans_up_old_buckets(self):
         project = Project.objects.create(name="usage cleanup")
@@ -130,7 +132,7 @@ class EventUsageTestCase(DjangoTestCase):
         IssueEventCountsPerHour.objects.create(project=other_project, issue=other_issue, bucket=old_bucket, count=1)
         IssueEventCountsPerHour.objects.create(project=project, issue=issue, bucket=recent_bucket, count=1)
 
-        record_event_counts(project, issue, new_hour)
+        record_event_counts(project, issue, new_hour, 1)
 
         self.assertFalse(InstallationEventCountsPerHour.objects.filter(bucket=old_bucket).exists())
         self.assertFalse(ProjectEventCountsPerHour.objects.filter(bucket=old_bucket).exists())
@@ -151,18 +153,20 @@ class EventSparklineTestCase(DjangoTestCase):
         now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
         start, _, _ = get_sparkline_range(now)
 
-        IssueEventCountsPerHour.objects.create(project=project, issue=issue, bucket=start, count=2)
+        IssueEventCountsPerHour.objects.create(project=project, issue=issue, bucket=start, count=2, digest_order=7)
         IssueEventCountsPerHour.objects.create(
             project=project,
             issue=issue,
             bucket=start + datetime.timedelta(hours=1),
             count=3,
+            digest_order=8,
         )
         IssueEventCountsPerHour.objects.create(
             project=project,
             issue=other_issue,
             bucket=start,
             count=99,
+            digest_order=99,
         )
 
         sparkline = get_issue_event_sparkline(issue.id, now)
@@ -173,6 +177,7 @@ class EventSparklineTestCase(DjangoTestCase):
         self.assertEqual(start + datetime.timedelta(hours=6), sparkline["event_buckets"][0]["bucket_end"])
         self.assertEqual("17 May 12:00 - 18:00", sparkline["event_buckets"][0]["label"])
         self.assertEqual(5, sparkline["event_buckets"][0]["count"])
+        self.assertEqual(8, sparkline["event_buckets"][0]["digest_order"])
         self.assertEqual(100, sparkline["event_buckets"][0]["pct"])
         self.assertEqual(0, sparkline["event_buckets"][1]["count"])
         self.assertEqual(0, sparkline["event_buckets"][1]["pct"])
