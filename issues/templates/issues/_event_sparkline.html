@@ -12,7 +12,7 @@
 
         {% if forloop.first %}
             {#-- top half-cell #}
-            <div class="flex-[0.5] flex items-start justify-end pr-1 relative">
+            <div class="flex-[0.5] flex items-start justify-start relative">
                 <span class="-translate-y-[35%]">
                     {{ y_label }}
                 </span>
@@ -20,7 +20,7 @@
 
         {% elif forloop.last %}
             {# bottom half-cell #}
-            <div class="flex-[0.5] flex items-end justify-end pr-1 relative">
+            <div class="flex-[0.5] flex items-end justify-start relative">
                 <span class="translate-y-[35%]">
                     {{ y_label }}
                 </span>
@@ -28,7 +28,7 @@
 
         {% else %}
             {# full-width middle cells #}
-            <div class="flex-1 flex items-center justify-end pr-1">
+            <div class="flex-1 flex items-center justify-start">
                 {{ y_label }}
             </div>
 
