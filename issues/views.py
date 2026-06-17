@@ -569,7 +569,12 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         "event_qs_count": _event_count(request, issue, event_x_qs) if request.GET.get("q") else None,
         "has_prev": event.digest_order > first_do,
         "has_next": event.digest_order < last_do,
-        "issue_sparkline": get_issue_event_sparkline(issue.id, timezone.now(), event.digested_at),
+        "issue_sparkline": get_issue_event_sparkline(
+            issue.id,
+            timezone.now(),
+            event.digested_at,
+            search_events(issue.project, issue, request.GET["q"]) if request.GET.get("q") else None,
+        ),
     })
 
 

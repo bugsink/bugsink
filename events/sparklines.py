@@ -1,6 +1,9 @@
 import math
 from datetime import timedelta, timezone
 
+from django.db.models import Count, Max
+from django.db.models.functions import TruncHour
+
 from events.models import IssueEventCountsPerHour
 
 
@@ -66,22 +69,44 @@ def _get_bucket_edges(start, end, interval):
     return bucket_edges
 
 
-def _build_variant(start, end, interval, buckets_by_hour, active_event_digested_at):
+def _format_event_count(count):
+    return f"{count:,} event" if count == 1 else f"{count:,} events"
+
+
+def _get_bucket_title(label, count, matching_count):
+    if matching_count is None:
+        return f"{label}: {_format_event_count(count)}"
+
+    matching = f"{matching_count:,} matching event{'' if matching_count == 1 else 's'}"
+    return f"{label}: {matching}, {_format_event_count(count)} total"
+
+
+def _build_variant(start, end, interval, buckets_by_hour, matching_buckets_by_hour, active_event_digested_at):
     bucket_edges = _get_bucket_edges(start, end, interval)
 
     buckets = []
     event_buckets = []
+    has_overlay = matching_buckets_by_hour is not None
     for i in range(1, len(bucket_edges)):
         bucket_start = bucket_edges[i - 1]
         bucket_end = bucket_edges[i]
         count = 0
         digest_order = None
+        matching_count = 0
+        matching_digest_order = None
         curr = bucket_start
         while curr < bucket_end:
             hour_bucket = buckets_by_hour.get(curr)
             if hour_bucket is not None:
                 count += hour_bucket["count"]
                 digest_order = hour_bucket["digest_order"]
+            if matching_buckets_by_hour is not None:
+                matching_hour_bucket = matching_buckets_by_hour.get(curr)
+                if matching_hour_bucket is not None:
+                    matching_count += matching_hour_bucket["count"]
+                    if (matching_digest_order is None or
+                            matching_hour_bucket["digest_order"] > matching_digest_order):
+                        matching_digest_order = matching_hour_bucket["digest_order"]
             curr += timedelta(hours=1)
 
         contains_active_event = (
@@ -94,7 +119,8 @@ def _build_variant(start, end, interval, buckets_by_hour, active_event_digested_
             "bucket_start": bucket_start,
             "bucket_end": bucket_end,
             "count": count,
-            "digest_order": digest_order,
+            "digest_order": matching_digest_order if has_overlay else digest_order,
+            "matching_count": matching_count if has_overlay else None,
             "label": _format_bucket_label(bucket_start, bucket_end),
             "contains_active_event": contains_active_event,
         })
@@ -107,6 +133,14 @@ def _build_variant(start, end, interval, buckets_by_hour, active_event_digested_
 
     for bucket, pct in zip(event_buckets, bar_data, strict=True):
         bucket["pct"] = pct
+        bucket["has_overlay"] = has_overlay
+        if has_overlay:
+            bucket["matching_pct"] = (bucket["matching_count"] / max_value) * 100 if max_value else 0
+            bucket["click_count"] = bucket["matching_count"]
+        else:
+            bucket["matching_pct"] = None
+            bucket["click_count"] = bucket["count"]
+        bucket["title"] = _get_bucket_title(bucket["label"], bucket["count"], bucket["matching_count"])
 
     return {
         "interval_hours": int(interval / timedelta(hours=1)),
@@ -118,7 +152,7 @@ def _build_variant(start, end, interval, buckets_by_hour, active_event_digested_
     }
 
 
-def get_issue_event_sparkline(issue_id, now, active_event_digested_at=None):
+def get_issue_event_sparkline(issue_id, now, active_event_digested_at=None, matching_event_qs=None):
     if active_event_digested_at is not None:
         active_event_digested_at = active_event_digested_at.astimezone(timezone.utc)
 
@@ -139,8 +173,25 @@ def get_issue_event_sparkline(issue_id, now, active_event_digested_at=None):
         ).values_list("bucket", "count", "digest_order")
     }
 
+    matching_buckets_by_hour = None
+    if matching_event_qs is not None:
+        # Search is dynamic, so these counts can only cover retained events that still have searchable rows.
+        matching_buckets_by_hour = {
+            bucket: {"count": count, "digest_order": digest_order}
+            for bucket, count, digest_order in matching_event_qs.filter(
+                digested_at__gte=query_start,
+                digested_at__lt=query_end,
+            ).annotate(
+                bucket=TruncHour("digested_at", tzinfo=timezone.utc),
+            ).values("bucket").annotate(
+                count=Count("id"),
+                matching_digest_order=Max("digest_order"),
+            ).values_list("bucket", "count", "matching_digest_order")
+        }
+
     for start, end, interval in ranges:
-        variants.append(_build_variant(start, end, interval, buckets_by_hour, active_event_digested_at))
+        variants.append(_build_variant(start, end, interval, buckets_by_hour, matching_buckets_by_hour,
+                                       active_event_digested_at))
 
     large_variant = variants[-1]
     return {

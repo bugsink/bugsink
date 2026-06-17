@@ -24,6 +24,7 @@ from .sparklines import get_issue_event_sparkline, get_sparkline_range
 from .usage import EVENT_COUNTS_PER_HOUR_MAX_AGE, hour_bucket, record_event_counts
 from .utils import annotate_with_meta, annotate_var_with_meta
 from tags.models import EventTag, store_tags
+from tags.search import search_events
 
 User = get_user_model()
 
@@ -190,6 +191,40 @@ class EventSparklineTestCase(DjangoTestCase):
         self.assertFalse(any(bucket["contains_active_event"] for bucket in sparkline["variants"][0]["event_buckets"]))
         self.assertTrue(sparkline["variants"][1]["event_buckets"][0]["contains_active_event"])
         self.assertTrue(sparkline["event_buckets"][0]["contains_active_event"])
+
+    def test_issue_event_sparkline_search_overlay_uses_matching_retained_events(self):
+        project = Project.objects.create(name="sparkline")
+        issue, _ = get_or_create_issue(project=project)
+        now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        start, _, _ = get_sparkline_range(now)
+
+        first_event = create_event(project, issue, timestamp=start + datetime.timedelta(hours=1))
+        second_event = create_event(project, issue, timestamp=start + datetime.timedelta(hours=2))
+        third_event = create_event(project, issue, timestamp=start + datetime.timedelta(hours=7))
+        for event in (first_event, second_event, third_event):
+            record_event_counts(project, issue, event.digested_at, event.digest_order)
+
+        store_tags(second_event, issue, {"foo": "bar"})
+        store_tags(third_event, issue, {"foo": "bar"})
+
+        sparkline = get_issue_event_sparkline(
+            issue.id,
+            now,
+            matching_event_qs=search_events(project, issue, "foo:bar"),
+        )
+
+        first_bucket = sparkline["event_buckets"][0]
+        second_bucket = sparkline["event_buckets"][1]
+        self.assertEqual(2, first_bucket["count"])
+        self.assertEqual(1, first_bucket["matching_count"])
+        self.assertEqual(2, first_bucket["digest_order"])
+        self.assertEqual(1, first_bucket["click_count"])
+        self.assertEqual(50, first_bucket["matching_pct"])
+        self.assertEqual("17 May 12:00 - 18:00: 1 matching event, 2 events total", first_bucket["title"])
+
+        self.assertEqual(1, second_bucket["count"])
+        self.assertEqual(1, second_bucket["matching_count"])
+        self.assertEqual(3, second_bucket["digest_order"])
 
 
 class RetentionUtilsTestCase(RegularTestCase):
