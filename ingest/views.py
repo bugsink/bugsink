@@ -36,6 +36,7 @@ from bugsink.utils import set_path
 
 from events.models import Event
 from events.retention import evict_for_max_events, should_evict, EvictionCounts
+from events.usage import record_event_counts
 from releases.models import create_release_if_needed
 from alerts.tasks import send_new_issue_alert, send_regression_alert
 from compat.timestamp import format_timestamp, parse_timestamp
@@ -482,6 +483,8 @@ class BaseIngestAPIView(View):
             # Note: given the ordering here this may hit after an eviction; that was not imagined (but will still work,
             # albeit with considerable wasted work in that scenario).
             raise ValidationError("Event already exists", code="event_already_exists")
+
+        record_event_counts(project, issue, digested_at, event.digest_order)
 
         release, _ = create_release_if_needed(project, event.release, event.ingested_at, issue)
 

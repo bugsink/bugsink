@@ -288,3 +288,31 @@ class Event(models.Model):
         # "design decision needed". Maybe if we get more `delete_deferred` impls. we'll have a bit more info to figure
         # out if we can harmonize on (e.g.) 2 approaches.
         delay_on_commit(delete_event_deps, str(self.project_id), str(self.id))
+
+
+class InstallationEventCountsPerHour(models.Model):
+    bucket = models.DateTimeField(unique=True)  # unique index supports installation usage range sums
+    count = models.PositiveIntegerField(default=0)
+
+
+class ProjectEventCountsPerHour(models.Model):
+    project = models.ForeignKey(Project, blank=False, null=False, on_delete=models.DO_NOTHING)
+    bucket = models.DateTimeField(db_index=True)  # bucket-only index supports broad 90-day cleanup
+    count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = [("project", "bucket")]  # unique index supports project usage charts and range sums
+
+
+class IssueEventCountsPerHour(models.Model):
+    project = models.ForeignKey(Project, blank=False, null=False, on_delete=models.DO_NOTHING)
+    issue = models.ForeignKey("issues.Issue", blank=False, null=False, on_delete=models.DO_NOTHING)
+    bucket = models.DateTimeField(db_index=True)  # bucket-only index supports broad 90-day cleanup
+    count = models.PositiveIntegerField(default=0)
+    digest_order = models.PositiveIntegerField(null=True)  # event's digest_order for the last event; for click-through
+
+    class Meta:
+        unique_together = [("issue", "bucket")]
+        indexes = [
+            models.Index(fields=["project", "bucket"]),  # batched issue-list sparklines for a project
+        ]

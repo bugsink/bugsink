@@ -33,6 +33,7 @@ from tags.models import store_tags
 from tags.tasks import vacuum_tagvalues
 from events.markdown_stacktrace import render_stacktrace_md
 from files.models import File, FileMetadata
+from events.usage import record_event_counts
 
 from .models import Issue, IssueStateManager, TurningPoint, TurningPointKind
 from .regressions import is_regression, is_regression_2, issue_is_regression
@@ -439,6 +440,14 @@ class ViewTests(TransactionTestCase):
 
     def test_issue_details(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/details/")
+        self.assertContains(response, self.issue.title())
+
+    def test_issue_details_by_digest_order_with_tag_search(self):
+        event = create_event(self.project, self.issue, project_digest_order=2)
+        store_tags(event, self.issue, {"foo": "bar"})
+
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{event.digest_order}/details/?q=foo:bar")
+
         self.assertContains(response, self.issue.title())
 
     def test_issue_event_views_do_not_show_events_from_other_projects(self):
@@ -1094,10 +1103,12 @@ class IssueDeletionTestCase(TransactionTestCase):
         self.event.save()
 
         store_tags(self.event, self.issue, {"foo": "bar"})
+        record_event_counts(self.project, self.issue, self.event.digested_at, self.event.digest_order)
 
     def test_delete_issue(self):
         models = [apps.get_model(app_label=s.split('.')[0], model_name=s.split('.')[1].lower()) for s in [
-            'events.Event', 'issues.Grouping', 'issues.TurningPoint', 'tags.EventTag', 'issues.Issue', 'tags.IssueTag',
+            'events.Event', 'events.IssueEventCountsPerHour', 'issues.Grouping', 'issues.TurningPoint', 'tags.EventTag',
+            'issues.Issue', 'tags.IssueTag',
             'tags.TagValue',  # TagValue 'feels like' a vacuum_model (FKs reversed) but is cleaned up in `prune_orphans`
         ]]
 
@@ -1115,7 +1126,7 @@ class IssueDeletionTestCase(TransactionTestCase):
         # correct for bugsink/transaction.py's select_for_update for non-sqlite databases
         correct_for_select_for_update = 1 if 'sqlite' not in settings.DATABASES['default']['ENGINE'] else 0
 
-        with self.assertNumQueries(20 + correct_for_select_for_update):
+        with self.assertNumQueries(22 + correct_for_select_for_update):
             self.issue.delete_deferred()
 
         # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly
@@ -1160,12 +1171,14 @@ class IssueDeletionTestCase(TransactionTestCase):
             (apps.get_model('events', 'Event'), 'issue'),
             (apps.get_model('issues', 'TurningPoint'), 'triggering_event'),
             (apps.get_model('tags', 'EventTag'), 'event'),
+            (apps.get_model('events', 'IssueEventCountsPerHour'), 'issue'),
             (apps.get_model('tags', 'EventTag'), 'issue'),
             (apps.get_model('tags', 'IssueTag'), 'issue'),
         ])
 
         self.assertEqual(walk(override, 'issues.Issue'), [
             (apps.get_model('issues', 'TurningPoint'), 'issue'),
+            (apps.get_model('events', 'IssueEventCountsPerHour'), 'issue'),
             (apps.get_model('tags', 'EventTag'), 'issue'),
             (apps.get_model('events', 'Event'), 'issue'),
             (apps.get_model('issues', 'Grouping'), 'issue'),

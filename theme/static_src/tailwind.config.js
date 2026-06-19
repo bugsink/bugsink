@@ -15,7 +15,7 @@ module.exports = {
          */
 
         /*  Templates within theme app (<tailwind_app_name>/templates), e.g. base.html. */
-        '../templates/**/*.html',
+        // '../templates/**/*.html',  covered in the below
 
         /*
          * Main templates directory of the project (BASE_DIR/templates).
@@ -25,9 +25,31 @@ module.exports = {
 
         /*
          * Templates in other django apps (BASE_DIR/<any_app_name>/templates).
-         * Adjust the following line to match your project structure.
+         * Based on the list in pyproject.toml.
          */
-        '../../**/templates/**/*.html',
+        "../../alerts/templates/**/*.html",
+        "../../api/templates/**/*.html",
+        "../../bsmain/templates/**/*.html",
+        "../../bugsink/templates/**/*.html",
+        "../../compat/templates/**/*.html",
+        "../../events/templates/**/*.html",
+        "../../ee/templates/**/*.html",
+        "../../ingest/templates/**/*.html",
+        "../../issues/templates/**/*.html",
+        "../../files/templates/**/*.html",
+        "../../performance/templates/**/*.html",
+        "../../phonehome/templates/**/*.html",
+        "../../projects/templates/**/*.html",
+        "../../releases/templates/**/*.html",
+        "../../sentry/templates/**/*.html",
+        "../../sentry_sdk_extensions/templates/**/*.html",
+        "../../snappea/templates/**/*.html",
+        // "../../static/**/*.html",
+        "../../tags/templates/**/*.html",
+        "../../teams/templates/**/*.html",
+        "../../templates/templates/**/*.html",
+        "../../theme/templates/**/*.html",
+        "../../users/templates/**/*.html",
 
         /**
          * JS: If you use Tailwind CSS in JavaScript, uncomment the following lines and make sure

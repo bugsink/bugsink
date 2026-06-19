@@ -104,7 +104,11 @@ def check_for_thresholds(qs, now, thresholds, add_for_current=0):
     # This is, in the light of evictions (and deletions), an approximation only. We'll leave the proof of why and how
     # much better than counting events this is as an exercise to the reader. If we ever want to go even more precise,
     # we'll have to move to a bucketing counting scheme rather than rolling counters.
-
+    #
+    # The hourly usage buckets in events.usage are intentionally not used for quota enforcement because [1] they cannot
+    # express the 5-minute quota (sub-hour), and using hour-sized buckets for rolling quota would introduce step changes
+    # causing spikes in evens-acceptance at the full hour (bucket boundary).
+    #
     # we only allow UTC, and we generally use Django model fields, which are UTC, so this should be good:
     assert_(now.tzinfo == timezone.utc)
 

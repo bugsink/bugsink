@@ -14,6 +14,7 @@ from issues.models import TurningPoint, TurningPointKind, Issue
 from alerts.models import MessagingServiceConfig
 from releases.models import Release
 from files.models import File, FileMetadata
+from events.usage import record_event_counts
 
 from .tasks import get_model_topography_with_project_override
 
@@ -45,6 +46,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
         self.event.save()
 
         store_tags(self.event, self.issue, {"foo": "bar"})
+        record_event_counts(self.project, self.issue, self.event.digested_at, self.event.digest_order)
 
     def test_delete_project(self):
         models = [apps.get_model(app_label=s.split('.')[0], model_name=s.split('.')[1].lower()) for s in [
@@ -53,6 +55,8 @@ class ProjectDeletionTestCase(TransactionTestCase):
                   "tags.TagValue",
                   "tags.TagKey",
                   "issues.TurningPoint",
+                  "events.IssueEventCountsPerHour",
+                  "events.ProjectEventCountsPerHour",
                   "events.Event",
                   "issues.Grouping",
                   "files.FileMetadata",
@@ -73,7 +77,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
         # correct for bugsink/transaction.py's select_for_update for non-sqlite databases
         correct_for_select_for_update = 1 if 'sqlite' not in settings.DATABASES['default']['ENGINE'] else 0
 
-        with self.assertNumQueries(29 + correct_for_select_for_update):
+        with self.assertNumQueries(33 + correct_for_select_for_update):
             self.project.delete_deferred()
 
         # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly
@@ -107,6 +111,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
             (apps.get_model('events', 'Event'), 'issue'),
             (apps.get_model('issues', 'TurningPoint'), 'triggering_event'),
             (apps.get_model('tags', 'EventTag'), 'event'),
+            (apps.get_model('events', 'IssueEventCountsPerHour'), 'issue'),
             (apps.get_model('tags', 'EventTag'), 'issue'),
             (apps.get_model('tags', 'IssueTag'), 'issue'),
             (apps.get_model('issues', 'Grouping'), 'project'),
@@ -118,6 +123,8 @@ class ProjectDeletionTestCase(TransactionTestCase):
             (apps.get_model('events', 'Event'), 'project'),
             (apps.get_model('issues', 'TurningPoint'), 'triggering_event'),
             (apps.get_model('tags', 'EventTag'), 'event'),
+            (apps.get_model('events', 'ProjectEventCountsPerHour'), 'project'),
+            (apps.get_model('events', 'IssueEventCountsPerHour'), 'project'),
             (apps.get_model('tags', 'TagKey'), 'project'),
             (apps.get_model('tags', 'TagValue'), 'key'),
             (apps.get_model('tags', 'EventTag'), 'value'),
@@ -137,6 +144,8 @@ class ProjectDeletionTestCase(TransactionTestCase):
             (apps.get_model('tags', 'TagValue'), 'project'),
             (apps.get_model('tags', 'TagKey'), 'project'),
             (apps.get_model('issues', 'TurningPoint'), 'project'),
+            (apps.get_model('events', 'IssueEventCountsPerHour'), 'project'),
+            (apps.get_model('events', 'ProjectEventCountsPerHour'), 'project'),
             (apps.get_model('events', 'Event'), 'project'),
             (apps.get_model('issues', 'Grouping'), 'project'),
             (apps.get_model('alerts', 'MessagingServiceConfig'), 'project'),
