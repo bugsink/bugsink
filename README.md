@@ -1,5 +1,7 @@
 # Bugsink: Self-hosted Error Tracking
 
+blah
+
 * [Error Tracking](https://www.bugsink.com/error-tracking/)
 * [Built to self-host](https://www.bugsink.com/built-to-self-host/)
 * [Sentry-SDK compatible](https://www.bugsink.com/connect-any-application/)
