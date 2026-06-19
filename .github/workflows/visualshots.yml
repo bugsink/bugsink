@@ -64,7 +64,7 @@ jobs:
             --out visualshots/results
 
       - name: Upload visual review bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: visualshots
           path: visualshots/results/
