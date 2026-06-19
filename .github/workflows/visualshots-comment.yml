@@ -41,17 +41,6 @@ jobs:
             core.setOutput("base_branch", `origin/${pull.base.ref}`);
             core.setOutput("artifact_prefix", `visualshots-pr-${pull_number}`);
 
-      - name: React to command
-        uses: actions/github-script@v8
-        with:
-          script: |
-            await github.rest.reactions.createForIssueComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: context.payload.comment.id,
-              content: "eyes",
-            });
-
   visualshots:
     needs: resolve
     uses: ./.github/workflows/visualshots-run.yml
