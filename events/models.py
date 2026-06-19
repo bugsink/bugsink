@@ -309,7 +309,7 @@ class IssueEventCountsPerHour(models.Model):
     issue = models.ForeignKey("issues.Issue", blank=False, null=False, on_delete=models.DO_NOTHING)
     bucket = models.DateTimeField(db_index=True)  # bucket-only index supports broad 90-day cleanup
     count = models.PositiveIntegerField(default=0)
-    digest_order = models.PositiveIntegerField(null=True)  # issue-local click target for bucket charts
+    digest_order = models.PositiveIntegerField(null=True)  # event's digest_order for the last event; for click-through
 
     class Meta:
         unique_together = [("issue", "bucket")]
