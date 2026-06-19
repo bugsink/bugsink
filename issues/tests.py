@@ -442,6 +442,14 @@ class ViewTests(TransactionTestCase):
         response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/details/")
         self.assertContains(response, self.issue.title())
 
+    def test_issue_details_by_digest_order_with_tag_search(self):
+        event = create_event(self.project, self.issue, project_digest_order=2)
+        store_tags(event, self.issue, {"foo": "bar"})
+
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{event.digest_order}/details/?q=foo:bar")
+
+        self.assertContains(response, self.issue.title())
+
     def test_issue_event_views_do_not_show_events_from_other_projects(self):
         other_project = Project.objects.create(name="other")
         other_issue, _ = get_or_create_issue(other_project)
