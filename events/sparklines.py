@@ -175,7 +175,9 @@ def get_issue_event_sparkline(issue_id, now, active_event_digested_at=None, matc
 
     matching_buckets_by_hour = None
     if matching_event_qs is not None:
-        # Search is dynamic, so these counts can only cover retained events that still have searchable rows.
+        # Search is dynamic, so these counts can only cover retained events that still have searchable rows. This also
+        # means q=<matches everything> can show retained events as an overlay on top of observed bucket counts, while
+        # the case where q=<empty> shows the buckets fully hightlighted. We accept that asymmetry for performance.
         matching_buckets_by_hour = {
             bucket: {"count": count, "digest_order": digest_order}
             for bucket, count, digest_order in matching_event_qs.filter(
