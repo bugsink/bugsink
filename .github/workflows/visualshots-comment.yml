@@ -58,6 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+      pull-requests: write
     steps:
       - name: Comment with run link
         uses: actions/github-script@v8
