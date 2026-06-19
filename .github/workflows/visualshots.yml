@@ -1,0 +1,71 @@
+name: Visualshots
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "Scenario name, comma-separated names, or all"
+        required: true
+        default: "smoke-projects"
+      ref:
+        description: "Branch, tag, or SHA to capture as after"
+        required: false
+        default: ""
+      base_branch:
+        description: "Base branch used to find the before commit"
+        required: false
+        default: "origin/main"
+
+env:
+  DJANGO_SETTINGS_MODULE: "bugsink.settings.development"
+  HOME: "/root"
+
+jobs:
+  visualshots:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.60.0-noble
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Check out visualshots
+        uses: actions/checkout@v6
+        with:
+          repository: "bugsink/visualshots"
+          path: visualshots
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements.development.txt
+          pip install playwright
+
+      - name: Trust Bugsink checkout
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Fetch base branch
+        run: |
+          git fetch origin "+refs/heads/*:refs/remotes/origin/*"
+
+      - name: Capture screenshots
+        run: |
+          python visualshots/visualshots.py run \
+            --repo "$GITHUB_WORKSPACE" \
+            --scenario "${{ inputs.scenario }}" \
+            --after HEAD \
+            --base-branch "${{ inputs.base_branch }}" \
+            --out visualshots/results
+
+      - name: Upload visual review bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: visualshots
+          path: visualshots/results/
+          if-no-files-found: error
