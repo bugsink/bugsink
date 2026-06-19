@@ -82,7 +82,8 @@ def _get_bucket_title(label, count, matching_count):
     return f"{label}: {matching}, {_format_event_count(count)} total"
 
 
-def _build_variant(start, end, interval, buckets_by_hour, matching_buckets_by_hour, active_event_digested_at):
+def _build_sized_bucket_series(
+        start, end, interval, buckets_by_hour, matching_buckets_by_hour, active_event_digested_at):
     bucket_edges = _get_bucket_edges(start, end, interval)
 
     buckets = []
@@ -193,8 +194,8 @@ def get_issue_event_sparkline(issue_id, now, active_event_digested_at=None, matc
         }
 
     for start, end, interval in ranges:
-        variants.append(_build_variant(start, end, interval, buckets_by_hour, matching_buckets_by_hour,
-                                       active_event_digested_at))
+        variants.append(_build_sized_bucket_series(start, end, interval, buckets_by_hour, matching_buckets_by_hour,
+                                                   active_event_digested_at))
 
     large_variant = variants[-1]
     return {
