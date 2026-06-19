@@ -20,9 +20,11 @@ from .models import InstallationEventCountsPerHour, IssueEventCountsPerHour, Pro
 from .factories import create_event
 from .retention import (
     eviction_target, should_evict, evict_for_max_events, get_epoch_bounds_with_irrelevance, filter_for_work)
+from .sparklines import get_issue_event_sparkline, get_sparkline_range
 from .usage import EVENT_COUNTS_PER_HOUR_MAX_AGE, hour_bucket, record_event_counts
 from .utils import annotate_with_meta, annotate_var_with_meta
 from tags.models import EventTag, store_tags
+from tags.search import search_events
 
 User = get_user_model()
 
@@ -101,9 +103,9 @@ class EventUsageTestCase(DjangoTestCase):
         first_hour = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
         next_hour = datetime.datetime(2026, 6, 14, 13, 1, tzinfo=datetime.timezone.utc)
 
-        record_event_counts(project, issue, first_hour)
-        record_event_counts(project, issue, first_hour)
-        record_event_counts(project, issue, next_hour)
+        record_event_counts(project, issue, first_hour, 1)
+        record_event_counts(project, issue, first_hour, 2)
+        record_event_counts(project, issue, next_hour, 3)
 
         self.assertEqual(2, InstallationEventCountsPerHour.objects.get(bucket=hour_bucket(first_hour)).count)
         self.assertEqual(1, InstallationEventCountsPerHour.objects.get(bucket=hour_bucket(next_hour)).count)
@@ -111,7 +113,9 @@ class EventUsageTestCase(DjangoTestCase):
             2,
             ProjectEventCountsPerHour.objects.get(project=project, bucket=hour_bucket(first_hour)).count,
         )
-        self.assertEqual(2, IssueEventCountsPerHour.objects.get(issue=issue, bucket=hour_bucket(first_hour)).count)
+        issue_bucket = IssueEventCountsPerHour.objects.get(issue=issue, bucket=hour_bucket(first_hour))
+        self.assertEqual(2, issue_bucket.count)
+        self.assertEqual(2, issue_bucket.digest_order)
 
     def test_record_event_counts_cleans_up_old_buckets(self):
         project = Project.objects.create(name="usage cleanup")
@@ -129,7 +133,7 @@ class EventUsageTestCase(DjangoTestCase):
         IssueEventCountsPerHour.objects.create(project=other_project, issue=other_issue, bucket=old_bucket, count=1)
         IssueEventCountsPerHour.objects.create(project=project, issue=issue, bucket=recent_bucket, count=1)
 
-        record_event_counts(project, issue, new_hour)
+        record_event_counts(project, issue, new_hour, 1)
 
         self.assertFalse(InstallationEventCountsPerHour.objects.filter(bucket=old_bucket).exists())
         self.assertFalse(ProjectEventCountsPerHour.objects.filter(bucket=old_bucket).exists())
@@ -137,6 +141,90 @@ class EventUsageTestCase(DjangoTestCase):
         self.assertTrue(InstallationEventCountsPerHour.objects.filter(bucket=recent_bucket).exists())
         self.assertTrue(ProjectEventCountsPerHour.objects.filter(bucket=recent_bucket).exists())
         self.assertTrue(IssueEventCountsPerHour.objects.filter(bucket=recent_bucket).exists())
+
+
+class EventSparklineTestCase(DjangoTestCase):
+    def test_issue_event_sparkline_uses_hourly_buckets(self):
+        project = Project.objects.create(name="sparkline")
+        issue, _ = get_or_create_issue(project=project)
+        other_issue, _ = get_or_create_issue(
+            project=project,
+            event_data={"exception": {"values": [{"type": "Other", "value": "Other"}]}},
+        )
+        now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        start, _, _ = get_sparkline_range(now)
+
+        IssueEventCountsPerHour.objects.create(project=project, issue=issue, bucket=start, count=2, digest_order=7)
+        IssueEventCountsPerHour.objects.create(
+            project=project,
+            issue=issue,
+            bucket=start + datetime.timedelta(hours=1),
+            count=3,
+            digest_order=8,
+        )
+        IssueEventCountsPerHour.objects.create(
+            project=project,
+            issue=other_issue,
+            bucket=start,
+            count=99,
+            digest_order=99,
+        )
+
+        sparkline = get_issue_event_sparkline(issue.id, now)
+
+        self.assertEqual(5, sparkline["buckets"][0])
+        self.assertEqual(100, sparkline["bar_data"][0])
+        self.assertEqual(start, sparkline["event_buckets"][0]["bucket_start"])
+        self.assertEqual(start + datetime.timedelta(hours=6), sparkline["event_buckets"][0]["bucket_end"])
+        self.assertEqual("17 May 12:00 - 18:00", sparkline["event_buckets"][0]["label"])
+        self.assertEqual(5, sparkline["event_buckets"][0]["count"])
+        self.assertEqual(8, sparkline["event_buckets"][0]["digest_order"])
+        self.assertEqual(100, sparkline["event_buckets"][0]["pct"])
+        self.assertEqual(0, sparkline["event_buckets"][1]["count"])
+        self.assertEqual(0, sparkline["event_buckets"][1]["pct"])
+        self.assertEqual([24, 12, 6], [variant["interval_hours"] for variant in sparkline["variants"]])
+        self.assertEqual("18 May", sparkline["variants"][0]["event_buckets"][0]["label"])
+        self.assertFalse(any(bucket["contains_active_event"] for bucket in sparkline["event_buckets"]))
+
+        sparkline = get_issue_event_sparkline(issue.id, now, start + datetime.timedelta(hours=1))
+
+        self.assertFalse(any(bucket["contains_active_event"] for bucket in sparkline["variants"][0]["event_buckets"]))
+        self.assertTrue(sparkline["variants"][1]["event_buckets"][0]["contains_active_event"])
+        self.assertTrue(sparkline["event_buckets"][0]["contains_active_event"])
+
+    def test_issue_event_sparkline_search_overlay_uses_matching_retained_events(self):
+        project = Project.objects.create(name="sparkline")
+        issue, _ = get_or_create_issue(project=project)
+        now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        start, _, _ = get_sparkline_range(now)
+
+        first_event = create_event(project, issue, timestamp=start + datetime.timedelta(hours=1))
+        second_event = create_event(project, issue, timestamp=start + datetime.timedelta(hours=2))
+        third_event = create_event(project, issue, timestamp=start + datetime.timedelta(hours=7))
+        for event in (first_event, second_event, third_event):
+            record_event_counts(project, issue, event.digested_at, event.digest_order)
+
+        store_tags(second_event, issue, {"foo": "bar"})
+        store_tags(third_event, issue, {"foo": "bar"})
+
+        sparkline = get_issue_event_sparkline(
+            issue.id,
+            now,
+            matching_event_qs=search_events(project, issue, "foo:bar"),
+        )
+
+        first_bucket = sparkline["event_buckets"][0]
+        second_bucket = sparkline["event_buckets"][1]
+        self.assertEqual(2, first_bucket["count"])
+        self.assertEqual(1, first_bucket["matching_count"])
+        self.assertEqual(2, first_bucket["digest_order"])
+        self.assertEqual(1, first_bucket["click_count"])
+        self.assertEqual(50, first_bucket["matching_pct"])
+        self.assertEqual("17 May 12:00 - 18:00: 1 matching event, 2 events total", first_bucket["title"])
+
+        self.assertEqual(1, second_bucket["count"])
+        self.assertEqual(1, second_bucket["matching_count"])
+        self.assertEqual(3, second_bucket["digest_order"])
 
 
 class RetentionUtilsTestCase(RegularTestCase):

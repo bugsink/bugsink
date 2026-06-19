@@ -46,7 +46,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
         self.event.save()
 
         store_tags(self.event, self.issue, {"foo": "bar"})
-        record_event_counts(self.project, self.issue, self.event.digested_at)
+        record_event_counts(self.project, self.issue, self.event.digested_at, self.event.digest_order)
 
     def test_delete_project(self):
         models = [apps.get_model(app_label=s.split('.')[0], model_name=s.split('.')[1].lower()) for s in [

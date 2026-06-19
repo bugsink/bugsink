@@ -27,6 +27,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False)),
                 ('bucket', models.DateTimeField(db_index=True)),
                 ('count', models.PositiveIntegerField(default=0)),
+                ('digest_order', models.PositiveIntegerField(null=True)),
                 ('issue', models.ForeignKey(on_delete=django.db.models.deletion.DO_NOTHING, to='issues.issue')),
                 ('project', models.ForeignKey(on_delete=django.db.models.deletion.DO_NOTHING, to='projects.project')),
             ],

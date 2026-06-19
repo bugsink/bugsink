@@ -24,6 +24,7 @@ from bugsink.utils import assert_
 from phonehome.utils import phone_home
 
 from events.models import Event
+from events.sparklines import get_issue_event_sparkline
 from events.ua_stuff import get_contexts_enriched_with_ua
 
 from projects.models import ProjectMembership
@@ -286,8 +287,8 @@ def _get_event(qs, issue, event_pk, digest_order, nav, bounds):
             return Event.objects.get(project=issue.project, issue=issue, event_id=event_pk)
 
     elif digest_order is not None:
-        # "ergonomics" when people type this in the URL bar
-        return qs.get(digest_order=digest_order)
+        # used in the clickable sparkline
+        return Event.objects.get(issue=issue, digest_order=digest_order)
     else:
         raise Http404("Either event_pk, nav, or digest_order must be provided")
 
@@ -568,6 +569,12 @@ def issue_event_details(request, issue, event_pk=None, digest_order=None, nav=No
         "event_qs_count": _event_count(request, issue, event_x_qs) if request.GET.get("q") else None,
         "has_prev": event.digest_order > first_do,
         "has_next": event.digest_order < last_do,
+        "issue_sparkline": get_issue_event_sparkline(
+            issue.id,
+            timezone.now(),
+            event.digested_at,
+            search_events(issue.project, issue, request.GET["q"]) if request.GET.get("q") else None,
+        ),
     })
 
 
