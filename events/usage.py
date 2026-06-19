@@ -11,7 +11,8 @@ EVENT_COUNTS_PER_HOUR_MAX_AGE = timedelta(days=90)
 
 
 def hour_bucket(dt):
-    return dt.astimezone(dt_timezone.utc).replace(minute=0, second=0, microsecond=0)
+    assert_(dt.tzinfo == dt_timezone.utc)
+    return dt.replace(minute=0, second=0, microsecond=0)
 
 
 def _remove_stale_event_count_buckets(bucket):

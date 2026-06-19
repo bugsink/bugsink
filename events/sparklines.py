@@ -4,12 +4,13 @@ from datetime import timedelta, timezone
 from django.db.models import Count, Max
 from django.db.models.functions import TruncHour
 
+from bugsink.utils import assert_
 from events.models import IssueEventCountsPerHour
 
 
 def get_sparkline_range(now, hour_step=6):
     # align on the display bucket boundary; round up from now
-    now = now.astimezone(timezone.utc)
+    assert_(now.tzinfo == timezone.utc)
     boundary = math.ceil(now.hour / hour_step) * hour_step
     end = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=boundary)
 
@@ -154,7 +155,7 @@ def _build_variant(start, end, interval, buckets_by_hour, matching_buckets_by_ho
 
 def get_issue_event_sparkline(issue_id, now, active_event_digested_at=None, matching_event_qs=None):
     if active_event_digested_at is not None:
-        active_event_digested_at = active_event_digested_at.astimezone(timezone.utc)
+        assert_(active_event_digested_at.tzinfo == timezone.utc)
 
     variants = []
     ranges = []
