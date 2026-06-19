@@ -1,0 +1,15 @@
+{% if bucket.contains_active_event %}
+    <div class="absolute top-0 bottom-0 left-1/2 z-10 w-[2px] -translate-x-1/2 bg-red-500 dark:bg-red-400"></div>
+{% endif %}
+{% if bucket.has_overlay %}
+    <div class="absolute bottom-0 w-full bg-slate-300 dark:bg-slate-600"
+         style="height: {{ bucket.pct }}%;"></div>
+    {% if clickable or bucket.matching_count %}
+        <div class="absolute bottom-0 w-full bg-slate-500 {% if clickable %}group-hover:bg-slate-600{% endif %} dark:bg-slate-300 {% if clickable %}dark:group-hover:bg-slate-200{% endif %}"
+             style="height: {{ bucket.matching_pct }}%;"></div>
+    {% endif %}
+{% else %}
+    <div class="bg-slate-500 {% if clickable %}group-hover:bg-slate-600{% endif %} dark:bg-slate-300 {% if clickable %}dark:group-hover:bg-slate-200{% endif %} w-full"
+         style="height: {{ bucket.pct }}%;">
+    </div>
+{% endif %}

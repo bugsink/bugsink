@@ -5,16 +5,16 @@ from django.db.models import Count, Max
 from django.db.models.functions import TruncHour
 
 from bugsink.utils import assert_
-from events.models import IssueEventCountsPerHour
+from events.models import InstallationEventCountsPerHour, IssueEventCountsPerHour
 
 
-def get_sparkline_range(now, hour_step=6):
+def get_sparkline_range(now, hour_step=6, days=28):
     # align on the display bucket boundary; round up from now
     assert_(now.tzinfo == timezone.utc)
     boundary = math.ceil(now.hour / hour_step) * hour_step
     end = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=boundary)
 
-    start = end - timedelta(days=28)
+    start = end - timedelta(days=days)
     interval = timedelta(hours=hour_step)
     return start, end, interval
 
@@ -196,6 +196,33 @@ def get_issue_event_sparkline(issue_id, now, active_event_digested_at=None, matc
     for start, end, interval in ranges:
         variants.append(_build_sized_bucket_series(start, end, interval, buckets_by_hour, matching_buckets_by_hour,
                                                    active_event_digested_at))
+
+    large_variant = variants[-1]
+    return {
+        **large_variant,
+        "variants": variants,
+    }
+
+
+def get_installation_event_sparkline(now):
+    variants = []
+    ranges = []
+    for hour_step in (24, 12, 6):
+        start, end, interval = get_sparkline_range(now, hour_step=hour_step, days=30)
+        ranges.append((start, end, interval))
+
+    query_start = min(start for start, _, _ in ranges)
+    query_end = max(end for _, end, _ in ranges)
+    buckets_by_hour = {
+        bucket: {"count": count, "digest_order": None}
+        for bucket, count in InstallationEventCountsPerHour.objects.filter(
+            bucket__gte=query_start,
+            bucket__lt=query_end,
+        ).values_list("bucket", "count")
+    }
+
+    for start, end, interval in ranges:
+        variants.append(_build_sized_bucket_series(start, end, interval, buckets_by_hour, None, None))
 
     large_variant = variants[-1]
     return {
