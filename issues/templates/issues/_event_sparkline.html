@@ -2,17 +2,17 @@
 {% if issue_sparkline %}
 {% for sparkline_variant in issue_sparkline.variants %}
 <div class="mt-8 {% if sparkline_variant.interval_hours == 24 %}grid md:hidden{% elif sparkline_variant.interval_hours == 12 %}hidden md:grid 2xl:hidden{% else %}hidden 2xl:grid{% endif %}"
-     style="grid-template-columns: 2rem 1fr; grid-template-rows: auto auto; column-gap: 0.5rem;">
+     style="grid-template-columns: max-content 1fr; grid-template-rows: auto auto; column-gap: 0.5rem;">
 
     {# y-axis #}
-    <div class="flex flex-col justify-between h-24 {# h matches chart height #} mr-2 text-xs text-slate-700 dark:text-slate-200">
+    <div class="flex flex-col justify-between h-24 {# h matches chart height #} mr-2 text-right tabular-nums text-xs text-slate-700 dark:text-slate-200">
     {# basic idea: first and last are half-cells, middle are full-width; this way the outermost labels are aligned with the outsides #}
 
     {% for y_label in sparkline_variant.y_labels %}
 
         {% if forloop.first %}
             {#-- top half-cell #}
-            <div class="flex-[0.5] flex items-start justify-start relative">
+            <div class="flex-[0.5] flex items-start justify-end relative">
                 <span class="-translate-y-[35%]">
                     {{ y_label }}
                 </span>
@@ -20,7 +20,7 @@
 
         {% elif forloop.last %}
             {# bottom half-cell #}
-            <div class="flex-[0.5] flex items-end justify-start relative">
+            <div class="flex-[0.5] flex items-end justify-end relative">
                 <span class="translate-y-[35%]">
                     {{ y_label }}
                 </span>
@@ -28,7 +28,7 @@
 
         {% else %}
             {# full-width middle cells #}
-            <div class="flex-1 flex items-center justify-start">
+            <div class="flex-1 flex items-center justify-end">
                 {{ y_label }}
             </div>
 
