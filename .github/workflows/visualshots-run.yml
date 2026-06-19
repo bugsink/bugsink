@@ -97,21 +97,23 @@ jobs:
 
       - name: Upload before screenshot
         if: steps.visual_artifacts.outputs.scenario_count == '1' && steps.visual_artifacts.outputs.has_before == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.artifact_prefix }}-before
           path: visualshots/artifacts/before.png
+          archive: false
 
       - name: Upload after screenshot
         if: steps.visual_artifacts.outputs.scenario_count == '1' && steps.visual_artifacts.outputs.has_after == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.artifact_prefix }}-after
           path: visualshots/artifacts/after.png
+          archive: false
 
       - name: Upload visual review bundle
         if: steps.visual_artifacts.outputs.scenario_count != '1'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.artifact_prefix }}
           path: visualshots/results/
