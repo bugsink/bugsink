@@ -5,7 +5,7 @@ on:
     types: [created]
 
 jobs:
-  resolve:
+  setup:
     if: >
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/visual ') &&
@@ -53,19 +53,19 @@ jobs:
             });
 
   visualshots:
-    needs: resolve
+    needs: setup
     uses: ./.github/workflows/visualshots-run.yml
     permissions:
       contents: read
     with:
-      scenario: ${{ needs.resolve.outputs.scenario }}
-      ref: ${{ needs.resolve.outputs.head_sha }}
-      base_branch: ${{ needs.resolve.outputs.base_branch }}
-      artifact_prefix: ${{ needs.resolve.outputs.artifact_prefix }}
+      scenario: ${{ needs.setup.outputs.scenario }}
+      ref: ${{ needs.setup.outputs.head_sha }}
+      base_branch: ${{ needs.setup.outputs.base_branch }}
+      artifact_prefix: ${{ needs.setup.outputs.artifact_prefix }}
 
   comment:
-    if: always() && needs.resolve.result == 'success'
-    needs: [resolve, visualshots]
+    if: always() && needs.setup.result == 'success'
+    needs: [setup, visualshots]
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -76,7 +76,7 @@ jobs:
         with:
           script: |
             const ok = "${{ needs.visualshots.result }}" === "success";
-            const scenario = "${{ needs.resolve.outputs.scenario }}";
+            const scenario = "${{ needs.setup.outputs.scenario }}";
             const body = ok
               ? `Visualshots finished for \`${scenario}\`.\n\nArtifacts: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
               : `Visualshots failed for \`${scenario}\`.\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
