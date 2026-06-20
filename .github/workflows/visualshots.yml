@@ -6,7 +6,7 @@ on:
       scenario:
         description: "Scenario name, comma-separated names, or all"
         required: true
-        default: "smoke-projects"
+        default: "projects"
       ref:
         description: "Branch, tag, or SHA to capture as after"
         required: false

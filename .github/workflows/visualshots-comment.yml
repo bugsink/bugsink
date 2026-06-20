@@ -28,7 +28,7 @@ jobs:
             const body = context.payload.comment.body.trim();
             const scenario = body.replace(/^\/visual\s+/, "").trim();
             if (!scenario) {
-              core.setFailed("Usage: /visual smoke-projects");
+              core.setFailed("Usage: /visual projects");
               return;
             }
 
