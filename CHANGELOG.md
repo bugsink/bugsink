@@ -1,7 +1,5 @@
 # Changes
 
-## Unreleased
-
 ## 2.3.0 (23 June 2026)
 
 ### CSP reports
