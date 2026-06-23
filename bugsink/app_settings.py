@@ -106,6 +106,11 @@ DEFAULTS = {
 
     # Feature flags:
     "FEATURE_MINIDUMPS": False,  # minidumps are experimental/early-stage and likely a DOS-magnet; disabled by default
+
+    # Private/undocumented extension API:
+    "EXTRA_URLCONF_MODULES": [],
+    "EXTRA_NAV_LINKS": [],
+    "SYSTEM_WARNING_PROVIDERS": [],
 }
 
 

@@ -12,6 +12,7 @@ from django.db.models import Sum
 from django.urls import get_script_prefix
 from django.utils.timezone import localtime
 from django.template.defaultfilters import date
+from django.utils.module_loading import import_string
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
 from bugsink.transaction import durable_atomic
@@ -144,6 +145,9 @@ def useful_settings_processor(request):
                 "Event ingestion stopped until %s. Reason: installation quota (%s events per %s) exceeded." % (
                       date_fmt, gte_threshold, per_fmt), None))
 
+        for provider_path in get_settings().SYSTEM_WARNING_PROVIDERS:
+            system_warnings.extend(import_string(provider_path)(request))
+
         return system_warnings + get_snappea_warnings()
 
     return {
@@ -151,6 +155,7 @@ def useful_settings_processor(request):
         'registration_enabled': get_settings().USER_REGISTRATION == CB_ANYBODY,
         'app_settings': get_settings(),
         'system_warnings': get_system_warnings,
+        'extra_nav_links': get_settings().EXTRA_NAV_LINKS,
         'script_prefix': get_script_prefix().rstrip("/"),  # TODO why
     }
 

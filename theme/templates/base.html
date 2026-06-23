@@ -63,6 +63,10 @@
 
                   <a href="{{ script_prefix }}/accounts/preferences/">Preferences</a>
 
+                  {% for extra_nav_link in extra_nav_links %}
+                  <a href="{{ extra_nav_link.href }}">{{ extra_nav_link.label }}</a>
+                  {% endfor %}
+
                   <form method="post" action="{% url 'logout' %}">
                     {% csrf_token %}
                     <button type="submit" class="text-right w-full">
@@ -104,6 +108,9 @@
                 {% else %}
                     <a href="{{ script_prefix }}/api/canonical/0/schema/swagger-ui/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "OpenAPI" %}</div></a>
                     <a href="{{ script_prefix }}/accounts/preferences/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Preferences" %}</div></a>
+                    {% for extra_nav_link in extra_nav_links %}
+                    <a href="{{ extra_nav_link.href }}"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{{ extra_nav_link.label }}</div></a>
+                    {% endfor %}
                     <div class="px-4 py-2 my-2 mr-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl"><form id="logout-form" method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">{% translate "Log out" %}</button></form></div>
                 {% endif %}
                 </div>
