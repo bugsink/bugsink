@@ -1,7 +1,6 @@
 import os
-from urllib.parse import urlparse
 
-from bugsink.conf_utils import deduce_allowed_hosts, eat_your_own_dogfood, deduce_script_name, int_or_none
+from bugsink.conf_utils import deduce_allowed_hosts, eat_your_own_dogfood, deduce_script_name, int_or_none, parse_database_url
 
 from bugsink.settings.default import *  # noqa
 from bugsink.settings.default import DATABASES
@@ -84,32 +83,7 @@ DATABASES["snappea"]["NAME"] = '/tmp/snappea.sqlite3'
 
 
 if os.getenv("DATABASE_URL"):
-    DATABASE_URL = os.getenv("DATABASE_URL")
-    parsed = urlparse(DATABASE_URL)
-
-    if parsed.scheme == "mysql":
-        DATABASES['default'] = {
-            'ENGINE': 'django.db.backends.mysql',
-            'NAME': parsed.path.lstrip('/'),
-            "USER": parsed.username,
-            "PASSWORD": parsed.password,
-            "HOST": parsed.hostname,
-            "PORT": parsed.port or "3306",
-        }
-
-    elif parsed.scheme in ["postgres", "postgresql"]:
-        DATABASES['default'] = {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': parsed.path.lstrip('/'),
-            "USER": parsed.username,
-            "PASSWORD": parsed.password,
-            "HOST": parsed.hostname,
-            "PORT": parsed.port or "5432",
-        }
-
-    else:
-        raise ValueError("For DATABASE_URL, only mysql and postgres are supported, not '%s'" % parsed.scheme)
-
+    DATABASES['default'] = parse_database_url(os.getenv("DATABASE_URL"))
 else:
     # similar to the default, but the fallback is /data/db.sqlite3; we also create the directory if it doesn't exist,
     # which allows for throwaway setups (no volume mounted) to work out of the box.
