@@ -1,4 +1,4 @@
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 
 from .version import version
@@ -51,6 +51,37 @@ def deduce_script_name(base_url):
         return None
 
     return path if path not in (None, "", "/") else None
+
+
+def parse_database_url(url):
+    """Parse DATABASE_URL into a Django DATABASES entry dict."""
+    parsed = urlparse(url)
+
+    # urlparse returns percent-encoded username/password/path; decode each component individually
+    # so that reserved characters (e.g. @ or : in a password) are passed to the driver correctly.
+    def _unquote(value):
+        return unquote(value) if value is not None else None
+
+    if parsed.scheme == "mysql":
+        return {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": unquote(parsed.path.lstrip("/")),
+            "USER": _unquote(parsed.username),
+            "PASSWORD": _unquote(parsed.password),
+            "HOST": parsed.hostname,
+            "PORT": parsed.port or "3306",
+        }
+    elif parsed.scheme in ["postgres", "postgresql"]:
+        return {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": unquote(parsed.path.lstrip("/")),
+            "USER": _unquote(parsed.username),
+            "PASSWORD": _unquote(parsed.password),
+            "HOST": parsed.hostname,
+            "PORT": parsed.port or "5432",
+        }
+    else:
+        raise ValueError("For DATABASE_URL, only mysql and postgres are supported, not '%s'" % parsed.scheme)
 
 
 def int_or_none(value):
