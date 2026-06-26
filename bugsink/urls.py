@@ -95,7 +95,12 @@ urlpatterns = [
          RedirectView.as_view(url='/bsmain/auth_tokens/', permanent=False)),
 
     path('bsmain/', include('bsmain.urls')),
+]
 
+for urlconf_module in get_settings().EXTRA_URLCONF_MODULES:
+    urlpatterns.append(path("", include(urlconf_module)))
+
+urlpatterns += [
     path('admin/', admin.site.urls),
 
     path('silence-email-system-warning/', silence_email_system_warning, name='silence_email_system_warning'),

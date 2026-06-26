@@ -1,0 +1,160 @@
+name: Visualshots Run
+
+on:
+  workflow_call:
+    inputs:
+      scenario:
+        required: true
+        type: string
+      ref:
+        required: true
+        type: string
+      base_branch:
+        required: true
+        type: string
+      artifact_prefix:
+        required: false
+        type: string
+        default: visualshots
+
+env:
+  DJANGO_SETTINGS_MODULE: "bugsink.settings.development"
+  HOME: "/root"
+
+jobs:
+  visualshots:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.60.0-noble
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref }}
+
+      - name: Check out visualshots
+        uses: actions/checkout@v6
+        with:
+          repository: "bugsink/visualshots"
+          path: visualshots
+
+      - name: Check out event-samples
+        uses: actions/checkout@v6
+        with:
+          repository: "bugsink/event-samples"
+          path: event-samples
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements.development.txt
+          pip install playwright
+
+      - name: Trust Bugsink checkout
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Fetch base branch
+        run: |
+          git fetch origin "+refs/heads/*:refs/remotes/origin/*"
+
+      - name: Capture screenshots
+        env:
+          SAMPLES_DIR: ${{ github.workspace }}/event-samples
+        run: |
+          python visualshots/visualshots.py run \
+            --repo "$GITHUB_WORKSPACE" \
+            --scenario "${{ inputs.scenario }}" \
+            --after HEAD \
+            --base-branch "${{ inputs.base_branch }}" \
+            --out visualshots/results
+
+      - name: Prepare visual artifacts
+        id: visual_artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          scenario_count=$(find visualshots/results -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
+          echo "scenario_count=${scenario_count}" >> "$GITHUB_OUTPUT"
+
+          if [ "$scenario_count" = "1" ]; then
+            scenario_dir=$(find visualshots/results -mindepth 1 -maxdepth 1 -type d | head -n 1)
+            mkdir -p visualshots/artifacts
+
+            if [ -f "${scenario_dir}/before.png" ]; then
+              cp "${scenario_dir}/before.png" visualshots/artifacts/before.png
+              echo "has_before=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "has_before=false" >> "$GITHUB_OUTPUT"
+            fi
+
+            if [ -f "${scenario_dir}/before-dark.png" ]; then
+              cp "${scenario_dir}/before-dark.png" visualshots/artifacts/before-dark.png
+              echo "has_before_dark=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "has_before_dark=false" >> "$GITHUB_OUTPUT"
+            fi
+
+            if [ -f "${scenario_dir}/after.png" ]; then
+              cp "${scenario_dir}/after.png" visualshots/artifacts/after.png
+              echo "has_after=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "has_after=false" >> "$GITHUB_OUTPUT"
+            fi
+
+            if [ -f "${scenario_dir}/after-dark.png" ]; then
+              cp "${scenario_dir}/after-dark.png" visualshots/artifacts/after-dark.png
+              echo "has_after_dark=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "has_after_dark=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "has_before=false" >> "$GITHUB_OUTPUT"
+            echo "has_before_dark=false" >> "$GITHUB_OUTPUT"
+            echo "has_after=false" >> "$GITHUB_OUTPUT"
+            echo "has_after_dark=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload before screenshot
+        if: steps.visual_artifacts.outputs.scenario_count == '1' && steps.visual_artifacts.outputs.has_before == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact_prefix }}-before
+          path: visualshots/artifacts/before.png
+          archive: false
+
+      - name: Upload after screenshot
+        if: steps.visual_artifacts.outputs.scenario_count == '1' && steps.visual_artifacts.outputs.has_after == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact_prefix }}-after
+          path: visualshots/artifacts/after.png
+          archive: false
+
+      - name: Upload before dark screenshot
+        if: steps.visual_artifacts.outputs.scenario_count == '1' && steps.visual_artifacts.outputs.has_before_dark == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact_prefix }}-before-dark
+          path: visualshots/artifacts/before-dark.png
+          archive: false
+
+      - name: Upload after dark screenshot
+        if: steps.visual_artifacts.outputs.scenario_count == '1' && steps.visual_artifacts.outputs.has_after_dark == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact_prefix }}-after-dark
+          path: visualshots/artifacts/after-dark.png
+          archive: false
+
+      - name: Upload visual review bundle
+        if: steps.visual_artifacts.outputs.scenario_count != '1'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact_prefix }}
+          path: visualshots/results/
+          if-no-files-found: error

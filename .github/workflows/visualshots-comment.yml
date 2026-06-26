@@ -1,0 +1,89 @@
+name: Visualshots Comment
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  setup:
+    if: >
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/visual ') &&
+      contains(fromJSON('["OWNER", "MEMBER"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    outputs:
+      scenario: ${{ steps.command.outputs.scenario }}
+      head_sha: ${{ steps.command.outputs.head_sha }}
+      base_branch: ${{ steps.command.outputs.base_branch }}
+      artifact_prefix: ${{ steps.command.outputs.artifact_prefix }}
+    steps:
+      - name: Resolve command and PR head
+        id: command
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const body = context.payload.comment.body.trim();
+            const scenario = body.replace(/^\/visual\s+/, "").trim();
+            if (!scenario) {
+              core.setFailed("Usage: /visual projects");
+              return;
+            }
+
+            const {owner, repo} = context.repo;
+            const pull_number = context.payload.issue.number;
+            const {data: pull} = await github.rest.pulls.get({owner, repo, pull_number});
+
+            core.setOutput("scenario", scenario);
+            core.setOutput("head_sha", pull.head.sha);
+            core.setOutput("base_branch", `origin/${pull.base.ref}`);
+            core.setOutput("artifact_prefix", `visualshots-pr-${pull_number}`);
+
+      - name: React to command
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: "eyes",
+            });
+
+  visualshots:
+    needs: setup
+    uses: ./.github/workflows/visualshots-run.yml
+    permissions:
+      contents: read
+    with:
+      scenario: ${{ needs.setup.outputs.scenario }}
+      ref: ${{ needs.setup.outputs.head_sha }}
+      base_branch: ${{ needs.setup.outputs.base_branch }}
+      artifact_prefix: ${{ needs.setup.outputs.artifact_prefix }}
+
+  comment:
+    if: always() && needs.setup.result == 'success'
+    needs: [setup, visualshots]
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Comment with run link
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const ok = "${{ needs.visualshots.result }}" === "success";
+            const scenario = "${{ needs.setup.outputs.scenario }}";
+            const body = ok
+              ? `Visualshots finished for \`${scenario}\`.\n\nArtifacts: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+              : `Visualshots failed for \`${scenario}\`.\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body,
+            });
