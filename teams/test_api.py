@@ -40,6 +40,10 @@ class TeamApiTests(TransactionTestCase):
         self.assertEqual(r2.json()["name"], "Core Team")
         self.assertEqual(r2.json()["visibility"], "discoverable")
 
+    def test_malformed_id_is_404(self):
+        r = self.client.get(reverse("api:team-detail", args=["not-a-uuid"]))
+        self.assertEqual(r.status_code, 404)
+
     def test_patch_minimal(self):
         team = Team.objects.create(name="Old Name")
         r = self.client.patch(

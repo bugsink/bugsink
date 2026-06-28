@@ -1,5 +1,5 @@
-from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
+from rest_framework.generics import get_object_or_404
 from drf_spectacular.utils import extend_schema
 
 from bugsink.api_pagination import AscDescCursorPagination
