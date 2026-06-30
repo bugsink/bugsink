@@ -19,7 +19,6 @@ class CreateProjectCommandTestCase(TransactionTestCase):
         self.admin_user = User.objects.create_superuser(
             username="admin@example.org",
             email="admin@example.org",
-            password="admin",
         )
 
     def test_creates_team_project_memberships_and_dsn(self):
