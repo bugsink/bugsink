@@ -1,5 +1,13 @@
+from django.contrib.auth import get_user_model
 from django.core.checks import run_checks
 from django.test import SimpleTestCase, override_settings
+from django.urls import reverse
+
+from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
+
+from .models import AuthToken
+
+User = get_user_model()
 
 
 class SystemChecksTestCase(SimpleTestCase):
@@ -43,3 +51,29 @@ class SystemChecksTestCase(SimpleTestCase):
     )
     def test_email_sender_domain_check_allows_bugsink_domain_when_allowed_hosts_match(self):
         self.assertEqual([], self._warnings())
+
+
+class AuthTokenDescriptionUpdateTestCase(TransactionTestCase):
+    """Editing one token's description must not touch any other token (regression test)."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(
+            User.objects.create_superuser(username="admin", password="admin", email="admin@example.org"))
+
+    def test_update_description_targets_only_the_clicked_token(self):
+        token_1 = AuthToken.objects.create(description="first")
+        token_2 = AuthToken.objects.create(description="second")
+
+        # A single <form> wraps all rows, so the browser posts every row's description input.
+        response = self.client.post(reverse("auth_token_list"), {
+            "action": f"update_description:{token_1.pk}",
+            f"description-{token_1.pk}": "updated first",
+            f"description-{token_2.pk}": "second",
+        })
+        self.assertEqual(302, response.status_code)
+
+        token_1.refresh_from_db()
+        token_2.refresh_from_db()
+        self.assertEqual("updated first", token_1.description)
+        self.assertEqual("second", token_2.description)

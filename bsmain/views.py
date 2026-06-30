@@ -25,7 +25,7 @@ def auth_token_list(request):
 
         elif action == "update_description":
             auth_token = AuthToken.objects.get(pk=pk)
-            auth_token.description = request.POST.get('description', '')[:255]
+            auth_token.description = request.POST.get(f'description-{pk}', '')[:255]
             auth_token.save()
 
             messages.success(request, _('Description updated'))
