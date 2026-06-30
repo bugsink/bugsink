@@ -1,5 +1,10 @@
 # Changes
 
+## 2.3.1 (30 June 2026)
+
+* Decode percent-encoded components from `DATABASE_URL` after parsing (See #423)
+* Return 404 for malformed API lookups (in markdown view)
+
 ## 2.3.0 (23 June 2026)
 
 ### CSP reports
