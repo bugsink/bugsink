@@ -57,21 +57,18 @@ WORKDIR /app
 RUN apt update && apt install default-libmysqlclient-dev -y \
  && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /wheels /wheels
-
 RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=bind,from=build,source=/wheels,target=/wheels \
     pip install --find-links /wheels --no-index mysqlclient
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install "psycopg[binary]"
 
-COPY dist/$WHEEL_FILE /wheels/
-
+# Bind-mount the wheel instead of COPYing it: this way it is available during
+# the install but never becomes part of any image layer.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install /wheels/$WHEEL_FILE
-
-# Drop the wheels: they've been installed and aren't needed at runtime.
-RUN rm -rf /wheels
+    --mount=type=bind,source=dist/$WHEEL_FILE,target=/tmp/$WHEEL_FILE \
+    pip install /tmp/$WHEEL_FILE
 
 RUN cp /usr/local/lib/python3.12/site-packages/bugsink/conf_templates/docker.py.template /app/bugsink_conf.py && \
     cp /usr/local/lib/python3.12/site-packages/bugsink/gunicorn.docker.conf.py /app/gunicorn.docker.conf.py
