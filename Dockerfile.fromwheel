@@ -53,22 +53,25 @@ ENV PORT=8000
 
 WORKDIR /app
 
-# mysqlclient dependencies; needed here too, because the built wheel depends on .o files
-RUN apt update && apt install default-libmysqlclient-dev -y \
+# Runtime shared library the mysqlclient wheel links against.
+RUN apt update && apt install libmariadb3 -y \
  && rm -rf /var/lib/apt/lists/*
 
+# Install all deps and strip native extensions in a single layer, so only the
+# stripped binaries are stored (must be same layer to actually shrink the image).
+# binutils is installed and purged here; the wheel is bind-mounted, not COPYed,
+# so neither ends up in a layer.
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,from=build,source=/wheels,target=/wheels \
-    pip install --find-links /wheels --no-index mysqlclient
-
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install "psycopg[binary]"
-
-# Bind-mount the wheel instead of COPYing it: this way it is available during
-# the install but never becomes part of any image layer.
-RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,source=dist/$WHEEL_FILE,target=/tmp/$WHEEL_FILE \
-    pip install /tmp/$WHEEL_FILE
+    apt-get update \
+ && apt-get install -y --no-install-recommends binutils \
+ && pip install --find-links /wheels --no-index mysqlclient \
+ && pip install "psycopg[binary]" \
+ && pip install /tmp/$WHEEL_FILE \
+ && find /usr/local/lib/python3.12/site-packages -name '*.so' -exec strip --strip-unneeded {} + \
+ && apt-get purge -y binutils && apt-get autoremove -y \
+ && rm -rf /var/lib/apt/lists/*
 
 RUN cp /usr/local/lib/python3.12/site-packages/bugsink/conf_templates/docker.py.template /app/bugsink_conf.py && \
     cp /usr/local/lib/python3.12/site-packages/bugsink/gunicorn.docker.conf.py /app/gunicorn.docker.conf.py
