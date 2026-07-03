@@ -1,5 +1,19 @@
 # Changes
 
+## ..... (unreleased)
+
+### Backwards incompatible changes
+
+Fail to start when `PID_FILE` is configured to be in a directory not owned by the process running gunicorn/snappea
+(typically: the `bugsink` user). The reason for this is: extra defense in depth, as per #174.
+
+Ensure that `PID_FILE` is either `None` (recommended in systemd setups, i.e. recommended in the recommended case) or, if
+you must, in file in a directory "one level deep" (e.g. `/tmp/snappea/snappea.pid` or `{base_path}/snappea/snappea.pid`)
+
+Otherwise you'll get a B108SecurityError ("Target path owned by uid other than me: ...")
+
+See #195, #196
+
 ## 2.3.1 (30 June 2026)
 
 * Decode percent-encoded components from `DATABASE_URL` after parsing (See #423)
