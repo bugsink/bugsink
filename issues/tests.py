@@ -35,7 +35,9 @@ from events.markdown_stacktrace import render_stacktrace_md
 from files.models import File, FileMetadata
 from events.usage import record_event_counts
 
-from .models import Issue, IssueStateManager, TurningPoint, TurningPointKind
+from .models import (
+    Issue, IssueStateManager, TurningPoint, TurningPointKind, apply_issue_action, is_valid_issue_action,
+    q_for_invalid_issue_action)
 from .regressions import is_regression, is_regression_2, issue_is_regression
 from .factories import denormalized_issue_fields
 from .utils import get_issue_grouper_for_data
@@ -321,7 +323,46 @@ resolved, because we're in the "let's not bother" scenario. Then, we get a later
 the wild ("b") and resolve it ("c"). Then, if we were to see it again in "a", as per the test_longer_patterns, this
 would be seen as a regression when in reality it was never solved in "a", and its marking-as-such should probably have
 seen as an undo rather than anything else.
+
+UPDATE: the Reopen button is now reintroduced (see IssueActionTestCase below), exactly per the "let's not bother"
+design above: `IssueStateManager.reopen()` flips `is_resolved` and unmutes, but does not touch `fixed_at`. The edge
+case described above remains a known limitation.
 """
+
+
+class IssueActionTestCase(DjangoTestCase):
+    def test_reopen_is_valid_only_when_resolved(self):
+        issue = Issue.objects.create(project=Project.objects.create(), **denormalized_issue_fields())
+
+        self.assertFalse(is_valid_issue_action("reopen", issue))
+
+        IssueStateManager.resolve(issue)
+        issue.save()
+        self.assertTrue(is_valid_issue_action("reopen", issue))
+
+    def test_reopen_illegal_queryset(self):
+        project = Project.objects.create()
+        open_issue = Issue.objects.create(project=project, **denormalized_issue_fields())
+        resolved_issue = Issue.objects.create(project=project, **denormalized_issue_fields())
+        IssueStateManager.resolve(resolved_issue)
+        resolved_issue.save()
+
+        illegal = Issue.objects.filter(q_for_invalid_issue_action("reopen"))
+        self.assertIn(open_issue, illegal)
+        self.assertNotIn(resolved_issue, illegal)
+
+    def test_apply_reopen_action(self):
+        issue = Issue.objects.create(project=Project.objects.create(), **denormalized_issue_fields())
+        IssueStateManager.resolve(issue)
+        issue.save()
+
+        apply_issue_action(IssueStateManager, issue, "reopen", user=None)
+        issue.save()
+
+        self.assertFalse(issue.is_resolved)
+
+        turningpoint = TurningPoint.objects.get(issue=issue)
+        self.assertEqual(turningpoint.kind, TurningPointKind.REOPENED)
 
 
 class MuteUnmuteTestCase(TransactionTestCase):

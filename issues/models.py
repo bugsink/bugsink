@@ -517,6 +517,11 @@ def is_valid_issue_action(action, issue):
         # any type of issue can be deleted
         return True
 
+    if action == "reopen":
+        # reopen is the mirror image of every other action: it's the only one that requires the issue to currently
+        # be resolved (instead of being illegal on resolved issues, as per the blanket rule below)
+        return issue.is_resolved
+
     if issue.is_resolved:
         # any action is illegal on resolved issues (as per our current UI)
         return False
@@ -546,6 +551,10 @@ def q_for_invalid_issue_action(action):
         # delete is always valid, so we don't want any issues to be returned, https://stackoverflow.com/a/39001190
         return Q(pk__in=[])
 
+    if action == "reopen":
+        # reopen is the mirror image of every other action: see is_valid_issue_action for the non-queryset version
+        return Q(is_resolved=False)
+
     illegal_conditions = Q(is_resolved=True)  # any action is illegal on resolved issues (as per our current UI)
 
     if action.startswith("resolved_release:"):
@@ -573,6 +582,8 @@ def make_issue_history(issue_or_qs, action, user):
         kind = TurningPointKind.MUTED
     elif action == "unmute":
         kind = TurningPointKind.UNMUTED
+    elif action == "reopen":
+        kind = TurningPointKind.REOPENED
     else:
         raise ValueError(f"unknown action: {action}")
 
@@ -627,8 +638,8 @@ def apply_issue_action(manager, issue_or_qs, action, user):
         manager.resolve_by_release(issue_or_qs, release_version)
     elif action == "resolved_next":
         manager.resolve_by_next(issue_or_qs)
-    # elif action == "reopen":  # not allowed from the UI
-    #     manager.reopen(issue_or_qs)
+    elif action == "reopen":
+        manager.reopen(issue_or_qs)
     elif action == "mute":
         manager.mute(issue_or_qs)
     elif action.startswith("mute_for:"):
@@ -660,6 +671,7 @@ class TurningPointKind(models.IntegerChoices):
     MUTED = 3, _("Muted")
     REGRESSED = 4, _("Marked as regressed")
     UNMUTED = 5, _("Unmuted")
+    REOPENED = 6, _("Reopened")
 
     NEXT_MATERIALIZED = 10, _("Release info added")
 
