@@ -69,7 +69,8 @@ SNAPPEA = {
     "TASK_ALWAYS_EAGER": True,  # at least for (unit) tests, this is a requirement
     "NUM_WORKERS": 1,
 
-    # no_bandit_expl: development setting, we know that this is insecure "in theory" at least
+    # development.py is precisly the intended use for a non-None PID_FILE: no systemd/Docker, i.e. no process manager
+    # no_bandit_expl: usage locations use b108_makedirs;
     "PID_FILE": "/tmp/bugsink/snappea.pid",  # nosec B108
 }
 
