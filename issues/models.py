@@ -552,10 +552,10 @@ def q_for_invalid_issue_action(action):
         return Q(pk__in=[])
 
     if action == "reopen":
-        # reopen is the mirror image of every other action: see is_valid_issue_action for the non-queryset version
+        # reopen is the only one that requires the issue to currently be resolved
         return Q(is_resolved=False)
 
-    illegal_conditions = Q(is_resolved=True)  # any action is illegal on resolved issues (as per our current UI)
+    illegal_conditions = Q(is_resolved=True)  # any other action is illegal on resolved issues
 
     if action.startswith("resolved_release:"):
         release_version = action.split(":", 1)[1]
