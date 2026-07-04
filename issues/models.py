@@ -315,15 +315,11 @@ class IssueStateManager(object):
     @staticmethod
     def reopen(issue):
         issue.is_resolved = False
+        issue.is_resolved_by_next_release = False  # clear related is_resolved_xxx state too
 
-        # we don't touch is_resolved_by_next_release (i.e. set to False) here. Why? The simple/principled answer is that
-        # observations that Bugsink can make can by definition not be about the future. If the user tells us "this
-        # is fixed in some not-yet-released version" there's just no information ever in Bugsink to refute that".
-        # (BTW this point in the code cannot be reached when issue.is_resolved_by_next_release is True anyway)
-
-        # we also don't touch `fixed_at`. The meaning of that field is "reports came in about fixes at these points in
-        # time", not "it actually _was_ fixed at all of those points" and the finer differences between those 2
-        # statements is precisely what we have quite some "is_regression" logic for.
+        # we don't touch `fixed_at`. The meaning of that field is "reports came in about fixes at these points in time",
+        # not "it actually _was_ fixed at all of those points" and the finer differences between those 2 statements is
+        # precisely what we have quite some "is_regression" logic for.
 
         # This also means that if you clicked resolve by mistake and immediately reopen, the stale fixed_at marker
         # remains. Full undo would be more principled but also more complex (implementation requires historic
@@ -469,9 +465,12 @@ class IssueQuerysetStateManager(object):
 
     @staticmethod
     def reopen(issue_qs):
-        # we don't need reopen() over a queryset (yet); reason being that we don't allow reopening of issues from the UI
-        # and hence not in bulk.
-        raise NotImplementedError("reopen is not implemented - see comments above")
+        # Currently unused by the UI; implemented for completeness because generic issue-action plumbing supports it.
+        issue_qs.update(
+            is_resolved=False,
+            is_resolved_by_next_release=False,
+        )
+        IssueQuerysetStateManager.unmute(issue_qs)
 
     @staticmethod
     def mute(issue_qs, unmute_on_volume_based_conditions="[]", unmute_after=None):

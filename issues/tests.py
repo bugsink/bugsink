@@ -36,8 +36,7 @@ from files.models import File, FileMetadata
 from events.usage import record_event_counts
 
 from .models import (
-    Issue, IssueStateManager, TurningPoint, TurningPointKind, apply_issue_action, is_valid_issue_action,
-    q_for_invalid_issue_action)
+    Issue, IssueStateManager, TurningPoint, TurningPointKind)
 from .regressions import is_regression, is_regression_2, issue_is_regression
 from .factories import denormalized_issue_fields
 from .utils import get_issue_grouper_for_data
@@ -291,40 +290,13 @@ class RegressionIssueTestCase(DjangoTestCase):
         create_release_if_needed(fresh(project), "4.0.0", timestamp)
         self.assertTrue(issue_is_regression(fresh(issue), "4.0.0"))
 
-
-class IssueActionTestCase(DjangoTestCase):
-    def test_reopen_is_valid_only_when_resolved(self):
-        issue = Issue.objects.create(project=Project.objects.create(), **denormalized_issue_fields())
-
-        self.assertFalse(is_valid_issue_action("reopen", issue))
-
-        IssueStateManager.resolve(issue)
+        # reopen cancels the "fixed in some future release" claim
+        IssueStateManager.reopen(issue)
         issue.save()
-        self.assertTrue(is_valid_issue_action("reopen", issue))
-
-    def test_reopen_illegal_queryset(self):
-        project = Project.objects.create()
-        open_issue = Issue.objects.create(project=project, **denormalized_issue_fields())
-        resolved_issue = Issue.objects.create(project=project, **denormalized_issue_fields())
-        IssueStateManager.resolve(resolved_issue)
-        resolved_issue.save()
-
-        illegal = Issue.objects.filter(q_for_invalid_issue_action("reopen"))
-        self.assertIn(open_issue, illegal)
-        self.assertNotIn(resolved_issue, illegal)
-
-    def test_apply_reopen_action(self):
-        issue = Issue.objects.create(project=Project.objects.create(), **denormalized_issue_fields())
-        IssueStateManager.resolve(issue)
-        issue.save()
-
-        apply_issue_action(IssueStateManager, issue, "reopen", user=None)
-        issue.save()
-
+        issue = fresh(issue)
         self.assertFalse(issue.is_resolved)
-
-        turningpoint = TurningPoint.objects.get(issue=issue)
-        self.assertEqual(turningpoint.kind, TurningPointKind.REOPENED)
+        self.assertFalse(issue.is_resolved_by_next_release)
+        self.assertFalse(issue_is_regression(issue, "4.0.0"))
 
 
 class MuteUnmuteTestCase(TransactionTestCase):
