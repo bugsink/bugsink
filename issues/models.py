@@ -314,8 +314,6 @@ class IssueStateManager(object):
 
     @staticmethod
     def reopen(issue):
-        # this is called "reopen", but since there's no UI for it, it's more like "deal with a regression" (i.e. that's
-        # the only way this gets called).
         issue.is_resolved = False
 
         # we don't touch is_resolved_by_next_release (i.e. set to False) here. Why? The simple/principled answer is that
@@ -326,6 +324,10 @@ class IssueStateManager(object):
         # we also don't touch `fixed_at`. The meaning of that field is "reports came in about fixes at these points in
         # time", not "it actually _was_ fixed at all of those points" and the finer differences between those 2
         # statements is precisely what we have quite some "is_regression" logic for.
+
+        # This also means that if you clicked resolve by mistake and immediately reopen, the stale fixed_at marker
+        # remains. Full undo would be more principled but also more complex (implementation requires historic
+        # information)
 
         # as in IssueStateManager.resolve(), but not because a reopened issue cannot be muted in principle (i.e. we
         # could mute it soon after reopening) but because when reopening an issue you're doing this from a resolved
@@ -518,12 +520,11 @@ def is_valid_issue_action(action, issue):
         return True
 
     if action == "reopen":
-        # reopen is the mirror image of every other action: it's the only one that requires the issue to currently
-        # be resolved (instead of being illegal on resolved issues, as per the blanket rule below)
+        # reopen is the only one that requires the issue to currently be resolved
         return issue.is_resolved
 
     if issue.is_resolved:
-        # any action is illegal on resolved issues (as per our current UI)
+        # any other action is illegal on resolved issues
         return False
 
     if action.startswith("resolved_release:"):
