@@ -1,5 +1,8 @@
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.core.checks import run_checks
+from django.db.migrations.loader import MigrationLoader
+from django.db.migrations.operations.base import OperationCategory
 from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 
@@ -8,6 +11,51 @@ from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from .models import AuthToken
 
 User = get_user_model()
+
+
+class MigrationShapeTestCase(SimpleTestCase):
+    # Because of what a migration is we can't go back in time and retroactively fix these so we'll just document them.
+    known_bad_mixed_data_schema_migrations = {
+        ("issues", "0024_turningpoint_project_alter_not_null"),
+        ("phonehome", "0001_b_squashed_initial"),
+        ("projects", "0017_project_issue_count"),
+    }
+
+    def test_first_party_migrations_do_not_mix_schema_and_data_operations(self):
+        # It is my experience that having RunPython and schema changes in separate migration files is very useful: when
+        # things go sideways this allows for much more finegrained replaying/rolling back. This test enforces that. If
+        # your migration file tripped it just split it in 2 parts.
+
+        migration_loader = MigrationLoader(None, ignore_no_migrations=True)
+        bugsink_app_labels = set(settings.BUGSINK_APPS)
+
+        mixed_migrations = {
+            key: [operation.__class__.__name__ for operation in migration.operations]
+            for key, migration in sorted(migration_loader.graph.nodes.items())
+            if key[0] in bugsink_app_labels and self._mixes_data_and_schema_operations(migration.operations)
+        }
+
+        unexpected_migrations = set(mixed_migrations) - self.known_bad_mixed_data_schema_migrations
+        self.assertEqual(
+            set(),
+            unexpected_migrations,
+            "Migrations must not mix data operations with schema operations: %s" % {
+                "%s.%s" % key: mixed_migrations[key] for key in sorted(unexpected_migrations)
+            },
+        )
+
+    @staticmethod
+    def _mixes_data_and_schema_operations(operations):
+        has_data_operation = any(
+            operation.category in (OperationCategory.PYTHON, OperationCategory.SQL)
+            for operation in operations
+        )
+        has_schema_operation = any(
+            operation.category not in (OperationCategory.PYTHON, OperationCategory.SQL)
+            for operation in operations
+        )
+
+        return has_data_operation and has_schema_operation
 
 
 class SystemChecksTestCase(SimpleTestCase):
