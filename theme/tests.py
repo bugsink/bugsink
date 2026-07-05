@@ -24,13 +24,15 @@ class TestPygmentizeLineLineCountHandling(RegularTestCase):
     def setUp(self):
         super().setUp()
         patcher = patch("theme.templatetags.issues.capture_stacktrace")
-        self.capture_mock = patcher.start()
+        self.the_mock_for_capture_stacktrace = patcher.start()
         self.addCleanup(patcher.stop)
 
     def _pygmentize_lines(self, lines):
         # since we exclusively care about line-counts, we just pick something for filename and platform here.
         result = actual_pygmentize_lines(lines, filename="a.py", platform="python")
-        self.capture_mock.assert_not_called()
+
+        # assert that the thing under test did not end up in the "robust, but logging" exception handling code path:
+        self.the_mock_for_capture_stacktrace.assert_not_called()
         return result
 
     def test_pygmentize_lines_empty(self):
