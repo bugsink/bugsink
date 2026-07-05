@@ -26,17 +26,6 @@
         {% if issue.is_resolved %}{# i.e. buttons disabled #}
             <button class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md" name="action" value="reopen">{% translate "Reopen" %}</button>
 
-            {% spaceless %}{# needed to avoid whitespace between the looks-like-one-buttons #}
-            {% if issue.project.has_releases %}
-                <button disabled class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-s-md" name="action" value="resolved_next">{% translate "Resolved in next release" %}</button>
-
-                <button disabled class="font-bold text-slate-300 dark:text-slate-600 fill-slate-300 dark:fill-slate-600 stroke-slate-300 dark:stroke-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 rounded-e-md"><svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
-                {# we just hide the whole dropdown; this is the easiest implementation of not-showing the dropdown #}
-            {% else %}
-                <button disabled class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-md" name="action" value="resolved">{% translate "Resolve" %}</button>
-            {% endif %}
-            {% endspaceless %}
-
         {% else %}{# not resolved, i.e. buttons enabled #}
             {% spaceless %}{# needed to avoid whitespace between the looks-like-one-buttons #}
 
