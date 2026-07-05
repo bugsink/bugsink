@@ -48,6 +48,9 @@ def issue_is_regression(issue, current_event_at):
         # Which means that seeing new events does not imply a regression, because that future hasn't arrived yet.
         return False
 
+    if issue.is_resolved_unconditionally:
+        return True
+
     if not issue.project.has_releases:
         # the simple case: no releases means that seeing new events implies a regression if the issue.is_resolved, which
         # is True given the first guard clause.

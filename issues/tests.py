@@ -265,6 +265,27 @@ class RegressionIssueTestCase(DjangoTestCase):
         self.assertFalse(issue_is_regression(fresh(issue), "1.0.0"))
         self.assertFalse(issue_is_regression(fresh(issue), "2.0.0"))
 
+    def test_issue_is_regression_after_plain_resolve_on_release_project(self):
+        project = Project.objects.create()
+        timestamp = datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+        create_release_if_needed(fresh(project), "1.0.0", timestamp)
+        create_release_if_needed(fresh(project), "1.1.0", timestamp)
+
+        issue = Issue.objects.create(
+            project=project,
+            events_at="1.0.0\n1.1.0\n",
+            **denormalized_issue_fields(),
+        )
+
+        IssueStateManager.resolve(issue)
+        issue.save()
+
+        self.assertEqual(fresh(issue).fixed_at, "")
+        self.assertTrue(fresh(issue).is_resolved_unconditionally)
+        self.assertTrue(issue_is_regression(fresh(issue), "1.0.0"))
+        self.assertTrue(issue_is_regression(fresh(issue), "1.1.0"))
+
     def test_issue_is_regression_with_releases_resolve_by_next(self):
         project = Project.objects.create()
         timestamp = datetime(2020, 1, 1, tzinfo=timezone.utc)
