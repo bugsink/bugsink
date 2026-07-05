@@ -35,7 +35,8 @@ from events.markdown_stacktrace import render_stacktrace_md
 from files.models import File, FileMetadata
 from events.usage import record_event_counts
 
-from .models import Issue, IssueStateManager, TurningPoint, TurningPointKind
+from .models import (
+    Issue, IssueStateManager, TurningPoint, TurningPointKind)
 from .regressions import is_regression, is_regression_2, issue_is_regression
 from .factories import denormalized_issue_fields
 from .utils import get_issue_grouper_for_data
@@ -289,39 +290,13 @@ class RegressionIssueTestCase(DjangoTestCase):
         create_release_if_needed(fresh(project), "4.0.0", timestamp)
         self.assertTrue(issue_is_regression(fresh(issue), "4.0.0"))
 
-
-"""
-Some thoughts on re-opening, that I have to put 'somewhere'; might as well put them here in the tests where I first
-thought of them... The direct cause for these thoughts was that I found it very hard to reason about the following
-question: "what does re-opening an issue mean for the `fixed_at` points?"
-
-First: re-opening an issue (from the UI) is kinda funny in the first place. What are you saying by doing that anyway?
-You're saying "this is an issue that continues to exist, despite me/someone at some point saying that it was resolved".
-You're doing this with "pure brainpower", i.e. by thinking it through rather than waiting for an issue to reoccur
-naturally.
-
-Why would you ever want to do this? My main guess is: to undo a click on resolve that you just did. If that's so, we
-might implement re-open more closely as such an undo (and the anwer to the first question would also follow from it,
-i.e. it would be "the last-added `fixed_at` point should be removed"
-
-The main consequences of re-opening are: you won't be bothered (alerts) about a regression that you just understood to
-still exist. And: if you go looking for unresolved issues, you'll find this one.
-
-Having said all of that, I might do something radical and _not implement reopen in the UI at all!_ Let's see if I run
-into the lack of it existing.
-
-... having said that, it's not _that bad_, and I think I could answer the original question, if pressed (allowing us to
-reintroduce the Reopen button in the UI). I would simply say: let's not bother doing a proper administration of
-`fixed_at` points when the issue is manually reopened. Manually reopening as such allows us to avoid an alert that we
-don't need, and get our administration of not-yet-resolved issues in order. The only scenario where this goes wrong is
-something along these lines:
-
-at some point ("a") which does not have seen breakage we mark as resolved. we then reopen. "a" remains marked as
-resolved, because we're in the "let's not bother" scenario. Then, we get a later point where we first see the issue in
-the wild ("b") and resolve it ("c"). Then, if we were to see it again in "a", as per the test_longer_patterns, this
-would be seen as a regression when in reality it was never solved in "a", and its marking-as-such should probably have
-seen as an undo rather than anything else.
-"""
+        # reopen cancels the "fixed in some future release" claim
+        IssueStateManager.reopen(issue)
+        issue.save()
+        issue = fresh(issue)
+        self.assertFalse(issue.is_resolved)
+        self.assertFalse(issue.is_resolved_by_next_release)
+        self.assertFalse(issue_is_regression(issue, "4.0.0"))
 
 
 class MuteUnmuteTestCase(TransactionTestCase):
