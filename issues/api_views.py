@@ -212,9 +212,6 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
             raise ValidationError({"detail": "Project has no releases."})
 
         latest_release = issue.project.get_latest_release()
-        if latest_release.version + "\n" in issue.events_at:
-            raise ValidationError({"detail": "Issue has already occurred in the latest release."})
-
         return self._apply_issue_action(issue, "resolved_release:" + latest_release.version)
 
     @extend_schema(

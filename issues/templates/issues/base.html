@@ -38,11 +38,7 @@
                     {# note that we can depend on get_latest_release being available, because we're in the 'project.has_releases' branch #}
                     <div class="dropdown-content-right flex-col pl-2">
                         <button name="action" value="resolved_next" class="block self-stretch font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 text-left whitespace-nowrap">{% translate "Resolved in next release" %}</button>
-                        {% if not issue.occurs_in_last_release %}
-                            <button name="action" value="resolved_release:{{ issue.project.get_latest_release.version }}" class="block self-stretch font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 text-left whitespace-nowrap">Resolved in latest ({{ issue.project.get_latest_release.get_short_version }})</button>
-                        {% else %}
-                            <button name="action" value="resolved_release:{{ issue.project.get_latest_release.version }}" disabled class="block self-stretch font-bold text-slate-300 dark:text-slate-600 border-slate-200 dark:border-slate-700 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white dark:bg-slate-900 text-left whitespace-nowrap">Resolved in latest ({{ issue.project.get_latest_release.get_short_version }})</button>
-                        {% endif %}
+                        <button name="action" value="resolved_release:{{ issue.project.get_latest_release.version }}" class="block self-stretch font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 text-left whitespace-nowrap">Resolved in latest ({{ issue.project.get_latest_release.get_short_version }})</button>
 
                     </div>
                 </div>

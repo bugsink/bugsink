@@ -539,12 +539,7 @@ def is_valid_issue_action(action, issue):
         # any other action is illegal on resolved issues
         return False
 
-    if action.startswith("resolved_release:"):
-        release_version = action.split(":", 1)[1]
-        if release_version + "\n" in issue.events_at:
-            return False
-
-    elif action.startswith("mute"):
+    if action.startswith("mute"):
         if issue.is_muted:
             return False
 
@@ -570,11 +565,7 @@ def q_for_invalid_issue_action(action):
 
     illegal_conditions = Q(is_resolved=True)  # any other action is illegal on resolved issues
 
-    if action.startswith("resolved_release:"):
-        release_version = action.split(":", 1)[1]
-        illegal_conditions = illegal_conditions | Q(events_at__contains=release_version + "\n")
-
-    elif action.startswith("mute"):
+    if action.startswith("mute"):
         illegal_conditions = illegal_conditions | Q(is_muted=True)
 
     elif action == "unmute":
