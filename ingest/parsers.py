@@ -141,7 +141,12 @@ class StreamingEnvelopeParser:
                 raise ParseError("EOF when reading headers; what is this a header for then?")
 
         try:
-            return json.loads(header_stream_value.decode("utf-8"))  # points 1, 2
+            header = header_stream_value.decode("utf-8")  # point 1
+        except UnicodeDecodeError as e:
+            raise ParseError("Header not UTF-8") from e
+
+        try:
+            return json.loads(header)  # point 2
         except json.JSONDecodeError as e:
             raise ParseError("Header not JSON") from e
 
