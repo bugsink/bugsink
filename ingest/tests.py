@@ -1603,6 +1603,13 @@ class TestParser(RegularTestCase):
             header, item = next(items)
         self.assertEqual("Header not JSON", str(e.exception))
 
+    def test_non_utf8_header(self):
+        parser = StreamingEnvelopeParser(io.BytesIO(b"\x8b"))
+
+        with self.assertRaises(ParseError) as e:
+            parser.get_envelope_headers()
+        self.assertEqual("Header not UTF-8", str(e.exception))
+
     def test_eof_after_envelope_headers(self):
         # whether this is valid or not: not entirely clear from the docs. It won't matter in practice, of course
         # (because nothing interesting is contained)
