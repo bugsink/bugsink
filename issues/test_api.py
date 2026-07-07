@@ -109,7 +109,10 @@ class IssueApiTests(TransactionTestCase):
 
         self.issue0.refresh_from_db()
         self.assertTrue(self.issue0.is_resolved)
+        self.assertTrue(self.issue0.is_resolved_unconditionally)
+        self.assertEqual(self.issue0.fixed_at, "")
         self.assertEqual(response.json()["is_resolved"], True)
+        self.assertEqual(response.json()["is_resolved_unconditionally"], True)
 
         turningpoint = TurningPoint.objects.get(issue=self.issue0)
         self.assertEqual(turningpoint.kind, TurningPointKind.RESOLVED)
@@ -131,6 +134,20 @@ class IssueApiTests(TransactionTestCase):
 
         self.issue0.refresh_from_db()
         self.assertTrue(self.issue0.is_resolved)
+        self.assertFalse(self.issue0.is_resolved_unconditionally)
+        self.assertEqual(self.issue0.fixed_at, "1.0.0\n")
+
+    def test_resolve_latest_allows_existing_occurrence(self):
+        create_release_if_needed(self.project, "1.0.0", timezone.now())
+        self.issue0.events_at = "1.0.0\n"
+        self.issue0.save()
+
+        response = self.client.post(reverse("api:issue-resolve-latest", args=[self.issue0.id]))
+        self.assertEqual(response.status_code, 200)
+
+        self.issue0.refresh_from_db()
+        self.assertTrue(self.issue0.is_resolved)
+        self.assertFalse(self.issue0.is_resolved_unconditionally)
         self.assertEqual(self.issue0.fixed_at, "1.0.0\n")
 
     def test_resolve_latest_requires_releases(self):
@@ -146,8 +163,10 @@ class IssueApiTests(TransactionTestCase):
 
         self.issue0.refresh_from_db()
         self.assertFalse(self.issue0.is_resolved)
+        self.assertFalse(self.issue0.is_resolved_unconditionally)
         self.assertFalse(self.issue0.is_resolved_by_next_release)
         self.assertEqual(response.json()["is_resolved"], False)
+        self.assertEqual(response.json()["is_resolved_unconditionally"], False)
         self.assertEqual(response.json()["is_resolved_by_next_release"], False)
 
         turningpoint = TurningPoint.objects.get(issue=self.issue0)

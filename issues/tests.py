@@ -115,10 +115,10 @@ class RegressionUtilTestCase(RegularTestCase):
             events_at=["a"],
             current_event_at="b"))
 
-    def test_observations_override_marked_resolutions(self):
-        # if an issue has been marked as resolved but has also (presumably later on) been seen in reality to not have
-        # been resolved, it is not resolved by that release. Hence, re-occurrence is not a (new) regression.
-        self.assertFalse(is_regression(
+    def test_marked_resolutions_override_observations(self):
+        # Marking an issue as resolved in a release where it has already been seen means "resolved as of now".
+        # A later event in that same release is therefore a regression.
+        self.assertTrue(is_regression(
             self.releases,
             fixed_at=["c"],
             events_at=["c"],
@@ -264,6 +264,53 @@ class RegressionIssueTestCase(DjangoTestCase):
         issue.save()
         self.assertFalse(issue_is_regression(fresh(issue), "1.0.0"))
         self.assertFalse(issue_is_regression(fresh(issue), "2.0.0"))
+
+    def test_issue_is_regression_with_releases_resolve_by_latest_after_observation(self):
+        project = Project.objects.create()
+        timestamp = datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+        create_release_if_needed(fresh(project), "1.0.0", timestamp)
+        create_release_if_needed(fresh(project), "2.0.0", timestamp)
+
+        issue = Issue.objects.create(
+            project=project,
+            events_at="2.0.0\n",
+            **denormalized_issue_fields(),
+        )
+
+        IssueStateManager.resolve_by_latest(issue)
+        issue.save()
+
+        self.assertFalse(issue_is_regression(fresh(issue), "1.0.0"))
+        self.assertTrue(issue_is_regression(fresh(issue), "2.0.0"))
+
+    def test_issue_is_regression_after_plain_resolve_on_release_project(self):
+        project = Project.objects.create()
+        timestamp = datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+        create_release_if_needed(fresh(project), "1.0.0", timestamp)
+        create_release_if_needed(fresh(project), "1.1.0", timestamp)
+
+        issue = Issue.objects.create(
+            project=project,
+            events_at="1.0.0\n",
+            **denormalized_issue_fields(),
+        )
+
+        # Seen at 1.0, resolved at 1.0.
+        IssueStateManager.resolve_by_release(issue, "1.0.0")
+        issue.save()
+
+        # Seen at 1.1, then resolved without pinning to a release.
+        IssueStateManager.reopen(issue)
+        issue.events_at += "1.1.0\n"
+        IssueStateManager.resolve(issue)
+        issue.save()
+
+        self.assertEqual(fresh(issue).fixed_at, "1.0.0\n")
+        self.assertTrue(fresh(issue).is_resolved_unconditionally)
+        self.assertTrue(issue_is_regression(fresh(issue), "1.0.0"))
+        self.assertTrue(issue_is_regression(fresh(issue), "1.1.0"))
 
     def test_issue_is_regression_with_releases_resolve_by_next(self):
         project = Project.objects.create()

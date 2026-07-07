@@ -36,6 +36,7 @@ class IssueSerializer(UTCModelSerializer):
             # "last_frame_module",
             # "last_frame_function",
             "is_resolved",
+            "is_resolved_unconditionally",
             "is_resolved_by_next_release",
             # "fixed_at",  too "raw"? i.e. too implementation-tied?
             # "events_at",  too "raw"? i.e. too implementation-tied?
