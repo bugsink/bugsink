@@ -84,12 +84,12 @@
 
                     {% spaceless %}{# needed to avoid whitespace between the looks-like-one-buttons #}
                     {% if project.has_releases %}
-                        <button disabled class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-s-md" name="action" value="resolved_next">{% translate "Resolved in next release" %}</button>
+                        <button disabled class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-s-md" name="action" value="resolve">{% translate "Resolve" %}</button>
 
                         <button disabled class="font-bold text-slate-300 dark:text-slate-600 fill-slate-300 dark:fill-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 rounded-e-md"><svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
                         {# we just hide the whole dropdown; this is the easiest implementation of not-showing the dropdown #}
                     {% else %}
-                        <button disabled class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-md" name="action" value="resolved">{% translate "Resolve" %}</button>
+                        <button disabled class="font-bold text-slate-300 dark:text-slate-600 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 rounded-md" name="action" value="resolve">{% translate "Resolve" %}</button>
                     {% endif %}
                     {% endspaceless %}
 
@@ -97,17 +97,14 @@
                     {% spaceless %}{# needed to avoid whitespace between the looks-like-one-buttons #}
 
                     {% if project.has_releases %}
-                        {# 'by next' is shown even if 'by current' is also shown: just because you haven't seen 'by current' doesn't mean it's actually already solved; and in fact we show this option first precisely because we can always show it #}
-                        <button class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-s-md" name="action" value="resolved_next">Resolved in next release</button>
+                        <button class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-s-md" name="action" value="resolve">{% translate "Resolve" %}</button>
 
                         <div class="dropdown">
                             <button disabled {# disabled b/c clicking the dropdown does nothing - we have hover for that #} class="font-bold text-slate-800 dark:text-slate-100 fill-slate-800 dark:fill-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-r-2 border-t-2 border-b-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-e-md"><svg xmlns="http://www.w3.org/2000/svg" fill="full" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg></button>
 
                             {# note that we can depend on get_latest_release being available, because we're in the 'project.has_releases' branch #}
                             <div class="dropdown-content-right flex-col pl-2">
-
-                                {# note that an if-statement ("issue.occurs_in_last_release") is missing here, because we're not on the level of a single issue #}
-                                {# handling of that question (but per-issue, and after-click) is done in views.py, _q_for_invalid_for_action()  #}
+                                <button name="action" value="resolved_next" class="block self-stretch font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 text-left whitespace-nowrap">{% translate "Resolved in next release" %}</button>
                                 <button name="action" value="resolved_release:{{ project.get_latest_release.version }}" class="block self-stretch font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 border-l-2 border-r-2 border-b-2 bg-white dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 text-left whitespace-nowrap">Resolved in latest ({{ project.get_latest_release.get_short_version }})</button>
                             </div>
                         </div>

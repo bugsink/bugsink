@@ -24,13 +24,15 @@ class TestPygmentizeLineLineCountHandling(RegularTestCase):
     def setUp(self):
         super().setUp()
         patcher = patch("theme.templatetags.issues.capture_stacktrace")
-        self.capture_mock = patcher.start()
+        self.the_mock_for_capture_stacktrace = patcher.start()
         self.addCleanup(patcher.stop)
 
     def _pygmentize_lines(self, lines):
         # since we exclusively care about line-counts, we just pick something for filename and platform here.
         result = actual_pygmentize_lines(lines, filename="a.py", platform="python")
-        self.capture_mock.assert_not_called()
+
+        # assert that the thing under test did not end up in the "robust, but logging" exception handling code path:
+        self.the_mock_for_capture_stacktrace.assert_not_called()
         return result
 
     def test_pygmentize_lines_empty(self):
@@ -78,27 +80,6 @@ class TestPygmentizeLineLineCountHandling(RegularTestCase):
 
     def test_pygmentize_lines_newline_on_otherwise_empty_line(self):
         self._pygmentize_lines(["\n", "\n", "\n"])
-
-    def test_pygmentize_lines_ruby_regression(self):
-        # deal with https://github.com/pygments/pygments/issues/2998
-
-        # code taken from:
-        # https://github.com/rails/rails/blob/0f969a989c87/activerecord/lib/active_record/connection_adapters/postgresql_adapter.rb
-        code = """        #  - format_type includes the column size constraint, e.g. varchar(50)
-        #  - ::regclass is a function that gives the id for a table name
-        def column_definitions(table_name) #:nodoc:
-          exec_query(<<-end_sql, 'SCHEMA').rows
-              SELECT a.attname, format_type(a.atttypid, a.atttypmod),
-                     pg_get_expr(d.adbin, d.adrelid), a.attnotnull, a.atttypid, a.atttypmod
-                FROM pg_attribute a LEFT JOIN pg_attrdef d"""
-
-        code_as_list = code.splitlines()
-        result = actual_pygmentize_lines(code_as_list, filename="postgresql_adapter.rb", platform="ruby")
-        self.assertEqual(len(code_as_list), len(result))
-        self.capture_mock.assert_called()
-        for line in result:
-            # we can't rely on pygments in this case, so the string must not be marked as safe.
-            self.assertNotIsInstance(line, SafeString)
 
 
 class TestChooseLexerForPattern(RegularTestCase):

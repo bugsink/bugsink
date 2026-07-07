@@ -60,6 +60,10 @@ class ProjectApiTests(TransactionTestCase):
         self.assertEqual(body["visibility"], "team_members")
         self.assertIn("dsn", body)  # read-only; present on detail
 
+    def test_malformed_id_is_404(self):
+        r = self.client.get(reverse("api:project-detail", args=["not-an-int"]))
+        self.assertEqual(r.status_code, 404)
+
     @override_settings(MAX_RETENTION_PER_PROJECT_EVENT_COUNT=1)
     def test_create_validations(self):
         r = self.client.post(

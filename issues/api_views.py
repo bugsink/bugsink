@@ -161,6 +161,10 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         if issue.is_resolved:
             raise ValidationError({"detail": "Issue is already resolved."})
 
+    def _assert_resolved(self, issue):
+        if not issue.is_resolved:
+            raise ValidationError({"detail": "Issue is not resolved."})
+
     def _assert_unmuted(self, issue):
         if issue.is_muted:
             raise ValidationError({"detail": "Issue is already muted."})
@@ -208,10 +212,19 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
             raise ValidationError({"detail": "Project has no releases."})
 
         latest_release = issue.project.get_latest_release()
-        if latest_release.version + "\n" in issue.events_at:
-            raise ValidationError({"detail": "Issue has already occurred in the latest release."})
-
         return self._apply_issue_action(issue, "resolved_release:" + latest_release.version)
+
+    @extend_schema(
+        summary="Reopen an issue",
+        description="Mark this resolved issue as unresolved again.",
+        request=OpenApiTypes.NONE,
+        responses=IssueSerializer,
+    )
+    @action(detail=True, methods=["post"])
+    def reopen(self, request, pk=None):
+        issue = self.get_object()
+        self._assert_resolved(issue)
+        return self._apply_issue_action(issue, "reopen")
 
     @extend_schema(
         summary="Mute an issue",
@@ -277,8 +290,6 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
             raise ValidationError({"detail": "Issue is not muted."})
 
         return self._apply_issue_action(issue, "unmute")
-
-    # NOTE: No 'unresolve' action: reopen is intentionally not exposed in the UI either. See apply_issue_action.
 
 
 class IssueCommentViewSet(AtomicRequestMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):

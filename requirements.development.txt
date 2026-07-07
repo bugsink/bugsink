@@ -2,3 +2,4 @@
 coverage
 sentry-cli
 ruff
+bandit

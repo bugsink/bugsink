@@ -63,6 +63,7 @@ class Issue(models.Model):
     # what does this mean for the release-based use cases? it means what you filter on.
     # it also simply means: it was "marked as resolved" after the last regression (if any)
     is_resolved = models.BooleanField(default=False)
+    is_resolved_unconditionally = models.BooleanField(default=False)
     is_resolved_by_next_release = models.BooleanField(default=False)
 
     fixed_at = models.TextField(blank=True, null=False, default='')  # line-separated list
@@ -283,7 +284,8 @@ class IssueStateManager(object):
     @staticmethod
     def resolve(issue):
         issue.is_resolved = True
-        issue.add_fixed_at("")  # i.e. fixed in the no-release-info-available release
+        issue.is_resolved_unconditionally = True
+        issue.is_resolved_by_next_release = False
 
         # an issue cannot be both resolved and muted; muted means "the problem persists but don't tell me about it
         # (or maybe unless some specific condition happens)" and resolved means "the problem is gone". Hence, resolving
@@ -296,6 +298,8 @@ class IssueStateManager(object):
     def resolve_by_latest(issue):
         # NOTE: currently unused; we may soon reintroduce it though so I left it in.
         issue.is_resolved = True
+        issue.is_resolved_unconditionally = False
+        issue.is_resolved_by_next_release = False
         issue.add_fixed_at(issue.project.get_latest_release().version)
         IssueStateManager.unmute(issue)  # as in IssueStateManager.resolve()
 
@@ -303,29 +307,31 @@ class IssueStateManager(object):
     def resolve_by_release(issue, release_version):
         # release_version: str
         issue.is_resolved = True
+        issue.is_resolved_unconditionally = False
+        issue.is_resolved_by_next_release = False
         issue.add_fixed_at(release_version)
         IssueStateManager.unmute(issue)  # as in IssueStateManager.resolve()
 
     @staticmethod
     def resolve_by_next(issue):
         issue.is_resolved = True
+        issue.is_resolved_unconditionally = False
         issue.is_resolved_by_next_release = True
         IssueStateManager.unmute(issue)  # as in IssueStateManager.resolve()
 
     @staticmethod
     def reopen(issue):
-        # this is called "reopen", but since there's no UI for it, it's more like "deal with a regression" (i.e. that's
-        # the only way this gets called).
         issue.is_resolved = False
+        issue.is_resolved_unconditionally = False
+        issue.is_resolved_by_next_release = False  # clear related is_resolved_xxx state too
 
-        # we don't touch is_resolved_by_next_release (i.e. set to False) here. Why? The simple/principled answer is that
-        # observations that Bugsink can make can by definition not be about the future. If the user tells us "this
-        # is fixed in some not-yet-released version" there's just no information ever in Bugsink to refute that".
-        # (BTW this point in the code cannot be reached when issue.is_resolved_by_next_release is True anyway)
+        # we don't touch `fixed_at`. The meaning of that field is "reports came in about fixes at these points in time",
+        # not "it actually _was_ fixed at all of those points" and the finer differences between those 2 statements is
+        # precisely what we have quite some "is_regression" logic for.
 
-        # we also don't touch `fixed_at`. The meaning of that field is "reports came in about fixes at these points in
-        # time", not "it actually _was_ fixed at all of those points" and the finer differences between those 2
-        # statements is precisely what we have quite some "is_regression" logic for.
+        # This also means that if you clicked resolve by mistake and immediately reopen, the stale fixed_at marker
+        # remains. Full undo would be more principled but also more complex (implementation requires historic
+        # information)
 
         # as in IssueStateManager.resolve(), but not because a reopened issue cannot be muted in principle (i.e. we
         # could mute it soon after reopening) but because when reopening an issue you're doing this from a resolved
@@ -416,20 +422,23 @@ class IssueQuerysetStateManager(object):
     def _resolve_at(issue_qs, release_version):
         filter_qs_for_fixed_at(issue_qs, release_version).update(
             is_resolved=True,
+            is_resolved_unconditionally=False,
+            is_resolved_by_next_release=False,
         )
-        exclude_qs_for_fixed_at(issue_qs, "").update(
+        exclude_qs_for_fixed_at(issue_qs, release_version).update(
             is_resolved=True,
-            fixed_at=Concat(F("fixed_at"), Value(release_version + "\n")),
-        )
-
-        # release_version: str
-        issue_qs.update(
+            is_resolved_unconditionally=False,
+            is_resolved_by_next_release=False,
             fixed_at=Concat(F("fixed_at"), Value(release_version + "\n")),
         )
 
     @staticmethod
     def resolve(issue_qs):
-        IssueQuerysetStateManager._resolve_at(issue_qs, "")  # i.e. fixed in the no-release-info-available release
+        issue_qs.update(
+            is_resolved=True,
+            is_resolved_unconditionally=True,
+            is_resolved_by_next_release=False,
+        )
 
         # an issue cannot be both resolved and muted; muted means "the problem persists but don't tell me about it
         # (or maybe unless some specific condition happens)" and resolved means "the problem is gone". Hence, resolving
@@ -460,6 +469,7 @@ class IssueQuerysetStateManager(object):
     def resolve_by_next(issue_qs):
         issue_qs.update(
             is_resolved=True,
+            is_resolved_unconditionally=False,
             is_resolved_by_next_release=True,
         )
 
@@ -467,9 +477,13 @@ class IssueQuerysetStateManager(object):
 
     @staticmethod
     def reopen(issue_qs):
-        # we don't need reopen() over a queryset (yet); reason being that we don't allow reopening of issues from the UI
-        # and hence not in bulk.
-        raise NotImplementedError("reopen is not implemented - see comments above")
+        # Currently unused by the UI; implemented for completeness because generic issue-action plumbing supports it.
+        issue_qs.update(
+            is_resolved=False,
+            is_resolved_unconditionally=False,
+            is_resolved_by_next_release=False,
+        )
+        IssueQuerysetStateManager.unmute(issue_qs)
 
     @staticmethod
     def mute(issue_qs, unmute_on_volume_based_conditions="[]", unmute_after=None):
@@ -517,16 +531,15 @@ def is_valid_issue_action(action, issue):
         # any type of issue can be deleted
         return True
 
+    if action == "reopen":
+        # reopen is the only one that requires the issue to currently be resolved
+        return issue.is_resolved
+
     if issue.is_resolved:
-        # any action is illegal on resolved issues (as per our current UI)
+        # any other action is illegal on resolved issues
         return False
 
-    if action.startswith("resolved_release:"):
-        release_version = action.split(":", 1)[1]
-        if release_version + "\n" in issue.events_at:
-            return False
-
-    elif action.startswith("mute"):
+    if action.startswith("mute"):
         if issue.is_muted:
             return False
 
@@ -546,13 +559,13 @@ def q_for_invalid_issue_action(action):
         # delete is always valid, so we don't want any issues to be returned, https://stackoverflow.com/a/39001190
         return Q(pk__in=[])
 
-    illegal_conditions = Q(is_resolved=True)  # any action is illegal on resolved issues (as per our current UI)
+    if action == "reopen":
+        # reopen is the only one that requires the issue to currently be resolved
+        return Q(is_resolved=False)
 
-    if action.startswith("resolved_release:"):
-        release_version = action.split(":", 1)[1]
-        illegal_conditions = illegal_conditions | Q(events_at__contains=release_version + "\n")
+    illegal_conditions = Q(is_resolved=True)  # any other action is illegal on resolved issues
 
-    elif action.startswith("mute"):
+    if action.startswith("mute"):
         illegal_conditions = illegal_conditions | Q(is_muted=True)
 
     elif action == "unmute":
@@ -573,6 +586,8 @@ def make_issue_history(issue_or_qs, action, user):
         kind = TurningPointKind.MUTED
     elif action == "unmute":
         kind = TurningPointKind.UNMUTED
+    elif action == "reopen":
+        kind = TurningPointKind.REOPENED
     else:
         raise ValueError(f"unknown action: {action}")
 
@@ -627,8 +642,8 @@ def apply_issue_action(manager, issue_or_qs, action, user):
         manager.resolve_by_release(issue_or_qs, release_version)
     elif action == "resolved_next":
         manager.resolve_by_next(issue_or_qs)
-    # elif action == "reopen":  # not allowed from the UI
-    #     manager.reopen(issue_or_qs)
+    elif action == "reopen":
+        manager.reopen(issue_or_qs)
     elif action == "mute":
         manager.mute(issue_or_qs)
     elif action.startswith("mute_for:"):
@@ -660,6 +675,7 @@ class TurningPointKind(models.IntegerChoices):
     MUTED = 3, _("Muted")
     REGRESSED = 4, _("Marked as regressed")
     UNMUTED = 5, _("Unmuted")
+    REOPENED = 6, _("Reopened")
 
     NEXT_MATERIALIZED = 10, _("Release info added")
 

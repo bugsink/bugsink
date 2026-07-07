@@ -228,7 +228,7 @@ class Event(models.Model):
                 data=json.dumps(parsed_data) if write_storage is None else "",
                 storage_backend=None if write_storage is None else write_storage.name,
 
-                timestamp=parse_timestamp(parsed_data["timestamp"]),
+                timestamp=parse_timestamp(parsed_data.get("timestamp", event_metadata["ingested_at"])),
                 platform=parsed_data["platform"][:64],
 
                 level=maybe_empty(parsed_data.get("level", "")),
