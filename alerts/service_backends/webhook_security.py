@@ -41,6 +41,19 @@ def _parse_hosts_and_networks(entries, setting_name):
 
 
 def _resolve_ip_addresses(hostname):
+    if hostname.startswith("[") and hostname.endswith("]"):
+        # In URL authority syntax, brackets are only used for IP literals. urllib3 keeps those brackets in `hostname`,
+        # but the the usage in socket.getaddrinfo expects the plain IP address so we must strip them back out.
+        inner_hostname = hostname[1:-1]
+        try:
+            # Rather than "just strip brackets if present", we verify that the inner value is actually a valid IP
+            # address; we don't want to "just generally strip stuff" in security-sentitive code.
+            ipaddress.ip_address(inner_hostname)
+        except ValueError:
+            pass
+        else:
+            hostname = inner_hostname
+
     infos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
     return [info[4][0] for info in infos]
 
@@ -103,20 +116,11 @@ def parse_webhook_url(webhook_url):
 
 def validate_webhook_url(webhook_url):
     parsed = parse_webhook_url(webhook_url)
+    validate_webhook_destination(parsed.hostname)
 
-    hostname = parsed.hostname.lower()
-    if hostname.startswith("[") and hostname.endswith("]"):
-        # In URL authority syntax, brackets are only used for IP literals. urllib3 keeps those brackets in `hostname`,
-        # but the rest of this function expects the plain host value so we must strip them back out.
-        inner_hostname = hostname[1:-1]
-        try:
-            # Rather than "just strip brackets if present", we verify that the inner value is actually a valid IP
-            # address; we don't want to "just generally strip stuff" in security-sentitive code.
-            ipaddress.ip_address(inner_hostname)
-        except ValueError:
-            pass
-        else:
-            hostname = inner_hostname
+
+def validate_webhook_destination(hostname):
+    hostname = hostname.lower()
 
     settings = get_settings()
     mode = settings.ALERTS_WEBHOOK_OUTBOUND_MODE
