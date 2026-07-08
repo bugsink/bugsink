@@ -4,6 +4,7 @@ import socket
 import requests
 from requests import RequestException
 from urllib3.exceptions import LocationParseError
+from urllib3.util.url import Url
 
 from urllib3.util import parse_url as parse_url_from_urllib3
 
@@ -119,6 +120,21 @@ def validate_webhook_url(webhook_url):
     validate_webhook_destination(parsed.hostname)
 
 
+def pin_url_to_ip(parsed, ip):
+    # Return a URL that uses the resolved IP address in place of the hostname
+    host = f"[{ip}]" if ip.version == 6 else str(ip)  # Use brackets for IPv6 addresses in URL authority syntax
+
+    return Url(
+        scheme=parsed.scheme,
+        auth=parsed.auth,
+        host=host,
+        port=parsed.port,
+        path=parsed.path,
+        query=parsed.query,
+        fragment=parsed.fragment,
+    ).url
+
+
 def validate_webhook_destination(hostname):
     hostname = hostname.lower()
 
@@ -135,6 +151,8 @@ def validate_webhook_destination(hostname):
         resolved_ips = [ipaddress.ip_address(ip) for ip in _resolve_ip_addresses(hostname)]
     except OSError as e:
         raise ValueError(f"Webhook hostname could not be resolved: {hostname}") from e
+    if not resolved_ips:
+        raise ValueError(f"Webhook hostname could not be resolved: {hostname}")
 
     allow_match = _match_entries(hostname, resolved_ips, allow_hosts, allow_networks)
     deny_match = _match_entries(hostname, resolved_ips, deny_hosts, deny_networks)
@@ -156,3 +174,5 @@ def validate_webhook_destination(hostname):
                 f"Webhook target resolves to non-global IP address {ip}. "
                 "If this destination is intentional, add it to ALERTS_WEBHOOK_ALLOW_LIST."
             )
+
+    return resolved_ips
