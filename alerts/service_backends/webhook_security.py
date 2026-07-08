@@ -39,8 +39,8 @@ def _parse_hosts_and_networks(entries, setting_name):
     return hosts, networks
 
 
-def _resolve_ip_addresses(hostname, port):
-    infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+def _resolve_ip_addresses(hostname):
+    infos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
     return [info[4][0] for info in infos]
 
 
@@ -115,13 +115,9 @@ def validate_webhook_url(webhook_url):
     deny_hosts, deny_networks = _parse_hosts_and_networks(
         settings.ALERTS_WEBHOOK_DENY_LIST, "ALERTS_WEBHOOK_DENY_LIST")
 
-    port = parsed.port
-    if port is None:
-        port = 443 if parsed.scheme == "https" else 80
-
     # Resolve on every send to defend against DNS changes after configuration time.
     try:
-        resolved_ips = [ipaddress.ip_address(ip) for ip in _resolve_ip_addresses(hostname, port)]
+        resolved_ips = [ipaddress.ip_address(ip) for ip in _resolve_ip_addresses(hostname)]
     except OSError as e:
         raise ValueError(f"Webhook hostname could not be resolved: {hostname}") from e
 
