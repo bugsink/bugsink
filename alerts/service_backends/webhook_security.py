@@ -20,6 +20,7 @@ _URL_ALLOWED_CHARACTERS = set(
     "%"  # Percent-encoding marker
 )
 
+
 def _parse_hosts_and_networks(entries, setting_name):
     hosts = set()
     networks = []
@@ -65,6 +66,7 @@ def _validate_raw_url_characters(webhook_url):
             continue
         raise ValueError("Webhook URL must contain only ASCII URL characters.")
 
+
 def _prepare_webhook_url(webhook_url):
     try:
         return requests.Request("POST", webhook_url).prepare().url
@@ -72,7 +74,10 @@ def _prepare_webhook_url(webhook_url):
         raise ValueError("Webhook URL is malformed.") from e
 
 
-def validate_webhook_url(webhook_url):
+def parse_webhook_url(webhook_url):
+    """Parse a webhook URL and return a urllib3.util.url.Url object with the parsed components (validated and
+    normalized). Raises ValueError if the URL is invalid."""
+
     _validate_raw_url_characters(webhook_url)
 
     # Both requests and urllib3 make some attempts to normalize malformed URLs. We must apply the
@@ -92,6 +97,12 @@ def validate_webhook_url(webhook_url):
         raise ValueError("Webhook URL must use http:// or https://.")
     if parsed.hostname is None:
         raise ValueError("Webhook URL must include a hostname.")
+
+    return parsed
+
+
+def validate_webhook_url(webhook_url):
+    parsed = parse_webhook_url(webhook_url)
 
     hostname = parsed.hostname.lower()
     if hostname.startswith("[") and hostname.endswith("]"):
