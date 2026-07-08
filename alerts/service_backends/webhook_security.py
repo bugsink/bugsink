@@ -41,7 +41,7 @@ def _parse_hosts_and_networks(entries, setting_name):
 
 def _resolve_ip_addresses(hostname, port):
     infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
-    return {info[4][0] for info in infos}
+    return [info[4][0] for info in infos]
 
 
 def _match_entries(target_hostname, resolved_ips, hosts, networks):
@@ -121,7 +121,7 @@ def validate_webhook_url(webhook_url):
 
     # Resolve on every send to defend against DNS changes after configuration time.
     try:
-        resolved_ips = {ipaddress.ip_address(ip) for ip in _resolve_ip_addresses(hostname, port)}
+        resolved_ips = [ipaddress.ip_address(ip) for ip in _resolve_ip_addresses(hostname, port)]
     except OSError as e:
         raise ValueError(f"Webhook hostname could not be resolved: {hostname}") from e
 
