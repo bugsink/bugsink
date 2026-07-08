@@ -17,9 +17,11 @@ from teams.models import Team, TeamMembership
 from .models import MessagingServiceConfig
 from .service_backends.slack import slack_backend_send_test_message, slack_backend_send_alert
 from .service_backends.discord import discord_backend_send_test_message, discord_backend_send_alert
+from .service_backends.webhook import webhook_backend_send_test_message, webhook_backend_send_alert
 from .service_backends.discord import DiscordConfigForm
 from .service_backends.mattermost import MattermostConfigForm
 from .service_backends.slack import SlackConfigForm
+from .service_backends.webhook import GenericWebhookConfigForm
 from .service_backends.webhook_security import validate_webhook_url
 from .tasks import send_new_issue_alert, send_regression_alert, send_unmute_alert, _get_users_for_email_alert
 from .views import DEBUG_CONTEXTS
@@ -619,3 +621,373 @@ class TestWebhookConfigForms(DjangoTestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn("non-global IP address", form.errors["webhook_url"][0])
+
+    def test_webhook_form_rejects_blocked_target(self):
+        form = GenericWebhookConfigForm(data={"webhook_url": "http://10.0.0.42/hooks/test"})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("non-global IP address", form.errors["webhook_url"][0])
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_webhook_form_accepts_public_target(self, mock_resolve):
+        mock_resolve.return_value = {"93.184.216.34"}
+        form = GenericWebhookConfigForm(data={"webhook_url": "https://hooks.example.com/webhook"})
+
+        self.assertTrue(form.is_valid())
+        self.assertEqual(
+            form.get_config(),
+            {"webhook_url": "https://hooks.example.com/webhook", "body_template": ""},
+        )
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_webhook_form_config_includes_body_template(self, mock_resolve):
+        mock_resolve.return_value = {"93.184.216.34"}
+        form = GenericWebhookConfigForm(data={
+            "webhook_url": "https://hooks.example.com/webhook",
+            "body_template": '{"text": $summary}',
+        })
+
+        self.assertTrue(form.is_valid())
+        self.assertEqual(form.get_config(), {
+            "webhook_url": "https://hooks.example.com/webhook",
+            "body_template": '{"text": $summary}',
+        })
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_webhook_form_prefills_body_template_from_config(self, mock_resolve):
+        mock_resolve.return_value = {"93.184.216.34"}
+        form = GenericWebhookConfigForm(config={
+            "webhook_url": "https://hooks.example.com/webhook",
+            "body_template": '{"text": $summary}',
+        })
+
+        self.assertEqual(form.fields["body_template"].initial, '{"text": $summary}')
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_webhook_form_accepts_valid_template(self, mock_resolve):
+        mock_resolve.return_value = {"93.184.216.34"}
+        form = GenericWebhookConfigForm(data={
+            "webhook_url": "https://hooks.example.com/webhook",
+            "body_template": '{"text": $summary, "id": $issue_friendly_id}',
+        })
+
+        self.assertTrue(form.is_valid())
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_webhook_form_rejects_typoed_placeholder(self, mock_resolve):
+        # $summry is a typo: left literal by safe_substitute, so a bareword json.loads rejects.
+        mock_resolve.return_value = {"93.184.216.34"}
+        form = GenericWebhookConfigForm(data={
+            "webhook_url": "https://hooks.example.com/webhook",
+            "body_template": '{"text": $summry}',
+        })
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("valid JSON", form.errors["body_template"][0])
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_webhook_form_rejects_quoted_placeholder(self, mock_resolve):
+        # placeholders already expand to JSON-encoded values; wrapping in quotes yields ""..."".
+        mock_resolve.return_value = {"93.184.216.34"}
+        form = GenericWebhookConfigForm(data={
+            "webhook_url": "https://hooks.example.com/webhook",
+            "body_template": '{"text": "$summary"}',
+        })
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("valid JSON", form.errors["body_template"][0])
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_webhook_form_rejects_whitespace_only_template(self, mock_resolve):
+        mock_resolve.return_value = {"93.184.216.34"}
+        form = GenericWebhookConfigForm(data={
+            "webhook_url": "https://hooks.example.com/webhook",
+            "body_template": "   ",
+        })
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("valid JSON", form.errors["body_template"][0])
+
+
+class TestGenericWebhookBackend(DjangoTestCase):
+    def setUp(self):
+        self.project = Project.objects.create(name="Test project")
+        self.config = MessagingServiceConfig.objects.create(
+            project=self.project,
+            display_name="Test Webhook",
+            kind="webhook",
+            config=json.dumps({"webhook_url": "https://hooks.example.com/webhook"}),
+        )
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_test_message_success_clears_failure_status(self, mock_post):
+        self.config.last_failure_timestamp = timezone.now()
+        self.config.last_failure_status_code = 500
+        self.config.save()
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        webhook_backend_send_test_message(
+            "https://hooks.example.com/webhook",
+            "Test project",
+            "Test Webhook",
+            self.config.id,
+        )
+
+        self.config.refresh_from_db()
+        self.assertIsNone(self.config.last_failure_timestamp)
+
+        # payload shape: human-readable text + issue=None for test messages
+        sent = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertIn("Test message", sent["text"])
+        self.assertIsNone(sent["issue"])
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_alert_message_payload_shape(self, mock_post):
+        issue, _ = get_or_create_issue(project=self.project)
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        webhook_backend_send_alert(
+            "https://hooks.example.com/webhook",
+            issue.id,
+            "New issue",
+            "a",
+            "NEW",
+            self.config.id,
+            unmute_reason=None,
+        )
+
+        self.config.refresh_from_db()
+        self.assertIsNone(self.config.last_failure_timestamp)
+
+        sent = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertIn("NEW issue:", sent["text"])
+        self.assertEqual(sent["issue"]["project"], "Test project")
+        self.assertEqual(sent["issue"]["state"], "NEW")
+        self.assertTrue(sent["issue"]["url"].endswith(issue.get_absolute_url()))
+        self.assertIsNone(sent["unmute_reason"])
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_alert_message_includes_unmute_reason(self, mock_post):
+        issue, _ = get_or_create_issue(project=self.project)
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        webhook_backend_send_alert(
+            "https://hooks.example.com/webhook",
+            issue.id,
+            "Unmuted issue",
+            "an",
+            "UNMUTED",
+            self.config.id,
+            unmute_reason="volume based unmute",
+        )
+
+        sent = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertEqual(sent["unmute_reason"], "volume based unmute")
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_test_message_http_error_stores_failure(self, mock_post):
+        mock_response = Mock()
+        mock_response.status_code = 404
+        mock_response.text = '{"error": "not_found"}'
+        http_error = requests.HTTPError()
+        http_error.response = mock_response
+        mock_response.raise_for_status.side_effect = http_error
+        mock_post.return_value = mock_response
+
+        webhook_backend_send_test_message(
+            "https://hooks.example.com/webhook",
+            "Test project",
+            "Test Webhook",
+            self.config.id,
+        )
+
+        self.config.refresh_from_db()
+        self.assertIsNotNone(self.config.last_failure_timestamp)
+        self.assertEqual(self.config.last_failure_status_code, 404)
+        self.assertTrue(self.config.last_failure_is_json)
+        self.assertEqual(self.config.last_failure_error_type, "HTTPError")
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_test_message_connection_error_stores_failure(self, mock_post):
+        mock_post.side_effect = requests.ConnectionError("Connection failed")
+
+        webhook_backend_send_test_message(
+            "https://hooks.example.com/webhook",
+            "Test project",
+            "Test Webhook",
+            self.config.id,
+        )
+
+        self.config.refresh_from_db()
+        self.assertIsNotNone(self.config.last_failure_timestamp)
+        self.assertIsNone(self.config.last_failure_status_code)
+        self.assertEqual(self.config.last_failure_error_type, "ConnectionError")
+
+    @patch('alerts.service_backends.base.requests.post')
+    def test_test_message_blocked_target_stores_failure_without_network_call(self, mock_post):
+        webhook_backend_send_test_message(
+            "http://10.0.0.42/hooks/test",
+            "Test project",
+            "Test Webhook",
+            self.config.id,
+        )
+
+        mock_post.assert_not_called()
+        self.config.refresh_from_db()
+        self.assertEqual(self.config.last_failure_error_type, "ValueError")
+        self.assertIn("non-global IP address", self.config.last_failure_error_message)
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_alert_custom_template_renders_valid_json(self, mock_post):
+        issue, _ = get_or_create_issue(project=self.project)
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        webhook_backend_send_alert(
+            "https://hooks.example.com/webhook",
+            issue.id,
+            "New issue",
+            "a",
+            "NEW",
+            self.config.id,
+            unmute_reason=None,
+            body_template='{"text": $summary, "reason": $alert_reason, "url": $issue_url}',
+        )
+
+        # the rendered body is valid JSON, and only carries the template's keys (not the default shape)
+        sent = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertEqual(set(sent.keys()), {"text", "reason", "url"})
+        self.assertIn("NEW issue:", sent["text"])
+        self.assertEqual(sent["reason"], "NEW")
+        self.assertTrue(sent["url"].endswith(issue.get_absolute_url()))
+
+    @patch('issues.models.Issue.title', return_value='Broke on "quotes" and\nnewlines')
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_alert_custom_template_quoted_title_stays_valid_json(self, mock_post, mock_title):
+        issue, _ = get_or_create_issue(project=self.project)
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        webhook_backend_send_alert(
+            "https://hooks.example.com/webhook",
+            issue.id,
+            "New issue",
+            "a",
+            "NEW",
+            self.config.id,
+            unmute_reason=None,
+            body_template='{"title": $issue_title}',
+        )
+
+        # JSON-encoded substitution keeps the body valid despite quotes/newlines in the title
+        sent = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertEqual(sent["title"], 'Broke on "quotes" and\nnewlines')
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_alert_custom_template_missing_unmute_reason_renders_null(self, mock_post):
+        issue, _ = get_or_create_issue(project=self.project)
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        webhook_backend_send_alert(
+            "https://hooks.example.com/webhook",
+            issue.id,
+            "New issue",
+            "a",
+            "NEW",
+            self.config.id,
+            unmute_reason=None,
+            body_template='{"unmute_reason": $unmute_reason}',
+        )
+
+        sent = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertIsNone(sent["unmute_reason"])
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_test_message_custom_template_renders_valid_json(self, mock_post):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        webhook_backend_send_test_message(
+            "https://hooks.example.com/webhook",
+            "Test project",
+            "Test Webhook",
+            self.config.id,
+            body_template='{"text": $summary, "reason": $alert_reason}',
+        )
+
+        sent = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertIn("Test message", sent["text"])
+        self.assertEqual(sent["reason"], "TEST")
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_alert_empty_body_template_posts_default_payload(self, mock_post):
+        # production persists "" for a blank field (not None); "" must fall back to the default payload.
+        issue, _ = get_or_create_issue(project=self.project)
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        webhook_backend_send_alert(
+            "https://hooks.example.com/webhook",
+            issue.id,
+            "New issue",
+            "a",
+            "NEW",
+            self.config.id,
+            unmute_reason=None,
+            body_template="",
+        )
+
+        sent = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertIn("NEW issue:", sent["text"])
+        self.assertEqual(sent["issue"]["project"], "Test project")
+        self.assertEqual(sent["issue"]["state"], "NEW")
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_alert_custom_template_friendly_id(self, mock_post):
+        issue, _ = get_or_create_issue(project=self.project)
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        webhook_backend_send_alert(
+            "https://hooks.example.com/webhook",
+            issue.id,
+            "New issue",
+            "a",
+            "NEW",
+            self.config.id,
+            unmute_reason=None,
+            body_template='{"id": $issue_friendly_id}',
+        )
+
+        sent = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertEqual(sent["id"], issue.friendly_id())

@@ -2,6 +2,14 @@
 
 ## ..... (unreleased)
 
+### Alerting
+
+Add a generic `Webhook` alert backend that POSTs JSON to any URL. This makes Bugsink alerts usable with systems that
+accept generic webhooks (e.g. Matrix via matrix-hookshot) without a product-specific backend. By default it sends a
+neutral, self-describing payload (a human-readable `text` plus a structured `issue` object); an optional body template
+(stdlib `string.Template`, with placeholders expanding to JSON-encoded values) lets users shape the request body to
+match any receiver's schema. See #429.
+
 ### Backwards incompatible changes
 
 Fail to start when `PID_FILE` is configured to be in a directory not owned by the process running gunicorn/snappea

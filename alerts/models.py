@@ -4,6 +4,7 @@ from projects.models import Project
 from .service_backends.slack import SlackBackend
 from .service_backends.mattermost import MattermostBackend
 from .service_backends.discord import DiscordBackend
+from .service_backends.webhook import WebhookBackend
 
 
 def get_alert_service_kind_choices():
@@ -13,6 +14,7 @@ def get_alert_service_kind_choices():
         ("discord", "Discord"),
         ("mattermost", "Mattermost"),
         ("slack", "Slack"),
+        ("webhook", "Webhook (generic)"),
     ]
 
 
@@ -23,6 +25,8 @@ def get_alert_service_backend_class(kind):
         return MattermostBackend
     if kind == "slack":
         return SlackBackend
+    if kind == "webhook":
+        return WebhookBackend
     raise ValueError(f"Unknown backend kind: {kind}")
 
 
