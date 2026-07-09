@@ -2,6 +2,7 @@ from django.utils.encoding import force_str
 
 from sentry.stacktraces.functions import get_function_name_for_frame
 from sentry.stacktraces.processing import get_crash_frame_from_event_data, get_crash_location
+from sentry.grouping.strategies.message import normalize_message_for_grouping
 from sentry.utils.safe import get_path, trim
 
 from sentry.utils.strings import strip
@@ -148,6 +149,29 @@ def get_issue_grouper_for_data(data, calculated_type=None, calculated_value=None
 
     transaction = force_str(data.get("transaction") or "<no transaction>")
     fingerprint = data.get("fingerprint")
+
+    if fingerprint:
+        return " ⋄ ".join([
+            (default_issue_grouper(calculated_type, calculated_value, transaction)
+             if part == "{{ default }}"
+             else str(part))
+            for part in fingerprint
+        ])
+
+    return default_issue_grouper(calculated_type, calculated_value, transaction)
+
+
+# TODO(#440): wire this in as a selectable grouping mechanism, not as an in-place default change.
+def get_issue_grouper_for_data_with_normalized_exception_value(data, calculated_type=None, calculated_value=None):
+    if calculated_type is None and calculated_value is None:
+        # convenience for calling code from tests, when digesting we don't do this because we already have this info
+        calculated_type, calculated_value = get_type_and_value_for_data(data)
+
+    transaction = force_str(data.get("transaction") or "<no transaction>")
+    fingerprint = data.get("fingerprint")
+
+    if "exception" in data and data["exception"]:
+        calculated_value = normalize_message_for_grouping(force_str(calculated_value))
 
     if fingerprint:
         return " ⋄ ".join([

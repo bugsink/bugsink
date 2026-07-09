@@ -39,7 +39,12 @@ from .models import (
     Issue, IssueStateManager, TurningPoint, TurningPointKind)
 from .regressions import is_regression, is_regression_2, issue_is_regression
 from .factories import denormalized_issue_fields
-from .utils import get_issue_grouper_for_data
+from .utils import (
+    get_issue_grouper_for_data,
+    get_issue_grouper_for_data_with_normalized_exception_value,
+    get_title_for_exception_type_and_value,
+    get_type_and_value_for_data,
+)
 from .tasks import get_model_topography_with_issue_override
 
 User = get_user_model()
@@ -988,6 +993,20 @@ _no source context available_''', md)
 
 class GroupingUtilsTestCase(DjangoTestCase):
 
+    def _exception_event_data(self, exception_type, exception_value, fingerprint=None):
+        data = {
+            "exception": {
+                "values": [{
+                    "type": exception_type,
+                    "value": exception_value,
+                }],
+            },
+            "transaction": "transaction",
+        }
+        if fingerprint is not None:
+            data["fingerprint"] = fingerprint
+        return data
+
     def test_empty_data(self):
         self.assertEqual("Log Message: <no log message> ⋄ <no transaction>", get_issue_grouper_for_data({}))
 
@@ -1105,6 +1124,93 @@ class GroupingUtilsTestCase(DjangoTestCase):
     def test_fingerprint_with_default(self):
         self.assertEqual("Log Message: <no log message> ⋄ <no transaction> ⋄ fixed string",
                          get_issue_grouper_for_data({"fingerprint": ["{{ default }}", "fixed string"]}))
+
+    def test_normalized_exception_values_have_stable_grouping_key(self):
+        cases = [
+            (
+                "SlowConsumerError",
+                "Cannot publish <Consumer object at 0x7fbb00112233>",
+                "Cannot publish <Consumer object at 0x7fbb44556677>",
+                "<hex>",
+            ),
+            (
+                "DatabaseError",
+                "DB::Exception: Memory limit exceeded, would use 81604378624 bytes, code: 241",
+                "DB::Exception: Memory limit exceeded, would use 91604378624 bytes, code: 242",
+                "<int>",
+            ),
+            (
+                "OperationalError",
+                "could not connect to some-host:5432",
+                "could not connect to some-host:6543",
+                "some-host:<int>",
+            ),
+            (
+                "LookupError",
+                "missing object 2eb7d3ba-4d15-4f9d-9a8f-b1ddf7f94b93",
+                "missing object 358a94e6-7649-455e-bfd5-91ba0d50a8e2",
+                "<uuid>",
+            ),
+            (
+                "ValueError",
+                "invalid record name='alice'",
+                "invalid record name='bob'",
+                "name=<quoted_str>",
+            ),
+        ]
+
+        for exception_type, first_value, second_value, expected_placeholder in cases:
+            with self.subTest(exception_type=exception_type):
+                first_data = self._exception_event_data(exception_type, first_value)
+                second_data = self._exception_event_data(exception_type, second_value)
+
+                first_key = get_issue_grouper_for_data_with_normalized_exception_value(first_data)
+                second_key = get_issue_grouper_for_data_with_normalized_exception_value(second_data)
+
+                self.assertEqual(first_key, second_key)
+                self.assertIn(expected_placeholder, first_key)
+
+    def test_normalized_exception_grouping_keeps_display_title_raw(self):
+        value = "Cannot publish <Consumer object at 0x7fbb00112233>"
+        data = self._exception_event_data("SlowConsumerError", value)
+
+        grouping_key = get_issue_grouper_for_data_with_normalized_exception_value(data)
+        calculated_type, calculated_value = get_type_and_value_for_data(data)
+        title = get_title_for_exception_type_and_value(calculated_type, calculated_value)
+
+        self.assertIn("<hex>", grouping_key)
+        self.assertEqual("SlowConsumerError: Cannot publish <Consumer object at 0x7fbb00112233>", title)
+
+    def test_normalized_exception_grouping_leaves_explicit_fingerprint_unchanged(self):
+        data = self._exception_event_data(
+            "SlowConsumerError",
+            "Cannot publish <Consumer object at 0x7fbb00112233>",
+            fingerprint=["fixed 0x7fbb00112233"],
+        )
+
+        self.assertEqual(
+            "fixed 0x7fbb00112233",
+            get_issue_grouper_for_data_with_normalized_exception_value(data),
+        )
+
+    def test_normalized_exception_grouping_changes_default_fingerprint_expansion(self):
+        first_data = self._exception_event_data(
+            "SlowConsumerError",
+            "Cannot publish <Consumer object at 0x7fbb00112233>",
+            fingerprint=["{{ default }}", "fixed string"],
+        )
+        second_data = self._exception_event_data(
+            "SlowConsumerError",
+            "Cannot publish <Consumer object at 0x7fbb44556677>",
+            fingerprint=["{{ default }}", "fixed string"],
+        )
+
+        first_key = get_issue_grouper_for_data_with_normalized_exception_value(first_data)
+        second_key = get_issue_grouper_for_data_with_normalized_exception_value(second_data)
+
+        self.assertEqual(first_key, second_key)
+        self.assertIn("SlowConsumerError: Cannot publish <Consumer object at <hex>>", first_key)
+        self.assertTrue(first_key.endswith(" ⋄ fixed string"))
 
 
 class IssueDeletionTestCase(TransactionTestCase):
