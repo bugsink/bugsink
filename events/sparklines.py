@@ -101,7 +101,7 @@ def _get_bucket_title(label, count, matching_count):
 
 # Compact list sparklines: 24 hourly buckets for issue/project rows, loaded in one batched query per list.
 def _get_list_sparkline_range(now):
-    assert_(now.tzinfo == timezone.utc)
+    assert_(now.tzinfo == dt_timezone.utc)
     current_hour = hour_bucket(now)
     return current_hour - timedelta(hours=23), current_hour + timedelta(hours=1), timedelta(hours=1)
 

@@ -174,8 +174,8 @@
                 </div>
             </td>
             <td class="w-full ml-0 pb-4 pt-4 pr-4">
-                <div style="display: grid; grid-template-columns: minmax(0, 1fr) 95px; column-gap: 1rem; align-items: end;">
-                <div style="min-width: 0;">
+                <div class="flex items-end gap-4">
+                <div class="min-w-0 flex-1">
                 <div>
                     <a href="{{ script_prefix }}/issues/issue/{{ issue.id }}/event/last/{% current_qs %}" class="text-cyan-500 dark:text-cyan-300 fill-cyan-500 font-bold {% if issue.is_resolved %}italic{% endif %}">{% if issue.is_resolved %}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6 inline"><path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
 </svg>{% endif %}{% if issue.is_muted %}<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 inline">
@@ -190,7 +190,7 @@
                 {% if issue.transaction %}| <span class="font-bold">{{ issue.transaction }} </span>{% endif %}
                 </div>
                 </div>
-                <div>
+                <div class="flex-none">
                     {% include "events/_compact_event_sparkline.html" with event_sparkline=issue.list_sparkline %}
                 </div>
                 </div>
