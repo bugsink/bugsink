@@ -24,7 +24,7 @@ from bugsink.utils import assert_
 from phonehome.utils import phone_home
 
 from events.models import Event
-from events.sparklines import get_issue_event_sparkline
+from events.sparklines import get_issue_event_sparkline, get_issue_list_event_sparklines
 from events.ua_stuff import get_contexts_enriched_with_ua
 
 from projects.models import ProjectMembership
@@ -181,6 +181,10 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
     paginator = UncountablePaginator(issue_list, 250)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
+    issue_sparklines = get_issue_list_event_sparklines(
+        [issue.id for issue in page_obj.object_list], timezone.now(), project.id)
+    for issue in page_obj.object_list:
+        issue.list_sparkline = issue_sparklines[issue.id]
 
     try:
         member = ProjectMembership.objects.get(project=project, user=request.user)

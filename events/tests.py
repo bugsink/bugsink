@@ -20,7 +20,7 @@ from .models import InstallationEventCountsPerHour, IssueEventCountsPerHour, Pro
 from .factories import create_event
 from .retention import (
     eviction_target, should_evict, evict_for_max_events, get_epoch_bounds_with_irrelevance, filter_for_work)
-from .sparklines import get_issue_event_sparkline, get_sparkline_range
+from .sparklines import get_issue_event_sparkline, get_issue_list_event_sparklines, get_sparkline_range
 from .usage import EVENT_COUNTS_PER_HOUR_MAX_AGE, hour_bucket, record_event_counts
 from .utils import annotate_with_meta, annotate_var_with_meta
 from tags.models import EventTag, store_tags
@@ -144,6 +144,7 @@ class EventUsageTestCase(DjangoTestCase):
 
 
 class EventSparklineTestCase(DjangoTestCase):
+
     @override_settings(TIME_ZONE="America/New_York")
     def test_sparkline_range_rounds_up_to_current_local_bucket_end(self):
         now = datetime.datetime(2026, 1, 1, 17, 30, tzinfo=datetime.timezone.utc)
@@ -168,6 +169,33 @@ class EventSparklineTestCase(DjangoTestCase):
         self.assertEqual(datetime.datetime(2026, 3, 29, 22, 0, tzinfo=datetime.timezone.utc),
                          last_day_bucket["bucket_end"])
         self.assertEqual("29 Mar", last_day_bucket["label"])
+
+    def test_issue_list_sparkline_includes_current_open_hour(self):
+        project = Project.objects.create(name="sparkline")
+        issue, _ = get_or_create_issue(project=project)
+        now = datetime.datetime(2026, 5, 18, 13, 30, tzinfo=datetime.timezone.utc)
+        current_hour = hour_bucket(now)
+
+        IssueEventCountsPerHour.objects.create(
+            project=project, issue=issue, bucket=current_hour - datetime.timedelta(hours=24), count=100)
+        IssueEventCountsPerHour.objects.create(
+            project=project, issue=issue, bucket=current_hour - datetime.timedelta(hours=23), count=2)
+        IssueEventCountsPerHour.objects.create(project=project, issue=issue, bucket=current_hour, count=3)
+        IssueEventCountsPerHour.objects.create(
+            project=project, issue=issue, bucket=current_hour + datetime.timedelta(hours=1), count=100)
+
+        sparkline = get_issue_list_event_sparklines([issue.id], now)[issue.id]
+
+        self.assertEqual(24, len(sparkline["event_buckets"]))
+        self.assertEqual(5, sparkline["total"])
+        self.assertEqual(2, sparkline["event_buckets"][0]["count"])
+        self.assertEqual(3, sparkline["event_buckets"][-1]["count"])
+        self.assertEqual(20, sparkline["event_buckets"][0]["pct"])
+        self.assertEqual(30, sparkline["event_buckets"][-1]["pct"])
+        self.assertEqual(
+            "5 events in the past 24h",
+            sparkline["event_buckets"][-1]["title"],
+        )
 
     def test_issue_event_sparkline_uses_hourly_buckets(self):
         project = Project.objects.create(name="sparkline")

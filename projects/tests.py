@@ -2,6 +2,7 @@ from django.conf import settings
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from unittest.mock import patch
+from datetime import datetime, timedelta, timezone
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.utils import get_model_topography
@@ -207,6 +208,16 @@ class ProjectListOpenIssueCountTestCase(TransactionTestCase):
 
         response = self.client.get("/projects/mine/")
         self.assertContains(response, "0 open issues")
+
+    def test_project_list_shows_24h_sparkline(self):
+        issue = Issue.objects.filter(project=self.project, is_resolved=False, is_muted=False).get()
+        now = datetime.now(timezone.utc)
+        record_event_counts(self.project, issue, now, issue.digest_order)
+        record_event_counts(self.project, issue, datetime.now(timezone.utc) - timedelta(days=2), issue.digest_order)
+
+        response = self.client.get("/projects/mine/")
+
+        self.assertContains(response, "1 event in the past 24h")
 
     @patch("projects.views.OPEN_ISSUE_COUNT_SHOW_THRESHOLD", 2)
     def test_project_list_skips_open_issue_query_when_over_threshold(self):

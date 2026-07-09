@@ -9,7 +9,7 @@ from io import BytesIO, StringIO
 from glob import glob
 from unittest import TestCase as RegularTestCase
 from unittest.mock import patch
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from django.test import TestCase as DjangoTestCase
@@ -442,6 +442,16 @@ class ViewTests(TransactionTestCase):
     def test_issue_list_view(self):
         response = self.client.get(f"/issues/{self.project.id}/")
         self.assertContains(response, self.issue.title())
+
+    def test_issue_list_view_shows_24h_sparkline(self):
+        now = datetime.now(timezone.utc)
+        record_event_counts(self.project, self.issue, now, self.event.digest_order)
+        record_event_counts(
+            self.project, self.issue, datetime.now(timezone.utc) - timedelta(days=2), self.event.digest_order)
+
+        response = self.client.get(f"/issues/{self.project.id}/")
+
+        self.assertContains(response, "1 event in the past 24h")
 
     def test_issue_list_bulk_action_ignores_issues_from_other_projects(self):
         other_project = Project.objects.create(name="other")

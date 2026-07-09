@@ -1,0 +1,16 @@
+{% comment %}Compact 24h event-count sparkline for issue/project list rows.{% endcomment %}
+{% if event_sparkline %}
+<div title="{{ event_sparkline.title }}" style="width: 95px;">
+    <div class="flex" style="align-items: flex-end; height: 32px; gap: 1px;">
+        {% for bucket in event_sparkline.event_buckets %}
+            <div title="{{ bucket.title }}" style="width: 3px; height: 32px; display: flex; align-items: flex-end;">
+                {% if bucket.count %}
+                    <div style="width: 3px; height: {{ bucket.pct }}%; background-color: #06b6d4;"></div>
+                {% else %}
+                    <div style="width: 3px; height: 2px; background-color: #cbd5e1;"></div>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
