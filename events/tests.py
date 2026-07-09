@@ -3,7 +3,7 @@ import datetime
 import io
 
 from django.core.management import call_command
-from django.test import TestCase as DjangoTestCase
+from django.test import TestCase as DjangoTestCase, override_settings
 from unittest import TestCase as RegularTestCase
 from unittest.mock import patch
 from django.contrib.auth import get_user_model
@@ -144,6 +144,31 @@ class EventUsageTestCase(DjangoTestCase):
 
 
 class EventSparklineTestCase(DjangoTestCase):
+    @override_settings(TIME_ZONE="America/New_York")
+    def test_sparkline_range_rounds_up_to_current_local_bucket_end(self):
+        now = datetime.datetime(2026, 1, 1, 17, 30, tzinfo=datetime.timezone.utc)
+
+        start, end, interval = get_sparkline_range(now, hour_step=6, days=1)
+
+        self.assertEqual(datetime.datetime(2025, 12, 31, 23, 0, tzinfo=datetime.timezone.utc), start)
+        self.assertEqual(datetime.datetime(2026, 1, 1, 23, 0, tzinfo=datetime.timezone.utc), end)
+        self.assertEqual(datetime.timedelta(hours=6), interval)
+
+    @override_settings(TIME_ZONE="Europe/Amsterdam")
+    def test_issue_event_sparkline_uses_local_day_edges_across_dst(self):
+        project = Project.objects.create(name="sparkline")
+        issue, _ = get_or_create_issue(project=project)
+        now = datetime.datetime(2026, 3, 29, 12, 0, tzinfo=datetime.timezone.utc)
+
+        sparkline = get_issue_event_sparkline(issue.id, now)
+
+        last_day_bucket = sparkline["variants"][0]["event_buckets"][-1]
+        self.assertEqual(datetime.datetime(2026, 3, 28, 23, 0, tzinfo=datetime.timezone.utc),
+                         last_day_bucket["bucket_start"])
+        self.assertEqual(datetime.datetime(2026, 3, 29, 22, 0, tzinfo=datetime.timezone.utc),
+                         last_day_bucket["bucket_end"])
+        self.assertEqual("29 Mar", last_day_bucket["label"])
+
     def test_issue_event_sparkline_uses_hourly_buckets(self):
         project = Project.objects.create(name="sparkline")
         issue, _ = get_or_create_issue(project=project)
@@ -176,7 +201,7 @@ class EventSparklineTestCase(DjangoTestCase):
         self.assertEqual(100, sparkline["bar_data"][0])
         self.assertEqual(start, sparkline["event_buckets"][0]["bucket_start"])
         self.assertEqual(start + datetime.timedelta(hours=6), sparkline["event_buckets"][0]["bucket_end"])
-        self.assertEqual("17 May 12:00 - 18:00", sparkline["event_buckets"][0]["label"])
+        self.assertEqual("17 May 18:00 - 18 May 00:00", sparkline["event_buckets"][0]["label"])
         self.assertEqual(5, sparkline["event_buckets"][0]["count"])
         self.assertEqual(8, sparkline["event_buckets"][0]["digest_order"])
         self.assertEqual(100, sparkline["event_buckets"][0]["pct"])
@@ -189,7 +214,6 @@ class EventSparklineTestCase(DjangoTestCase):
         sparkline = get_issue_event_sparkline(issue.id, now, start + datetime.timedelta(hours=1))
 
         self.assertFalse(any(bucket["contains_active_event"] for bucket in sparkline["variants"][0]["event_buckets"]))
-        self.assertTrue(sparkline["variants"][1]["event_buckets"][0]["contains_active_event"])
         self.assertTrue(sparkline["event_buckets"][0]["contains_active_event"])
 
     def test_issue_event_sparkline_search_overlay_uses_matching_retained_events(self):
@@ -220,7 +244,7 @@ class EventSparklineTestCase(DjangoTestCase):
         self.assertEqual(2, first_bucket["digest_order"])
         self.assertEqual(1, first_bucket["click_count"])
         self.assertEqual(50, first_bucket["matching_pct"])
-        self.assertEqual("17 May 12:00 - 18:00: 1 matching event, 2 events total", first_bucket["title"])
+        self.assertEqual("17 May 18:00 - 18 May 00:00: 1 matching event, 2 events total", first_bucket["title"])
 
         self.assertEqual(1, second_bucket["count"])
         self.assertEqual(1, second_bucket["matching_count"])

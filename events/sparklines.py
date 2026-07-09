@@ -1,21 +1,33 @@
 import math
-from datetime import timedelta, timezone
+from datetime import timedelta, timezone as dt_timezone
 
 from django.db.models import Count, Max
 from django.db.models.functions import TruncHour
+from django.utils import timezone
 
 from bugsink.utils import assert_
 from events.models import InstallationEventCountsPerHour, IssueEventCountsPerHour
 
 
-def get_sparkline_range(now, hour_step=6, days=28):
-    # align on the display bucket boundary; round up from now
-    assert_(now.tzinfo == timezone.utc)
-    boundary = math.ceil(now.hour / hour_step) * hour_step
-    end = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=boundary)
+def _installation_localtime(dt):
+    return timezone.localtime(dt, timezone.get_default_timezone())
 
-    start = end - timedelta(days=days)
+
+def _as_utc(dt):
+    return dt.astimezone(dt_timezone.utc)
+
+
+def get_sparkline_range(now, hour_step=6, days=28):
+    # Align display buckets on installation-local boundaries; stored hourly buckets remain UTC.
+    assert_(now.tzinfo == dt_timezone.utc)
+    local_now = _installation_localtime(now)
     interval = timedelta(hours=hour_step)
+    local_start_of_day = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    boundary = math.ceil((local_now - local_start_of_day) / interval) * interval
+    local_end = local_start_of_day + boundary
+
+    start = _as_utc(local_end - timedelta(days=days))
+    end = _as_utc(local_end)
     return start, end, interval
 
 
@@ -51,6 +63,9 @@ def get_y_labels(max_value, num_labels=5):
 
 
 def _format_bucket_label(bucket_start, bucket_end):
+    bucket_start = _installation_localtime(bucket_start)
+    bucket_end = _installation_localtime(bucket_end)
+
     if bucket_start.hour == 0 and bucket_start.minute == 0 and bucket_end == bucket_start + timedelta(days=1):
         return f"{bucket_start.day} {bucket_start:%b}"
 
@@ -62,9 +77,10 @@ def _format_bucket_label(bucket_start, bucket_end):
 
 def _get_bucket_edges(start, end, interval):
     bucket_edges = []
-    curr = start
-    while curr <= end:
-        bucket_edges.append(curr)
+    curr = _installation_localtime(start)
+    local_end = _installation_localtime(end)
+    while curr <= local_end:
+        bucket_edges.append(_as_utc(curr))
         curr += interval
 
     return bucket_edges
@@ -156,7 +172,7 @@ def _build_sized_bucket_series(
 
 def get_issue_event_sparkline(issue_id, now, active_event_digested_at=None, matching_event_qs=None):
     if active_event_digested_at is not None:
-        assert_(active_event_digested_at.tzinfo == timezone.utc)
+        assert_(active_event_digested_at.tzinfo == dt_timezone.utc)
 
     variants = []
     ranges = []
@@ -186,7 +202,7 @@ def get_issue_event_sparkline(issue_id, now, active_event_digested_at=None, matc
                 digested_at__gte=query_start,
                 digested_at__lt=query_end,
             ).annotate(
-                bucket=TruncHour("digested_at", tzinfo=timezone.utc),
+                bucket=TruncHour("digested_at", tzinfo=dt_timezone.utc),
             ).values("bucket").annotate(
                 count=Count("id"),
                 matching_digest_order=Max("digest_order"),
