@@ -20,7 +20,8 @@ from .models import InstallationEventCountsPerHour, IssueEventCountsPerHour, Pro
 from .factories import create_event
 from .retention import (
     eviction_target, should_evict, evict_for_max_events, get_epoch_bounds_with_irrelevance, filter_for_work)
-from .sparklines import get_issue_event_sparkline, get_issue_list_event_sparklines, get_sparkline_range
+from .sparklines import (
+    get_issue_event_sparkline, get_issue_list_event_sparklines, get_sparkline_range, get_y_labels)
 from .usage import EVENT_COUNTS_PER_HOUR_MAX_AGE, hour_bucket, record_event_counts
 from .utils import annotate_with_meta, annotate_var_with_meta
 from tags.models import EventTag, store_tags
@@ -144,6 +145,165 @@ class EventUsageTestCase(DjangoTestCase):
 
 
 class EventSparklineTestCase(DjangoTestCase):
+    def test_y_labels_respect_max_labels(self):
+        cases_by_max_labels = [
+            # max_labels 0, 1 are somewhat nonsensical anyway (you'd label top & bottom at the least in practice)
+            (0, [
+                (   0, []),
+                ( 1.2, []),
+            ]),
+            (1, [
+                (   0, [   1]),
+                (   1, [   1]),
+                (1410, [1410]),
+            ]),
+
+            # max_labels=2
+            (2, [
+                (   0, [   1,    0]),
+                (   1, [   1,    0]),
+                (   2, [   2,    0]),
+                (  10, [  10,    0]),
+                (  11, [  12,    0]),
+                (  80, [  80,    0]),
+                (  81, [ 100,    0]),
+                (  90, [ 100,    0]),
+                (  91, [ 100,    0]),
+                ( 100, [ 100,    0]),
+                ( 101, [ 120,    0]),
+                (1000, [1000,    0]),
+                (1001, [1200,    0]),
+            ]),
+
+            # max_labels=3
+            (3, [
+                (   0, [   1,    0]),
+                (   1, [   1,    0]),
+                (   2, [   2,    1,    0]),
+                (   3, [   4,    2,    0]),
+                (   8, [   8,    4,    0]),
+                (   9, [  10,    5,    0]),
+                (  10, [  10,    5,    0]),
+                (  11, [  12,    6,    0]),
+                (  18, [  20,   10,    0]),
+                (  21, [  24,   12,    0]),
+                (  24, [  24,   12,    0]),
+                (  25, [  25, 12.5,    0]),
+                (  50, [  50,   25,    0]),
+                (  75, [  80,   40,    0]),
+                (  80, [  80,   40,    0]),
+                (  81, [ 100,   50,    0]),
+                ( 100, [ 100,   50,    0]),
+                ( 101, [ 120,   60,    0]),
+                ( 800, [ 800,  400,    0]),
+                ( 801, [1000,  500,    0]),
+                (1000, [1000,  500,    0]),
+                (1001, [1200,  600,    0]),
+            ]),
+
+            # max_labels=4
+            (4, [
+                (   0, [   1,    0]),
+                (   1, [   1,    0]),
+                (   2, [   2,    1,    0]),
+                (   3, [   3,    2,    1,    0]),
+                (   4, [   6,    4,    2,    0]),
+                (   8, [   9,    6,    3,    0]),
+                (  10, [  10,    5,    0]),
+                (  11, [  12,    8,    4,    0]),
+                (  25, [  30,   20,   10,    0]),
+                (  38, [  40,   20,    0]),
+                (  50, [  50,   25,    0]),
+                (  80, [  90,   60,   30,    0]),
+                (  80, [ 100,   50,    0]),  # alternative
+                (  81, [  90,   60,   30,    0]),
+                (  81, [ 100,   50,    0]),  # alternative
+                (  91, [ 100,   50,    0]),
+                ( 100, [ 100,   50,    0]),
+                ( 101, [ 120,   80,   40,    0]),
+            ]),
+
+            # max_labels=5
+            (5, [
+                (   0, [   1,    0]),
+                (   1, [   1,    0]),
+                (   4, [   4,    3,    2,    1,    0]),
+                (   5, [   8,    6,    4,    2,    0]),
+                (   8, [   8,    6,    4,    2,    0]),
+                (   9, [  10,   7.5,   5,  2.5,    0]),
+                (  10, [  10,   7.5,   5,  2.5,    0]),
+                (  11, [  12,    9,    6,    3,    0]),
+                (  25, [  30,   20,   10,    0]),
+                (  38, [  40,   30,   20,   10,    0]),
+                (  48, [  50,  37.5,  25,   12.5,  0]),
+                (  50, [  50,   25,    0]),
+                (  80, [  80,   60,   40,   20,    0]),
+                (  81, [ 100,   75,   50,   25,    0]),
+                ( 100, [ 100,   75,   50,   25,    0]),
+            ]),
+
+            # max_labels=10
+            (10, [
+                (   0, [   1,    0]),
+                (   1, [   1,    0]),
+                (   8, [   8,    7,    6,    5,    4,    3,    2,    1,    0]),
+                (   9, [   9,    8,    7,    6,    5,    4,    3,    2,    1,    0]),
+                (  10, [  10,    8,    6,    4,    2,    0]),
+                (  11, [  12,   10,    8,    6,    4,    2,    0]),
+                (  80, [  80,   70,   60,   50,   40,   30,   20,   10,    0]),
+                (  81, [  80,   70,   60,   50,   40,   30,   20,   10,    0]),
+                (  82, [  90,   80,   70,   60,   50,   40,   30,   20,   10,    0]),
+                (  90, [  90,   80,   70,   60,   50,   40,   30,   20,   10,    0]),
+                (  91, [ 100,   80,   60,   40,   20,    0]),
+                ( 100, [ 100,   80,   60,   40,   20,    0]),
+                ( 101, [ 120,  100,   80,   60,   40,   20,    0]),
+                ( 800, [ 900,  800,  700,  600,  500,  400,  300,  200,  100,    0]),
+                ( 900, [ 900,  800,  700,  600,  500,  400,  300,  200,  100,    0]),
+                ( 901, [1000,  800,  600,  400,  200,    0]),
+                (1000, [1000,  800,  600,  400,  200,    0]),
+                (1001, [1200, 1000,  800,  600,  400,  200,    0])
+            ]),
+
+            # max_labels=11
+            (11, [
+                (   0, [   1,    0]),
+                (   1, [   1,    0]),
+                (   5, [   5,    4,    3,    2,    1,    0]),
+                (   8, [   8,    7,    6,    5,    4,    3,    2,    1,    0]),
+                (   9, [   9,    8,    7,    6,    5,    4,    3,    2,    1,    0]),
+                (  10, [  10,    9,    8,    7,    6,    5,    4,    3,    2,    1,    0]),
+                (  11, [  12,   10,    8,    6,    4,    2,    0]),
+                (  48, [  50,   45,   40,   35,   30,   25,   20,   15,   10,    5,    0]),
+                (  50, [  50,   45,   40,   35,   30,   25,   20,   15,   10,    5,    0]),
+                (  75, [  80,   70,   60,   50,   40,   30,   20,   10,    0]),
+                (  80, [  80,   70,   60,   50,   40,   30,   20,   10,    0]),
+                (  81, [ 100,   90,   80,   70,   60,   50,   40,   30,   20,   10,    0]),
+                (  91, [ 100,   90,   80,   70,   60,   50,   40,   30,   20,   10,    0]),
+                ( 100, [ 100,   90,   80,   70,   60,   50,   40,   30,   20,   10,    0]),
+                ( 101, [ 120,  100,   80,   60,   40,   20,    0]),
+                ( 900, [1000,  900,  800,  700,  600,  500,  400,  300,  200,  100,    0]),
+                ( 901, [1000,  900,  800,  700,  600,  500,  400,  300,  200,  100,    0]),
+                (1000, [1000,  900,  800,  700,  600,  500,  400,  300,  200,  100,    0]),
+                (1001, [1200, 1000,  800,  600,  400,  200,    0]),
+            ]),
+
+        ]
+
+        expected_by_case = {}
+        for max_labels, cases in cases_by_max_labels:
+            for max_value, expected in cases:
+                expected_by_case.setdefault((max_labels, max_value), []).append(expected)
+
+        failures = []
+        for (max_labels, max_value), expected_options in expected_by_case.items():
+            actual = list(get_y_labels(max_value, max_labels=max_labels))
+            if actual not in expected_options:
+                failures.append(
+                    "max_labels=%s, max_value=%s: expected one of %s, got %s" %
+                    (max_labels, max_value, expected_options, actual))
+
+        if failures:
+            self.fail("%d y-label case(s) failed:\n%s" % (len(failures), "\n".join(failures)))
 
     @override_settings(TIME_ZONE="America/New_York")
     def test_sparkline_range_rounds_up_to_current_local_bucket_end(self):
