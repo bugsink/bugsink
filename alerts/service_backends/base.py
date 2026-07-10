@@ -2,6 +2,7 @@ import requests
 from requests.adapters import HTTPAdapter
 
 from .webhook_security import parse_webhook_url, pin_url_to_ip, validate_webhook_destination
+from bugsink.utils import assert_
 
 
 class OriginalHostnameAdapter(HTTPAdapter):
@@ -33,10 +34,10 @@ class BaseWebhookBackend:
     def safe_post(cls, webhook_url, *args, **kwargs):
         # Ensure the carefully picked values in the below cannot be accidentally overwritten caller-side; complain
         # loudly if they accidentally are.
-        assert "allow_redirects" not in kwargs
-        assert "timeout" not in kwargs
+        assert_("allow_redirects" not in kwargs)
+        assert_("timeout" not in kwargs)
         headers = kwargs.pop("headers", {})
-        assert "host" not in {name.lower() for name in headers}
+        assert_("host" not in {name.lower() for name in headers})
 
         parsed = parse_webhook_url(webhook_url)
         resolved_ips = validate_webhook_destination(parsed.hostname)
