@@ -124,14 +124,13 @@ def _build_compact_hourly_series(now, buckets_by_hour):
         })
         curr = bucket_end
 
-    raw_max_value = max(buckets) or 0
     # Per-chart scaling keeps low-volume rows readable instead of squashing them against a page-wide outlier.
     # Floor at 10 so a single event does not render as a full-height spike.
-    max_value = max(10, raw_max_value) if raw_max_value else 0
+    max_value = max(10, max(buckets))
     total = sum(buckets)
     title = f"{_format_event_count(total)} in the past 24h"
     for bucket in event_buckets:
-        bucket["pct"] = (bucket["count"] / max_value) * 100 if max_value else 0
+        bucket["pct"] = (bucket["count"] / max_value) * 100
         bucket["title"] = title
 
     return {
@@ -219,17 +218,14 @@ def _build_sized_bucket_series(
             "contains_active_event": contains_active_event,
         })
 
-    max_value = max(buckets) or 0
-    if max_value == 0:
-        bar_data = [0 for v in buckets]
-    else:
-        bar_data = [(v / max_value) * 100 for v in buckets]
+    max_value = max(10, max(buckets))
+    bar_data = [(v / max_value) * 100 for v in buckets]
 
     for bucket, pct in zip(event_buckets, bar_data, strict=True):
         bucket["pct"] = pct
         bucket["has_overlay"] = has_overlay
         if has_overlay:
-            bucket["matching_pct"] = (bucket["matching_count"] / max_value) * 100 if max_value else 0
+            bucket["matching_pct"] = (bucket["matching_count"] / max_value) * 100
             bucket["click_count"] = bucket["matching_count"]
         else:
             bucket["matching_pct"] = None
