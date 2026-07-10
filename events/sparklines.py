@@ -40,27 +40,112 @@ def get_x_labels(start, end, num_labels=5):
     return labels
 
 
-def get_y_labels(max_value, num_labels=5):
-    if max_value == 0:
+_NICE_Y_LABEL_STEPS = (1, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 12.5)
+_NICE_Y_LABEL_STEP_RANK = {
+    1: 0,
+    2: 0.02,
+    2.5: 0.08,
+    5: 0.1,
+    10: 0.1,
+    3: 0.2,
+    4: 0.25,
+    6: 0.35,
+    8: 0.55,
+    12.5: 0.7,
+    12: 0.8,
+}
+
+
+def _clean_label_value(value):
+    value = round(value, 10)
+    if math.isclose(value, round(value)):
+        return int(round(value))
+    return value
+
+
+def _nice_base(value):
+    if value == 0:
+        return 1
+
+    power = 10 ** math.floor(math.log10(abs(value)))
+    scaled = value / power
+    return min(_NICE_Y_LABEL_STEPS, key=lambda candidate: abs(candidate - scaled))
+
+
+def _score_y_label_candidate(labels, step_base, max_value, max_labels):
+    top = labels[0]
+    count = len(labels)
+    headroom = (top - max_value) / max(max_value, 1)
+    if top - max_value <= 1:
+        headroom = 0
+    missing_labels = (max_labels - count) / max(max_labels - 1, 1)
+    is_exact = math.isclose(top, max_value)
+
+    return (
+        headroom * 3.65
+        + missing_labels * 2.8
+        + _NICE_Y_LABEL_STEP_RANK[step_base] * 2.35
+        + _NICE_Y_LABEL_STEP_RANK[_nice_base(top)] * 1.1
+        - count / max_labels * 1.25
+        - is_exact * 0.2
+        + max(0, headroom - 0.2) * 6.25
+        + max(0, headroom - 0.5) * 10.5
+    )
+
+
+def _get_y_label_candidates(max_value, max_labels):
+    candidates = []
+    seen = set()
+    wants_integer_labels = float(max_value).is_integer()
+    raw_step = max_value / (max_labels - 1)
+    first_power = math.floor(math.log10(raw_step)) - 2
+    last_power = math.floor(math.log10(max_value)) + 2
+
+    for exponent in range(first_power, last_power + 1):
+        power = 10 ** exponent
+        for step_base in _NICE_Y_LABEL_STEPS:
+            step = step_base * power
+            first_interval = math.ceil(max_value / step - 1e-12)
+            last_interval = 1 if max_labels == 2 else max_labels - 1
+            for intervals in range(max(1, first_interval), last_interval + 1):
+                labels = [
+                    _clean_label_value(i * step)
+                    for i in range(intervals, -1, -1)
+                ]
+                if wants_integer_labels and any(not isinstance(label, int) for label in labels):
+                    continue
+
+                labels_tuple = tuple(labels)
+                if labels_tuple in seen:
+                    continue
+
+                seen.add(labels_tuple)
+                candidates.append((labels, step_base))
+
+    return candidates
+
+
+def get_y_labels(max_value, max_labels=5):
+    if max_labels <= 0:
+        return []
+
+    if max_labels == 1:
+        return [_clean_label_value(max(1, max_value))]
+
+    if max_value <= 1:
         return [1, 0]
 
-    # the available number of non-zero labels
-    available_labels = num_labels - 1
+    if float(max_value).is_integer() and max_value <= max_labels - 1:
+        return reversed(range(int(max_value) + 1))
 
-    if max_value <= available_labels:
-        return reversed(list(range(0, max_value + 1)))
+    candidates = _get_y_label_candidates(max_value, max_labels)
+    if max_labels == 2:
+        return min(candidates, key=lambda candidate: candidate[0][0])[0]
 
-    step = max_value / available_labels
-
-    # convert step into a round number:
-    magnitude = 10 ** (len(str(math.ceil(step))) - 1)
-    step = math.ceil(step / magnitude) * magnitude
-
-    labels = [0]
-    for i in range(1, num_labels):
-        labels.append(labels[-1] + step)
-
-    return reversed(labels)
+    return min(
+        candidates,
+        key=lambda candidate: _score_y_label_candidate(candidate[0], candidate[1], max_value, max_labels),
+    )[0]
 
 
 def _format_bucket_label(bucket_start, bucket_end):
@@ -124,14 +209,13 @@ def _build_compact_hourly_series(now, buckets_by_hour):
         })
         curr = bucket_end
 
-    raw_max_value = max(buckets) or 0
     # Per-chart scaling keeps low-volume rows readable instead of squashing them against a page-wide outlier.
     # Floor at 10 so a single event does not render as a full-height spike.
-    max_value = max(10, raw_max_value) if raw_max_value else 0
+    max_value = max(10, max(buckets))
     total = sum(buckets)
     title = f"{_format_event_count(total)} in the past 24h"
     for bucket in event_buckets:
-        bucket["pct"] = (bucket["count"] / max_value) * 100 if max_value else 0
+        bucket["pct"] = (bucket["count"] / max_value) * 100
         bucket["title"] = title
 
     return {
@@ -219,17 +303,14 @@ def _build_sized_bucket_series(
             "contains_active_event": contains_active_event,
         })
 
-    max_value = max(buckets) or 0
-    if max_value == 0:
-        bar_data = [0 for v in buckets]
-    else:
-        bar_data = [(v / max_value) * 100 for v in buckets]
+    max_value = max(10, max(buckets))
+    bar_data = [(v / max_value) * 100 for v in buckets]
 
     for bucket, pct in zip(event_buckets, bar_data, strict=True):
         bucket["pct"] = pct
         bucket["has_overlay"] = has_overlay
         if has_overlay:
-            bucket["matching_pct"] = (bucket["matching_count"] / max_value) * 100 if max_value else 0
+            bucket["matching_pct"] = (bucket["matching_count"] / max_value) * 100
             bucket["click_count"] = bucket["matching_count"]
         else:
             bucket["matching_pct"] = None
