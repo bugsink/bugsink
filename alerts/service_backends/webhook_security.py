@@ -4,6 +4,7 @@ import socket
 import requests
 from requests import RequestException
 from urllib3.exceptions import LocationParseError
+from urllib3.util.url import Url
 
 from urllib3.util import parse_url as parse_url_from_urllib3
 
@@ -19,6 +20,7 @@ _URL_ALLOWED_CHARACTERS = set(
     "!$&'()*+,;=" +  # RFC 3986 sub-delims
     "%"  # Percent-encoding marker
 )
+
 
 def _parse_hosts_and_networks(entries, setting_name):
     hosts = set()
@@ -39,9 +41,22 @@ def _parse_hosts_and_networks(entries, setting_name):
     return hosts, networks
 
 
-def _resolve_ip_addresses(hostname, port):
-    infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
-    return {info[4][0] for info in infos}
+def _resolve_ip_addresses(hostname):
+    if hostname.startswith("[") and hostname.endswith("]"):
+        # In URL authority syntax, brackets are only used for IP literals. urllib3 keeps those brackets in `hostname`,
+        # but the the usage in socket.getaddrinfo expects the plain IP address so we must strip them back out.
+        inner_hostname = hostname[1:-1]
+        try:
+            # Rather than "just strip brackets if present", we verify that the inner value is actually a valid IP
+            # address; we don't want to "just generally strip stuff" in security-sentitive code.
+            ipaddress.ip_address(inner_hostname)
+        except ValueError:
+            pass
+        else:
+            hostname = inner_hostname
+
+    infos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+    return [info[4][0] for info in infos]
 
 
 def _match_entries(target_hostname, resolved_ips, hosts, networks):
@@ -65,6 +80,7 @@ def _validate_raw_url_characters(webhook_url):
             continue
         raise ValueError("Webhook URL must contain only ASCII URL characters.")
 
+
 def _prepare_webhook_url(webhook_url):
     try:
         return requests.Request("POST", webhook_url).prepare().url
@@ -72,7 +88,10 @@ def _prepare_webhook_url(webhook_url):
         raise ValueError("Webhook URL is malformed.") from e
 
 
-def validate_webhook_url(webhook_url):
+def parse_webhook_url(webhook_url):
+    """Parse a webhook URL and return a urllib3.util.url.Url object with the parsed components (validated and
+    normalized). Raises ValueError if the URL is invalid."""
+
     _validate_raw_url_characters(webhook_url)
 
     # Both requests and urllib3 make some attempts to normalize malformed URLs. We must apply the
@@ -93,19 +112,31 @@ def validate_webhook_url(webhook_url):
     if parsed.hostname is None:
         raise ValueError("Webhook URL must include a hostname.")
 
-    hostname = parsed.hostname.lower()
-    if hostname.startswith("[") and hostname.endswith("]"):
-        # In URL authority syntax, brackets are only used for IP literals. urllib3 keeps those brackets in `hostname`,
-        # but the rest of this function expects the plain host value so we must strip them back out.
-        inner_hostname = hostname[1:-1]
-        try:
-            # Rather than "just strip brackets if present", we verify that the inner value is actually a valid IP
-            # address; we don't want to "just generally strip stuff" in security-sentitive code.
-            ipaddress.ip_address(inner_hostname)
-        except ValueError:
-            pass
-        else:
-            hostname = inner_hostname
+    return parsed
+
+
+def validate_webhook_url(webhook_url):
+    parsed = parse_webhook_url(webhook_url)
+    validate_webhook_destination(parsed.hostname)
+
+
+def pin_url_to_ip(parsed, ip):
+    # Return a URL that uses the resolved IP address in place of the hostname
+    host = f"[{ip}]" if ip.version == 6 else str(ip)  # Use brackets for IPv6 addresses in URL authority syntax
+
+    return Url(
+        scheme=parsed.scheme,
+        auth=parsed.auth,
+        host=host,
+        port=parsed.port,
+        path=parsed.path,
+        query=parsed.query,
+        fragment=parsed.fragment,
+    ).url
+
+
+def validate_webhook_destination(hostname):
+    hostname = hostname.lower()
 
     settings = get_settings()
     mode = settings.ALERTS_WEBHOOK_OUTBOUND_MODE
@@ -115,15 +146,13 @@ def validate_webhook_url(webhook_url):
     deny_hosts, deny_networks = _parse_hosts_and_networks(
         settings.ALERTS_WEBHOOK_DENY_LIST, "ALERTS_WEBHOOK_DENY_LIST")
 
-    port = parsed.port
-    if port is None:
-        port = 443 if parsed.scheme == "https" else 80
-
     # Resolve on every send to defend against DNS changes after configuration time.
     try:
-        resolved_ips = {ipaddress.ip_address(ip) for ip in _resolve_ip_addresses(hostname, port)}
+        resolved_ips = [ipaddress.ip_address(ip) for ip in _resolve_ip_addresses(hostname)]
     except OSError as e:
         raise ValueError(f"Webhook hostname could not be resolved: {hostname}") from e
+    if not resolved_ips:
+        raise ValueError(f"Webhook hostname could not be resolved: {hostname}")
 
     allow_match = _match_entries(hostname, resolved_ips, allow_hosts, allow_networks)
     deny_match = _match_entries(hostname, resolved_ips, deny_hosts, deny_networks)
@@ -145,3 +174,5 @@ def validate_webhook_url(webhook_url):
                 f"Webhook target resolves to non-global IP address {ip}. "
                 "If this destination is intentional, add it to ALERTS_WEBHOOK_ALLOW_LIST."
             )
+
+    return resolved_ips

@@ -2,6 +2,7 @@ from django.test import TestCase as DjangoTestCase
 from unittest.mock import patch, Mock
 import json
 import requests
+import socket
 from socket import gaierror
 
 from django.core import mail
@@ -15,6 +16,7 @@ from events.factories import create_event
 from teams.models import Team, TeamMembership
 
 from .models import MessagingServiceConfig
+from .service_backends.base import BaseWebhookBackend
 from .service_backends.slack import slack_backend_send_test_message, slack_backend_send_alert
 from .service_backends.discord import discord_backend_send_test_message, discord_backend_send_alert
 from .service_backends.discord import DiscordConfigForm
@@ -490,6 +492,37 @@ class TestDiscordBackendErrorHandling(DjangoTestCase):
 
 
 class TestWebhookSecurityValidation(DjangoTestCase):
+    def test_safe_post_does_not_re_resolve_after_validation(self):
+        original_getaddrinfo = socket.getaddrinfo
+        calls = []
+
+        def rebinding_getaddrinfo(host, port, *args, **kwargs):
+            # Simulate a DNS rebinding attack by returning different IPs on different calls.
+            if host == "rebind-ssrf.attacker.example":
+                calls.append(host)
+                ip = "93.184.216.34" if len(calls) == 1 else "127.0.0.1"
+                return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port))]
+            return original_getaddrinfo(host, port, *args, **kwargs)
+
+        def reject_example_ip(sock, address):
+            # Prove we connect to the validated public IP, not to a later rebound loopback address.
+            if address[0] == "93.184.216.34":
+                # The test is such that we expect safe_point to reach this point; we don't want to do actual network
+                # connections to public IPs so we just raise and catch the exception to prove we reached this point.
+                raise ConnectionRefusedError("refusing the validated public IP")
+            raise AssertionError(f"unexpected connect target: {address!r}")
+
+        with override_bugsink_settings(ALERTS_WEBHOOK_OUTBOUND_MODE="open"):
+            with patch("socket.getaddrinfo", side_effect=rebinding_getaddrinfo):
+                with patch.object(socket.socket, "connect", reject_example_ip):
+                    with self.assertRaises(requests.RequestException):
+                        BaseWebhookBackend.safe_post(
+                            "http://rebind-ssrf.attacker.example:9999/admin/secret",
+                            json={"text": "SSRF payload"},
+                        )
+
+        self.assertEqual(1, len(calls))
+
     def test_rejects_private_ip_target(self):
         with override_bugsink_settings(ALERTS_WEBHOOK_OUTBOUND_MODE="open"):
             with self.assertRaisesRegex(ValueError, "non-global IP address"):
@@ -503,6 +536,13 @@ class TestWebhookSecurityValidation(DjangoTestCase):
     @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
     def test_rejects_hostname_that_resolves_to_private_ip(self, mock_resolve):
         mock_resolve.return_value = {"10.1.2.3"}
+        with override_bugsink_settings(ALERTS_WEBHOOK_OUTBOUND_MODE="open"):
+            with self.assertRaisesRegex(ValueError, "non-global IP address"):
+                validate_webhook_url("https://webhook.internal.example/hooks/example")
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_rejects_hostname_when_any_resolved_ip_is_private(self, mock_resolve):
+        mock_resolve.return_value = ["93.184.216.34", "10.1.2.3"]
         with override_bugsink_settings(ALERTS_WEBHOOK_OUTBOUND_MODE="open"):
             with self.assertRaisesRegex(ValueError, "non-global IP address"):
                 validate_webhook_url("https://webhook.internal.example/hooks/example")
