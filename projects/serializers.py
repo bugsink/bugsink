@@ -34,6 +34,7 @@ class ProjectListSerializer(UTCModelSerializer):
             "alert_on_unmute",
             "visibility",
             "retention_max_event_count",
+            "grouping_mechanism",
         ]
 
 
@@ -57,6 +58,7 @@ class ProjectDetailSerializer(ExpandableSerializerMixin, UTCModelSerializer):
             "alert_on_unmute",
             "visibility",
             "retention_max_event_count",
+            "grouping_mechanism",
         ]
 
 

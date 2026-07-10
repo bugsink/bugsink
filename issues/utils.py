@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from django.utils.encoding import force_str
 
 from sentry.stacktraces.functions import get_function_name_for_frame
@@ -132,32 +134,42 @@ def get_exception_type_and_value_for_exception(data):
     return type_, value
 
 
-def default_issue_grouper(calculated_type, calculated_value, transaction):
-    # This is the "default" issue grouper, both in the sense that it's the issue-grouper that's used for the part of the
-    # fingerprint named "{{ default }}" and in the sense that it's the default issue grouper when no fingerprint is
-    # provided. It's a simple issue grouper that concatenates the title and the transaction.
-
-    title = get_title_for_exception_type_and_value(calculated_type, calculated_value)
-    return title + " ⋄ " + transaction
+@dataclass(frozen=True)
+class GroupingResult:
+    grouping_key: str
+    grouping_mechanism: str | None
 
 
-def get_issue_grouper_for_data(data, calculated_type=None, calculated_value=None):
+def get_grouping_result_for_data(data, calculated_type=None, calculated_value=None, grouping_mechanism=None):
+    from issues.grouping_mechanisms import LATEST_GROUPING_MECHANISM, get_grouping_mechanism
+
     if calculated_type is None and calculated_value is None:
         # convenience for calling code from tests, when digesting we don't do this because we already have this info
         calculated_type, calculated_value = get_type_and_value_for_data(data)
 
     transaction = force_str(data.get("transaction") or "<no transaction>")
     fingerprint = data.get("fingerprint")
+    grouping_mechanism = grouping_mechanism or LATEST_GROUPING_MECHANISM
+    mechanism = get_grouping_mechanism(grouping_mechanism)
 
     if fingerprint:
-        return " ⋄ ".join([
-            (default_issue_grouper(calculated_type, calculated_value, transaction)
-             if part == "{{ default }}"
-             else str(part))
-            for part in fingerprint
-        ])
+        used_default = False
+        parts = []
+        for part in fingerprint:
+            if part == "{{ default }}":
+                used_default = True
+                parts.append(mechanism.grouper(calculated_type, calculated_value, transaction))
+            else:
+                parts.append(str(part))
 
-    return default_issue_grouper(calculated_type, calculated_value, transaction)
+        return GroupingResult(" ⋄ ".join(parts), grouping_mechanism if used_default else None)
+
+    return GroupingResult(mechanism.grouper(calculated_type, calculated_value, transaction), grouping_mechanism)
+
+
+def get_issue_grouper_for_data(data, calculated_type=None, calculated_value=None, grouping_mechanism=None):
+    return get_grouping_result_for_data(
+        data, calculated_type, calculated_value, grouping_mechanism).grouping_key
 
 
 def get_title_for_exception_type_and_value(type_, value):

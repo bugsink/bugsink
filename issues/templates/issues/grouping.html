@@ -15,9 +15,12 @@ This template/tab may seem like very little info for a full tab, and that's prob
 {% endcomment %}
 
 <div>The following automatically determined groupers are part of this issue:{# I think a better text can be devised #}</div>
-<ol class="font-mono">
+<ol>
 {% for grouper in issue.grouping_set.all %}
-<li>{{ grouper.grouping_key }}</li>
+<li class="mb-2">
+    <div class="font-mono">{{ grouper.grouping_key }}</div>
+    <div class="text-sm text-slate-500 dark:text-slate-400">{{ grouper.grouping_mechanism_display_name }}</div>
+</li>
 {% endfor %}
 </ol>
 {% endblock %}

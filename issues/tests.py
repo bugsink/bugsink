@@ -26,6 +26,7 @@ from events.factories import create_event, create_event_data
 from bsmain.management.commands.send_json import Command as SendJsonCommand
 from compat.dsn import get_header_value
 from events.models import Event
+from issues.grouping_mechanisms import LATEST_GROUPING_MECHANISM
 from bsmain.models import AuthToken
 from ingest.views import BaseIngestAPIView
 from issues.factories import get_or_create_issue
@@ -39,7 +40,7 @@ from .models import (
     Issue, IssueStateManager, TurningPoint, TurningPointKind)
 from .regressions import is_regression, is_regression_2, issue_is_regression
 from .factories import denormalized_issue_fields
-from .utils import get_issue_grouper_for_data
+from .utils import get_grouping_result_for_data, get_issue_grouper_for_data
 from .tasks import get_model_topography_with_issue_override
 
 User = get_user_model()
@@ -1115,6 +1116,18 @@ class GroupingUtilsTestCase(DjangoTestCase):
     def test_fingerprint_with_default(self):
         self.assertEqual("Log Message: <no log message> ⋄ <no transaction> ⋄ fixed string",
                          get_issue_grouper_for_data({"fingerprint": ["{{ default }}", "fixed string"]}))
+
+    def test_grouping_result_for_explicit_fingerprint_is_mechanismless(self):
+        result = get_grouping_result_for_data({"fingerprint": ["fixed string"]})
+
+        self.assertEqual("fixed string", result.grouping_key)
+        self.assertIsNone(result.grouping_mechanism)
+
+    def test_grouping_result_for_default_fingerprint_uses_mechanism(self):
+        result = get_grouping_result_for_data({"fingerprint": ["{{ default }}", "fixed string"]})
+
+        self.assertEqual("Log Message: <no log message> ⋄ <no transaction> ⋄ fixed string", result.grouping_key)
+        self.assertEqual(LATEST_GROUPING_MECHANISM, result.grouping_mechanism)
 
 
 class IssueDeletionTestCase(TransactionTestCase):

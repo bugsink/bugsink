@@ -4,7 +4,7 @@ from django.utils import timezone
 from projects.models import Project
 
 from .models import Issue, Grouping
-from .utils import get_issue_grouper_for_data
+from .utils import get_grouping_result_for_data
 
 
 def get_or_create_issue(project=None, event_data=None):
@@ -16,9 +16,11 @@ def get_or_create_issue(project=None, event_data=None):
     if project is None:
         project = Project.objects.create(name="Test project")
 
-    grouping_key = get_issue_grouper_for_data(event_data)
+    grouping_result = get_grouping_result_for_data(event_data, grouping_mechanism=project.grouping_mechanism)
+    grouping_key = grouping_result.grouping_key
 
-    if not Grouping.objects.filter(project=project, grouping_key=grouping_key).exists():
+    if not Grouping.objects.filter(
+            project=project, grouping_key=grouping_key, grouping_mechanism=grouping_result.grouping_mechanism).exists():
         issue = Issue.objects.create(
             project=project,
             **denormalized_issue_fields(),
@@ -29,11 +31,13 @@ def get_or_create_issue(project=None, event_data=None):
             project=project,
             grouping_key=grouping_key,
             grouping_key_hash=hashlib.sha256(grouping_key.encode()).hexdigest(),
+            grouping_mechanism=grouping_result.grouping_mechanism,
             issue=issue,
         )
 
     else:
-        grouping = Grouping.objects.get(project=project, grouping_key=grouping_key)
+        grouping = Grouping.objects.get(
+            project=project, grouping_key=grouping_key, grouping_mechanism=grouping_result.grouping_mechanism)
         issue = grouping.issue
         issue_created = False
 

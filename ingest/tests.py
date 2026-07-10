@@ -25,7 +25,12 @@ from events.storage_registry import override_event_storages
 from events.models import InstallationEventCountsPerHour, IssueEventCountsPerHour, ProjectEventCountsPerHour, Event
 from events.usage import hour_bucket
 from issues.factories import get_or_create_issue
-from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
+from issues.grouping_mechanisms import (
+    GROUPING_TRANSITION_PERIOD,
+    LATEST_GROUPING_MECHANISM,
+    LEGACY_GROUPING_MECHANISM,
+)
+from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind, Grouping
 from issues.utils import get_values
 from bugsink.app_settings import override_settings
 from bugsink.streams import UnclosableBytesIO
@@ -1099,6 +1104,80 @@ class IngestViewTestCase(TransactionTestCase):
             2,
             IssueEventCountsPerHour.objects.get(issue=Issue.objects.get(), bucket=hour_bucket(first_hour)).count,
         )
+
+    def test_ingest_stores_latest_grouping_mechanism(self):
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
+
+        self.assertEqual(LATEST_GROUPING_MECHANISM, Grouping.objects.get().grouping_mechanism)
+
+    def test_ingest_stores_no_mechanism_for_explicit_fingerprint(self):
+        request = self.request_factory.post("/api/1/store/")
+        event_data = create_event_data()
+        event_data["fingerprint"] = ["shared-fingerprint"]
+
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        self.assertIsNone(Grouping.objects.get().grouping_mechanism)
+
+    def test_grouping_transition_links_old_issue_to_new_mechanism(self):
+        request = self.request_factory.post("/api/1/store/")
+        now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        project = Project.objects.create(
+            name="transition",
+            grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+            alert_on_new_issue=False,
+            alert_on_regression=False,
+            alert_on_unmute=False,
+        )
+        first = create_event_data(exception_type="TransitionError")
+
+        BaseIngestAPIView().digest_event(**_digest_params(first, project, request, now))
+        old_issue = Issue.objects.get()
+
+        project.grouping_mechanism = LATEST_GROUPING_MECHANISM
+        project.previous_grouping_mechanism = LEGACY_GROUPING_MECHANISM
+        project.grouping_mechanism_upgraded_at = now
+        project.save()
+
+        second = create_event_data(exception_type="TransitionError")
+        BaseIngestAPIView().digest_event(
+            **_digest_params(second, project, request, now + datetime.timedelta(minutes=1)))
+
+        self.assertEqual(1, Issue.objects.count())
+        self.assertEqual(2, Grouping.objects.count())
+        self.assertEqual(
+            {LEGACY_GROUPING_MECHANISM, LATEST_GROUPING_MECHANISM},
+            set(Grouping.objects.values_list("grouping_mechanism", flat=True)),
+        )
+        self.assertEqual({old_issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
+
+    def test_expired_grouping_transition_creates_new_issue(self):
+        request = self.request_factory.post("/api/1/store/")
+        now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        project = Project.objects.create(
+            name="expired-transition",
+            grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+            alert_on_new_issue=False,
+            alert_on_regression=False,
+            alert_on_unmute=False,
+        )
+        first = create_event_data(exception_type="ExpiredTransitionError")
+
+        BaseIngestAPIView().digest_event(**_digest_params(first, project, request, now))
+
+        project.grouping_mechanism = LATEST_GROUPING_MECHANISM
+        project.previous_grouping_mechanism = LEGACY_GROUPING_MECHANISM
+        project.grouping_mechanism_upgraded_at = now - GROUPING_TRANSITION_PERIOD - datetime.timedelta(seconds=1)
+        project.save()
+
+        second = create_event_data(exception_type="ExpiredTransitionError")
+        BaseIngestAPIView().digest_event(
+            **_digest_params(second, project, request, now + datetime.timedelta(minutes=1)))
+
+        self.assertEqual(2, Issue.objects.count())
+        self.assertEqual(2, Grouping.objects.count())
 
     def test_ingest_refreshes_issue_calculated_fields_on_subsequent_events(self):
         # When a fingerprint groups events whose exception type/value differ, the issue's denormalized

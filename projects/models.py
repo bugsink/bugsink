@@ -13,6 +13,7 @@ from bugsink.app_settings import get_settings
 from bugsink.transaction import delay_on_commit
 
 from compat.dsn import build_dsn
+from issues.grouping_mechanisms import GROUPING_MECHANISM_CHOICES, LATEST_GROUPING_MECHANISM
 
 from teams.models import TeamMembership
 
@@ -124,6 +125,20 @@ class Project(models.Model):
 
     # retention
     retention_max_event_count = models.PositiveIntegerField(_("Retention max event count"), default=10_000)
+
+    # grouping policy
+    grouping_mechanism = models.CharField(
+        max_length=64,
+        choices=GROUPING_MECHANISM_CHOICES,
+        default=LATEST_GROUPING_MECHANISM,
+    )
+    previous_grouping_mechanism = models.CharField(
+        max_length=64,
+        choices=GROUPING_MECHANISM_CHOICES,
+        blank=True,
+        null=True,
+    )
+    grouping_mechanism_upgraded_at = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return self.name

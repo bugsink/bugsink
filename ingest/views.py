@@ -23,7 +23,8 @@ from compat.dsn import get_sentry_key, build_dsn
 
 from projects.models import Project
 from issues.models import Issue, IssueStateManager, Grouping, TurningPoint, TurningPointKind
-from issues.utils import get_type_and_value_for_data, get_issue_grouper_for_data, get_denormalized_fields_for_data
+from issues.grouping_mechanisms import GROUPING_TRANSITION_PERIOD
+from issues.utils import get_type_and_value_for_data, get_grouping_result_for_data, get_denormalized_fields_for_data
 from issues.regressions import issue_is_regression
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
@@ -87,6 +88,72 @@ def update_issue_counts(per_issue):
 
     for count, issue_ids in by_count.items():
         Issue.objects.filter(id__in=issue_ids).update(stored_event_count=F("stored_event_count") - count)
+
+
+def get_grouping_key_hash(grouping_key):
+    return hashlib.sha256(grouping_key.encode()).hexdigest()
+
+
+def get_existing_grouping(project_id, grouping_result, fallback_to_any_mechanism=False):
+    qs = Grouping.objects.filter(
+        project_id=project_id,
+        grouping_key=grouping_result.grouping_key,
+        grouping_key_hash=get_grouping_key_hash(grouping_result.grouping_key),
+    )
+
+    if grouping_result.grouping_mechanism is None:
+        grouping = qs.filter(grouping_mechanism__isnull=True).first()
+        if grouping is not None:
+            return grouping
+
+        if fallback_to_any_mechanism:
+            return qs.first()
+
+        return None
+
+    return qs.filter(grouping_mechanism=grouping_result.grouping_mechanism).first()
+
+
+def create_grouping(project_id, grouping_result, issue):
+    return Grouping.objects.create(
+        project_id=project_id,
+        grouping_key=grouping_result.grouping_key,
+        grouping_key_hash=get_grouping_key_hash(grouping_result.grouping_key),
+        grouping_mechanism=grouping_result.grouping_mechanism,
+        issue=issue,
+    )
+
+
+def grouping_transition_is_active(project, digested_at):
+    if project.previous_grouping_mechanism is None or project.grouping_mechanism_upgraded_at is None:
+        return False
+
+    return digested_at <= project.grouping_mechanism_upgraded_at + GROUPING_TRANSITION_PERIOD
+
+
+def get_grouping_for_event(project, event_data, calculated_type, calculated_value, digested_at):
+    current_result = get_grouping_result_for_data(
+        event_data, calculated_type, calculated_value, project.grouping_mechanism)
+    current_grouping = get_existing_grouping(
+        project.id,
+        current_result,
+        fallback_to_any_mechanism=current_result.grouping_mechanism is None,
+    )
+
+    if current_grouping is not None or current_result.grouping_mechanism is None:
+        return current_grouping, current_result
+
+    if not grouping_transition_is_active(project, digested_at):
+        return None, current_result
+
+    previous_result = get_grouping_result_for_data(
+        event_data, calculated_type, calculated_value, project.previous_grouping_mechanism)
+    previous_grouping = get_existing_grouping(project.id, previous_result)
+
+    if previous_grouping is None:
+        return None, current_result
+
+    return create_grouping(project.id, current_result, previous_grouping.issue), current_result
 
 
 def check_for_thresholds_on_installation(qs, now, thresholds, add_for_current=0):
@@ -386,13 +453,9 @@ class BaseIngestAPIView(View):
         denormalized_fields["calculated_type"] = calculated_type
         denormalized_fields["calculated_value"] = calculated_value
 
-        grouping_key = get_issue_grouper_for_data(event_data, calculated_type, calculated_value)
-
-        try:
-            grouping = Grouping.objects.get(
-                project_id=event_metadata["project_id"], grouping_key=grouping_key,
-                grouping_key_hash=hashlib.sha256(grouping_key.encode()).hexdigest())
-
+        grouping, grouping_result = get_grouping_for_event(
+            project, event_data, calculated_type, calculated_value, digested_at)
+        if grouping is not None:
             issue = grouping.issue
             issue_created = False
 
@@ -403,7 +466,7 @@ class BaseIngestAPIView(View):
             issue.calculated_type = calculated_type
             issue.calculated_value = calculated_value
 
-        except Grouping.DoesNotExist:
+        else:
             # we don't have Project.issue_count here ('premature optimization') so we just do an aggregate instead.
             max_current = Issue.objects.filter(project_id=event_metadata["project_id"]).aggregate(
                 Max("digest_order"))["digest_order__max"]
@@ -422,12 +485,7 @@ class BaseIngestAPIView(View):
             )
             issue_created = True
 
-            grouping = Grouping.objects.create(
-                project_id=event_metadata["project_id"],
-                grouping_key=grouping_key,
-                grouping_key_hash=hashlib.sha256(grouping_key.encode()).hexdigest(),
-                issue=issue,
-            )
+            grouping = create_grouping(event_metadata["project_id"], grouping_result, issue)
 
         # +1 because we're about to add one event.
         project_stored_event_count = project.stored_event_count + 1

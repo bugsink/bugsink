@@ -16,6 +16,7 @@ class GroupingInline(admin.TabularInline):
     exclude = ['project']
     readonly_fields = [
         'grouping_key',
+        'grouping_mechanism',
     ]
 
 
