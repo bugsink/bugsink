@@ -9,5 +9,4 @@ def default_issue_grouper(data, calculated_type, calculated_value, transaction):
     if "exception" in data and data["exception"]:
         calculated_value = normalize_message_for_grouping(force_str(calculated_value))
 
-    title = get_title_for_exception_type_and_value(calculated_type, calculated_value)
-    return title + " ⋄ " + transaction
+    return get_title_for_exception_type_and_value(calculated_type, calculated_value)

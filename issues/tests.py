@@ -1027,8 +1027,19 @@ class GroupingUtilsTestCase(DjangoTestCase):
     def test_grouping_result_for_default_fingerprint_uses_mechanism(self):
         result = get_grouping_result_for_data({"fingerprint": ["{{ default }}", "fixed string"]})
 
-        self.assertEqual("Log Message: <no log message> ⋄ <no transaction> ⋄ fixed string", result.grouping_key)
+        self.assertEqual("Log Message: <no log message> ⋄ fixed string", result.grouping_key)
         self.assertEqual(LATEST_GROUPING_MECHANISM, result.grouping_mechanism)
+
+    def test_latest_grouping_ignores_transaction(self):
+        first_data = self._exception_event_data("KeyError", "exception message")
+        second_data = self._exception_event_data("KeyError", "exception message")
+        second_data["transaction"] = "other-transaction"
+
+        first_key = get_issue_grouper_for_data(first_data)
+        second_key = get_issue_grouper_for_data(second_data)
+
+        self.assertEqual("KeyError: exception message", first_key)
+        self.assertEqual(first_key, second_key)
 
     def test_normalized_exception_values_have_stable_grouping_key(self):
         cases = [
