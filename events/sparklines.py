@@ -6,7 +6,8 @@ from django.db.models.functions import TruncHour
 from django.utils import timezone
 
 from bugsink.utils import assert_
-from events.models import InstallationEventCountsPerHour, IssueEventCountsPerHour
+from events.models import InstallationEventCountsPerHour, IssueEventCountsPerHour, ProjectEventCountsPerHour
+from events.usage import hour_bucket
 
 
 def _installation_localtime(dt):
@@ -96,6 +97,81 @@ def _get_bucket_title(label, count, matching_count):
 
     matching = f"{matching_count:,} matching event{'' if matching_count == 1 else 's'}"
     return f"{label}: {matching}, {_format_event_count(count)} total"
+
+
+# Compact list sparklines: 24 hourly buckets for issue/project rows, loaded in one batched query per list.
+def _get_list_sparkline_range(now):
+    assert_(now.tzinfo == dt_timezone.utc)
+    current_hour = hour_bucket(now)
+    return current_hour - timedelta(hours=23), current_hour + timedelta(hours=1), timedelta(hours=1)
+
+
+def _build_compact_hourly_series(now, buckets_by_hour):
+    start, end, interval = _get_list_sparkline_range(now)
+    current_hour = hour_bucket(now)
+    buckets = []
+    event_buckets = []
+    curr = start
+    while curr < end:
+        bucket_end = curr + interval
+        count = buckets_by_hour.get(curr, 0)
+        buckets.append(count)
+        event_buckets.append({
+            "bucket_start": curr,
+            "bucket_end": bucket_end,
+            "count": count,
+            "is_current_hour": curr == current_hour,
+        })
+        curr = bucket_end
+
+    raw_max_value = max(buckets) or 0
+    # Per-chart scaling keeps low-volume rows readable instead of squashing them against a page-wide outlier.
+    # Floor at 10 so a single event does not render as a full-height spike.
+    max_value = max(10, raw_max_value) if raw_max_value else 0
+    total = sum(buckets)
+    title = f"{_format_event_count(total)} in the past 24h"
+    for bucket in event_buckets:
+        bucket["pct"] = (bucket["count"] / max_value) * 100 if max_value else 0
+        bucket["title"] = title
+
+    return {
+        "event_buckets": event_buckets,
+        "total": total,
+        "total_label": _format_event_count(total),
+        "title": title,
+    }
+
+
+def _get_list_sparklines(ids, now, model, id_field, extra_filters=None):
+    if not ids:
+        return {}
+
+    start, end, _ = _get_list_sparkline_range(now)
+    filters = {
+        f"{id_field}__in": ids,
+        "bucket__gte": start,
+        "bucket__lt": end,
+    }
+    if extra_filters is not None:
+        filters.update(extra_filters)
+
+    buckets_by_id = {id_: {} for id_ in ids}
+    for id_, bucket, count in model.objects.filter(**filters).values_list(id_field, "bucket", "count"):
+        buckets_by_id[id_][bucket] = count
+
+    return {
+        id_: _build_compact_hourly_series(now, buckets_by_hour)
+        for id_, buckets_by_hour in buckets_by_id.items()
+    }
+
+
+def get_issue_list_event_sparklines(issue_ids, now, project_id=None):
+    extra_filters = {"project_id": project_id} if project_id is not None else None
+    return _get_list_sparklines(issue_ids, now, IssueEventCountsPerHour, "issue_id", extra_filters)
+
+
+def get_project_list_event_sparklines(project_ids, now):
+    return _get_list_sparklines(project_ids, now, ProjectEventCountsPerHour, "project_id")
 
 
 def _build_sized_bucket_series(

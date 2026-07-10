@@ -61,7 +61,9 @@
       <tbody>
             {% for project in project_list %}
             <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
-            <td class="w-full p-4">
+            <td class="w-full p-4 pr-12 {# a bit of spacing to visually seprate the chart & the buttons #}">
+                <div class="flex items-end gap-4">
+                <div class="min-w-0 flex-1">
                 <div>
                     {% if project.member or request.user.is_superuser %}
                     <a href="{{ script_prefix }}/issues/{{ project.id }}" class="text-xl text-cyan-500 dark:text-cyan-300 font-bold">{{ project.name }}</a>
@@ -79,7 +81,13 @@
                     | <a href="{% url 'project_member_settings' project_pk=project.id user_pk=request.user.id %}" class="font-bold text-cyan-500 dark:text-cyan-300">{% translate "my settings" %}</a>
                     {% endif %}
                 </div>
+                </div>
+                <div class="flex-none">
+                    {% include "events/_compact_event_sparkline.html" with event_sparkline=project.list_sparkline %}
+                </div>
+                </div>
             </td>
+
             <td class="pr-2 text-center">
                 {% if project.member %}
                     {% if not project.member.accepted %}
