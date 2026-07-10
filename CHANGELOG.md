@@ -14,6 +14,16 @@ Otherwise you'll get a B108SecurityError ("Target path owned by uid other than m
 
 See #195, #196
 
+### Security
+
+Fix: prevent DNS rebinding bypasses in outbound webhook protection.
+
+A project admin who controlled webhook DNS responses could make the policy check see an allowed public IP while the
+actual HTTP request connected to a blocked internal destination. Bugsink now pins each webhook send to the validated DNS
+result while preserving normal Host/SNI behavior. See:
+
+https://github.com/bugsink/bugsink/security/advisories/GHSA-w589-2ffr-2prv
+
 ### Sparklines / Trends
 
 Project and issue lists now show compact 24h event-volume trends. Sparkline bucket boundaries respect the installation
