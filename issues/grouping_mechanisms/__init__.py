@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import timedelta
 
-from . import after_2_4_0, up_until_2_4_0
+from . import v1, v2
 
 
 @dataclass(frozen=True)
@@ -13,19 +13,21 @@ class GroupingMechanism:
 
 GROUPING_TRANSITION_PERIOD = timedelta(days=30)
 
-LEGACY_GROUPING_MECHANISM = "bugsink-up-until-v2.4.0"
-LATEST_GROUPING_MECHANISM = "bugsink-after-v2.4.0"
+LEGACY_GROUPING_MECHANISM = "bugsink-v1"
+LATEST_GROUPING_MECHANISM = "bugsink-v2"
 
+# I think in general it's a good idea to let legacy display names reflect the history, and have the latest name reflect
+# why it's better than the previous one.
 GROUPING_MECHANISMS = [
     GroupingMechanism(
         LEGACY_GROUPING_MECHANISM,
-        "Up until v2.4.0 (July 2026)",
-        up_until_2_4_0.default_issue_grouper,
+        "Original, default until v2.4.0 (July 2026)",
+        v1.default_issue_grouper,
     ),
     GroupingMechanism(
         LATEST_GROUPING_MECHANISM,
-        "After v2.4.0 (July 2026)",
-        after_2_4_0.default_issue_grouper,
+        "Value-normalized (latest)",
+        v2.default_issue_grouper,
     ),
 ]
 

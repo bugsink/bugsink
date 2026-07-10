@@ -3,7 +3,7 @@ from django.db import migrations, models
 
 def set_legacy_grouping_mechanism(apps, schema_editor):
     Grouping = apps.get_model("issues", "Grouping")
-    Grouping.objects.update(grouping_mechanism="bugsink-up-until-v2.4.0")
+    Grouping.objects.update(grouping_mechanism="bugsink-v1")
 
 
 class Migration(migrations.Migration):
@@ -19,8 +19,8 @@ class Migration(migrations.Migration):
             field=models.CharField(
                 blank=True,
                 choices=[
-                    ("bugsink-up-until-v2.4.0", "Up until v2.4.0 (July 2026)"),
-                    ("bugsink-after-v2.4.0", "After v2.4.0 (July 2026)"),
+                    ("bugsink-v1", "Original, default until v2.4.0 (July 2026)"),
+                    ("bugsink-v2", "Value-normalized (latest)"),
                 ],
                 max_length=64,
                 null=True,

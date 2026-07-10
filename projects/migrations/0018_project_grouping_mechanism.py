@@ -13,10 +13,10 @@ class Migration(migrations.Migration):
             name="grouping_mechanism",
             field=models.CharField(
                 choices=[
-                    ("bugsink-up-until-v2.4.0", "Up until v2.4.0 (July 2026)"),
-                    ("bugsink-after-v2.4.0", "After v2.4.0 (July 2026)"),
+                    ("bugsink-v1", "Original, default until v2.4.0 (July 2026)"),
+                    ("bugsink-v2", "Value-normalized (latest)"),
                 ],
-                default="bugsink-up-until-v2.4.0",
+                default="bugsink-v1",
                 max_length=64,
             ),
         ),
@@ -26,8 +26,8 @@ class Migration(migrations.Migration):
             field=models.CharField(
                 blank=True,
                 choices=[
-                    ("bugsink-up-until-v2.4.0", "Up until v2.4.0 (July 2026)"),
-                    ("bugsink-after-v2.4.0", "After v2.4.0 (July 2026)"),
+                    ("bugsink-v1", "Original, default until v2.4.0 (July 2026)"),
+                    ("bugsink-v2", "Value-normalized (latest)"),
                 ],
                 max_length=64,
                 null=True,
@@ -43,10 +43,10 @@ class Migration(migrations.Migration):
             name="grouping_mechanism",
             field=models.CharField(
                 choices=[
-                    ("bugsink-up-until-v2.4.0", "Up until v2.4.0 (July 2026)"),
-                    ("bugsink-after-v2.4.0", "After v2.4.0 (July 2026)"),
+                    ("bugsink-v1", "Original, default until v2.4.0 (July 2026)"),
+                    ("bugsink-v2", "Value-normalized (latest)"),
                 ],
-                default="bugsink-after-v2.4.0",
+                default="bugsink-v2",
                 max_length=64,
             ),
         ),
