@@ -1146,9 +1146,14 @@ class IngestViewTestCase(TransactionTestCase):
         request = self.request_factory.post("/api/1/store/")
         BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
 
-        # no new issue is created, the new event is grouped with the existing one
+        # no new issue is created, but the correct mechanism-independent grouping is created for the old issue.
         self.assertEqual(1, Issue.objects.count())
-        self.assertEqual(1, Grouping.objects.count())
+        self.assertEqual(2, Grouping.objects.count())
+        self.assertEqual(
+            {LEGACY_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING},
+            set(Grouping.objects.values_list("grouping_mechanism", flat=True)),
+        )
+        self.assertEqual({issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
         self.assertEqual(2, Issue.objects.get().digested_event_count)
 
     def test_grouping_transition_links_old_issue_to_new_mechanism(self):

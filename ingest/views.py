@@ -1,4 +1,5 @@
 from collections import defaultdict
+from enum import Enum
 import uuid
 import hashlib
 import os
@@ -61,6 +62,11 @@ HTTP_400_BAD_REQUEST = 400
 HTTP_404_NOT_FOUND = 404
 HTTP_413_CONTENT_TOO_LARGE = 413
 HTTP_501_NOT_IMPLEMENTED = 501
+
+class GroupingPath(Enum):
+    FOUND = "found"
+    NEW = "new"
+    ATTACH = "attach"
 
 
 QUOTA_THRESHOLDS = {
@@ -131,17 +137,12 @@ def grouping_transition_is_active(project, digested_at):
     return digested_at <= project.grouping_mechanism_upgraded_at + GROUPING_TRANSITION_PERIOD
 
 
-def get_grouping_for_event(project, event_data, calculated_type, calculated_value, digested_at):
-    """Find the grouping for this event, if it already exists under the current grouping policy. Falls back to the
-    previous grouping policy if the current one does not find a match, and we're still in the transition window."""
-
+def get_grouping_path_for_event(project, event_data, calculated_type, calculated_value, digested_at):
     # First try the project's current mechanism.
     current_key_with_mechanism = get_key_with_mechanism_for_data(
         event_data, calculated_type, calculated_value, project.grouping_mechanism)
-    current_grouping = get_existing_grouping(project.id, current_key_with_mechanism)
-
-    if current_grouping is not None:
-        return current_grouping, current_key_with_mechanism
+    if (current_grouping := get_existing_grouping(project.id, current_key_with_mechanism)) is not None:
+        return GroupingPath.FOUND, (current_grouping,)
 
     if current_key_with_mechanism.mechanism == MECHANISM_INDEPENDENT_GROUPING:
         # special case for imprecisely migrated data, i.e. this is "another piece of legacy-handling code in the digest
@@ -150,24 +151,23 @@ def get_grouping_for_event(project, event_data, calculated_type, calculated_valu
         #
         # this is really the 10%/1% correctness for avoiding some unnecesary splits so it can be removed "quite soon",
         # e.g. in October 2026.
-        return (
-            get_legacy_grouping_for_mechanism_independent_key(project.id, current_key_with_mechanism),
-            current_key_with_mechanism,
-        )
+        legacy_grouping = get_legacy_grouping_for_mechanism_independent_key(project.id, current_key_with_mechanism)
+        if legacy_grouping is not None:
+            return GroupingPath.ATTACH, (current_key_with_mechanism, legacy_grouping)
+        return GroupingPath.NEW, (current_key_with_mechanism,)
 
-    # current mechanism not found, no special-case, and we're not in the transition window: we're done.
+    # Current mechanism not found, no special-case, and we're not in the transition window: this is a new grouping.
     if not grouping_transition_is_active(project, digested_at):
-        return None, current_key_with_mechanism
+        return GroupingPath.NEW, (current_key_with_mechanism,)
 
     # During the transition window, retry the previous mechanism.
     previous_key_with_mechanism = get_key_with_mechanism_for_data(
         event_data, calculated_type, calculated_value, project.previous_grouping_mechanism)
-    previous_grouping = get_existing_grouping(project.id, previous_key_with_mechanism)
+    if (previous_grouping := get_existing_grouping(project.id, previous_key_with_mechanism)) is not None:
+        return GroupingPath.ATTACH, (current_key_with_mechanism, previous_grouping)
 
-    if previous_grouping is None:
-        return None, current_key_with_mechanism
-
-    return create_grouping(project.id, current_key_with_mechanism, previous_grouping.issue), current_key_with_mechanism
+    # No grouping found for either mechanism, so this is a new grouping.
+    return GroupingPath.NEW, (current_key_with_mechanism,)
 
 
 def check_for_thresholds_on_installation(qs, now, thresholds, add_for_current=0):
@@ -467,9 +467,17 @@ class BaseIngestAPIView(View):
         denormalized_fields["calculated_type"] = calculated_type
         denormalized_fields["calculated_value"] = calculated_value
 
-        grouping, key_with_mechanism = get_grouping_for_event(
+        grouping_path, path_context = get_grouping_path_for_event(
             project, event_data, calculated_type, calculated_value, digested_at)
-        if grouping is not None:
+
+        if grouping_path in [GroupingPath.FOUND, GroupingPath.ATTACH]:
+            if grouping_path == GroupingPath.FOUND:
+                grouping, = path_context
+            else:
+                key_with_mechanism, grouping_to_attach_to = path_context
+                grouping = create_grouping(
+                    event_metadata["project_id"], key_with_mechanism, grouping_to_attach_to.issue)
+
             issue = grouping.issue
             issue_created = False
 
@@ -480,7 +488,9 @@ class BaseIngestAPIView(View):
             issue.calculated_type = calculated_type
             issue.calculated_value = calculated_value
 
-        else:
+        elif grouping_path == GroupingPath.NEW:
+            key_with_mechanism, = path_context
+
             # we don't have Project.issue_count here ('premature optimization') so we just do an aggregate instead.
             max_current = Issue.objects.filter(project_id=event_metadata["project_id"]).aggregate(
                 Max("digest_order"))["digest_order__max"]
