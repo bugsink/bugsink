@@ -1098,6 +1098,19 @@ class GroupingUtilsTestCase(DjangoTestCase):
         self.assertIn("<hex>", grouping_key)
         self.assertEqual("SlowConsumerError: Cannot publish <Consumer object at 0x7fbb00112233>", title)
 
+    def test_normalized_log_messages_have_stable_grouping_key_but_raw_title(self):
+        first_data = {"logentry": {"message": "User 123 failed from 10.0.0.1"}}
+        second_data = {"logentry": {"message": "User 456 failed from 10.0.0.2"}}
+
+        first_key = get_issue_grouper_for_data(first_data)
+        second_key = get_issue_grouper_for_data(second_data)
+        calculated_type, calculated_value = get_type_and_value_for_data(first_data)
+        title = get_title_for_exception_type_and_value(calculated_type, calculated_value)
+
+        self.assertEqual(first_key, second_key)
+        self.assertEqual("Log Message: User <int> failed from <ip>", first_key)
+        self.assertEqual("Log Message: User 123 failed from 10.0.0.1", title)
+
     def test_normalized_exception_grouping_leaves_explicit_fingerprint_unchanged(self):
         data = self._exception_event_data(
             "SlowConsumerError",
