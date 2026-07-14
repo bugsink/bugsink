@@ -1,3 +1,5 @@
+from collections import namedtuple
+
 from django.utils.encoding import force_str
 
 from sentry.stacktraces.functions import get_function_name_for_frame
@@ -132,13 +134,10 @@ def get_exception_type_and_value_for_exception(data):
     return type_, value
 
 
-class GroupingResult:
-    def __init__(self, grouping_key, grouping_mechanism):
-        self.grouping_key = grouping_key
-        self.grouping_mechanism = grouping_mechanism
+KeyWithMechanism = namedtuple("KeyWithMechanism", ["key", "mechanism"])
 
 
-def get_grouping_result_for_data(data, calculated_type=None, calculated_value=None, grouping_mechanism=None):
+def get_key_with_mechanism_for_data(data, calculated_type=None, calculated_value=None, grouping_mechanism=None):
     from issues.grouping_mechanisms import (
         LATEST_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING, get_grouping_mechanism)
 
@@ -161,17 +160,17 @@ def get_grouping_result_for_data(data, calculated_type=None, calculated_value=No
             else:
                 parts.append(str(part))
 
-        return GroupingResult(
+        return KeyWithMechanism(
             " ⋄ ".join(parts),
             grouping_mechanism if used_default else MECHANISM_INDEPENDENT_GROUPING,
         )
 
-    return GroupingResult(mechanism.grouper(data, calculated_type, calculated_value, transaction), grouping_mechanism)
+    return KeyWithMechanism(mechanism.grouper(data, calculated_type, calculated_value, transaction), grouping_mechanism)
 
 
 def get_issue_grouper_for_data(data, calculated_type=None, calculated_value=None, grouping_mechanism=None):
-    return get_grouping_result_for_data(
-        data, calculated_type, calculated_value, grouping_mechanism).grouping_key
+    return get_key_with_mechanism_for_data(
+        data, calculated_type, calculated_value, grouping_mechanism).key
 
 
 def get_title_for_exception_type_and_value(type_, value):

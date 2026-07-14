@@ -25,7 +25,7 @@ from projects.models import Project
 from issues.models import Issue, IssueStateManager, Grouping, TurningPoint, TurningPointKind
 from issues.grouping_mechanisms import (
     GROUPING_TRANSITION_PERIOD, LEGACY_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING)
-from issues.utils import get_type_and_value_for_data, get_grouping_result_for_data, get_denormalized_fields_for_data
+from issues.utils import get_type_and_value_for_data, get_key_with_mechanism_for_data, get_denormalized_fields_for_data
 from issues.regressions import issue_is_regression
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
@@ -95,31 +95,31 @@ def get_grouping_key_hash(grouping_key):
     return hashlib.sha256(grouping_key.encode()).hexdigest()
 
 
-def get_existing_grouping(project_id, grouping_result):
-    # helper to get the existing grouping for a given grouping result, if it exists.
+def get_existing_grouping(project_id, key_with_mechanism):
+    # helper to get the existing grouping for a given key/mechanism pair, if it exists.
     return Grouping.objects.filter(
         project_id=project_id,
-        grouping_key=grouping_result.grouping_key,
-        grouping_key_hash=get_grouping_key_hash(grouping_result.grouping_key),
-        grouping_mechanism=grouping_result.grouping_mechanism,
+        grouping_key=key_with_mechanism.key,
+        grouping_key_hash=get_grouping_key_hash(key_with_mechanism.key),
+        grouping_mechanism=key_with_mechanism.mechanism,
     ).first()
 
 
-def get_legacy_grouping_for_mechanism_independent_result(project_id, grouping_result):
+def get_legacy_grouping_for_mechanism_independent_key(project_id, key_with_mechanism):
     return Grouping.objects.filter(
         project_id=project_id,
-        grouping_key=grouping_result.grouping_key,
-        grouping_key_hash=get_grouping_key_hash(grouping_result.grouping_key),
+        grouping_key=key_with_mechanism.key,
+        grouping_key_hash=get_grouping_key_hash(key_with_mechanism.key),
         grouping_mechanism=LEGACY_GROUPING_MECHANISM,
     ).first()
 
 
-def create_grouping(project_id, grouping_result, issue):
+def create_grouping(project_id, key_with_mechanism, issue):
     return Grouping.objects.create(
         project_id=project_id,
-        grouping_key=grouping_result.grouping_key,
-        grouping_key_hash=get_grouping_key_hash(grouping_result.grouping_key),
-        grouping_mechanism=grouping_result.grouping_mechanism,
+        grouping_key=key_with_mechanism.key,
+        grouping_key_hash=get_grouping_key_hash(key_with_mechanism.key),
+        grouping_mechanism=key_with_mechanism.mechanism,
         issue=issue,
     )
 
@@ -132,33 +132,42 @@ def grouping_transition_is_active(project, digested_at):
 
 
 def get_grouping_for_event(project, event_data, calculated_type, calculated_value, digested_at):
-    current_result = get_grouping_result_for_data(
+    """Find the grouping for this event, if it already exists under the current grouping policy. Falls back to the
+    previous grouping policy if the current one does not find a match, and we're still in the transition window."""
+
+    # First try the project's current mechanism.
+    current_key_with_mechanism = get_key_with_mechanism_for_data(
         event_data, calculated_type, calculated_value, project.grouping_mechanism)
-    current_grouping = get_existing_grouping(project.id, current_result)
+    current_grouping = get_existing_grouping(project.id, current_key_with_mechanism)
 
     if current_grouping is not None:
-        return current_grouping, current_result
+        return current_grouping, current_key_with_mechanism
 
-    if current_result.grouping_mechanism == MECHANISM_INDEPENDENT_GROUPING:
+    if current_key_with_mechanism.mechanism == MECHANISM_INDEPENDENT_GROUPING:
         # special case for imprecisely migrated data, i.e. this is "another piece of legacy-handling code in the digest
         # path" as mentioned in the migration file: because we may not have correctly identified all mechanismless
         # groupings we allow matching with v1 here.
         #
         # this is really the 10%/1% correctness for avoiding some unnecesary splits so it can be removed "quite soon",
         # e.g. in October 2026.
-        return get_legacy_grouping_for_mechanism_independent_result(project.id, current_result), current_result
+        return (
+            get_legacy_grouping_for_mechanism_independent_key(project.id, current_key_with_mechanism),
+            current_key_with_mechanism,
+        )
 
+    # current mechanism not found, no special-case, and we're not in the transition window: we're done.
     if not grouping_transition_is_active(project, digested_at):
-        return None, current_result
+        return None, current_key_with_mechanism
 
-    previous_result = get_grouping_result_for_data(
+    # During the transition window, retry the previous mechanism.
+    previous_key_with_mechanism = get_key_with_mechanism_for_data(
         event_data, calculated_type, calculated_value, project.previous_grouping_mechanism)
-    previous_grouping = get_existing_grouping(project.id, previous_result)
+    previous_grouping = get_existing_grouping(project.id, previous_key_with_mechanism)
 
     if previous_grouping is None:
-        return None, current_result
+        return None, current_key_with_mechanism
 
-    return create_grouping(project.id, current_result, previous_grouping.issue), current_result
+    return create_grouping(project.id, current_key_with_mechanism, previous_grouping.issue), current_key_with_mechanism
 
 
 def check_for_thresholds_on_installation(qs, now, thresholds, add_for_current=0):
@@ -458,7 +467,7 @@ class BaseIngestAPIView(View):
         denormalized_fields["calculated_type"] = calculated_type
         denormalized_fields["calculated_value"] = calculated_value
 
-        grouping, grouping_result = get_grouping_for_event(
+        grouping, key_with_mechanism = get_grouping_for_event(
             project, event_data, calculated_type, calculated_value, digested_at)
         if grouping is not None:
             issue = grouping.issue
@@ -490,7 +499,7 @@ class BaseIngestAPIView(View):
             )
             issue_created = True
 
-            grouping = create_grouping(event_metadata["project_id"], grouping_result, issue)
+            grouping = create_grouping(event_metadata["project_id"], key_with_mechanism, issue)
 
         # +1 because we're about to add one event.
         project_stored_event_count = project.stored_event_count + 1

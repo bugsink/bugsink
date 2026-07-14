@@ -41,7 +41,7 @@ from .models import (
 from .regressions import is_regression, is_regression_2, issue_is_regression
 from .factories import denormalized_issue_fields
 from .utils import (
-    get_grouping_result_for_data,
+    get_key_with_mechanism_for_data,
     get_issue_grouper_for_data,
     get_title_for_exception_type_and_value,
     get_type_and_value_for_data,
@@ -1018,19 +1018,20 @@ class GroupingUtilsTestCase(DjangoTestCase):
             data["fingerprint"] = fingerprint
         return data
 
-    def test_grouping_result_for_explicit_fingerprint_is_mechanism_independent(self):
-        result = get_grouping_result_for_data({"fingerprint": ["fixed string"]})
+    def test_key_with_mechanism_for_explicit_fingerprint_is_mechanism_independent(self):
+        key_with_mechanism = get_key_with_mechanism_for_data({"fingerprint": ["fixed string"]})
 
-        self.assertEqual("fixed string", result.grouping_key)
-        self.assertEqual(MECHANISM_INDEPENDENT_GROUPING, result.grouping_mechanism)
+        self.assertEqual("fixed string", key_with_mechanism.key)
+        self.assertEqual(MECHANISM_INDEPENDENT_GROUPING, key_with_mechanism.mechanism)
 
-    def test_grouping_result_for_default_fingerprint_uses_mechanism(self):
-        result = get_grouping_result_for_data({"fingerprint": ["{{ default }}", "fixed string"]})
+    def test_key_with_mechanism_for_default_fingerprint_uses_mechanism(self):
+        key_with_mechanism = get_key_with_mechanism_for_data({"fingerprint": ["{{ default }}", "fixed string"]})
 
-        self.assertEqual("Log Message: <no log message> ⋄ fixed string", result.grouping_key)
-        self.assertEqual(LATEST_GROUPING_MECHANISM, result.grouping_mechanism)
+        self.assertEqual("Log Message: <no log message> ⋄ fixed string", key_with_mechanism.key)
+        self.assertEqual(LATEST_GROUPING_MECHANISM, key_with_mechanism.mechanism)
 
     def test_latest_grouping_ignores_transaction(self):
+        # this trivially tests that #441, "transaction should not be part of the grouping key", is fixed.
         first_data = self._exception_event_data("KeyError", "exception message")
         second_data = self._exception_event_data("KeyError", "exception message")
         second_data["transaction"] = "other-transaction"
