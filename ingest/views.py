@@ -23,7 +23,8 @@ from compat.dsn import get_sentry_key, build_dsn
 
 from projects.models import Project
 from issues.models import Issue, IssueStateManager, Grouping, TurningPoint, TurningPointKind
-from issues.grouping_mechanisms import GROUPING_TRANSITION_PERIOD
+from issues.grouping_mechanisms import (
+    GROUPING_TRANSITION_PERIOD, LEGACY_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING)
 from issues.utils import get_type_and_value_for_data, get_grouping_result_for_data, get_denormalized_fields_for_data
 from issues.regressions import issue_is_regression
 
@@ -94,24 +95,23 @@ def get_grouping_key_hash(grouping_key):
     return hashlib.sha256(grouping_key.encode()).hexdigest()
 
 
-def get_existing_grouping(project_id, grouping_result, fallback_to_any_mechanism=False):
-    qs = Grouping.objects.filter(
+def get_existing_grouping(project_id, grouping_result):
+    # helper to get the existing grouping for a given grouping result, if it exists.
+    return Grouping.objects.filter(
         project_id=project_id,
         grouping_key=grouping_result.grouping_key,
         grouping_key_hash=get_grouping_key_hash(grouping_result.grouping_key),
-    )
+        grouping_mechanism=grouping_result.grouping_mechanism,
+    ).first()
 
-    if grouping_result.grouping_mechanism is None:
-        grouping = qs.filter(grouping_mechanism__isnull=True).first()
-        if grouping is not None:
-            return grouping
 
-        if fallback_to_any_mechanism:
-            return qs.first()
-
-        return None
-
-    return qs.filter(grouping_mechanism=grouping_result.grouping_mechanism).first()
+def get_legacy_grouping_for_mechanism_independent_result(project_id, grouping_result):
+    return Grouping.objects.filter(
+        project_id=project_id,
+        grouping_key=grouping_result.grouping_key,
+        grouping_key_hash=get_grouping_key_hash(grouping_result.grouping_key),
+        grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+    ).first()
 
 
 def create_grouping(project_id, grouping_result, issue):
@@ -134,14 +134,19 @@ def grouping_transition_is_active(project, digested_at):
 def get_grouping_for_event(project, event_data, calculated_type, calculated_value, digested_at):
     current_result = get_grouping_result_for_data(
         event_data, calculated_type, calculated_value, project.grouping_mechanism)
-    current_grouping = get_existing_grouping(
-        project.id,
-        current_result,
-        fallback_to_any_mechanism=current_result.grouping_mechanism is None,
-    )
+    current_grouping = get_existing_grouping(project.id, current_result)
 
-    if current_grouping is not None or current_result.grouping_mechanism is None:
+    if current_grouping is not None:
         return current_grouping, current_result
+
+    if current_result.grouping_mechanism == MECHANISM_INDEPENDENT_GROUPING:
+        # special case for imprecisely migrated data, i.e. this is "another piece of legacy-handling code in the digest
+        # path" as mentioned in the migration file: because we may not have correctly identified all mechanismless
+        # groupings we allow matching with v1 here.
+        #
+        # this is really the 10%/1% correctness for avoiding some unnecesary splits so it can be removed "quite soon",
+        # e.g. in October 2026.
+        return get_legacy_grouping_for_mechanism_independent_result(project.id, current_result), current_result
 
     if not grouping_transition_is_active(project, digested_at):
         return None, current_result

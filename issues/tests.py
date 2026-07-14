@@ -26,7 +26,7 @@ from events.factories import create_event, create_event_data
 from bsmain.management.commands.send_json import Command as SendJsonCommand
 from compat.dsn import get_header_value
 from events.models import Event
-from issues.grouping_mechanisms import LATEST_GROUPING_MECHANISM
+from issues.grouping_mechanisms import LATEST_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING
 from bsmain.models import AuthToken
 from ingest.views import BaseIngestAPIView
 from issues.factories import get_or_create_issue
@@ -1018,11 +1018,11 @@ class GroupingUtilsTestCase(DjangoTestCase):
             data["fingerprint"] = fingerprint
         return data
 
-    def test_grouping_result_for_explicit_fingerprint_is_mechanismless(self):
+    def test_grouping_result_for_explicit_fingerprint_is_mechanism_independent(self):
         result = get_grouping_result_for_data({"fingerprint": ["fixed string"]})
 
         self.assertEqual("fixed string", result.grouping_key)
-        self.assertIsNone(result.grouping_mechanism)
+        self.assertEqual(MECHANISM_INDEPENDENT_GROUPING, result.grouping_mechanism)
 
     def test_grouping_result_for_default_fingerprint_uses_mechanism(self):
         result = get_grouping_result_for_data({"fingerprint": ["{{ default }}", "fixed string"]})

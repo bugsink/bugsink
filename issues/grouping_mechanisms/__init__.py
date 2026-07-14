@@ -12,6 +12,7 @@ class GroupingMechanism:
 
 GROUPING_TRANSITION_PERIOD = timedelta(days=30)
 
+MECHANISM_INDEPENDENT_GROUPING = "none"
 LEGACY_GROUPING_MECHANISM = "bugsink-v1"
 LATEST_GROUPING_MECHANISM = "bugsink-v2"
 
@@ -34,6 +35,10 @@ GROUPING_MECHANISM_CHOICES = [
     (mechanism.identifier, mechanism.display_name)
     for mechanism in GROUPING_MECHANISMS
 ]
+GROUPING_CHOICES = [
+    # more precisely "explicit fingerprint not containing the default grouper" but that's overly verbose in practice.
+    (MECHANISM_INDEPENDENT_GROUPING, "Mechanism-independent (explicit fingerprint)"),
+] + GROUPING_MECHANISM_CHOICES
 
 
 def get_grouping_mechanism(identifier):

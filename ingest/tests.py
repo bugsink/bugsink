@@ -29,6 +29,7 @@ from issues.grouping_mechanisms import (
     GROUPING_TRANSITION_PERIOD,
     LATEST_GROUPING_MECHANISM,
     LEGACY_GROUPING_MECHANISM,
+    MECHANISM_INDEPENDENT_GROUPING,
 )
 from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind, Grouping
 from issues.utils import get_values
@@ -39,7 +40,7 @@ from compat.dsn import get_header_value
 from bsmain.management.commands.send_json import Command as SendJsonCommand
 from phonehome.models import Installation
 
-from .views import BaseIngestAPIView, IngestSecurityAPIView, MinidumpAPIView
+from .views import BaseIngestAPIView, IngestSecurityAPIView, MinidumpAPIView, get_grouping_key_hash
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 from .event_counter import check_for_thresholds
 from .header_validators import (
@@ -1112,14 +1113,43 @@ class IngestViewTestCase(TransactionTestCase):
 
         self.assertEqual(LATEST_GROUPING_MECHANISM, Grouping.objects.get().grouping_mechanism)
 
-    def test_ingest_stores_no_mechanism_for_explicit_fingerprint(self):
+    def test_ingest_stores_mechanism_independent_grouping_for_explicit_fingerprint(self):
         request = self.request_factory.post("/api/1/store/")
         event_data = create_event_data()
         event_data["fingerprint"] = ["shared-fingerprint"]
 
         BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
 
-        self.assertIsNone(Grouping.objects.get().grouping_mechanism)
+        self.assertEqual(MECHANISM_INDEPENDENT_GROUPING, Grouping.objects.get().grouping_mechanism)
+
+    def test_mechanism_independent_grouping_matches_legacy_multipart_fingerprint(self):
+        # test for "another piece of legacy-handling code in the digest path" (can be removed at some point)
+        issue = Issue.objects.create(
+            project=self.quiet_project,
+            digest_order=1,
+            first_seen=timezone.now(),
+            last_seen=timezone.now(),
+            digested_event_count=1,
+        )
+        # explicit fingerprint, but multi-part so cannot be identified as "none" by our migration
+        grouping_key = "shared ⋄ fingerprint"
+        Grouping.objects.create(
+            project=self.quiet_project,
+            grouping_key=grouping_key,
+            grouping_key_hash=get_grouping_key_hash(grouping_key),
+            grouping_mechanism=LEGACY_GROUPING_MECHANISM,  # the "cannot be identified as none" part of the test
+            issue=issue,
+        )
+
+        event_data = create_event_data()
+        event_data["fingerprint"] = ["shared", "fingerprint"]
+        request = self.request_factory.post("/api/1/store/")
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        # no new issue is created, the new event is grouped with the existing one
+        self.assertEqual(1, Issue.objects.count())
+        self.assertEqual(1, Grouping.objects.count())
+        self.assertEqual(2, Issue.objects.get().digested_event_count)
 
     def test_grouping_transition_links_old_issue_to_new_mechanism(self):
         request = self.request_factory.post("/api/1/store/")

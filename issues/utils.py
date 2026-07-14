@@ -139,7 +139,8 @@ class GroupingResult:
 
 
 def get_grouping_result_for_data(data, calculated_type=None, calculated_value=None, grouping_mechanism=None):
-    from issues.grouping_mechanisms import LATEST_GROUPING_MECHANISM, get_grouping_mechanism
+    from issues.grouping_mechanisms import (
+        LATEST_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING, get_grouping_mechanism)
 
     if calculated_type is None and calculated_value is None:
         # convenience for calling code from tests, when digesting we don't do this because we already have this info
@@ -160,7 +161,10 @@ def get_grouping_result_for_data(data, calculated_type=None, calculated_value=No
             else:
                 parts.append(str(part))
 
-        return GroupingResult(" ⋄ ".join(parts), grouping_mechanism if used_default else None)
+        return GroupingResult(
+            " ⋄ ".join(parts),
+            grouping_mechanism if used_default else MECHANISM_INDEPENDENT_GROUPING,
+        )
 
     return GroupingResult(mechanism.grouper(data, calculated_type, calculated_value, transaction), grouping_mechanism)
 

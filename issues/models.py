@@ -20,7 +20,7 @@ from alerts.tasks import send_unmute_alert
 from compat.timestamp import parse_timestamp, format_timestamp
 from tags.models import IssueTag, TagValue
 
-from .grouping_mechanisms import GROUPING_MECHANISM_CHOICES, get_grouping_mechanism
+from .grouping_mechanisms import GROUPING_CHOICES
 from .utils import (
     parse_lines, serialize_lines, filter_qs_for_fixed_at, exclude_qs_for_fixed_at,
     get_title_for_exception_type_and_value)
@@ -250,22 +250,12 @@ class Grouping(models.Model):
     # we hash the key to make it indexable on MySQL, see https://code.djangoproject.com/ticket/2495
     grouping_key_hash = models.CharField(max_length=64, blank=False, null=True)
 
-    grouping_mechanism = models.CharField(
-        max_length=64,
-        choices=GROUPING_MECHANISM_CHOICES,
-        blank=True,
-        null=True,
-    )
+    grouping_mechanism = models.CharField(max_length=64, choices=GROUPING_CHOICES)
 
     issue = models.ForeignKey("Issue", blank=False, null=False, on_delete=models.DO_NOTHING)
 
     def __str__(self):
         return self.grouping_key
-
-    def grouping_mechanism_display_name(self):
-        if self.grouping_mechanism is None:
-            return "Mechanismless"
-        return get_grouping_mechanism(self.grouping_mechanism).display_name
 
     class Meta:
         unique_together = [
