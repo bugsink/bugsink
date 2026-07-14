@@ -204,6 +204,45 @@ class ProjectFormTestCase(TransactionTestCase):
         self.assertEqual(LEGACY_GROUPING_MECHANISM, saved.previous_grouping_mechanism)
         self.assertIsNotNone(saved.grouping_mechanism_upgraded_at)
 
+    def test_changing_grouping_mechanism_back_and_forth_restarts_transition_window(self):
+        first_changed_at = datetime(2026, 6, 14, 12, 34, tzinfo=timezone.utc)
+        second_changed_at = datetime(2026, 6, 15, 12, 34, tzinfo=timezone.utc)
+        project = Project.objects.create(
+            name="Original Name",
+            slug="original-slug",
+            grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+        )
+
+        with patch("projects.forms.timezone.now", return_value=first_changed_at):
+            form = ProjectForm(
+                data={
+                    "name": "Original Name",
+                    "visibility": ProjectVisibility.JOINABLE,
+                    "retention_max_event_count": 10000,
+                    "grouping_mechanism": LATEST_GROUPING_MECHANISM,
+                },
+                instance=project,
+            )
+            self.assertTrue(form.is_valid(), form.errors)
+            saved = form.save()
+
+        with patch("projects.forms.timezone.now", return_value=second_changed_at):
+            form = ProjectForm(
+                data={
+                    "name": "Original Name",
+                    "visibility": ProjectVisibility.JOINABLE,
+                    "retention_max_event_count": 10000,
+                    "grouping_mechanism": LEGACY_GROUPING_MECHANISM,
+                },
+                instance=saved,
+            )
+            self.assertTrue(form.is_valid(), form.errors)
+            saved = form.save()
+
+        self.assertEqual(LEGACY_GROUPING_MECHANISM, saved.grouping_mechanism)
+        self.assertEqual(LATEST_GROUPING_MECHANISM, saved.previous_grouping_mechanism)
+        self.assertEqual(second_changed_at, saved.grouping_mechanism_upgraded_at)
+
 
 class ProjectListOpenIssueCountTestCase(TransactionTestCase):
 

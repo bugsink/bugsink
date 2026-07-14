@@ -1188,6 +1188,57 @@ class IngestViewTestCase(TransactionTestCase):
         )
         self.assertEqual({old_issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
 
+    def test_grouping_transition_handles_switching_back_to_previous_mechanism(self):
+        # simple test for the "back-and-forth" case, where a project switches from legacy to latest and then back to
+        # legacy again. At least this proves that it works correctly for the simple case, I can't really think of a more
+        # complex scenario that would be worth testing for so we'll leave it at that for now.
+
+        request = self.request_factory.post("/api/1/store/")
+        now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        project = Project.objects.create(
+            name="back-and-forth-transition",
+            grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+            alert_on_new_issue=False,
+            alert_on_regression=False,
+            alert_on_unmute=False,
+        )
+
+        BaseIngestAPIView().digest_event(
+            **_digest_params(create_event_data(exception_type="BackAndForthError"), project, request, now))
+        old_issue = Issue.objects.get()
+
+        project.grouping_mechanism = LATEST_GROUPING_MECHANISM
+        project.previous_grouping_mechanism = LEGACY_GROUPING_MECHANISM
+        project.grouping_mechanism_upgraded_at = now
+        project.save()
+        BaseIngestAPIView().digest_event(**_digest_params(
+            create_event_data(exception_type="BackAndForthError"),
+            project,
+            request,
+            now + datetime.timedelta(minutes=1),
+        ))
+
+        project.grouping_mechanism = LEGACY_GROUPING_MECHANISM
+        project.previous_grouping_mechanism = LATEST_GROUPING_MECHANISM
+        project.grouping_mechanism_upgraded_at = now + datetime.timedelta(minutes=2)
+        project.save()
+        BaseIngestAPIView().digest_event(**_digest_params(
+            create_event_data(exception_type="BackAndForthError"),
+            project,
+            request,
+            now + datetime.timedelta(minutes=3),
+        ))
+
+        self.assertEqual(1, Issue.objects.count())
+        self.assertEqual(2, Grouping.objects.count())
+        self.assertEqual(3, Event.objects.count())
+        self.assertEqual(3, Issue.objects.get().digested_event_count)
+        self.assertEqual(
+            {LEGACY_GROUPING_MECHANISM, LATEST_GROUPING_MECHANISM},
+            set(Grouping.objects.values_list("grouping_mechanism", flat=True)),
+        )
+        self.assertEqual({old_issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
+
     def test_expired_grouping_transition_creates_new_issue(self):
         request = self.request_factory.post("/api/1/store/")
         now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
