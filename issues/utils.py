@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 from django.utils.encoding import force_str
 
 from sentry.stacktraces.functions import get_function_name_for_frame
@@ -134,10 +132,10 @@ def get_exception_type_and_value_for_exception(data):
     return type_, value
 
 
-@dataclass(frozen=True)
 class GroupingResult:
-    grouping_key: str
-    grouping_mechanism: str | None
+    def __init__(self, grouping_key, grouping_mechanism):
+        self.grouping_key = grouping_key
+        self.grouping_mechanism = grouping_mechanism
 
 
 def get_grouping_result_for_data(data, calculated_type=None, calculated_value=None, grouping_mechanism=None):

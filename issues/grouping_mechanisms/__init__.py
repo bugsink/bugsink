@@ -1,14 +1,13 @@
-from dataclasses import dataclass
 from datetime import timedelta
 
 from . import v1, v2
 
 
-@dataclass(frozen=True)
 class GroupingMechanism:
-    identifier: str
-    display_name: str
-    grouper: object
+    def __init__(self, identifier, display_name, grouper):
+        self.identifier = identifier
+        self.display_name = display_name
+        self.grouper = grouper
 
 
 GROUPING_TRANSITION_PERIOD = timedelta(days=30)
