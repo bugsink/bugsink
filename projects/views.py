@@ -23,7 +23,6 @@ from bugsink.utils import assert_
 from alerts.models import MessagingServiceConfig, get_alert_service_backend_class, get_alert_service_kind_choices
 from alerts.forms import MessagingServiceConfigNewForm, MessagingServiceConfigEditForm
 from events.sparklines import get_project_list_event_sparklines
-from issues.grouping_mechanisms import GROUPING_TRANSITION_PERIOD, get_next_grouping_mechanism
 from phonehome.utils import phone_home
 
 from .models import Project, ProjectMembership, ProjectRole, ProjectVisibility
@@ -213,22 +212,6 @@ def project_edit(request, project_pk):
             messages.success(request, f'Project "{project.name}" has been deleted successfully.')
             return redirect('project_list')
 
-        if action == "upgrade_grouping":
-            next_mechanism = get_next_grouping_mechanism(project.grouping_mechanism)
-            if next_mechanism is None:
-                messages.info(request, "This project already uses the latest grouping mechanism.")
-            else:
-                project.previous_grouping_mechanism = project.grouping_mechanism
-                project.grouping_mechanism = next_mechanism.identifier
-                project.grouping_mechanism_upgraded_at = timezone.now()
-                project.save(update_fields=[
-                    "previous_grouping_mechanism",
-                    "grouping_mechanism",
-                    "grouping_mechanism_upgraded_at",
-                ])
-                messages.success(request, f'Project grouping upgraded to "{next_mechanism.display_name}".')
-            return redirect("project_edit", project_pk=project.id)
-
         form = ProjectForm(request.POST, instance=project)
         if form.is_valid():
             form.save()
@@ -241,8 +224,6 @@ def project_edit(request, project_pk):
     return render(request, 'projects/project_edit.html', {
         'project': project,
         'form': form,
-        'next_grouping_mechanism': get_next_grouping_mechanism(project.grouping_mechanism),
-        'grouping_transition_days': GROUPING_TRANSITION_PERIOD.days,
     })
 
 

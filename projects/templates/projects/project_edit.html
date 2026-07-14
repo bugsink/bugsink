@@ -47,24 +47,8 @@
         {% tailwind_formfield form.visibility %}
         {% tailwind_formfield form.retention_max_event_count %}
 
-        <div class="mt-6 mb-6">
-            <h2 class="text-2xl font-bold mb-2">{% translate "Grouping" %}</h2>
-            <div class="text-slate-700 dark:text-slate-300 mb-2">
-                {% blocktranslate with mechanism=project.get_grouping_mechanism_display %}Current mechanism: {{ mechanism }}{% endblocktranslate %}
-            </div>
-            {% if next_grouping_mechanism %}
-            <div class="text-slate-700 dark:text-slate-300 mb-3">
-                {% blocktranslate with mechanism=next_grouping_mechanism.display_name days=grouping_transition_days %}Upgrade to {{ mechanism }}. For {{ days }} days, Bugsink will also look for matching issues under the previous mechanism.{% endblocktranslate %}
-            </div>
-            <button name="action" value="upgrade_grouping" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">{% translate "Upgrade grouping" %}</button>
-            {% else %}
-            <div class="text-slate-700 dark:text-slate-300">
-                {% translate "This project already uses the latest grouping mechanism." %}
-            </div>
-            {% endif %}
-        </div>
-
         {% tailwind_formfield form.dsn %}
+        {% tailwind_formfield form.grouping_mechanism %}
 
         <div class="flex items-center mt-4">
             <button name="action" value="invite" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">{% translate "Save" %}</button>

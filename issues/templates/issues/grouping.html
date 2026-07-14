@@ -14,12 +14,12 @@ This template/tab may seem like very little info for a full tab, and that's prob
 
 {% endcomment %}
 
-<div>The following automatically determined groupers are part of this issue:{# I think a better text can be devised #}</div>
-<ol>
-{% for grouper in issue.grouping_set.all %}
-<li class="mb-2">
-    <div class="font-mono">{{ grouper.grouping_key }}</div>
-    <div class="text-sm text-slate-500 dark:text-slate-400">{{ grouper.get_grouping_mechanism_display }}</div>
+<div class="mt-2 text-slate-700 dark:text-slate-300">Automatic grouping keys attached to this issue.</div>
+<ol class="mt-4 space-y-4">
+{% for grouper in groupers %}
+<li class="border-t border-slate-200 dark:border-slate-700 pt-4 first:border-t-0 first:pt-0">
+    <div class="text-sm font-bold text-slate-500 dark:text-slate-400 mb-1">{{ grouper.get_grouping_mechanism_display }}</div>
+    <div class="font-mono text-sm break-all leading-relaxed">{{ grouper.grouping_key }}</div>
 </li>
 {% endfor %}
 </ol>
