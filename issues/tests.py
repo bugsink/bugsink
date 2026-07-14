@@ -1074,6 +1074,30 @@ class GroupingUtilsTestCase(DjangoTestCase):
                 "invalid record name='bob'",
                 "name=<quoted_str>",
             ),
+            (
+                "ConnectionError",
+                "failed to call api1.example.com",
+                "failed to call api2.example.com",
+                "<hostname>",
+            ),
+            (
+                "TimeoutError",
+                "request took 123ms",
+                "request took 456ms",
+                "<duration>",
+            ),
+            (
+                "SchedulerError",
+                "job started at 12:34 PM",
+                "job started at 1:23 PM",
+                "<date>",
+            ),
+            (
+                "ParseError",
+                "bad header on Mon, 02 Jan 2006 15:04:05 GMT",
+                "bad header on Tue, 03 Jan 2006 16:05:06 GMT",
+                "<date>",
+            ),
         ]
 
         for exception_type, first_value, second_value, expected_placeholder in cases:

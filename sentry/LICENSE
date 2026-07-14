@@ -1,3 +1,7 @@
+This directory contains code vendored from Sentry.
+
+Some older vendored files were copied from BSD-licensed Sentry sources:
+
 Copyright (c) 2019 Sentry (https://sentry.io) and individual contributors.
 All rights reserved.
 
@@ -10,3 +14,32 @@ Redistribution and use in source and binary forms, with or without modification,
     3. Neither the name Sentry nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Some newer vendored files were copied from Sentry's FSL-1.1-Apache-2.0 sources after the
+Apache-2.0 future-license date had passed. Those files identify their source commit in their
+header comments.
+
+Functional Source License, Version 1.1, Apache 2.0 Future License
+
+Abbreviation
+
+FSL-1.1-Apache-2.0
+
+Notice
+
+Copyright 2008-2024 Functional Software, Inc. dba Sentry
+
+Grant of Future License
+
+Sentry irrevocably grants an additional license to use the Software under the Apache License,
+Version 2.0 that is effective on the second anniversary of the date Sentry makes the Software
+available. On or after that date, the Software may be used under the Apache License, Version 2.0.
+
+You may obtain a copy of the Apache License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under the Apache
+License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+express or implied. See the Apache License for the specific language governing permissions and
+limitations under the License.
