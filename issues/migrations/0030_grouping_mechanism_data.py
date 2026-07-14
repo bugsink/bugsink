@@ -16,6 +16,10 @@ def set_mechanism_independent_groupings(apps, schema_editor):
     #
     # Multi-part fixed-text fingerprints (["foo", "bar"]) will be misclassified under this scheme, for which there is
     # another piece of legacy-handling code in the digest path.
+    #
+    # Note: in fact we could even do better: since the fingerprint exists on event, we could check whether the
+    # fingerprint contains "{{ default }}" or not; presumably expensive and also still not complete (missing events) so
+    # we'll take the simpler approach.
     Grouping.objects.exclude(grouping_key__contains=" ⋄ ").update(grouping_mechanism="none")
 
 
