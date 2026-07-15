@@ -445,7 +445,7 @@ def project_sdk_setup(request, project_pk, platform=""):
     # NOTE about lexers:: I have bugsink/pyments_extensions; but the platforms mentioned there don't necessarily map to
     # what I will make selectable here. "We'll see" whether yet another lookup dict will be needed.
 
-    assert_(platform in ["", "python", "javascript", "php"])
+    assert_(platform in ["", "python", "javascript", "php", "go"])
 
     template_name = "projects/project_sdk_setup%s.html" % ("_" + platform if platform else "")
 
