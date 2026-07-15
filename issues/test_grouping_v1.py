@@ -4,11 +4,11 @@ from issues.grouping_mechanisms import BUGSINK_GROUPING_V1
 from issues.utils import get_issue_grouper_for_data as _get_issue_grouper_for_data
 
 
-def get_issue_grouper_for_data(data, calculated_type=None, calculated_value=None):
-    return _get_issue_grouper_for_data(data, calculated_type, calculated_value, BUGSINK_GROUPING_V1)
+def get_issue_grouper_for_data(data):
+    return _get_issue_grouper_for_data(data, grouping_mechanism=BUGSINK_GROUPING_V1)
 
 
-class LegacyGroupingUtilsTestCase(DjangoTestCase):
+class GroupingV1TestCase(DjangoTestCase):
 
     def _exception_event_data(self, exception_type, exception_value, fingerprint=None):
         data = {

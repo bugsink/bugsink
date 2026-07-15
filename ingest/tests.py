@@ -1107,7 +1107,7 @@ class IngestViewTestCase(TransactionTestCase):
             IssueEventCountsPerHour.objects.get(issue=Issue.objects.get(), bucket=hour_bucket(first_hour)).count,
         )
 
-    def test_ingest_stores_latest_grouping_mechanism(self):
+    def test_ingest_stores_current_grouping_mechanism(self):
         request = self.request_factory.post("/api/1/store/")
 
         BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
@@ -1147,7 +1147,7 @@ class IngestViewTestCase(TransactionTestCase):
         request = self.request_factory.post("/api/1/store/")
         BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
 
-        # no new issue is created, but the correct mechanism-independent grouping is created for the old issue.
+        # no new issue is created, but the correct mechanism-independent grouping is created for the legacy issue.
         self.assertEqual(1, Issue.objects.count())
         self.assertEqual(2, Grouping.objects.count())
         self.assertEqual(
@@ -1190,8 +1190,8 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual({old_issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
 
     def test_grouping_transition_handles_switching_back_to_previous_mechanism(self):
-        # simple test for the "back-and-forth" case, where a project switches from legacy to latest and then back to
-        # legacy again. At least this proves that it works correctly for the simple case, I can't really think of a more
+        # simple test for the "back-and-forth" case, where a project switches to another mechanism and then back again.
+        # At least this proves that it works correctly for the simple case, I can't really think of a more
         # complex scenario that would be worth testing for so we'll leave it at that for now.
 
         request = self.request_factory.post("/api/1/store/")
