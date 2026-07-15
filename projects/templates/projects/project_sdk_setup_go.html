@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% load static code %}
+
+{% block title %}Connect your Go Application · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+
+<div class="flex items-center justify-center">
+
+    <div class="m-4 max-w-4xl flex-auto">
+        <h1 class="text-4xl font-bold">Connect your Go Application</h1>
+
+        <div class="mt-4">
+            Connect your Go application to Bugsink to start tracking errors.
+            Bugsink is compatible with the <a class="text-cyan-500 dark:text-cyan-300 font-bold" href="https://docs.sentry.io/platforms/go/">Sentry SDK</a>. A basic setup is the following:
+        </div>
+
+        <h2 class="mt-8 text-2xl font-bold">Step 1: Install the SDK</h2>
+
+        <div class="mt-4">
+            Add the following line to the <code>require()</code> section of your <code>go.mod</code> file.
+        </div>
+
+{% code %}:::text
+github.com/getsentry/sentry-go v0.48.0
+{% endcode %}
+        <div class="mt-4">
+            Install the SDK by running <code>go mod tidy</code>.
+        </div>
+
+        <h2 class="mt-8 text-2xl font-bold">Step 2: Initialize the SDK</h2>
+
+        <div class="mt-4">
+            Initialize and configure the SDK with your DSN. Add the following at the start of your application code:
+        </div>
+
+{% code %}:::golang
+import (
+        // ...
+        "github.com/getsentry/sentry-go"
+)
+
+err := sentry.Init(sentry.ClientOptions{
+    Dsn: "{{ dsn }}",
+    Debug: false,  // send SDK debug messages to stdout
+    SendDefaultPII: true,  // include request header and IP address
+})
+if err != nil {
+    log.Fatalf("sentry.Init: %s", err)
+}
+defer sentry.Flush(2 * time.Second)
+{% endcode %}
+
+        <h2 class="mt-6 text-2xl font-bold">Step 3: Verify the setup</h2>
+
+        <div class="mt-4">
+            To verify that everything is working, create an error on purpose and check that it appears in Bugsink.
+
+        </div>
+        <div class="mt-4">
+            Put this code in your application where it can easily be triggered and then trigger it:
+        </div>
+
+{% code %}:::golang
+sentry.CaptureException(fmt.Errorf("Error created on purpose to send it to Bugsink"))
+{% endcode %}
+
+        <div class="mt-4">
+            Your event should now appear in the <a href="{% url "issue_list_open" project_pk=project.pk %}" class="text-cyan-500 dark:text-cyan-300 font-bold">list of open issues</a>.
+        </div>
+
+        <h2 class="mt-6 text-2xl font-bold">Further reading</h2>
+
+        <div class="mt-4">
+            For more information on how to use the SDK, check the <a href="https://www.bugsink.com/docs/sdk-recommendations/" class="text-cyan-500 dark:text-cyan-300 font-bold">Bugsink-specific SDK recommendations</a>.
+        </div>
+
+
+    </div>
+</div>
+
+{% endblock %}
