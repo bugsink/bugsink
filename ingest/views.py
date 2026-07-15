@@ -25,7 +25,7 @@ from compat.dsn import get_sentry_key, build_dsn
 from projects.models import Project
 from issues.models import Issue, IssueStateManager, Grouping, TurningPoint, TurningPointKind
 from issues.grouping_mechanisms import (
-    GROUPING_TRANSITION_PERIOD, LEGACY_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING)
+    GROUPING_TRANSITION_PERIOD, BUGSINK_GROUPING_V1, MECHANISM_INDEPENDENT_GROUPING)
 from issues.utils import get_type_and_value_for_data, get_key_with_mechanism_for_data, get_denormalized_fields_for_data
 from issues.regressions import issue_is_regression
 
@@ -116,7 +116,7 @@ def get_legacy_grouping_for_mechanism_independent_key(project_id, key_with_mecha
         project_id=project_id,
         grouping_key=key_with_mechanism.key,
         grouping_key_hash=get_grouping_key_hash(key_with_mechanism.key),
-        grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+        grouping_mechanism=BUGSINK_GROUPING_V1,
     ).first()
 
 

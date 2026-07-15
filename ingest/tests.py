@@ -27,8 +27,9 @@ from events.usage import hour_bucket
 from issues.factories import get_or_create_issue
 from issues.grouping_mechanisms import (
     GROUPING_TRANSITION_PERIOD,
-    LATEST_GROUPING_MECHANISM,
-    LEGACY_GROUPING_MECHANISM,
+    CURRENT_GROUPING_MECHANISM,
+    BUGSINK_GROUPING_V2,
+    BUGSINK_GROUPING_V1,
     MECHANISM_INDEPENDENT_GROUPING,
 )
 from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind, Grouping
@@ -1111,7 +1112,7 @@ class IngestViewTestCase(TransactionTestCase):
 
         BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
 
-        self.assertEqual(LATEST_GROUPING_MECHANISM, Grouping.objects.get().grouping_mechanism)
+        self.assertEqual(CURRENT_GROUPING_MECHANISM, Grouping.objects.get().grouping_mechanism)
 
     def test_ingest_stores_mechanism_independent_grouping_for_explicit_fingerprint(self):
         request = self.request_factory.post("/api/1/store/")
@@ -1137,7 +1138,7 @@ class IngestViewTestCase(TransactionTestCase):
             project=self.quiet_project,
             grouping_key=grouping_key,
             grouping_key_hash=get_grouping_key_hash(grouping_key),
-            grouping_mechanism=LEGACY_GROUPING_MECHANISM,  # the "cannot be identified as none" part of the test
+            grouping_mechanism=BUGSINK_GROUPING_V1,  # the "cannot be identified as none" part of the test
             issue=issue,
         )
 
@@ -1150,7 +1151,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(1, Issue.objects.count())
         self.assertEqual(2, Grouping.objects.count())
         self.assertEqual(
-            {LEGACY_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING},
+            {BUGSINK_GROUPING_V1, MECHANISM_INDEPENDENT_GROUPING},
             set(Grouping.objects.values_list("grouping_mechanism", flat=True)),
         )
         self.assertEqual({issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
@@ -1161,7 +1162,7 @@ class IngestViewTestCase(TransactionTestCase):
         now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
         project = Project.objects.create(
             name="transition",
-            grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+            grouping_mechanism=BUGSINK_GROUPING_V1,
             alert_on_new_issue=False,
             alert_on_regression=False,
             alert_on_unmute=False,
@@ -1171,8 +1172,8 @@ class IngestViewTestCase(TransactionTestCase):
         BaseIngestAPIView().digest_event(**_digest_params(first, project, request, now))
         old_issue = Issue.objects.get()
 
-        project.grouping_mechanism = LATEST_GROUPING_MECHANISM
-        project.previous_grouping_mechanism = LEGACY_GROUPING_MECHANISM
+        project.grouping_mechanism = BUGSINK_GROUPING_V2
+        project.previous_grouping_mechanism = BUGSINK_GROUPING_V1
         project.grouping_mechanism_upgraded_at = now
         project.save()
 
@@ -1183,7 +1184,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(1, Issue.objects.count())
         self.assertEqual(2, Grouping.objects.count())
         self.assertEqual(
-            {LEGACY_GROUPING_MECHANISM, LATEST_GROUPING_MECHANISM},
+            {BUGSINK_GROUPING_V1, BUGSINK_GROUPING_V2},
             set(Grouping.objects.values_list("grouping_mechanism", flat=True)),
         )
         self.assertEqual({old_issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
@@ -1197,7 +1198,7 @@ class IngestViewTestCase(TransactionTestCase):
         now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
         project = Project.objects.create(
             name="back-and-forth-transition",
-            grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+            grouping_mechanism=BUGSINK_GROUPING_V1,
             alert_on_new_issue=False,
             alert_on_regression=False,
             alert_on_unmute=False,
@@ -1207,8 +1208,8 @@ class IngestViewTestCase(TransactionTestCase):
             **_digest_params(create_event_data(exception_type="BackAndForthError"), project, request, now))
         old_issue = Issue.objects.get()
 
-        project.grouping_mechanism = LATEST_GROUPING_MECHANISM
-        project.previous_grouping_mechanism = LEGACY_GROUPING_MECHANISM
+        project.grouping_mechanism = BUGSINK_GROUPING_V2
+        project.previous_grouping_mechanism = BUGSINK_GROUPING_V1
         project.grouping_mechanism_upgraded_at = now
         project.save()
         BaseIngestAPIView().digest_event(**_digest_params(
@@ -1218,8 +1219,8 @@ class IngestViewTestCase(TransactionTestCase):
             now + datetime.timedelta(minutes=1),
         ))
 
-        project.grouping_mechanism = LEGACY_GROUPING_MECHANISM
-        project.previous_grouping_mechanism = LATEST_GROUPING_MECHANISM
+        project.grouping_mechanism = BUGSINK_GROUPING_V1
+        project.previous_grouping_mechanism = BUGSINK_GROUPING_V2
         project.grouping_mechanism_upgraded_at = now + datetime.timedelta(minutes=2)
         project.save()
         BaseIngestAPIView().digest_event(**_digest_params(
@@ -1234,7 +1235,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(3, Event.objects.count())
         self.assertEqual(3, Issue.objects.get().digested_event_count)
         self.assertEqual(
-            {LEGACY_GROUPING_MECHANISM, LATEST_GROUPING_MECHANISM},
+            {BUGSINK_GROUPING_V1, BUGSINK_GROUPING_V2},
             set(Grouping.objects.values_list("grouping_mechanism", flat=True)),
         )
         self.assertEqual({old_issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
@@ -1244,7 +1245,7 @@ class IngestViewTestCase(TransactionTestCase):
         now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
         project = Project.objects.create(
             name="expired-transition",
-            grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+            grouping_mechanism=BUGSINK_GROUPING_V1,
             alert_on_new_issue=False,
             alert_on_regression=False,
             alert_on_unmute=False,
@@ -1253,8 +1254,8 @@ class IngestViewTestCase(TransactionTestCase):
 
         BaseIngestAPIView().digest_event(**_digest_params(first, project, request, now))
 
-        project.grouping_mechanism = LATEST_GROUPING_MECHANISM
-        project.previous_grouping_mechanism = LEGACY_GROUPING_MECHANISM
+        project.grouping_mechanism = BUGSINK_GROUPING_V2
+        project.previous_grouping_mechanism = BUGSINK_GROUPING_V1
         project.grouping_mechanism_upgraded_at = now - GROUPING_TRANSITION_PERIOD - datetime.timedelta(seconds=1)
         project.save()
 

@@ -1,11 +1,11 @@
 from django.test import TestCase as DjangoTestCase
 
-from issues.grouping_mechanisms import LEGACY_GROUPING_MECHANISM
+from issues.grouping_mechanisms import BUGSINK_GROUPING_V1
 from issues.utils import get_issue_grouper_for_data as _get_issue_grouper_for_data
 
 
 def get_issue_grouper_for_data(data, calculated_type=None, calculated_value=None):
-    return _get_issue_grouper_for_data(data, calculated_type, calculated_value, LEGACY_GROUPING_MECHANISM)
+    return _get_issue_grouper_for_data(data, calculated_type, calculated_value, BUGSINK_GROUPING_V1)
 
 
 class LegacyGroupingUtilsTestCase(DjangoTestCase):

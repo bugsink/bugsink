@@ -26,7 +26,7 @@ from events.factories import create_event, create_event_data
 from bsmain.management.commands.send_json import Command as SendJsonCommand
 from compat.dsn import get_header_value
 from events.models import Event
-from issues.grouping_mechanisms import LATEST_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING
+from issues.grouping_mechanisms import BUGSINK_GROUPING_V2, MECHANISM_INDEPENDENT_GROUPING
 from bsmain.models import AuthToken
 from ingest.views import BaseIngestAPIView
 from issues.factories import get_or_create_issue
@@ -1028,7 +1028,7 @@ class GroupingUtilsTestCase(DjangoTestCase):
         key_with_mechanism = get_key_with_mechanism_for_data({"fingerprint": ["{{ default }}", "fixed string"]})
 
         self.assertEqual("Log Message: <no log message> ⋄ fixed string", key_with_mechanism.key)
-        self.assertEqual(LATEST_GROUPING_MECHANISM, key_with_mechanism.mechanism)
+        self.assertEqual(BUGSINK_GROUPING_V2, key_with_mechanism.mechanism)
 
     def test_latest_grouping_ignores_transaction(self):
         # this trivially tests that #441, "transaction should not be part of the grouping key", is fixed.

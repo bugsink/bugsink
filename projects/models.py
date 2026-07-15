@@ -13,7 +13,7 @@ from bugsink.app_settings import get_settings
 from bugsink.transaction import delay_on_commit
 
 from compat.dsn import build_dsn
-from issues.grouping_mechanisms import GROUPING_MECHANISM_CHOICES, LATEST_GROUPING_MECHANISM
+from issues.grouping_mechanisms import GROUPING_MECHANISM_CHOICES, CURRENT_GROUPING_MECHANISM
 
 from teams.models import TeamMembership
 
@@ -130,7 +130,7 @@ class Project(models.Model):
     grouping_mechanism = models.CharField(
         max_length=64,
         choices=GROUPING_MECHANISM_CHOICES,
-        default=LATEST_GROUPING_MECHANISM,
+        default=CURRENT_GROUPING_MECHANISM,
     )
     previous_grouping_mechanism = models.CharField(
         max_length=64,

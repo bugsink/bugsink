@@ -13,19 +13,20 @@ class GroupingMechanism:
 GROUPING_TRANSITION_PERIOD = timedelta(days=30)
 
 MECHANISM_INDEPENDENT_GROUPING = "none"
-LEGACY_GROUPING_MECHANISM = "bugsink-v1"
-LATEST_GROUPING_MECHANISM = "bugsink-v2"
+BUGSINK_GROUPING_V1 = "bugsink-v1"
+BUGSINK_GROUPING_V2 = "bugsink-v2"
+CURRENT_GROUPING_MECHANISM = BUGSINK_GROUPING_V2
 
 # I think in general it's a good idea to let legacy display names reflect the history, and have the latest name reflect
 # why it's better than the previous one.
 GROUPING_MECHANISMS = [
     GroupingMechanism(
-        LEGACY_GROUPING_MECHANISM,
+        BUGSINK_GROUPING_V1,
         "Original, default until v2.4.0 (July 2026)",
         v1.default_issue_grouper,
     ),
     GroupingMechanism(
-        LATEST_GROUPING_MECHANISM,
+        BUGSINK_GROUPING_V2,
         "Value-normalized (latest)",
         v2.default_issue_grouper,
     ),
