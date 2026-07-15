@@ -1,12 +1,14 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.utils.html import format_html
 from django.db.models import Sum
 
 from bugsink.utils import assert_
 from bugsink.app_settings import get_settings
+from issues.grouping_mechanisms import GROUPING_TRANSITION_PERIOD, get_grouping_mechanism
 from teams.models import TeamMembership
 from bsmain.utils import yesno
 
@@ -85,6 +87,7 @@ class ProjectForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         team_qs = kwargs.pop("team_qs", None)
         super().__init__(*args, **kwargs)
+        self.old_grouping_mechanism = None
 
         self.fields["retention_max_event_count"].help_text = _("The maximum number of events to store before evicting.")
 
@@ -98,6 +101,8 @@ class ProjectForm(forms.ModelForm):
             self.fields["retention_max_event_count"].initial = min(maxes)
 
         if self.instance is not None and self.instance.pk is not None:
+            self.old_grouping_mechanism = self.instance.grouping_mechanism
+
             # for editing, we disallow changing the team. consideration: it's somewhat hard to see what the consequences
             # for authorization are (from the user's perspective).
             del self.fields["team"]
@@ -115,6 +120,23 @@ class ProjectForm(forms.ModelForm):
                 _("Use the DSN to {link}."),
                 link=format_html('<a href="{}" class="text-cyan-800 font-bold">{}</a>', href, _("set up the SDK")),
             )
+
+            transition_ends_at = (
+                self.instance.grouping_mechanism_upgraded_at + GROUPING_TRANSITION_PERIOD
+                if self.instance.grouping_mechanism_upgraded_at is not None else None
+            )
+            if transition_ends_at is not None and timezone.now() <= transition_ends_at:
+                previous_grouping_mechanism = get_grouping_mechanism(self.instance.previous_grouping_mechanism)
+                self.fields["grouping_mechanism"].choices = [
+                    (
+                        value,
+                        _("%(name)s -- previous, transitioning until %(date)s") % {
+                            "name": label,
+                            "date": timezone.localtime(transition_ends_at).strftime("%Y-%m-%d"),
+                        } if value == previous_grouping_mechanism.identifier else label,
+                    )
+                    for value, label in self.fields["grouping_mechanism"].choices
+                ]
         else:
             # for creation, we allow changing the team; (as an additional improvement we _could_ consider hiding this
             # field if there is only one team, and especially if SINGLE_TEAM is True, but being explicit is fine too as
@@ -136,7 +158,7 @@ class ProjectForm(forms.ModelForm):
     class Meta:
         model = Project
 
-        fields = ["team", "name", "visibility", "retention_max_event_count"]
+        fields = ["team", "name", "visibility", "retention_max_event_count", "grouping_mechanism"]
         # slug is shown read-only via an explicit (declared) field for edit; creation auto-generates it on the model.
         # If we ever make slug editable, we'd want JS like django/contrib/admin/static/admin/js/prepopulate.js.
 
@@ -170,3 +192,12 @@ class ProjectForm(forms.ModelForm):
                                                 get_settings().MAX_RETENTION_EVENT_COUNT))
 
         return retention_max_event_count
+
+    def save(self, commit=True):
+        if self.old_grouping_mechanism is not None:
+            new_grouping_mechanism = self.cleaned_data["grouping_mechanism"]
+            if new_grouping_mechanism != self.old_grouping_mechanism:
+                self.instance.previous_grouping_mechanism = self.old_grouping_mechanism
+                self.instance.grouping_mechanism_upgraded_at = timezone.now()
+
+        return super().save(commit=commit)

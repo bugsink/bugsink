@@ -25,7 +25,13 @@ from events.storage_registry import override_event_storages
 from events.models import InstallationEventCountsPerHour, IssueEventCountsPerHour, ProjectEventCountsPerHour, Event
 from events.usage import hour_bucket
 from issues.factories import get_or_create_issue
-from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
+from issues.grouping_mechanisms import (
+    GROUPING_TRANSITION_PERIOD,
+    LATEST_GROUPING_MECHANISM,
+    LEGACY_GROUPING_MECHANISM,
+    MECHANISM_INDEPENDENT_GROUPING,
+)
+from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind, Grouping
 from issues.utils import get_values
 from bugsink.app_settings import override_settings
 from bugsink.streams import UnclosableBytesIO
@@ -34,7 +40,7 @@ from compat.dsn import get_header_value
 from bsmain.management.commands.send_json import Command as SendJsonCommand
 from phonehome.models import Installation
 
-from .views import BaseIngestAPIView, IngestSecurityAPIView, MinidumpAPIView
+from .views import BaseIngestAPIView, IngestSecurityAPIView, MinidumpAPIView, get_grouping_key_hash
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 from .event_counter import check_for_thresholds
 from .header_validators import (
@@ -1099,6 +1105,165 @@ class IngestViewTestCase(TransactionTestCase):
             2,
             IssueEventCountsPerHour.objects.get(issue=Issue.objects.get(), bucket=hour_bucket(first_hour)).count,
         )
+
+    def test_ingest_stores_latest_grouping_mechanism(self):
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
+
+        self.assertEqual(LATEST_GROUPING_MECHANISM, Grouping.objects.get().grouping_mechanism)
+
+    def test_ingest_stores_mechanism_independent_grouping_for_explicit_fingerprint(self):
+        request = self.request_factory.post("/api/1/store/")
+        event_data = create_event_data()
+        event_data["fingerprint"] = ["shared-fingerprint"]
+
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        self.assertEqual(MECHANISM_INDEPENDENT_GROUPING, Grouping.objects.get().grouping_mechanism)
+
+    def test_mechanism_independent_grouping_matches_legacy_multipart_fingerprint(self):
+        # test for "another piece of legacy-handling code in the digest path" (can be removed at some point)
+        issue = Issue.objects.create(
+            project=self.quiet_project,
+            digest_order=1,
+            first_seen=timezone.now(),
+            last_seen=timezone.now(),
+            digested_event_count=1,
+        )
+        # explicit fingerprint, but multi-part so cannot be identified as "none" by our migration
+        grouping_key = "shared ⋄ fingerprint"
+        Grouping.objects.create(
+            project=self.quiet_project,
+            grouping_key=grouping_key,
+            grouping_key_hash=get_grouping_key_hash(grouping_key),
+            grouping_mechanism=LEGACY_GROUPING_MECHANISM,  # the "cannot be identified as none" part of the test
+            issue=issue,
+        )
+
+        event_data = create_event_data()
+        event_data["fingerprint"] = ["shared", "fingerprint"]
+        request = self.request_factory.post("/api/1/store/")
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        # no new issue is created, but the correct mechanism-independent grouping is created for the old issue.
+        self.assertEqual(1, Issue.objects.count())
+        self.assertEqual(2, Grouping.objects.count())
+        self.assertEqual(
+            {LEGACY_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING},
+            set(Grouping.objects.values_list("grouping_mechanism", flat=True)),
+        )
+        self.assertEqual({issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
+        self.assertEqual(2, Issue.objects.get().digested_event_count)
+
+    def test_grouping_transition_links_old_issue_to_new_mechanism(self):
+        request = self.request_factory.post("/api/1/store/")
+        now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        project = Project.objects.create(
+            name="transition",
+            grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+            alert_on_new_issue=False,
+            alert_on_regression=False,
+            alert_on_unmute=False,
+        )
+        first = create_event_data(exception_type="TransitionError")
+
+        BaseIngestAPIView().digest_event(**_digest_params(first, project, request, now))
+        old_issue = Issue.objects.get()
+
+        project.grouping_mechanism = LATEST_GROUPING_MECHANISM
+        project.previous_grouping_mechanism = LEGACY_GROUPING_MECHANISM
+        project.grouping_mechanism_upgraded_at = now
+        project.save()
+
+        second = create_event_data(exception_type="TransitionError")
+        BaseIngestAPIView().digest_event(
+            **_digest_params(second, project, request, now + datetime.timedelta(minutes=1)))
+
+        self.assertEqual(1, Issue.objects.count())
+        self.assertEqual(2, Grouping.objects.count())
+        self.assertEqual(
+            {LEGACY_GROUPING_MECHANISM, LATEST_GROUPING_MECHANISM},
+            set(Grouping.objects.values_list("grouping_mechanism", flat=True)),
+        )
+        self.assertEqual({old_issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
+
+    def test_grouping_transition_handles_switching_back_to_previous_mechanism(self):
+        # simple test for the "back-and-forth" case, where a project switches from legacy to latest and then back to
+        # legacy again. At least this proves that it works correctly for the simple case, I can't really think of a more
+        # complex scenario that would be worth testing for so we'll leave it at that for now.
+
+        request = self.request_factory.post("/api/1/store/")
+        now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        project = Project.objects.create(
+            name="back-and-forth-transition",
+            grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+            alert_on_new_issue=False,
+            alert_on_regression=False,
+            alert_on_unmute=False,
+        )
+
+        BaseIngestAPIView().digest_event(
+            **_digest_params(create_event_data(exception_type="BackAndForthError"), project, request, now))
+        old_issue = Issue.objects.get()
+
+        project.grouping_mechanism = LATEST_GROUPING_MECHANISM
+        project.previous_grouping_mechanism = LEGACY_GROUPING_MECHANISM
+        project.grouping_mechanism_upgraded_at = now
+        project.save()
+        BaseIngestAPIView().digest_event(**_digest_params(
+            create_event_data(exception_type="BackAndForthError"),
+            project,
+            request,
+            now + datetime.timedelta(minutes=1),
+        ))
+
+        project.grouping_mechanism = LEGACY_GROUPING_MECHANISM
+        project.previous_grouping_mechanism = LATEST_GROUPING_MECHANISM
+        project.grouping_mechanism_upgraded_at = now + datetime.timedelta(minutes=2)
+        project.save()
+        BaseIngestAPIView().digest_event(**_digest_params(
+            create_event_data(exception_type="BackAndForthError"),
+            project,
+            request,
+            now + datetime.timedelta(minutes=3),
+        ))
+
+        self.assertEqual(1, Issue.objects.count())
+        self.assertEqual(2, Grouping.objects.count())
+        self.assertEqual(3, Event.objects.count())
+        self.assertEqual(3, Issue.objects.get().digested_event_count)
+        self.assertEqual(
+            {LEGACY_GROUPING_MECHANISM, LATEST_GROUPING_MECHANISM},
+            set(Grouping.objects.values_list("grouping_mechanism", flat=True)),
+        )
+        self.assertEqual({old_issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
+
+    def test_expired_grouping_transition_creates_new_issue(self):
+        request = self.request_factory.post("/api/1/store/")
+        now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        project = Project.objects.create(
+            name="expired-transition",
+            grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+            alert_on_new_issue=False,
+            alert_on_regression=False,
+            alert_on_unmute=False,
+        )
+        first = create_event_data(exception_type="ExpiredTransitionError")
+
+        BaseIngestAPIView().digest_event(**_digest_params(first, project, request, now))
+
+        project.grouping_mechanism = LATEST_GROUPING_MECHANISM
+        project.previous_grouping_mechanism = LEGACY_GROUPING_MECHANISM
+        project.grouping_mechanism_upgraded_at = now - GROUPING_TRANSITION_PERIOD - datetime.timedelta(seconds=1)
+        project.save()
+
+        second = create_event_data(exception_type="ExpiredTransitionError")
+        BaseIngestAPIView().digest_event(
+            **_digest_params(second, project, request, now + datetime.timedelta(minutes=1)))
+
+        self.assertEqual(2, Issue.objects.count())
+        self.assertEqual(2, Grouping.objects.count())
 
     def test_ingest_refreshes_issue_calculated_fields_on_subsequent_events(self):
         # When a fingerprint groups events whose exception type/value differ, the issue's denormalized

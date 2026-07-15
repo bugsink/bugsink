@@ -20,6 +20,7 @@ from alerts.tasks import send_unmute_alert
 from compat.timestamp import parse_timestamp, format_timestamp
 from tags.models import IssueTag, TagValue
 
+from .grouping_mechanisms import GROUPING_CHOICES
 from .utils import (
     parse_lines, serialize_lines, filter_qs_for_fixed_at, exclude_qs_for_fixed_at,
     get_title_for_exception_type_and_value)
@@ -249,6 +250,8 @@ class Grouping(models.Model):
     # we hash the key to make it indexable on MySQL, see https://code.djangoproject.com/ticket/2495
     grouping_key_hash = models.CharField(max_length=64, blank=False, null=True)
 
+    grouping_mechanism = models.CharField(max_length=64, choices=GROUPING_CHOICES)
+
     issue = models.ForeignKey("Issue", blank=False, null=False, on_delete=models.DO_NOTHING)
 
     def __str__(self):
@@ -258,7 +261,7 @@ class Grouping(models.Model):
         unique_together = [
             # principled: grouping _key_ is a _key_ for a reason (within a project). This also implies the main way of
             # looking up groupings has an appropriate index.
-            ("project", "grouping_key_hash"),
+            ("project", "grouping_key_hash", "grouping_mechanism"),
         ]
 
 

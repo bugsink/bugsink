@@ -10,6 +10,7 @@ from projects.forms import ProjectForm
 from projects.models import Project, ProjectMembership, ProjectRole, ProjectVisibility
 from events.factories import create_event
 from issues.factories import get_or_create_issue, denormalized_issue_fields
+from issues.grouping_mechanisms import LEGACY_GROUPING_MECHANISM, LATEST_GROUPING_MECHANISM
 from tags.models import store_tags
 from issues.models import TurningPoint, TurningPointKind, Issue
 from alerts.models import MessagingServiceConfig
@@ -170,6 +171,7 @@ class ProjectFormTestCase(TransactionTestCase):
                 "slug": "tampered-slug",
                 "visibility": ProjectVisibility.JOINABLE,
                 "retention_max_event_count": 10000,
+                "grouping_mechanism": project.grouping_mechanism,
             },
             instance=project,
         )
@@ -178,6 +180,68 @@ class ProjectFormTestCase(TransactionTestCase):
         saved = form.save()
         self.assertEqual(saved.slug, "original-slug")
         self.assertEqual(saved.name, "Renamed")
+
+    def test_changing_grouping_mechanism_starts_transition_window(self):
+        project = Project.objects.create(
+            name="Original Name",
+            slug="original-slug",
+            grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+        )
+
+        form = ProjectForm(
+            data={
+                "name": "Original Name",
+                "visibility": ProjectVisibility.JOINABLE,
+                "retention_max_event_count": 10000,
+                "grouping_mechanism": LATEST_GROUPING_MECHANISM,
+            },
+            instance=project,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        saved = form.save()
+        self.assertEqual(LATEST_GROUPING_MECHANISM, saved.grouping_mechanism)
+        self.assertEqual(LEGACY_GROUPING_MECHANISM, saved.previous_grouping_mechanism)
+        self.assertIsNotNone(saved.grouping_mechanism_upgraded_at)
+
+    def test_changing_grouping_mechanism_back_and_forth_restarts_transition_window(self):
+        first_changed_at = datetime(2026, 6, 14, 12, 34, tzinfo=timezone.utc)
+        second_changed_at = datetime(2026, 6, 15, 12, 34, tzinfo=timezone.utc)
+        project = Project.objects.create(
+            name="Original Name",
+            slug="original-slug",
+            grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+        )
+
+        with patch("projects.forms.timezone.now", return_value=first_changed_at):
+            form = ProjectForm(
+                data={
+                    "name": "Original Name",
+                    "visibility": ProjectVisibility.JOINABLE,
+                    "retention_max_event_count": 10000,
+                    "grouping_mechanism": LATEST_GROUPING_MECHANISM,
+                },
+                instance=project,
+            )
+            self.assertTrue(form.is_valid(), form.errors)
+            saved = form.save()
+
+        with patch("projects.forms.timezone.now", return_value=second_changed_at):
+            form = ProjectForm(
+                data={
+                    "name": "Original Name",
+                    "visibility": ProjectVisibility.JOINABLE,
+                    "retention_max_event_count": 10000,
+                    "grouping_mechanism": LEGACY_GROUPING_MECHANISM,
+                },
+                instance=saved,
+            )
+            self.assertTrue(form.is_valid(), form.errors)
+            saved = form.save()
+
+        self.assertEqual(LEGACY_GROUPING_MECHANISM, saved.grouping_mechanism)
+        self.assertEqual(LATEST_GROUPING_MECHANISM, saved.previous_grouping_mechanism)
+        self.assertEqual(second_changed_at, saved.grouping_mechanism_upgraded_at)
 
 
 class ProjectListOpenIssueCountTestCase(TransactionTestCase):

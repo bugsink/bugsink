@@ -39,6 +39,7 @@ class ProjectAdmin(admin.ModelAdmin):
     list_display = [
         'name',
         'dsn',
+        'grouping_mechanism',
         'digested_event_count',
         'stored_event_count',
     ]

@@ -38,6 +38,7 @@ from .forms import CommentForm
 from .utils import get_values, get_main_exception
 from events.utils import annotate_with_meta, apply_sourcemaps, get_sourcemap_images
 from .markdown_issue import render_issue_md
+from .grouping_mechanisms import GROUPING_MECHANISMS, MECHANISM_INDEPENDENT_GROUPING
 
 logger = logging.getLogger("bugsink.issues")
 
@@ -640,10 +641,21 @@ def issue_grouping(request, issue):
 
     event_qs = search_events(issue.project, issue, request.GET.get("q", ""))
     last_event = event_qs.order_by("digest_order").last()
+
+    grouping_mechanisms_by_age = [MECHANISM_INDEPENDENT_GROUPING] + [
+        mechanism.identifier for mechanism in reversed(GROUPING_MECHANISMS)
+    ]
+    grouping_order = {mechanism: i for i, mechanism in enumerate(grouping_mechanisms_by_age)}
+    groupers = sorted(
+        issue.grouping_set.all(),
+        key=lambda grouper: (grouping_order.get(grouper.grouping_mechanism, 999), grouper.grouping_key),
+    )
+
     return render(request, "issues/grouping.html", {
         "tab": "grouping",
         "project": issue.project,
         "issue": issue,
+        "groupers": groupers,
         "is_event_page": False,
         "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,
