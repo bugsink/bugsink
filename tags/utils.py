@@ -1,5 +1,5 @@
 from events.ua_stuff import get_contexts_enriched_with_ua
-from sentry.utils.safe import get_path
+from sentry.at_glitchtip_af9a700a8706.utils.safe import get_path
 
 from issues.utils import get_main_exception
 

@@ -1,12 +1,10 @@
 from collections import namedtuple
 
-from django.utils.encoding import force_str
+from sentry.at_glitchtip_af9a700a8706.stacktraces.functions import get_function_name_for_frame
+from sentry.at_glitchtip_af9a700a8706.stacktraces.processing import get_crash_frame_from_event_data, get_crash_location
+from sentry.at_glitchtip_af9a700a8706.utils.safe import get_path, trim
 
-from sentry.stacktraces.functions import get_function_name_for_frame
-from sentry.stacktraces.processing import get_crash_frame_from_event_data, get_crash_location
-from sentry.utils.safe import get_path, trim
-
-from sentry.utils.strings import strip
+from sentry.at_glitchtip_af9a700a8706.utils.strings import strip
 
 
 def maybe_empty(s):
@@ -141,14 +139,11 @@ def get_key_with_mechanism_for_data(data, calculated_type=None, calculated_value
     from issues.grouping_mechanisms import (
         CURRENT_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING, get_grouping_mechanism)
 
-    if calculated_type is None and calculated_value is None:
-        # convenience for calling code from tests, when digesting we don't do this because we already have this info
-        calculated_type, calculated_value = get_type_and_value_for_data(data)
-
-    transaction = force_str(data.get("transaction") or "<no transaction>")
     fingerprint = data.get("fingerprint")
     grouping_mechanism = grouping_mechanism or CURRENT_GROUPING_MECHANISM
     mechanism = get_grouping_mechanism(grouping_mechanism)
+    if calculated_type is None and calculated_value is None:
+        calculated_type, calculated_value = mechanism.get_type_and_value_for_data(data)
 
     if fingerprint:
         used_default = False
@@ -156,7 +151,7 @@ def get_key_with_mechanism_for_data(data, calculated_type=None, calculated_value
         for part in fingerprint:
             if part == "{{ default }}":
                 used_default = True
-                parts.append(mechanism.grouper(data, calculated_type, calculated_value, transaction))
+                parts.append(mechanism.grouper(data, calculated_type, calculated_value))
             else:
                 parts.append(str(part))
 
@@ -165,12 +160,16 @@ def get_key_with_mechanism_for_data(data, calculated_type=None, calculated_value
             grouping_mechanism if used_default else MECHANISM_INDEPENDENT_GROUPING,
         )
 
-    return KeyWithMechanism(mechanism.grouper(data, calculated_type, calculated_value, transaction), grouping_mechanism)
+    return KeyWithMechanism(mechanism.grouper(data, calculated_type, calculated_value), grouping_mechanism)
 
 
 def get_issue_grouper_for_data(data, calculated_type=None, calculated_value=None, grouping_mechanism=None):
     return get_key_with_mechanism_for_data(
-        data, calculated_type, calculated_value, grouping_mechanism).key
+        data,
+        calculated_type=calculated_type,
+        calculated_value=calculated_value,
+        grouping_mechanism=grouping_mechanism,
+    ).key
 
 
 def get_title_for_exception_type_and_value(type_, value):

@@ -1,12 +1,14 @@
 from datetime import timedelta
 
 from . import v1, v2
+from .building_blocks.v1 import get_type_and_value_for_data
 
 
 class GroupingMechanism:
-    def __init__(self, identifier, display_name, grouper):
+    def __init__(self, identifier, display_name, get_type_and_value_for_data, grouper):
         self.identifier = identifier
         self.display_name = display_name
+        self.get_type_and_value_for_data = get_type_and_value_for_data
         self.grouper = grouper
 
 
@@ -23,11 +25,13 @@ GROUPING_MECHANISMS = [
     GroupingMechanism(
         BUGSINK_GROUPING_V1,
         "Original, default until v2.4.0 (July 2026)",
+        get_type_and_value_for_data,
         v1.default_issue_grouper,
     ),
     GroupingMechanism(
         BUGSINK_GROUPING_V2,
         "Value-normalized (latest)",
+        get_type_and_value_for_data,
         v2.default_issue_grouper,
     ),
 ]

@@ -137,10 +137,10 @@ def grouping_transition_is_active(project, digested_at):
     return digested_at <= project.grouping_mechanism_upgraded_at + GROUPING_TRANSITION_PERIOD
 
 
-def get_grouping_path_for_event(project, event_data, calculated_type, calculated_value, digested_at):
+def get_grouping_path_for_event(project, event_data, digested_at):
     # First try the project's current mechanism.
     current_key_with_mechanism = get_key_with_mechanism_for_data(
-        event_data, calculated_type, calculated_value, project.grouping_mechanism)
+        event_data, grouping_mechanism=project.grouping_mechanism)
     if (current_grouping := get_existing_grouping(project.id, current_key_with_mechanism)) is not None:
         return GroupingPath.FOUND, (current_grouping,)
 
@@ -162,7 +162,7 @@ def get_grouping_path_for_event(project, event_data, calculated_type, calculated
 
     # During the transition window, retry the previous mechanism.
     previous_key_with_mechanism = get_key_with_mechanism_for_data(
-        event_data, calculated_type, calculated_value, project.previous_grouping_mechanism)
+        event_data, grouping_mechanism=project.previous_grouping_mechanism)
     if (previous_grouping := get_existing_grouping(project.id, previous_key_with_mechanism)) is not None:
         return GroupingPath.ATTACH, (current_key_with_mechanism, previous_grouping)
 
@@ -467,8 +467,7 @@ class BaseIngestAPIView(View):
         denormalized_fields["calculated_type"] = calculated_type
         denormalized_fields["calculated_value"] = calculated_value
 
-        grouping_path, path_context = get_grouping_path_for_event(
-            project, event_data, calculated_type, calculated_value, digested_at)
+        grouping_path, path_context = get_grouping_path_for_event(project, event_data, digested_at)
 
         if grouping_path in [GroupingPath.FOUND, GroupingPath.ATTACH]:
             if grouping_path == GroupingPath.FOUND:
