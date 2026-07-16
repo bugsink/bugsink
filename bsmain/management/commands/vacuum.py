@@ -125,7 +125,7 @@ class Command(BaseCommand):
                 )
 
         if run_ingest_dir:
-            self.stdout.write("Vacuuming ingest dir...")
+            self.stdout.write("Checking for stale temporary ingest files...")
             vacuum_ingest_dir_sync(days=options["ingest_max_days"], stdout=self.stdout, stderr=self.stderr)
 
         self.stdout.write(self.style.SUCCESS("Vacuum complete."))
