@@ -289,6 +289,7 @@ class ProjectListOpenIssueCountTestCase(TransactionTestCase):
             response = self.client.get("/projects/mine/")
 
         issue_filter.assert_not_called()
+        self.assertContains(response, "many issues")
         self.assertNotContains(response, "open issues")
 
 
