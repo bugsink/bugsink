@@ -1,6 +1,8 @@
 from datetime import timedelta
 
 from django.contrib.auth import login
+from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth.forms import PasswordChangeForm
 from django.shortcuts import render, redirect, reverse
 from django.contrib.auth import get_user_model
 from django.http import Http404
@@ -229,23 +231,38 @@ def reset_password(request, token=None):
 def preferences(request):
     user = request.user
     if request.method == 'POST':
-        form = PreferencesForm(request.POST, instance=user)
+        if request.POST.get("action") == "set_password":
+            form = PreferencesForm(instance=user)
+            password_form = PasswordChangeForm(user, request.POST)
 
-        if form.is_valid():
-            user = form.save()
+            if password_form.is_valid():
+                password_form.save()
+                update_session_auth_hash(request, user)
+                messages.success(request, _("Password updated"))
+                return redirect('preferences')
 
-            # activate the selected language immediately for the Success message; we've already passed the middleware
-            # stage (which looked at the pre-change language), so we need to do this ourselves with the fresh value.
-            translation.activate(get_chosen_language(user, request))
+        else:
+            form = PreferencesForm(request.POST, instance=user)
+            password_form = PasswordChangeForm(user)
 
-            messages.success(request, _("Updated preferences"))
-            return redirect('preferences')
+            if form.is_valid():
+                user = form.save()
+
+                # activate the selected language immediately for the Success message; we've already passed the
+                # middleware stage (which looked at the pre-change language), so we need to do this ourselves with the
+                # fresh value.
+                translation.activate(get_chosen_language(user, request))
+
+                messages.success(request, _("Updated preferences"))
+                return redirect('preferences')
 
     else:
         form = PreferencesForm(instance=user)
+        password_form = PasswordChangeForm(user)
 
     return render(request, 'users/preferences.html', {
         'form': form,
+        'password_form': password_form,
     })
 
 
