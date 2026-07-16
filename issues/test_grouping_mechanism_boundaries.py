@@ -10,7 +10,6 @@ GROUPING_MECHANISMS_DIR = ROOT / "issues" / "grouping_mechanisms"
 BUILDING_BLOCKS_DIR = GROUPING_MECHANISMS_DIR / "building_blocks"
 SENTRY_IMPORT_HASH = "597d25951d00"
 VENDORED_SENTRY_DIR = ROOT / "sentry" / f"at_{SENTRY_IMPORT_HASH}"
-VENDORED_SENTRY_PACKAGE = f"sentry.at_{SENTRY_IMPORT_HASH}"
 VENDORED_SENTRY_PACKAGES = (
     "sentry.at_597d25951d00",
     "sentry.at_glitchtip_af9a700a8706",
@@ -22,8 +21,23 @@ ImportReference = namedtuple("ImportReference", ["module", "level", "display"])
 
 class GroupingMechanismBoundaryTestCase(TestCase):
     def test_python_code_imports_vendored_sentry_through_pinned_root(self):
+        def skip_import_boundary_file(path):
+            relative_parts = path.relative_to(ROOT).parts
+            if relative_parts[0].startswith("."):
+                return True
+
+            try:
+                path.relative_to(VENDORED_SENTRY_DIR)
+                return True
+            except ValueError:
+                return False
+
         self.assert_imports_allowed(
-            self._repo_python_files(),
+            [
+                path
+                for path in sorted(ROOT.rglob("*.py"))
+                if not skip_import_boundary_file(path)
+            ],
             self._is_not_unpinned_sentry_import,
         )
 
@@ -55,20 +69,41 @@ class GroupingMechanismBoundaryTestCase(TestCase):
 
     def _is_mechanism_import(self, path, imported):
         if imported.level == 1:
-            return self._is_building_block_module(imported.module)
+            return imported.module is not None and imported.module.startswith("building_blocks.v")
 
         return imported.level == 0 and (
-            self._is_pinned_sentry_or_stdlib(imported.module)
+            self._is_pinned_sentry_import(imported.module)
+            or self._is_stdlib(imported.module)
             or self._is_django_import(imported.module)
         )
 
     def _is_building_block_import(self, path, imported):
+        def is_lower_building_block_absolute_import(name):
+            if name is None:
+                return False
+
+            if not name.startswith(BUILDING_BLOCKS_PACKAGE + ".v"):
+                return False
+
+            imported_version = self._version_from_module(name.removeprefix(BUILDING_BLOCKS_PACKAGE + "."))
+            return imported_version < self._version_from_path(path)
+
+        def is_lower_building_block_relative_import(name):
+            if name is None:
+                return False
+
+            if not name.split(".", 1)[0].startswith("v"):
+                return False
+
+            imported_version = self._version_from_module(name)
+            return imported_version < self._version_from_path(path)
+
         if imported.level == 1:
-            return self._is_lower_building_block_module(path, imported.module)
+            return is_lower_building_block_relative_import(imported.module)
 
         return imported.level == 0 and (
             self._is_pinned_sentry_import(imported.module)
-            or self._is_lower_building_block_absolute_import(path, imported.module)
+            or is_lower_building_block_absolute_import(imported.module)
             or self._is_django_import(imported.module)
             or self._is_stdlib(imported.module)
         )
@@ -81,8 +116,13 @@ class GroupingMechanismBoundaryTestCase(TestCase):
             return True
 
         if imported.module == "sentry" or imported.module.startswith("sentry."):
-            return self._is_pinned_sentry_import(imported.module) or self._is_allowed_unpinned_sentry_import(
-                imported.module)
+            return (
+                self._is_pinned_sentry_import(imported.module)
+                or any(
+                    imported.module == package or imported.module.startswith(package + ".")
+                    for package in UNPINNED_SENTRY_PACKAGES
+                )
+            )
 
         return True
 
@@ -101,23 +141,11 @@ class GroupingMechanismBoundaryTestCase(TestCase):
 
         return True
 
-    def _is_pinned_sentry_or_stdlib(self, name):
-        if self._is_pinned_sentry_import(name):
-            return True
-
-        return self._is_stdlib(name)
-
     def _is_pinned_sentry_import(self, name):
         if name is None:
             return False
 
         return any(name == package or name.startswith(package + ".") for package in VENDORED_SENTRY_PACKAGES)
-
-    def _is_allowed_unpinned_sentry_import(self, name):
-        if name is None:
-            return False
-
-        return any(name == package or name.startswith(package + ".") for package in UNPINNED_SENTRY_PACKAGES)
 
     def _is_stdlib(self, name):
         if name is None:
@@ -138,14 +166,13 @@ class GroupingMechanismBoundaryTestCase(TestCase):
                     f"{path.relative_to(ROOT)} imports {imported.display}",
                 )
 
-    def _repo_python_files(self):
-        return [
-            path
-            for path in sorted(ROOT.rglob("*.py"))
-            if not self._skip_import_boundary_file(path)
-        ]
-
     def _imports_in(self, path):
+        def format_from_import(node):
+            dots = "." * node.level
+            module = node.module or ""
+            names = ", ".join(alias.name for alias in node.names)
+            return f"from {dots}{module} import {names}"
+
         tree = ast.parse(path.read_text(), filename=str(path))
 
         for node in ast.walk(tree):
@@ -154,41 +181,7 @@ class GroupingMechanismBoundaryTestCase(TestCase):
                     yield ImportReference(alias.name, 0, alias.name)
 
             if isinstance(node, ast.ImportFrom):
-                yield ImportReference(node.module, node.level, self._format_from_import(node))
-
-    def _skip_import_boundary_file(self, path):
-        relative_parts = path.relative_to(ROOT).parts
-        if relative_parts[0].startswith("."):
-            return True
-
-        try:
-            path.relative_to(VENDORED_SENTRY_DIR)
-            return True
-        except ValueError:
-            return False
-
-    def _is_building_block_module(self, name):
-        if name is None:
-            return False
-
-        return name.startswith("building_blocks.v")
-
-    def _is_lower_building_block_absolute_import(self, path, name):
-        if not name.startswith(BUILDING_BLOCKS_PACKAGE + ".v"):
-            return False
-
-        imported_version = self._version_from_module(name.removeprefix(BUILDING_BLOCKS_PACKAGE + "."))
-        return imported_version < self._version_from_path(path)
-
-    def _is_lower_building_block_module(self, path, name):
-        if name is None:
-            return False
-
-        if not name.split(".", 1)[0].startswith("v"):
-            return False
-
-        imported_version = self._version_from_module(name)
-        return imported_version < self._version_from_path(path)
+                yield ImportReference(node.module, node.level, format_from_import(node))
 
     def _version_from_path(self, path):
         return int(path.stem.removeprefix("v"))
@@ -199,9 +192,3 @@ class GroupingMechanismBoundaryTestCase(TestCase):
             return 0
 
         return int(version.removeprefix("v"))
-
-    def _format_from_import(self, node):
-        dots = "." * node.level
-        module = node.module or ""
-        names = ", ".join(alias.name for alias in node.names)
-        return f"from {dots}{module} import {names}"

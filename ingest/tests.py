@@ -30,6 +30,8 @@ from issues.grouping_mechanisms import (
     CURRENT_GROUPING_MECHANISM,
     BUGSINK_GROUPING_V2,
     BUGSINK_GROUPING_V1,
+    GROUPING_MECHANISMS,
+    GroupingMechanism,
     MECHANISM_INDEPENDENT_GROUPING,
 )
 from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind, Grouping
@@ -1292,6 +1294,36 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual("SecondError", issue.calculated_type)
         self.assertEqual("second message", issue.calculated_value)
         self.assertEqual(2, issue.digested_event_count)
+
+    def test_grouping_key_and_display_title_are_calculated_separately(self):
+        # Proves that the calculated_type/calculated_value used for the grouping mechanism are not the same as the
+        # calculated_type/calculated_value used for the issue title. This was made so that future changes to the one
+        # used for the display value/title won't break the grouping mechanism.
+        request = self.request_factory.post("/api/1/store/")
+        event_data = create_event_data()
+        event_data["exception"] = {
+            "values": [{
+                "type": "DisplayError",
+                "value": "display value",
+            }],
+        }
+
+        mocked_grouping_mechanism = GroupingMechanism(
+            "test-grouping-mechanism",  # should not show up
+            "Test grouping mechanism",  # should not show up
+            lambda data: ("GroupingError", "grouping value"),
+            lambda data, calculated_type, calculated_value: calculated_type + " + " + calculated_value,
+        )
+        self.quiet_project.grouping_mechanism = mocked_grouping_mechanism.identifier
+        self.quiet_project.save()
+
+        with patch("issues.grouping_mechanisms.GROUPING_MECHANISMS", GROUPING_MECHANISMS + [mocked_grouping_mechanism]):
+            BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        issue = Issue.objects.get()
+        self.assertEqual("DisplayError", issue.calculated_type)
+        self.assertEqual("display value", issue.calculated_value)
+        self.assertEqual("GroupingError + grouping value", Grouping.objects.get().grouping_key)  # proves actual use
 
 
 class IngestSecurityViewTestCase(TransactionTestCase):

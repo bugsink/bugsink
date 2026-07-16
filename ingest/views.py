@@ -462,6 +462,7 @@ class BaseIngestAPIView(View):
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
         # in an if-statement would require more rework (and possibly extra queries) than it's worth.
         denormalized_fields = get_denormalized_fields_for_data(event_data)
+
         # the 3 lines below are suggestive of a further inlining of the get_type_and_value_for_data function
         calculated_type, calculated_value = get_type_and_value_for_data(event_data)
         denormalized_fields["calculated_type"] = calculated_type

@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from . import v1, v2
-from .building_blocks.v1 import get_type_and_value_for_data
+from .building_blocks import v1 as building_blocks_v1
 
 
 class GroupingMechanism:
@@ -25,13 +25,13 @@ GROUPING_MECHANISMS = [
     GroupingMechanism(
         BUGSINK_GROUPING_V1,
         "Original, default until v2.4.0 (July 2026)",
-        get_type_and_value_for_data,
+        building_blocks_v1.get_type_and_value_for_data,
         v1.default_issue_grouper,
     ),
     GroupingMechanism(
         BUGSINK_GROUPING_V2,
         "Value-normalized (latest)",
-        get_type_and_value_for_data,
+        building_blocks_v1.get_type_and_value_for_data,
         v2.default_issue_grouper,
     ),
 ]

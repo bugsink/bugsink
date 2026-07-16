@@ -22,6 +22,10 @@ def get_values(obj):
 
 
 def get_type_and_value_for_data(data):
+    # note: this is a verbatim copy of the function in issues.utils, but we need to keep it here so that v1 grouping is
+    # not affected by future changes to the application-level event-shape helper (its transitive dependency closure is
+    # actually quite large so despite the fact that it seems like a straightforward data-getter the likelihood of it
+    # being affected by future changes is high).
     if "exception" in data and data["exception"]:
         return get_exception_type_and_value_for_exception(data)
     return get_exception_type_and_value_for_logmessage(data)

@@ -135,15 +135,12 @@ def get_exception_type_and_value_for_exception(data):
 KeyWithMechanism = namedtuple("KeyWithMechanism", ["key", "mechanism"])
 
 
-def get_key_with_mechanism_for_data(data, calculated_type=None, calculated_value=None, grouping_mechanism=None):
-    from issues.grouping_mechanisms import (
-        CURRENT_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING, get_grouping_mechanism)
+def get_key_with_mechanism_for_data(data, grouping_mechanism):
+    from issues.grouping_mechanisms import MECHANISM_INDEPENDENT_GROUPING, get_grouping_mechanism
 
     fingerprint = data.get("fingerprint")
-    grouping_mechanism = grouping_mechanism or CURRENT_GROUPING_MECHANISM
     mechanism = get_grouping_mechanism(grouping_mechanism)
-    if calculated_type is None and calculated_value is None:
-        calculated_type, calculated_value = mechanism.get_type_and_value_for_data(data)
+    calculated_type, calculated_value = mechanism.get_type_and_value_for_data(data)
 
     if fingerprint:
         used_default = False
@@ -161,15 +158,6 @@ def get_key_with_mechanism_for_data(data, calculated_type=None, calculated_value
         )
 
     return KeyWithMechanism(mechanism.grouper(data, calculated_type, calculated_value), grouping_mechanism)
-
-
-def get_issue_grouper_for_data(data, calculated_type=None, calculated_value=None, grouping_mechanism=None):
-    return get_key_with_mechanism_for_data(
-        data,
-        calculated_type=calculated_type,
-        calculated_value=calculated_value,
-        grouping_mechanism=grouping_mechanism,
-    ).key
 
 
 def get_title_for_exception_type_and_value(type_, value):

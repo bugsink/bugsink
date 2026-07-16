@@ -1,20 +1,15 @@
 from django.test import TestCase as DjangoTestCase
 
 from issues.grouping_mechanisms import BUGSINK_GROUPING_V2, MECHANISM_INDEPENDENT_GROUPING
-from issues.utils import (
-    get_issue_grouper_for_data as _get_issue_grouper_for_data,
-    get_key_with_mechanism_for_data as _get_key_with_mechanism_for_data,
-    get_title_for_exception_type_and_value,
-    get_type_and_value_for_data,
-)
+from issues.utils import get_key_with_mechanism_for_data as _get_key_with_mechanism_for_data
 
 
 def get_key_with_mechanism_for_data(data):
     return _get_key_with_mechanism_for_data(data, grouping_mechanism=BUGSINK_GROUPING_V2)
 
 
-def get_issue_grouper_for_data(data):
-    return _get_issue_grouper_for_data(data, grouping_mechanism=BUGSINK_GROUPING_V2)
+def get_grouping_key_for_data(data):
+    return get_key_with_mechanism_for_data(data).key
 
 
 class GroupingV2TestCase(DjangoTestCase):
@@ -51,8 +46,8 @@ class GroupingV2TestCase(DjangoTestCase):
         second_data = self._exception_event_data("KeyError", "exception message")
         second_data["transaction"] = "other-transaction"
 
-        first_key = get_issue_grouper_for_data(first_data)
-        second_key = get_issue_grouper_for_data(second_data)
+        first_key = get_grouping_key_for_data(first_data)
+        second_key = get_grouping_key_for_data(second_data)
 
         self.assertEqual("KeyError: exception message", first_key)
         self.assertEqual(first_key, second_key)
@@ -120,35 +115,11 @@ class GroupingV2TestCase(DjangoTestCase):
                 first_data = self._exception_event_data(exception_type, first_value)
                 second_data = self._exception_event_data(exception_type, second_value)
 
-                first_key = get_issue_grouper_for_data(first_data)
-                second_key = get_issue_grouper_for_data(second_data)
+                first_key = get_grouping_key_for_data(first_data)
+                second_key = get_grouping_key_for_data(second_data)
 
                 self.assertEqual(first_key, second_key)
                 self.assertIn(expected_placeholder, first_key)
-
-    def test_normalized_exception_grouping_keeps_display_title_raw(self):
-        value = "Cannot publish <Consumer object at 0x7fbb00112233>"
-        data = self._exception_event_data("SlowConsumerError", value)
-
-        grouping_key = get_issue_grouper_for_data(data)
-        calculated_type, calculated_value = get_type_and_value_for_data(data)
-        title = get_title_for_exception_type_and_value(calculated_type, calculated_value)
-
-        self.assertIn("<hex>", grouping_key)
-        self.assertEqual("SlowConsumerError: Cannot publish <Consumer object at 0x7fbb00112233>", title)
-
-    def test_normalized_log_messages_have_stable_grouping_key_but_raw_title(self):
-        first_data = {"logentry": {"message": "User 123 failed from 10.0.0.1"}}
-        second_data = {"logentry": {"message": "User 456 failed from 10.0.0.2"}}
-
-        first_key = get_issue_grouper_for_data(first_data)
-        second_key = get_issue_grouper_for_data(second_data)
-        calculated_type, calculated_value = get_type_and_value_for_data(first_data)
-        title = get_title_for_exception_type_and_value(calculated_type, calculated_value)
-
-        self.assertEqual(first_key, second_key)
-        self.assertEqual("Log Message: User <int> failed from <ip>", first_key)
-        self.assertEqual("Log Message: User 123 failed from 10.0.0.1", title)
 
     def test_normalized_exception_grouping_leaves_explicit_fingerprint_unchanged(self):
         data = self._exception_event_data(
@@ -159,7 +130,7 @@ class GroupingV2TestCase(DjangoTestCase):
 
         self.assertEqual(
             "fixed 0x7fbb00112233",
-            get_issue_grouper_for_data(data),
+            get_grouping_key_for_data(data),
         )
 
     def test_normalized_exception_grouping_changes_default_fingerprint_expansion(self):
@@ -174,8 +145,8 @@ class GroupingV2TestCase(DjangoTestCase):
             fingerprint=["{{ default }}", "fixed string"],
         )
 
-        first_key = get_issue_grouper_for_data(first_data)
-        second_key = get_issue_grouper_for_data(second_data)
+        first_key = get_grouping_key_for_data(first_data)
+        second_key = get_grouping_key_for_data(second_data)
 
         self.assertEqual(first_key, second_key)
         self.assertIn("SlowConsumerError: Cannot publish <Consumer object at <hex>>", first_key)
