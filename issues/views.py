@@ -14,7 +14,7 @@ from django.db.utils import OperationalError
 from django.conf import settings
 from django.utils.functional import cached_property
 
-from sentry.utils.safe import get_path
+from sentry.at_glitchtip_af9a700a8706.utils.safe import get_path
 from sentry_sdk_extensions import capture_or_log_exception
 
 from bugsink.decorators import project_membership_required, issue_membership_required, atomic_for_request_method

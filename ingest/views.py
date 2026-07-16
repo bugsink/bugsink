@@ -25,7 +25,7 @@ from compat.dsn import get_sentry_key, build_dsn
 from projects.models import Project
 from issues.models import Issue, IssueStateManager, Grouping, TurningPoint, TurningPointKind
 from issues.grouping_mechanisms import (
-    GROUPING_TRANSITION_PERIOD, LEGACY_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING)
+    GROUPING_TRANSITION_PERIOD, BUGSINK_GROUPING_V1, MECHANISM_INDEPENDENT_GROUPING)
 from issues.utils import get_type_and_value_for_data, get_key_with_mechanism_for_data, get_denormalized_fields_for_data
 from issues.regressions import issue_is_regression
 
@@ -116,7 +116,7 @@ def get_legacy_grouping_for_mechanism_independent_key(project_id, key_with_mecha
         project_id=project_id,
         grouping_key=key_with_mechanism.key,
         grouping_key_hash=get_grouping_key_hash(key_with_mechanism.key),
-        grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+        grouping_mechanism=BUGSINK_GROUPING_V1,
     ).first()
 
 
@@ -137,10 +137,10 @@ def grouping_transition_is_active(project, digested_at):
     return digested_at <= project.grouping_mechanism_upgraded_at + GROUPING_TRANSITION_PERIOD
 
 
-def get_grouping_path_for_event(project, event_data, calculated_type, calculated_value, digested_at):
+def get_grouping_path_for_event(project, event_data, digested_at):
     # First try the project's current mechanism.
     current_key_with_mechanism = get_key_with_mechanism_for_data(
-        event_data, calculated_type, calculated_value, project.grouping_mechanism)
+        event_data, grouping_mechanism=project.grouping_mechanism)
     if (current_grouping := get_existing_grouping(project.id, current_key_with_mechanism)) is not None:
         return GroupingPath.FOUND, (current_grouping,)
 
@@ -162,7 +162,7 @@ def get_grouping_path_for_event(project, event_data, calculated_type, calculated
 
     # During the transition window, retry the previous mechanism.
     previous_key_with_mechanism = get_key_with_mechanism_for_data(
-        event_data, calculated_type, calculated_value, project.previous_grouping_mechanism)
+        event_data, grouping_mechanism=project.previous_grouping_mechanism)
     if (previous_grouping := get_existing_grouping(project.id, previous_key_with_mechanism)) is not None:
         return GroupingPath.ATTACH, (current_key_with_mechanism, previous_grouping)
 
@@ -462,13 +462,13 @@ class BaseIngestAPIView(View):
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
         # in an if-statement would require more rework (and possibly extra queries) than it's worth.
         denormalized_fields = get_denormalized_fields_for_data(event_data)
+
         # the 3 lines below are suggestive of a further inlining of the get_type_and_value_for_data function
         calculated_type, calculated_value = get_type_and_value_for_data(event_data)
         denormalized_fields["calculated_type"] = calculated_type
         denormalized_fields["calculated_value"] = calculated_value
 
-        grouping_path, path_context = get_grouping_path_for_event(
-            project, event_data, calculated_type, calculated_value, digested_at)
+        grouping_path, path_context = get_grouping_path_for_event(project, event_data, digested_at)
 
         if grouping_path in [GroupingPath.FOUND, GroupingPath.ATTACH]:
             if grouping_path == GroupingPath.FOUND:

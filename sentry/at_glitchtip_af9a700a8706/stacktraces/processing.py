@@ -1,9 +1,9 @@
-from sentry.stacktraces.functions import get_function_name_for_frame
-from sentry.utils.safe import get_path
+from sentry.at_glitchtip_af9a700a8706.stacktraces.functions import get_function_name_for_frame
+from sentry.at_glitchtip_af9a700a8706.utils.safe import get_path
 
 
 def get_crash_frame_from_event_data(data, frame_filter=None):
-    from issues.utils import get_values  # changed by Bugsink
+    from issues.grouping_mechanisms.building_blocks.v1 import get_values  # changed by Bugsink
     values = get_values(get_path(data, "exception"))
 
     frames = get_path(
