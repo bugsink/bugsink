@@ -19,6 +19,7 @@
 {% code %}:::text
 {{ dsn }}
 {% endcode %}
+        {% include "includes/copy_button.html" with copy_value=dsn %}
 
         <h2 class="mt-8 text-2xl font-bold">Language-specific instructions</h2>
         <div class="mt-4">
@@ -53,4 +54,8 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/copy.js' %}"></script>
 {% endblock %}

@@ -48,6 +48,7 @@
         {% tailwind_formfield form.retention_max_event_count %}
 
         {% tailwind_formfield form.dsn %}
+        {% include "includes/copy_button.html" with copy_value=project.dsn %}
         {% tailwind_formfield form.grouping_mechanism %}
 
         <div class="flex items-center mt-4">
@@ -66,4 +67,5 @@
     var csrftoken = '{{ csrf_token }}';
 </script>
 <script src="{% static 'js/entity_edit.js' %}"></script>
+<script src="{% static 'js/copy.js' %}"></script>
 {% endblock %}
