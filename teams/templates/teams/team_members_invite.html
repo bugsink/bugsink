@@ -24,6 +24,13 @@
         </ul>
         {% endif %}
 
+        {% if invite_link %}
+        <div class="mb-4 bg-cyan-50 dark:bg-cyan-900 border-2 border-cyan-800 dark:border-cyan-400 p-4 rounded-lg">
+            <div class="font-bold">{% translate "Invite link" %}</div>
+            {% include "includes/copy_button.html" with copy_value=invite_link %}
+        </div>
+        {% endif %}
+
         <div>
             <h1 class="text-4xl mt-4 font-bold">{% blocktranslate with team_name=team.name %}Invite members ({{ team_name }}){% endblocktranslate %}</h1>
         </div>
@@ -58,4 +65,8 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/copy.js' %}"></script>
 {% endblock %}

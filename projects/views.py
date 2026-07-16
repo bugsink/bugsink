@@ -18,7 +18,7 @@ from teams.models import TeamMembership, Team, TeamRole
 
 from bugsink.app_settings import get_settings, CB_ANYBODY, CB_MEMBERS, CB_ADMINS
 from bugsink.decorators import login_exempt, atomic_for_request_method
-from bugsink.utils import assert_
+from bugsink.utils import assert_, email_backend_delivers_mail
 
 from alerts.models import MessagingServiceConfig, get_alert_service_backend_class, get_alert_service_kind_choices
 from alerts.forms import MessagingServiceConfigNewForm, MessagingServiceConfigEditForm
@@ -231,12 +231,17 @@ def project_edit(request, project_pk):
 def project_members(request, project_pk):
     project = Project.objects.get(id=project_pk, is_deleted=False)
     _check_project_admin(project, request.user)
+    invite_link = None
 
     if request.method == 'POST':
         full_action_str = request.POST.get('action')
         action, user_id = full_action_str.split(":", 1)
         if action == "remove":
             ProjectMembership.objects.filter(project=project_pk, user=user_id).delete()
+        elif action == "copy_invite_link" and not email_backend_delivers_mail():
+            user = User.objects.get(id=user_id)
+            invite_link = _create_project_invite_link(user, project_pk)
+            messages.success(request, f"Invitation link created for {user.email}")
         elif action == "reinvite":
             user = User.objects.get(id=user_id)
             _send_project_invite_email(user, project_pk)
@@ -245,6 +250,8 @@ def project_members(request, project_pk):
     return render(request, 'projects/project_members.html', {
         'project': project,
         'members': project.projectmembership_set.all().select_related('user'),
+        'can_copy_invite_links': not email_backend_delivers_mail(),
+        'invite_link': invite_link,
     })
 
 
@@ -257,6 +264,17 @@ def _send_project_invite_email(user, project_pk):
         # not yet accepted the invite. In the latter case, we just send a fresh email
         verification = EmailVerification.objects.create(user=user, email=user.username)
         send_project_invite_email_new_user.delay(user.email, project_pk, verification.token)
+
+
+def _create_project_invite_link(user, project_pk):
+    if user.is_active:
+        return get_settings().BASE_URL + reverse("project_members_accept", kwargs={"project_pk": project_pk})
+
+    verification = EmailVerification.objects.create(user=user, email=user.username)
+    return get_settings().BASE_URL + reverse("project_members_accept_new_user", kwargs={
+        "project_pk": project_pk,
+        "token": verification.token,
+    })
 
 
 @atomic_for_request_method
@@ -286,7 +304,11 @@ def project_members_invite(request, project_pk):
             user, user_created = User.objects.get_or_create(
                 email=email, defaults={'username': email, 'is_active': False})
 
-            _send_project_invite_email(user, project_pk)
+            if email_backend_delivers_mail():
+                _send_project_invite_email(user, project_pk)
+                invite_link = None
+            else:
+                invite_link = _create_project_invite_link(user, project_pk)
 
             _, membership_created = ProjectMembership.objects.get_or_create(project=project, user=user, defaults={
                 'role': form.cleaned_data['role'],
@@ -298,6 +320,14 @@ def project_members_invite(request, project_pk):
             else:
                 messages.success(
                     request, f"Invitation resent to {email} (it was previously sent and we just sent it again)")
+
+            if invite_link is not None:
+                form = ProjectMemberInviteForm(user_must_exist)
+                return render(request, 'projects/project_members_invite.html', {
+                    'project': project,
+                    'form': form,
+                    'invite_link': invite_link,
+                })
 
             if request.POST.get('action') == "invite_and_add_another":
                 return redirect('project_members_invite', project_pk=project_pk)

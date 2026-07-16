@@ -21,6 +21,13 @@
         </ul>
         {% endif %}
 
+        {% if invite_link %}
+        <div class="mb-4 bg-cyan-50 dark:bg-cyan-900 border-2 border-cyan-800 dark:border-cyan-400 p-4 rounded-lg">
+            <div class="font-bold">{% translate "Invite link" %}</div>
+            {% include "includes/copy_button.html" with copy_value=invite_link %}
+        </div>
+        {% endif %}
+
         <div class="flex">
             <h1 class="text-4xl mt-4 font-bold">{% translate "Team Members" %}</h1>
 
@@ -56,7 +63,11 @@
                 <td class="p-4">
                     <div class="flex justify-end">
                         {% if not member.accepted %}
+                            {% if can_copy_invite_links %}
+                            <button name="action" value="copy_invite_link:{{ member.user_id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Copy invite link" %}</button>
+                            {% else %}
                             <button name="action" value="reinvite:{{ member.user_id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Reinvite" %}</button>
+                            {% endif %}
                         {% endif %}
                         {% if request.user == member.user %}
                             <button name="action" value="remove:{{ member.user_id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Leave" %}</button>
@@ -91,4 +102,8 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/copy.js' %}"></script>
 {% endblock %}

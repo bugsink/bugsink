@@ -21,6 +21,14 @@ nc_rnd = random
 logger = logging.getLogger("bugsink.email")
 
 
+def email_backend_delivers_mail():
+    return settings.EMAIL_BACKEND not in [
+        "bugsink.email_backends.QuietConsoleEmailBackend",
+        "django.core.mail.backends.console.EmailBackend",
+        "django.core.mail.backends.dummy.EmailBackend",
+    ]
+
+
 def is_safe_next_url(url, request):
     # There's a long discussion here:
     # https://forum.djangoproject.com/t/why-is-the-use-of-url-has-allowed-host-and-scheme-discouraged/35314/3

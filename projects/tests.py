@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.apps import apps
 from django.contrib.auth import get_user_model
+from django.test import override_settings
+from django.urls import reverse
 from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 
@@ -8,6 +10,8 @@ from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.utils import get_model_topography
 from projects.forms import ProjectForm
 from projects.models import Project, ProjectMembership, ProjectRole, ProjectVisibility
+from teams.models import Team, TeamMembership, TeamRole
+from users.models import EmailVerification
 from events.factories import create_event
 from issues.factories import get_or_create_issue, denormalized_issue_fields
 from issues.grouping_mechanisms import BUGSINK_GROUPING_V1, BUGSINK_GROUPING_V2
@@ -21,6 +25,55 @@ from events.usage import record_event_counts
 from .tasks import get_model_topography_with_project_override
 
 User = get_user_model()
+
+
+class ProjectInviteLinkTestCase(TransactionTestCase):
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username="project-admin@example.com",
+            email="project-admin@example.com",
+            password="test",
+        )
+        self.team = Team.objects.create(name="Invite Team")
+        TeamMembership.objects.create(team=self.team, user=self.admin, role=TeamRole.ADMIN, accepted=True)
+        self.project = Project.objects.create(name="Invite Project", team=self.team)
+        ProjectMembership.objects.create(
+            project=self.project, user=self.admin, role=ProjectRole.ADMIN, accepted=True)
+        self.client.force_login(self.admin)
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
+    def test_invite_shows_link_when_email_backend_does_not_deliver(self):
+        response = self.client.post(reverse("project_members_invite", kwargs={"project_pk": self.project.pk}), {
+            "email": "new-project-member@example.com",
+            "role": ProjectRole.MEMBER,
+            "action": "invite",
+        })
+
+        user = User.objects.get(username="new-project-member@example.com")
+        verification = EmailVerification.objects.get(user=user)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invite link")
+        self.assertContains(response, reverse("project_members_accept_new_user", kwargs={
+            "project_pk": self.project.pk,
+            "token": verification.token,
+        }))
+        self.assertTrue(ProjectMembership.objects.filter(project=self.project, user=user, accepted=False).exists())
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
+    def test_members_page_replaces_reinvite_with_copy_invite_link(self):
+        user = User.objects.create_user(
+            username="pending-project-member@example.com",
+            email="pending-project-member@example.com",
+            is_active=False,
+        )
+        ProjectMembership.objects.create(project=self.project, user=user, accepted=False)
+
+        response = self.client.get(reverse("project_members", kwargs={"project_pk": self.project.pk}))
+
+        self.assertContains(response, "Copy invite link")
+        self.assertNotContains(response, "Reinvite")
 
 
 class ProjectDeletionTestCase(TransactionTestCase):
