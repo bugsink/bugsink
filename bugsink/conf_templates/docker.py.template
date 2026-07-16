@@ -91,7 +91,9 @@ else:
     database_path = os.path.dirname(DATABASES['default']['NAME'])
 
 
-if os.getenv("EMAIL_HOST"):
+if os.getenv("EMAIL_BACKEND"):
+    EMAIL_BACKEND = os.getenv("EMAIL_BACKEND")
+elif os.getenv("EMAIL_HOST"):
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"  # default, here for explicitness
     EMAIL_HOST = os.getenv("EMAIL_HOST")
     EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
