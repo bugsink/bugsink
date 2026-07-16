@@ -1,18 +1,23 @@
+import logging
 import uuid
 import contextlib
 import os.path
 from pathlib import Path
+from io import TextIOWrapper
 
 from django.utils._os import safe_join
+
+from bugsink.streams import (
+    brotli_generator, zlib_generator, GeneratorReader, WBITS_PARAM_FOR_GZIP, BrotliStreamWriter, ZlibStreamWriter)
+
+
+logger = logging.getLogger("bugsink.eventstorage")
 
 
 class EventStorage(object):
 
     def __init__(self, name, **options):
         self.name = name
-
-    def save(self):
-        raise NotImplementedError()
 
     def exists(self, event_id):
         raise NotImplementedError()
@@ -31,15 +36,74 @@ class EventStorage(object):
     # not worth it, so we only support "pass through application layer" (where the auth stuff is) models of usage.
 
 
+class NoCompression:
+    suffix = ".json"
+
+    @contextlib.contextmanager
+    def open_wrapper(self, raw_file, mode):
+        yield raw_file
+
+
+class BrotliCompression:
+    suffix = ".json.br"
+
+    def __init__(self, quality):
+        self.quality = quality
+
+    @contextlib.contextmanager
+    def open_wrapper(self, raw, mode):
+        if mode.startswith('r'):
+            yield GeneratorReader(brotli_generator(raw))
+        else:
+            writer = BrotliStreamWriter(raw, self.quality)
+            try:
+                yield writer
+            finally:
+                writer.close()
+
+
+class GzipCompression:
+    suffix = ".json.gz"
+
+    def __init__(self, level):
+        self.level = level
+
+    @contextlib.contextmanager
+    def open_wrapper(self, raw, mode):
+        if mode.startswith('r'):
+            yield GeneratorReader(zlib_generator(raw, WBITS_PARAM_FOR_GZIP))
+        else:
+            writer = ZlibStreamWriter(raw, self.level, WBITS_PARAM_FOR_GZIP)
+            try:
+                yield writer
+            finally:
+                writer.close()
+
+
 class FileEventStorage(EventStorage):
 
-    def __init__(self, name, basepath=None):
+    def __init__(
+            self, name, basepath=None, get_basepath=None, compression_algorithm=None, compression_level=None, **kwargs):
+
         super().__init__(name)
 
-        if basepath is None:
-            raise ValueError("Basepath must be provided")
+        if (basepath is None) == (get_basepath is None):
+            raise ValueError("Provide exactly one of basepath or get_basepath")
+        if get_basepath is not None:
+            self.get_basepath = get_basepath
+        else:
+            self.get_basepath = lambda: basepath
 
-        self.basepath = basepath
+        if compression_algorithm is None:
+            self.compression = NoCompression()
+        elif compression_algorithm == "br":
+            self.compression = BrotliCompression(quality=compression_level or 11)
+        elif compression_algorithm == "gzip":
+            self.compression = GzipCompression(level=compression_level or 9)
+
+        if kwargs:
+            # for forward-compatibility
+            logger.warn("FileEventStorage ignored unexpected arguments: %s", ', '.join(kwargs.keys()))
 
     def _event_path(self, event_id):
         # the dashes in uuid are preserved in the filename for readability; since their location is consistent, this is
@@ -50,7 +114,7 @@ class FileEventStorage(EventStorage):
         if not isinstance(event_id, uuid.UUID):
             raise ValueError("event_id must be a UUID")
 
-        return safe_join(self.basepath, str(event_id) + ".json")
+        return safe_join(self.get_basepath(), str(event_id) + self.compression.suffix)
 
     @contextlib.contextmanager
     def open(self, event_id, mode='r'):
@@ -59,15 +123,17 @@ class FileEventStorage(EventStorage):
             # strict about what we allow; we further imply "text mode" and "utf-8 encoding" given the JSON context.
             raise ValueError("EventStorage.open() mode must be 'r' or 'w'")
 
-        if mode == 'w' and not os.path.exists(self.basepath):
-            # only if we're writing does this make sense (when reading, a newly created directoy won't have files in it,
+        if mode == 'w' and not os.path.exists(self.get_basepath()):
+            # only if we're writing does this make sense (when reading, a newly created directory won't have files in it
             # and fail in the next step)
-            Path(self.basepath).mkdir(parents=True, exist_ok=True)
+            Path(self.get_basepath()).mkdir(parents=True, exist_ok=True)
 
         # We open with utf-8 encoding explicitly to pre-empt the future of pep-0686 (it's also the only thing that makes
         # sense in the context of JSON)
-        with open(self._event_path(event_id), mode, encoding="utf-8") as f:
-            yield f
+        with open(self._event_path(event_id), mode + "b") as raw_file:
+            with self.compression.open_wrapper(raw_file, mode) as wrapped_file:
+                with TextIOWrapper(wrapped_file, encoding='utf-8') as text_file:
+                    yield text_file
 
     def exists(self, event_id):
         return os.path.exists(self._event_path(event_id))
@@ -76,13 +142,16 @@ class FileEventStorage(EventStorage):
         os.remove(self._event_path(event_id))
 
     def list(self):
-        # returns the event IDs (as strings) of all events in the storage. Useful for "cleanup" operations.
+        # returns the event IDs of all events in the storage. Useful for "cleanup" operations.
         # impl.: we use os.scandir() because it doesn't load the entire directory into memory (unlike os.listdir()), or
         # worse, sorts it. "Some people" point to pathlib.Path.iterdir() as a better alternative, but only since 3.12
         # is it using os.scandir(): https://github.com/python/cpython/commit/30f0643e36d2c9a5849c76ca0b27b748448d0567
 
+        if not os.path.exists(self.get_basepath()):  # be robust for non-initialized storage
+            return []
+
         return (
-            p.name[:-5]  # strip the ".json" suffix
-            for p in os.scandir(self.basepath)
-            if p.name.endswith(".json")
+            uuid.UUID(p.name[:-1 * len(self.compression.suffix)])  # strip the ".json" (or similar) suffix
+            for p in os.scandir(self.get_basepath())
+            if p.name.endswith(self.compression.suffix)
         )

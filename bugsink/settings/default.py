@@ -6,6 +6,9 @@ from pathlib import Path
 
 from django.utils.log import DEFAULT_LOGGING
 
+from ..version import version as __version__
+
+
 # We have a single file for our default settings, and expect (if they use the singleserver setup) the end-users to
 # configure their setup using a single bugsink_conf.py also. To be able to have (slightly) different settings for e.g.
 # logging for various commands, we expose a variable I_AM_RUNNING that can be used to determine what command is being
@@ -90,7 +93,7 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Bugsink',
     'DESCRIPTION': 'Bugsink API Documentation',
-    'VERSION': '1.0.0',
+    'VERSION': __version__,
     'SERVE_INCLUDE_SCHEMA': False,  # keep the docs clean and not document the docs endpoint itself.
 
     "SECURITY": [
@@ -100,6 +103,10 @@ SPECTACULAR_SETTINGS = {
         "TeamVisibilityEnum": ["joinable", "discoverable", "hidden"],
         "ProjectVisibilityEnum": ["joinable", "discoverable", "team_members"],
     },
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "bugsink.api_schema.add_sentry_compatible_api",
+    ],
 }
 
 BUGSINK_APPS = [
@@ -139,6 +146,7 @@ MIDDLEWARE = [
     'verbose_csrf_middleware.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
 
+    'bugsink.middleware.AdminRequiresSettingMiddleware',
     'bugsink.middleware.LoginRequiredMiddleware',
 
     # note on ordering: we need request.user, so after AuthenticationMiddleware; and we're not tied to "before
@@ -246,7 +254,9 @@ DATABASES = {
 }
 
 
-DATABASE_ROUTERS = ("bugsink.dbrouters.SeparateSnappeaDBRouter",)
+DATABASE_ROUTERS = (
+    "snappea.dbrouters.SeparateSnappeaDBRouter",
+)
 
 # This is the default, but we're being explicit. In our recommended setup (sqlite) we assume a low cost for reconnecting
 # to the DB, but a potential high cost ("checkpoint starvation") for keeping connections open.

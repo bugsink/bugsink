@@ -12,6 +12,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 
 from compat.dsn import get_store_url, get_envelope_url, get_header_value
+from bugsink.app_settings import get_settings
 from bugsink.streams import compress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE
 from bugsink.utils import nc_rnd
 
@@ -31,6 +32,7 @@ class Command(BaseCommand):
         parser.add_argument("--compress", action="store", choices=["gzip", "deflate", "br"], default=None)
         parser.add_argument("--use-store-api", action="store_true", help="Use (deprecated) /api/<id>/store/")
         parser.add_argument("--chunked-encoding", action="store_true")
+        parser.add_argument("--respect-limits", action="store_true", help="Use client-side size-limit checks")
         parser.add_argument(
             "--x-forwarded-for", action="store",
             help="Set the X-Forwarded-For header to test whether your setup is properly ignoring it")
@@ -132,6 +134,14 @@ class Command(BaseCommand):
         if options["valid_only"] and not self.is_valid(data, identifier):
             return False
 
+        data_bytes = json.dumps(data, separators=(",", ":")).encode("utf-8")
+
+        # For now this only checks the event item size; we'll add other limit checks as needed.
+        if options["respect_limits"] and len(data_bytes) >= get_settings().MAX_EVENT_SIZE:
+            raise CommandError(
+                "Event JSON is %d bytes, which would hit the %d byte event-size limit" % (
+                    len(data_bytes), get_settings().MAX_EVENT_SIZE))
+
         try:
             headers = {
                 "Content-Type": "application/json",
@@ -141,7 +151,6 @@ class Command(BaseCommand):
             if options["x_forwarded_for"]:
                 headers["X-Forwarded-For"] = options["x_forwarded_for"]
 
-            data_bytes = json.dumps(data).encode("utf-8")
             if use_envelope:
                 event_id = data.get("event_id", uuid.uuid4().hex)
 

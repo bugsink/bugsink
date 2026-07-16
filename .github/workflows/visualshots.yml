@@ -1,0 +1,28 @@
+name: Visualshots
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "Scenario name, comma-separated names, or all"
+        required: true
+        default: "projects"
+      ref:
+        description: "Branch, tag, or SHA to capture as after"
+        required: false
+        default: ""
+      base_branch:
+        description: "Base branch used to find the before commit"
+        required: false
+        default: "origin/main"
+
+jobs:
+  visualshots:
+    uses: ./.github/workflows/visualshots-run.yml
+    permissions:
+      contents: read
+    with:
+      scenario: ${{ inputs.scenario }}
+      ref: ${{ inputs.ref || github.ref }}
+      base_branch: ${{ inputs.base_branch }}
+      artifact_prefix: visualshots

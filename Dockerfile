@@ -13,7 +13,7 @@ FROM python:${PYTHON_VERSION} AS build
 # mysqlclient is not available as a .whl on PyPI, so we need to build it from
 # source and store the .whl. This is both the most expensive part of the build
 # and the one that is least likely to change, so we do it first.
-RUN --mount=type=cache,target=/var/cache/buildkit/pip \
+RUN --mount=type=cache,target=/root/.cache/pip \
     pip wheel --wheel-dir /wheels mysqlclient
 
 # Actual image (based on slim)
@@ -25,27 +25,37 @@ ENV PORT=8000
 
 WORKDIR /app
 
-# mysqlclient dependencies; needed here too, because the built wheel depends on .o files
-RUN apt update && apt install default-libmysqlclient-dev -y
+# Runtime shared library the mysqlclient wheel links against.
+RUN apt update && apt install libmariadb3 -y \
+ && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /wheels /wheels
-
-RUN --mount=type=cache,target=/var/cache/buildkit/pip \
-    pip install --find-links /wheels --no-index mysqlclient
-
-RUN --mount=type=cache,target=/var/cache/buildkit/pip \
-    pip install "psycopg[binary]"
-
-COPY requirements.txt /app/
-RUN --mount=type=cache,target=/var/cache/buildkit/pip \
-    pip install -r requirements.txt
+# Install all deps and strip native extensions in a single layer, so only the
+# stripped binaries are stored (must be same layer to actually shrink the image).
+# binutils is installed and purged here; requirements/wheels are bind-mounted,
+# not COPYed, so they don't end up in a layer.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=bind,from=build,source=/wheels,target=/wheels \
+    --mount=type=bind,source=requirements.txt,target=/tmp/requirements.txt \
+    apt-get update \
+ && apt-get install -y --no-install-recommends binutils \
+ && pip install --find-links /wheels --no-index mysqlclient \
+ && pip install "psycopg[binary]" \
+ && pip install -r /tmp/requirements.txt \
+ && find /usr/local/lib/python3.12/site-packages -name '*.so' -exec strip --strip-unneeded {} + \
+ && apt-get purge -y binutils && apt-get autoremove -y \
+ && rm -rf /var/lib/apt/lists/*
 
 COPY . /app/
 COPY bugsink/conf_templates/docker.py.template bugsink_conf.py
 
-# Git is needed by setuptools_scm to get the version from the git tag
-RUN apt update && apt install -y git
-RUN pip install -e .
+# git is only needed by setuptools_scm during the editable install; install and
+# purge it in the same layer so it stays out of the final image.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    apt-get update \
+ && apt-get install -y --no-install-recommends git \
+ && pip install -e . \
+ && apt-get purge -y git && apt-get autoremove -y \
+ && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --gid 14237 bugsink \
  && useradd --uid 14237 --gid 14237 bugsink \

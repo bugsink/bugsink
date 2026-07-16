@@ -1,14 +1,19 @@
 import uuid
+import json
+from datetime import datetime, timezone
 
 from django.db import models
 from django.conf import settings
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _, pgettext_lazy
+from django.template.defaultfilters import date
+from django.utils.timezone import localtime
 
 from bugsink.app_settings import get_settings
 from bugsink.transaction import delay_on_commit
 
 from compat.dsn import build_dsn
+from issues.grouping_mechanisms import GROUPING_MECHANISM_CHOICES, LATEST_GROUPING_MECHANISM
 
 from teams.models import TeamMembership
 
@@ -99,6 +104,7 @@ class Project(models.Model):
 
     # denormalized/cached/counted fields below
     has_releases = models.BooleanField(editable=False, default=False)
+    issue_count = models.PositiveIntegerField(null=False, blank=False, default=0, editable=False)
     digested_event_count = models.PositiveIntegerField(null=False, blank=False, default=0, editable=False)
     stored_event_count = models.IntegerField(blank=False, null=False, default=0, editable=False)
 
@@ -114,10 +120,25 @@ class Project(models.Model):
 
     # ingestion/digestion quota
     quota_exceeded_until = models.DateTimeField(null=True, blank=True)
+    quota_exceeded_reason = models.CharField(max_length=255, null=False, default="null")
     next_quota_check = models.PositiveIntegerField(null=False, default=0)
 
     # retention
     retention_max_event_count = models.PositiveIntegerField(_("Retention max event count"), default=10_000)
+
+    # grouping policy
+    grouping_mechanism = models.CharField(
+        max_length=64,
+        choices=GROUPING_MECHANISM_CHOICES,
+        default=LATEST_GROUPING_MECHANISM,
+    )
+    previous_grouping_mechanism = models.CharField(
+        max_length=64,
+        choices=GROUPING_MECHANISM_CHOICES,
+        blank=True,
+        null=True,
+    )
+    grouping_mechanism_upgraded_at = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
         return self.name
@@ -134,6 +155,14 @@ class Project(models.Model):
         if not hasattr(self, "_latest_release"):  # per-instance cache
             self._latest_release = list(ordered_releases(project=self))[-1]
         return self._latest_release
+
+    def get_retention_max_event_count(self):
+        # apply global maximum if set (allows for meaningfully decreasing max retention after the fact). (note that
+        # down-adjusting the cross-project max will not automatically affect per-project; implementing that would
+        # require some kind of fractional/relative adjustment which seems more complex than it's worth).
+        if get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT is not None:
+            return min(self.retention_max_event_count, get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT)
+        return self.retention_max_event_count
 
     def save(self, *args, **kwargs):
         if self.slug in [None, ""]:
@@ -168,6 +197,19 @@ class Project(models.Model):
 
     def is_discoverable(self):
         return self.visibility <= ProjectVisibility.DISCOVERABLE
+
+    def get_warnings(self):
+        now = datetime.now(timezone.utc)
+        from ingest.views import BaseIngestAPIView
+        if BaseIngestAPIView.is_quota_still_exceeded(self, now):
+            period_name, nr_of_periods, gte_threshold = json.loads(self.quota_exceeded_reason)
+            # TODO i18n
+            per_fmt = "%s %ss" % (nr_of_periods, period_name) if nr_of_periods != 1 else period_name
+            date_fmt = date(localtime(self.quota_exceeded_until), "j M G:i T")
+            return ["Event ingestion stopped until %s. Reason: project quota (%s events per %s) exceeded." % (
+                      date_fmt, gte_threshold, per_fmt)]
+
+        return []
 
     class Meta:
         indexes = [

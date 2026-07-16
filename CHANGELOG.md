@@ -1,5 +1,344 @@
 # Changes
 
+## 2.4.0 (10 July 2026)
+
+### Backwards incompatible changes
+
+Fail to start when `PID_FILE` is configured to be in a directory not owned by the process running gunicorn/snappea
+(typically: the `bugsink` user). The reason for this is: extra defense in depth, as per #174.
+
+Ensure that `PID_FILE` is either `None` (recommended in systemd setups, i.e. recommended in the recommended case) or, if
+you must, in file in a directory "one level deep" (e.g. `/tmp/snappea/snappea.pid` or `{base_path}/snappea/snappea.pid`)
+
+Otherwise you'll get a B108SecurityError ("Target path owned by uid other than me: ...")
+
+See #195, #196
+
+### Security
+
+Fix: prevent DNS rebinding bypasses in outbound webhook protection.
+
+A project admin who controlled webhook DNS responses could make the policy check see an allowed public IP while the
+actual HTTP request connected to a blocked internal destination. Bugsink now pins each webhook send to the validated DNS
+result while preserving normal Host/SNI behavior. See:
+
+https://github.com/bugsink/bugsink/security/advisories/GHSA-w589-2ffr-2prv
+
+### Sparklines / Trends
+
+Project and issue lists now show compact 24h event-volume trends. Sparkline bucket boundaries respect the installation
+timezone, and y-axis labels now use nicer count-oriented steps with a floor of 10 for low-volume charts. See #444,
+#445 and #447.
+
+### Issue resolution
+
+Resolved issues can be reopened manually. The Resolve controls also support a plain "Resolve" flow and resolve-by-current
+release when observations already exist. See #431 and #436.
+
+### Smaller fixes
+
+* Fix AuthToken description edits applying to the wrong token, see #424.
+* Use the ready endpoint in the sample Compose healthcheck, see #426.
+* Reduce Docker image size, see #430.
+* Improve invalid payload handling in envelope and deprecated `/store/` ingest paths, see #435.
+
+## 2.3.1 (30 June 2026)
+
+* Decode percent-encoded components from `DATABASE_URL` after parsing (See #423)
+* Return 404 for malformed API lookups (in markdown view)
+
+## 2.3.0 (23 June 2026)
+
+### CSP reports
+
+Add native support for CSP violation reports via a new `/api/<project_pk>/security/` endpoint, compatible with the
+`report-uri` directive browsers emit. Reports are translated into events and pushed through the existing envelope
+pipeline, grouped by `(effective-directive, blocked-uri)`, see #371.
+
+### Sparklines
+
+Issue event pages now show a 28-day event-volume sparkline. The sparkline is backed by hourly event-count buckets, so
+regular page views do not need to rescan the event table. Bars can be clicked to jump to an event in that time bucket,
+see #417 and #420.
+
+### Smaller fixes
+
+* Show full exception values on stacktrace pages, see #412.
+* Include Bugsink's Sentry-compatible API surface in the OpenAPI schema, see #413.
+* Return `{"id": ...}` from the `/envelope/` endpoint, see #396.
+* Update the Docker run command in the README, see #415.
+
+## 2.2.2 (4 June 2026)
+
+### Security
+
+Fix: cap the number of tags stored per event.
+
+Events with very many tags could keep the single write transaction busy for longer than intended during digestion.
+Bugsink now stores at most `MAX_EVENT_TAGS` tags per event, defaulting to 100.
+
+https://github.com/bugsink/bugsink/security/advisories/GHSA-5x67-j5xg-c5gj
+
+### Smaller fixes
+
+* Show project slugs as read-only on project settings pages, see #402.
+
+## 2.2.1 (22 May 2026)
+
+### API
+
+* Add issue actions to the canonical API, see #214 and #401.
+* Add canonical API issue comment creation, see #352 and #401.
+* Accept issue friendly IDs in the canonical API, see #389 and #401.
+* Improve OpenAPI endpoint docs, see #390 and #401.
+* Use Bugsink's version as the OpenAPI spec version, see #307.
+
+### Smaller fixes
+
+* Fix long module names overlapping version values on event detail pages, see #377 and #382.
+* Validate `CREATE_SUPERUSER` email addresses and use the email as username in Docker server-start setup, see #394.
+* Development server: do not send email by default, see d6d5190441b3.
+* Docker: disable Gunicorn's unused control socket, see #405.
+* Sourcemap uploads without a project slug now log server-side context before returning `400`, see #404 and #408.
+
+## 2.2.0 (21 May 2026)
+
+### Security
+
+Fix: scope issue actions and event lookups to the authorized project/issue.
+
+A project member who knew UUIDs from another project could use some issue-list
+bulk actions and issue event views through a project or issue they were allowed
+to access. These views now require the selected issues/events to belong to the
+authorized parent. See:
+
+https://github.com/bugsink/bugsink/security/advisories/GHSA-g5vc-q7qc-v939
+https://github.com/bugsink/bugsink/security/advisories/GHSA-vx2f-6m6h-9frf
+
+Fix: scope sourcemap and minidump debug-file metadata to projects.
+
+Sourcemap and debug-file IDs are client-provided and were previously resolved
+globally. That could let events in one project use uploaded debug metadata from
+another project. Newly uploaded files now store project information and lookup
+prefers project-scoped metadata. Already-uploaded legacy sourcemaps/debug files
+keep working through a fallback. See:
+
+https://github.com/bugsink/bugsink/security/advisories/GHSA-5389-f7vh-wxj8
+
+### Smaller fixes
+
+* Fix health-check `ALLOWED_HOSTS`-ignore, see #140, #397
+* Generate an `event_id` on `/store/` when the SDK does not send one, see #383.
+* Refresh issue title fields on every event digest, see #378.
+* Include ingest-dir cleanup in the `vacuum` command and warn about stale ingest-dir files, see 772fb1a9bff6 and
+  1ee34c574b7d.
+* Add more verbose output to file vacuuming, see #372.
+* Broaden phonehome triggers and avoid unnecessary queueing, see 2f76eacfbf68.
+* Fix API catch-all logging for non-JSON bodies, see d13e5eff132b.
+* Ensure `release` is a string before ingesting, see 374914c96f62.
+* Fix direct minidump endpoint calls, see 5324d802cc50.
+
+### Upgrading
+
+Sourcemap uploads should include a meaningful project slug. Existing unscoped
+sourcemaps keep working, but installations that prefer to remove that fallback
+can run `delete_legacy_sourcemaps` and re-upload sourcemaps with project slugs.
+
+## 2.1.3 (2 May 2026)
+
+### Security
+
+Fix: harden webhook URL validation parsing and reject non-RFC characters.
+
+In some malformed URLs, Python’s standard URL parser (urllib) and the HTTP
+client stack (requests / urllib3) do not agree on which host is actually being
+targeted. That could allow a webhook URL to pass Bugsink’s outbound-host checks
+while the actual HTTP request is sent somewhere else. See:
+
+https://github.com/bugsink/bugsink/security/advisories/GHSA-fp53-qcf8-2xx2
+
+### Smaller fixes
+
+* Add issue-level markdown, see #334.
+* Fix installation quota counting across projects, see #359.
+* When vacuuming files, don't load them in memory, and allow long-running totals queries, see #363, #373 and #372.
+* Refuse to send email as something@bugsink.com for self-hosters, see 3ff3a6fbeb6d.
+* Fix `MultipleObjectsReturned` when user has unaccepted project memberships, see 653be6968f6e.
+* Cleanup lingering files for `MAX_EVENT_SIZE` overshoots, see #370.
+* Fix some `.get(context, {})` usages and an exception-path double-exception, see #369.
+* Upgrade `gunicorn` requirement from `==25.1.*` to `==25.3.*`, see 2d5e0071cf66.
+* Upgrade monofy, see #367.
+
+## 2.1.2 (11 April 2026)
+
+* Add stored file count and byte caps, see #355
+* Error message readability in dark mode, see #362
+
+## 2.1.1 (9 April 2026)
+
+### Security
+
+Fix: avoid using upload checksums as temporary filenames.
+
+The recent temp-file assembly change made checksum values part of path
+construction before they had been validated. An authenticated caller could
+thereby reach a write-before-checksum-mismatch path during file assembly.
+
+### Smaller fixes
+
+* AuthToken deletion is now idempotent, so mashing the delete button no longer results in a spurious 500.
+* Disable phonehome in development, see #357.
+* Allow enabling `USE_ADMIN` via environment variable, see #361.
+* Fix sourcemap application when `sourcesContent` contains `null`, see #360.
+
+## 2.1.0 (4 April 2026)
+
+* Show open issue counts on project list (skipping very large projects), see #228
+
+* Add outbound webhook destination policy: destinations can be filtered by hostname/IP/CIDR allow/deny lists and
+  non-global IPs are blocked by default. See #339 and [the docs](https://www.bugsink.com/docs/webhook-outbound-policy/).
+
+* Add object storage for uploaded files via `OBJECT_STORAGES`, including `migrate_to_current_objectstorage` and
+  `cleanup_objectstorage`, see #354.
+
+* File uploads and artifact bundle assembly now enforce server-side limits more strictly: chunk uploads are checked
+  server-side, `MAX_FILE_SIZE` applies to assembled files too, and artifact bundles no longer need to be loaded fully
+  into memory during extraction, see #356.
+
+* Add a synchronous `vacuum` command as a single entry point for cleanup tasks, and add `MAX_EVENT_AGE_DAYS` /
+  `delete_old_events` for age-based event cleanup, see #350 and #48.
+
+* Docker config: add `USE_X_FORWARDED_HOST` and `USE_X_FORWARDED_FOR`, see #336 and d3e743d.
+
+* Sourcemaps: handle unmappable frames per-frame, so mixed mapped/unmapped stacktraces keep rendering, see #330.
+
+* Reject events at ingest when retention is configured as zero, see #341.
+
+## 2.0.14 (3 March 2026)
+
+* sourcemaps upload now works for sentry-cli >= 3.0.0, See #290
+* Add `chunk_max_days` and `file_max_days parameters` to `vacuum_files` command and task
+
+* Update whitenoise requirement from ==6.11.* to ==6.12.*
+* Fix `FEATURE_MINIDUMPS` env-parsing in docker template
+* mobile menu: somewhat workable, See #120
+* Add index on `(digested_at, digest_order)` Fix #322
+* Move `mark_safe` closer to actual escaping
+
+## 2.0.13 (21 February 20206)
+
+### Security
+
+Fix: escape output for pygments fallback.
+
+An unauthenticated attacker could store arbitrary JavaScript in a bugsink
+project by sending a crafted Sentry event. Any admin who views the stacktrace
+will execute the payload.
+
+### Other
+
+* annotate with meta: when meta-keys are not actually in the var
+* Reduce Slack title length from 200 to 150 characters (See #318)
+* fix dbrouter `allow_migrate` for more than 2 databases
+* Distinguish installation-quota warning message from the project-level ones
+* fix unsupported operand type(s) for +: 'NoneType' and 'str' in request.url display
+* Add a `description` field to authtoken (See #312)
+* 400 template should say 'bad request' not 'server error'
+* Max retention: default per-project of 20% per project to avoid out-of-room on project 2
+* Allow editing of project when global `max_rention` settings have recently been decreased
+
+## 2.0.12 (26 January 2026)
+
+### Fixes:
+
+* Quota checks: don't get confused (so much) by eviction, see c157827a3050
+* `cleanup_eventstorage` command: don't fail when no storage initialized, see 45dc85a38288
+* `EventStorage.list` must return UUIDs for usage in .delete, see c8457ed9bd45
+* Don't rely on SDK-provided `event_id` for ingest-digest handover, see 6ab3fa56200e, and 9e8f59ebc1b1
+* `cleanup_events` (after delete): push out of transaction, see 4130cd240205 and 7f726cad8fc9
+* Add simple command to delete the oldest events until under retention max, see 941490605355
+* `FileEventStorage` config forward-compatible, see 5099d697493f
+* `migrate_to_current_eventstorage` command: don't crash when there are 'very many' events, see 34cf7dc868f5
+
+### Upgrading
+
+The optional management command `fix_project_digest_order` can be run in
+addition to migrations; this will make rate-limiting quota work more
+correctly immediately.
+
+(if you don't care, this will become eventually correct as the old data
+fades away).
+
+## 2.0.11 (20 January 2026)
+
+* Add brotli and gzip filestorages, see 5b345e0535c9
+* Apply max retention from settings even if stored project value is higher, see 1f1b06b74dd0
+* Max retention event count: guard the API, see d3beed517217
+* Max event retention: don't mention a negative budget, see 0a39ce16f487
+* New project: suggest no more than the legal retention, see 0cdb6c0afdab
+
+## 2.0.10 (14 January 2026)
+
+* FileStorage: basepath configurable using `get_basepath` (callable), 2561f5602a7b
+
+## 2.0.9 (13 January 2026)
+
+* Add event URL for the "external" (SDK-provided) ID, see #291
+* Add OpenAPI link to navigation bar, see #302 / #301
+* Adding info to contributing guidelines, see #303
+
+## 2.0.8 (10 January 2026)
+
+* Improve default Sentry SDK settings for Python, Fix #298
+* Fix background of event search inputs in dark mode, see #300
+* Add missing tailwindcss dependencies (for development)
+* `MAX_RETENTION[_PER_PROJECT]` as a setting
+* More fully disable the admin when `USE_ADMIN=False`, See #131
+* quota exceeded: show a message
+* Project quota: pick up on settings-changes
+* Setting & check for site-wide per-month event ingestion maximum
+* Add modelcounts command; useful in the context of housekeeping when servers are down
+* Fix exception for unsupported envelope items / when minidump feature is off. See #293
+
+## 2.0.7 (6 January 2026)
+
+### New & Improved Alert backends
+
+* Adds the Mattermost Alert Backend, see #278, #253, #277
+* Adds the Discord Alert Backend, see #279, #121
+
+### Minidump API Endpoint: _Experimental_
+
+This release contains _code_ that supports Minidumps, and which can be turned on with the
+feature-flag (setting) `FEATURE_MINIDUMPS`.
+
+However, as it stands, this code should be seen as development-only: it has not
+passed security-review yet, which means it opens your Bugsink-installation to DOS-like
+attacks.
+
+See #270, #82.
+
+### Other changes
+
+* Fix `never_evict` for the "conditional ummute" case, see #292
+* ingest ParseError: don't raise a 500; make this the SDK's problem (400), see 4fe8bd3fad44
+* Upgrade Verbose CSRF Middleware to match Django 5.2, see e3f1c92fd17f
+* Fix for pygements mishandling a weird case w/ ruby, see 4564131ff532
+* Raise 413 for the 'content too large' case
+* Slack alerts: issue title in message title, fix #283
+* Channel support for Mattermost message backend, see #281
+* Discord alert backend: send 'valid' URLs only, fix #280
+* yesno filter: just don't return None ever, see 9b2acddf206b
+* tailwind update, see bddc2e8f640e
+* Link to 'all tags' in the 'tags' RHS box, see eeac2e750c05
+* 'files' is a bugsink module too; reflect in `eat_your_own_dogfood`, see 74a04f6ea1dc
+* Don't log emails to 0 recepients, see #86
+* Fix member counts on project/team list, they were at most 1, see a93f369ad749
+* Support request.body when doing Chuncked Transfer Encoding, see #9
+* Fix inefficient bytes concatenation when `KEEP_ENVELOPES` != 0, see 0432451e8e8b
+* Compression decoding errors: return 400 rather than 500, see 53bea102d911
+* Support Python 3.14, see #267
+
 ## 2.0.6 (8 November 2025)
 
 ### Security

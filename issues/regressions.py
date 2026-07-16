@@ -18,10 +18,10 @@ def is_regression(sorted_releases, fixed_at, events_at, current_event_at):
     marked_as_resolved = False
 
     for r in sorted_releases:
-        if r in events_at:
-            marked_as_resolved = False
-        elif r in fixed_at:
+        if r in fixed_at:
             marked_as_resolved = True
+        elif r in events_at:
+            marked_as_resolved = False
 
         if current_event_at == r:
             return marked_as_resolved
@@ -48,6 +48,9 @@ def issue_is_regression(issue, current_event_at):
         # Which means that seeing new events does not imply a regression, because that future hasn't arrived yet.
         return False
 
+    if issue.is_resolved_unconditionally:
+        return True
+
     if not issue.project.has_releases:
         # the simple case: no releases means that seeing new events implies a regression if the issue.is_resolved, which
         # is True given the first guard clause.
@@ -73,11 +76,11 @@ def is_regression_2(sorted_releases, fixed_at, events_at, current_event_at):
     marked_as_resolved = False
 
     for r in sorted_releases:
-        if r in events_at:
-            marked_as_resolved = False
-        elif r in fixed_at:
+        if r in fixed_at:
             marked_as_resolved = True
             fixed_at.remove(r)
+        elif r in events_at:
+            marked_as_resolved = False
 
         if current_event_at == r:
             return marked_as_resolved, len(fixed_at) > 0

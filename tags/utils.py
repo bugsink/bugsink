@@ -57,7 +57,7 @@ def deduce_user_tags(event_data):
     # we can find, and put the rest in dotted paths. It's simple, easy to explain, and we're not aiming for Sentry
     # compatibility here. (If we ever want that, for reference, Sentry has the concept of an "EventUser" (eventuser.py))
 
-    if "user" not in event_data:
+    if not event_data.get("user") or not isinstance(event_data["user"], dict):
         return {}
 
     result = {}

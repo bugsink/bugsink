@@ -10,6 +10,8 @@ from bugsink.app_settings import get_settings
 from bugsink.transaction import immediate_atomic
 
 from issues.models import Issue
+from .base import BaseWebhookBackend
+from .webhook_security import validate_webhook_url
 
 
 class SlackConfigForm(forms.Form):
@@ -31,6 +33,14 @@ class SlackConfigForm(forms.Form):
         return {
             "webhook_url": self.cleaned_data.get("webhook_url"),
         }
+
+    def clean_webhook_url(self):
+        webhook_url = self.cleaned_data["webhook_url"]
+        try:
+            validate_webhook_url(webhook_url)
+        except ValueError as e:
+            raise forms.ValidationError(str(e)) from e
+        return webhook_url
 
 
 def _safe_markdown(text):
@@ -124,11 +134,10 @@ def slack_backend_send_test_message(webhook_url, project_name, display_name, ser
             ]}
 
     try:
-        result = requests.post(
+        result = SlackBackend.safe_post(
             webhook_url,
             data=json.dumps(data),
             headers={"Content-Type": "application/json"},
-            timeout=5,
         )
 
         result.raise_for_status()
@@ -149,7 +158,7 @@ def slack_backend_send_alert(
     issue = Issue.objects.get(id=issue_id)
 
     issue_url = get_settings().BASE_URL + issue.get_absolute_url()
-    title = truncatechars(issue.title().replace("|", ""), 200)
+    title = truncatechars(issue.title().replace("|", ""), 150)
     link = f"<{issue_url}|view on Bugsink>"
 
     sections = [
@@ -211,11 +220,10 @@ def slack_backend_send_alert(
     data = {"text": sections[0]["text"]["text"], "blocks": sections}
 
     try:
-        result = requests.post(
+        result = SlackBackend.safe_post(
             webhook_url,
             data=json.dumps(data),
             headers={"Content-Type": "application/json"},
-            timeout=5,
         )
 
         result.raise_for_status()
@@ -229,7 +237,7 @@ def slack_backend_send_alert(
         _store_failure_info(service_config_id, e)
 
 
-class SlackBackend:
+class SlackBackend(BaseWebhookBackend):
     def __init__(self, service_config):
         self.service_config = service_config
 

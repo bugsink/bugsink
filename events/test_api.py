@@ -70,6 +70,15 @@ class EventApiTests(TransactionTestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 404)
 
+    def test_detail_malformed_id_is_404(self):
+        response = self.client.get(reverse("api:event-detail", args=["not-a-uuid"]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_stacktrace_malformed_id_is_404(self):
+        response = self.client.get(reverse("api:event-stacktrace", args=["not-a-uuid"]))
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("404 Not Found", response.content.decode("utf-8"))
+
     def test_list_rejects_bad_order(self):
         response = self.client.get(reverse("api:event-list"), {"issue": str(self.issue.id), "order": "sideways"})
         self.assertEqual(response.status_code, 400)

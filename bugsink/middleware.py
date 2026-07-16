@@ -9,7 +9,9 @@ from django.utils.translation import get_supported_language_variant
 from django.utils.translation.trans_real import parse_accept_lang_header
 from django.utils import translation
 from django.urls import get_script_prefix
-from django.http import HttpResponseBadRequest
+from django.http import HttpResponseBadRequest, Http404
+
+from bugsink.app_settings import get_settings
 
 
 performance_logger = logging.getLogger("bugsink.performance.views")
@@ -102,6 +104,18 @@ class LoginRequiredMiddleware:
         # do amounts to "redirect and do something else". (It's not OK in the general case, where you just want to do a
         # small middleware-like thing and proceed normally otherwise)
         return login_required(view_func)(request, *view_args, **view_kwargs)
+
+
+class AdminRequiresSettingMiddleware:
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.path.startswith("/admin/") and not get_settings().USE_ADMIN:
+            raise Http404
+
+        return self.get_response(request)
 
 
 class PerformanceStatsMiddleware:

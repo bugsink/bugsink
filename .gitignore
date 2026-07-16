@@ -47,6 +47,7 @@ node_modules
 
 # conf
 /bugsink_conf.py
+/bugsink/settings/personal/*.py
 
 # static files
 /collectedstatic

@@ -3,6 +3,8 @@ abstract generality. Python 3.12 is the standard environment.
 
 ## Coding Guidance
 
+* CONTRIBUTING.md contains many important notes for humans and agents alike. Make sure to read it apply its advice.
+
 * Keep it clear and simple. When in doubt: shorter.
 * Use descriptive names, short functions, minimal boilerplate.
 * Error-handling: avoid catching every possible error; in many cases "fail early"
@@ -10,10 +12,10 @@ abstract generality. Python 3.12 is the standard environment.
 * Avoid overly clever or verbose code
 * Keep comments absolutely minimal: only comment to explain unusual or complex
   (which there shouldn't be anyway)
-* Follow PEP8 and ensure `flake8` passes (CI ignores E741, E731). width: 120 columns.
+* Follow PEP8 and ensure `ruff check .` passes. Rules/exceptions live in pyproject.toml. width: 120 columns.
 * Use Django's function-based views
 
-### Tests
+### Writing Tests
 
 Tests should be either of 2 kinds:
 
@@ -55,5 +57,3 @@ python manage.py tailwind build
 git add theme/static/css/dist/styles.css
 tools/strip-trailing-whitespace.sh
 ```
-
-If you fail to do so the pre-commit hook will trigger, and you will not be able to commit.

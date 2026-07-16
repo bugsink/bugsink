@@ -17,21 +17,30 @@ from django.test.client import RequestFactory
 from django.core.exceptions import ValidationError
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
+from bugsink.transaction import immediate_atomic
 from projects.models import Project
 from events.factories import create_event_data, create_event
 from events.retention import evict_for_max_events
 from events.storage_registry import override_event_storages
-from events.models import Event
+from events.models import InstallationEventCountsPerHour, IssueEventCountsPerHour, ProjectEventCountsPerHour, Event
+from events.usage import hour_bucket
 from issues.factories import get_or_create_issue
-from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind
+from issues.grouping_mechanisms import (
+    GROUPING_TRANSITION_PERIOD,
+    LATEST_GROUPING_MECHANISM,
+    LEGACY_GROUPING_MECHANISM,
+    MECHANISM_INDEPENDENT_GROUPING,
+)
+from issues.models import IssueStateManager, Issue, TurningPoint, TurningPointKind, Grouping
 from issues.utils import get_values
 from bugsink.app_settings import override_settings
 from bugsink.streams import UnclosableBytesIO
 from compat.timestamp import format_timestamp
 from compat.dsn import get_header_value
 from bsmain.management.commands.send_json import Command as SendJsonCommand
+from phonehome.models import Installation
 
-from .views import BaseIngestAPIView, MinidumpAPIView
+from .views import BaseIngestAPIView, IngestSecurityAPIView, MinidumpAPIView, get_grouping_key_hash
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 from .event_counter import check_for_thresholds
 from .header_validators import (
@@ -110,6 +119,26 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual("\n", Issue.objects.get().events_at)
         self.assertEqual(1, TurningPoint.objects.count())
         self.assertEqual(TurningPointKind.FIRST_SEEN, TurningPoint.objects.first().kind)
+
+    @patch("ingest.views.BaseIngestAPIView.count_project_periods_and_act_on_it")
+    @patch("ingest.views.BaseIngestAPIView.count_installation_periods_and_act_on_it")
+    @patch("ingest.views.evict_for_max_events")
+    @patch("events.tasks.delete_by_age_until_under_retention_max.delay")
+    def test_ingest_view_zero_retention_short_circuits(
+            self, cleanup_delay, evict_for_max_events, count_installation, count_project):
+        self.quiet_project.retention_max_event_count = 0
+        self.quiet_project.save(update_fields=["retention_max_event_count"])
+
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
+
+        self.assertFalse(count_installation.called)
+        self.assertFalse(count_project.called)
+        self.assertFalse(evict_for_max_events.called)
+        self.assertFalse(cleanup_delay.called)
+        self.assertEqual(0, Event.objects.filter(project=self.quiet_project).count())
+        self.assertEqual(0, Issue.objects.filter(project=self.quiet_project).count())
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
@@ -206,6 +235,32 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(TurningPointKind.UNMUTED, TurningPoint.objects.first().kind)
         self.assertEqual(send_unmute_alert.delay.call_args[0][0], str(issue.id))
         self.assertTrue("An event was observed after the mute-deadline of" in send_unmute_alert.delay.call_args[0][1])
+
+    @patch("ingest.views.BaseIngestAPIView.count_project_periods_and_act_on_it")
+    @patch("ingest.views.BaseIngestAPIView.count_installation_periods_and_act_on_it")
+    @patch("ingest.views.evict_for_max_events")
+    @patch("events.tasks.delete_by_age_until_under_retention_max.delay")
+    def test_ingest_view_zero_retention_schedules_cleanup_for_stored_events(
+            self, cleanup_delay, evict_for_max_events, count_installation, count_project):
+        self.quiet_project.retention_max_event_count = 0
+        self.quiet_project.save(update_fields=["retention_max_event_count"])
+
+        event_data = create_event_data()
+        issue, _ = get_or_create_issue(self.quiet_project, event_data)
+        create_event(self.quiet_project, issue, event_data=event_data)
+        issue.stored_event_count = 1
+        issue.save(update_fields=["stored_event_count"])
+        self.quiet_project.stored_event_count = 1
+        self.quiet_project.save(update_fields=["stored_event_count"])
+
+        request = self.request_factory.post("/api/1/store/")
+
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        self.assertFalse(count_installation.called)
+        self.assertFalse(count_project.called)
+        self.assertFalse(evict_for_max_events.called)
+        cleanup_delay.assert_called_once_with(self.quiet_project.id)
 
     @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
@@ -327,6 +382,7 @@ class IngestViewTestCase(TransactionTestCase):
             )
             self.assertEqual(
                 200, response.status_code, response.content if response.status_code != 302 else response.url)
+            self.assertEqual({"id": event_id}, response.json())
 
             self.assertEqual(1 + i, Event.objects.count())
 
@@ -419,6 +475,181 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual('SIGABRT: Fatal Error: SIGABRT', Event.objects.get().title())
 
     @tag("samples")
+    @override_settings(FEATURE_MINIDUMPS=False)
+    def test_envelope_endpoint_minidump_only_when_feature_off(self):
+        # dirty copy/paste from the "feature on" case, with different expectations.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        SAMPLES_DIR = os.getenv("SAMPLES_DIR", "../event-samples")
+
+        filename = glob(SAMPLES_DIR + "/minidumps/linux_overflow.dmp")[0]  # pick a fixed one for reproducibility
+        with open(filename, 'rb') as f:
+            minidump_bytes = f.read()
+
+        event_id = uuid.uuid4().hex  # required at the envelope level so we provide it.
+
+        data_bytes = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "attachment", "attachment_type": "event.minidump", "length": %d}\n' % len(minidump_bytes) +
+            minidump_bytes
+            )
+
+        response = self.client.post(
+            f"/api/{ project.id }/envelope/",
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+            },
+            data=data_bytes,
+        )
+        self.assertEqual(
+            200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+        self.assertEqual(0, Event.objects.count())
+
+    def test_envelope_endpoint_unsupported_type(self):
+        # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        for i, include_event_id in enumerate([True, False]):
+            data = {}
+            event_id = uuid.uuid4().hex
+
+            data_bytes = json.dumps(data).encode("utf-8")
+            data_bytes = (
+                b'{"event_id": "%s"}\n{"type": "unsupported_type"}\n' % event_id.encode("utf-8") + data_bytes)
+
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                },
+                data=data_bytes,
+            )
+            self.assertEqual(
+                200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+            self.assertEqual(0, Event.objects.count())
+
+    def test_envelope_endpoint_unsupported_type_without_event_id(self):
+        # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        for i, include_event_id in enumerate([True, False]):
+            data = {}
+
+            data_bytes = json.dumps(data).encode("utf-8")
+            data_bytes = (
+                b'{}\n{"type": "unsupported_type"}\n' + data_bytes)
+
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                },
+                data=data_bytes,
+            )
+            self.assertEqual(
+                200, response.status_code, response.content if response.status_code != 302 else response.url)
+
+            self.assertEqual(0, Event.objects.count())
+
+    def test_store_endpoint_generates_event_id_when_missing(self):
+        # The legacy /store/ endpoint must accept payloads without `event_id` and generate one server-side
+        # (matching real Sentry behavior). utopia-php/logger — used by Appwrite 1.9.0 — posts without `event_id`.
+        project = Project.objects.create(name="test")
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        data = {
+            "timestamp": time.time(),
+            "platform": "php",
+            "level": "error",
+            "logger": "app",
+            "message": {"message": "test"},
+            "exception": {"values": [{"type": "TestError", "stacktrace": {"frames": []}}]},
+        }
+        data_bytes = json.dumps(data).encode("utf-8")
+
+        response = self.client.post(
+            f"/api/{ project.id }/store/",
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+            },
+            data=data_bytes,
+        )
+        self.assertEqual(
+            200, response.status_code, response.content if response.status_code != 302 else response.url)
+        self.assertEqual(1, Event.objects.count())
+        # server-generated event_id is echoed back per the Sentry response contract; we can't predict it but it must
+        # be a valid UUID hex string.
+        self.assertIn("id", response.json())
+        uuid.UUID(response.json()["id"])
+
+    def test_envelope_endpoint_cleans_up_oversized_event_file(self):
+        project = Project.objects.create(name="test")
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+        event_id = uuid.uuid4().hex
+
+        event_bytes = json.dumps({"event_id": event_id, "message": "x" * 2000}).encode("utf-8")
+        data_bytes = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "event", "length": %d}\n' % len(event_bytes) +
+            event_bytes
+        )
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(
+                INGEST_STORE_BASE_DIR=tempdir, MAX_EVENT_SIZE=1500):
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                },
+                data=data_bytes,
+            )
+
+            self.assertEqual(413, response.status_code)
+            self.assertEqual([], os.listdir(tempdir))
+
+    def test_envelope_endpoint_cleans_up_multiple_event_files(self):
+        project = Project.objects.create(name="test")
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+        event_id = uuid.uuid4().hex
+        event_bytes = json.dumps({"event_id": event_id, "message": "hello"}).encode("utf-8")
+
+        data_bytes = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "event", "length": %d}\n' % len(event_bytes) +
+            event_bytes + b"\n" +
+            b'{"type": "event", "length": %d}\n' % len(event_bytes) +
+            event_bytes
+        )
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                },
+                data=data_bytes,
+            )
+
+            self.assertEqual(200, response.status_code)
+            self.assertEqual([], os.listdir(tempdir))
+            self.assertEqual(0, Event.objects.count())
+
+    @tag("samples")
     def test_envelope_endpoint_reused_ids_different_exceptions(self):
         # dirty copy/paste from test_envelope_endpoint,
         project = Project.objects.create(name="test")
@@ -504,11 +735,86 @@ class IngestViewTestCase(TransactionTestCase):
                     },
                     }):
                 self.test_envelope_endpoint()
+                [e.get_parsed_data() for e in Event.objects.all()]  # force reading from filestore
                 self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
 
-                project = Project.objects.get(name="test")
-                project.retention_max_event_count = 1
-                evict_for_max_events(project, timezone.now(), stored_event_count=2)
+                with immediate_atomic():
+                    project = Project.objects.get(name="test")
+                    project.retention_max_event_count = 1
+                    evict_for_max_events(project, timezone.now(), stored_event_count=2)
+
+                self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
+
+    @tag("samples")
+    def test_filestore_get_basepath(self):
+        # exact copy of test_filestore but using get_basepath option variant
+        with tempfile.TemporaryDirectory() as tempdir:
+            with override_event_storages({"local_flat_files": {
+                        "STORAGE": "events.storage.FileEventStorage",
+                        "OPTIONS": {
+                            "get_basepath": lambda: tempdir,
+                        },
+                        "USE_FOR_WRITE": True,
+                    },
+                    }):
+                self.test_envelope_endpoint()
+                [e.get_parsed_data() for e in Event.objects.all()]  # force reading from filestore
+                self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
+
+                with immediate_atomic():
+                    project = Project.objects.get(name="test")
+                    project.retention_max_event_count = 1
+                    evict_for_max_events(project, timezone.now(), stored_event_count=2)
+
+                self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
+
+    @tag("samples")
+    def test_filestore_br(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            # exact copy of test_filestore but using brotli compression
+            with override_event_storages({"local_flat_files": {
+                        "STORAGE": "events.storage.FileEventStorage",
+                        "OPTIONS": {
+                            "basepath": tempdir,
+                            "compression_algorithm": "br",
+                            "compression_level": 7,
+                        },
+                        "USE_FOR_WRITE": True,
+                    },
+                    }):
+                self.test_envelope_endpoint()
+                [e.get_parsed_data() for e in Event.objects.all()]  # force reading from filestore
+                self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
+
+                with immediate_atomic():
+                    project = Project.objects.get(name="test")
+                    project.retention_max_event_count = 1
+                    evict_for_max_events(project, timezone.now(), stored_event_count=2)
+
+                self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
+
+    @tag("samples")
+    def test_filestore_gzip(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            # exact copy of test_filestore but using gzip compression
+            with override_event_storages({"local_flat_files": {
+                        "STORAGE": "events.storage.FileEventStorage",
+                        "OPTIONS": {
+                            "basepath": tempdir,
+                            "compression_algorithm": "gzip",
+                            "compression_level": 7,
+                        },
+                        "USE_FOR_WRITE": True,
+                    },
+                    }):
+                self.test_envelope_endpoint()
+                [e.get_parsed_data() for e in Event.objects.all()]  # force reading from filestore
+                self.assertEqual(len(os.listdir(tempdir)), 2)  # test_envelope_endpoint creates 2 events
+
+                with immediate_atomic():
+                    project = Project.objects.get(name="test")
+                    project.retention_max_event_count = 1
+                    evict_for_max_events(project, timezone.now(), stored_event_count=2)
 
                 self.assertEqual(len(os.listdir(tempdir)), 1)  # we set the max to 1, so one should remain
 
@@ -606,7 +912,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertIsNone(project.quota_exceeded_until)
         self.assertEqual(1, patched_check_for_thresholds.call_count)
 
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=1)  # result was True, proceed accordingly
 
         # second call
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
@@ -616,7 +922,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertIsNone(project.quota_exceeded_until)
         self.assertEqual(1, patched_check_for_thresholds.call_count)  # no new call to the expensive check is done
 
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=2)  # result was True, proceed accordingly
 
         # third call (equals but does not exceed quota, so this event should still be accepted, but the door should be
         # closed right after it)
@@ -627,7 +933,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(now + relativedelta(minutes=5), project.quota_exceeded_until)
         self.assertEqual(2, patched_check_for_thresholds.call_count)  # the check was done right at the lower bound
 
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=3)  # result was True, proceed accordingly
 
         # fourth call
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
@@ -645,6 +951,43 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertIsNone(project.quota_exceeded_until)
         self.assertEqual(3, patched_check_for_thresholds.call_count)  # the check is done on "re-enter"
 
+    @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=100)
+    @patch("ingest.views.check_for_thresholds")
+    def test_count_project_periods_and_act_on_it_in_face_of_evication(self, patched_check_for_thresholds):
+        patched_check_for_thresholds.side_effect = check_for_thresholds  # the patch is only there to count calls
+        now = timezone.now()
+
+        project = Project.objects.create(name="test")
+
+        # first call
+        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+
+        self.assertEqual(True, result)
+        self.assertEqual(1, project.digested_event_count)
+        self.assertIsNone(project.quota_exceeded_until)
+        self.assertEqual(1, patched_check_for_thresholds.call_count)
+        create_event(project, timestamp=now, project_digest_order=1)  # result was True, proceed accordingly
+
+        # calls 2 - 98 are eluded here; this mimicks eviction; we do manually update project.digested_event_count though
+        project.digested_event_count = 98
+        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+
+        self.assertEqual(True, result)
+        self.assertEqual(99, project.digested_event_count)
+        self.assertIsNone(project.quota_exceeded_until)
+
+        create_event(project, timestamp=now, project_digest_order=99)  # result was True, proceed accordingly
+
+        # 100th call (equals but does not exceed quota, so this event should still be accepted, but the door should be
+        # closed right after it)
+        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+
+        self.assertEqual(True, result)
+        self.assertEqual(100, project.digested_event_count)
+        self.assertEqual(now + relativedelta(minutes=5), project.quota_exceeded_until)
+
+        create_event(project, timestamp=now, project_digest_order=100)  # result was True, proceed accordingly
+
     @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=3)
     @patch("ingest.views.check_for_thresholds")
     def test_count_project_periods_and_act_on_it_new_check_done_but_below_threshold(self, patched_check_for_thresholds):
@@ -655,10 +998,10 @@ class IngestViewTestCase(TransactionTestCase):
 
         # first and second call as in "simple_case" test
         BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=1)  # result was True, proceed accordingly
 
         BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=2)  # result was True, proceed accordingly
 
         # third call must trigger the check; if it happens outside of the 5-minute period the result should be OK though
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now + relativedelta(minutes=6))
@@ -682,7 +1025,7 @@ class IngestViewTestCase(TransactionTestCase):
 
         # first call (assertions implied, as in simple_case)
         result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
-        create_event(project, timestamp=now)  # result was True, proceed accordingly
+        create_event(project, timestamp=now, project_digest_order=1)  # result was True, proceed accordingly
 
         with override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=1):
             # the path described in this test only works if the next_quota_check are simultaneously reset
@@ -700,18 +1043,468 @@ class IngestViewTestCase(TransactionTestCase):
             # but at least this closes the door for the next event
             self.assertEqual(now + relativedelta(minutes=5), project.quota_exceeded_until)
 
+    @override_settings(MAX_EVENTS_PER_5_MINUTES=1_000, MAX_EVENTS_PER_HOUR=1_000, MAX_EVENTS_PER_MONTH=3)
+    def test_count_installation_periods_and_act_on_it_sums_project_spans(self):
+        now = timezone.now()
+        installation = Installation.objects.get()
+
+        project_a = Project.objects.create(name="installation-a")
+        project_b = Project.objects.create(name="installation-b")
+
+        create_event(project_a, timestamp=now, project_digest_order=100)
+        create_event(project_b, timestamp=now + relativedelta(seconds=1), project_digest_order=1)
+
+        project_a.digested_event_count = 1
+        project_a.save(update_fields=["digested_event_count"])
+        project_b.digested_event_count = 1
+        project_b.save(update_fields=["digested_event_count"])
+
+        result = BaseIngestAPIView.count_installation_periods_and_act_on_it(
+            installation,
+            now + relativedelta(seconds=2),
+        )
+
+        installation.refresh_from_db()
+
+        self.assertEqual(True, result)
+        self.assertEqual(now + relativedelta(months=1), installation.quota_exceeded_until)
+        self.assertEqual('["month", 1, 3]', installation.quota_exceeded_reason)
+
     def test_ingest_updates_stored_event_counts(self):
+        request = self.request_factory.post("/api/1/store/")
+        first_hour = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        second_event = first_hour + datetime.timedelta(minutes=1)
+
+        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request, first_hour))
+
+        self.assertEqual(1, Issue.objects.count())
+        self.assertEqual(1, Issue.objects.get().stored_event_count)
+        self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).issue_count)
+        self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).stored_event_count)
+        self.assertEqual(1, InstallationEventCountsPerHour.objects.get(bucket=hour_bucket(first_hour)).count)
+        self.assertEqual(
+            1,
+            ProjectEventCountsPerHour.objects.get(project=self.quiet_project, bucket=hour_bucket(first_hour)).count,
+        )
+        self.assertEqual(
+            1,
+            IssueEventCountsPerHour.objects.get(issue=Issue.objects.get(), bucket=hour_bucket(first_hour)).count,
+        )
+
+        BaseIngestAPIView().digest_event(
+            **_digest_params(create_event_data(), self.quiet_project, request, second_event))
+        self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).issue_count)
+        self.assertEqual(2, Issue.objects.get().stored_event_count)
+        self.assertEqual(2, Project.objects.get(id=self.quiet_project.id).stored_event_count)
+        self.assertEqual(2, InstallationEventCountsPerHour.objects.get(bucket=hour_bucket(first_hour)).count)
+        self.assertEqual(
+            2,
+            ProjectEventCountsPerHour.objects.get(project=self.quiet_project, bucket=hour_bucket(first_hour)).count,
+        )
+        self.assertEqual(
+            2,
+            IssueEventCountsPerHour.objects.get(issue=Issue.objects.get(), bucket=hour_bucket(first_hour)).count,
+        )
+
+    def test_ingest_stores_latest_grouping_mechanism(self):
         request = self.request_factory.post("/api/1/store/")
 
         BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
 
-        self.assertEqual(1, Issue.objects.count())
-        self.assertEqual(1, Issue.objects.get().stored_event_count)
-        self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).stored_event_count)
+        self.assertEqual(LATEST_GROUPING_MECHANISM, Grouping.objects.get().grouping_mechanism)
 
-        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
-        self.assertEqual(2, Issue.objects.get().stored_event_count)
-        self.assertEqual(2, Project.objects.get(id=self.quiet_project.id).stored_event_count)
+    def test_ingest_stores_mechanism_independent_grouping_for_explicit_fingerprint(self):
+        request = self.request_factory.post("/api/1/store/")
+        event_data = create_event_data()
+        event_data["fingerprint"] = ["shared-fingerprint"]
+
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        self.assertEqual(MECHANISM_INDEPENDENT_GROUPING, Grouping.objects.get().grouping_mechanism)
+
+    def test_mechanism_independent_grouping_matches_legacy_multipart_fingerprint(self):
+        # test for "another piece of legacy-handling code in the digest path" (can be removed at some point)
+        issue = Issue.objects.create(
+            project=self.quiet_project,
+            digest_order=1,
+            first_seen=timezone.now(),
+            last_seen=timezone.now(),
+            digested_event_count=1,
+        )
+        # explicit fingerprint, but multi-part so cannot be identified as "none" by our migration
+        grouping_key = "shared ⋄ fingerprint"
+        Grouping.objects.create(
+            project=self.quiet_project,
+            grouping_key=grouping_key,
+            grouping_key_hash=get_grouping_key_hash(grouping_key),
+            grouping_mechanism=LEGACY_GROUPING_MECHANISM,  # the "cannot be identified as none" part of the test
+            issue=issue,
+        )
+
+        event_data = create_event_data()
+        event_data["fingerprint"] = ["shared", "fingerprint"]
+        request = self.request_factory.post("/api/1/store/")
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+
+        # no new issue is created, but the correct mechanism-independent grouping is created for the old issue.
+        self.assertEqual(1, Issue.objects.count())
+        self.assertEqual(2, Grouping.objects.count())
+        self.assertEqual(
+            {LEGACY_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING},
+            set(Grouping.objects.values_list("grouping_mechanism", flat=True)),
+        )
+        self.assertEqual({issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
+        self.assertEqual(2, Issue.objects.get().digested_event_count)
+
+    def test_grouping_transition_links_old_issue_to_new_mechanism(self):
+        request = self.request_factory.post("/api/1/store/")
+        now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        project = Project.objects.create(
+            name="transition",
+            grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+            alert_on_new_issue=False,
+            alert_on_regression=False,
+            alert_on_unmute=False,
+        )
+        first = create_event_data(exception_type="TransitionError")
+
+        BaseIngestAPIView().digest_event(**_digest_params(first, project, request, now))
+        old_issue = Issue.objects.get()
+
+        project.grouping_mechanism = LATEST_GROUPING_MECHANISM
+        project.previous_grouping_mechanism = LEGACY_GROUPING_MECHANISM
+        project.grouping_mechanism_upgraded_at = now
+        project.save()
+
+        second = create_event_data(exception_type="TransitionError")
+        BaseIngestAPIView().digest_event(
+            **_digest_params(second, project, request, now + datetime.timedelta(minutes=1)))
+
+        self.assertEqual(1, Issue.objects.count())
+        self.assertEqual(2, Grouping.objects.count())
+        self.assertEqual(
+            {LEGACY_GROUPING_MECHANISM, LATEST_GROUPING_MECHANISM},
+            set(Grouping.objects.values_list("grouping_mechanism", flat=True)),
+        )
+        self.assertEqual({old_issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
+
+    def test_grouping_transition_handles_switching_back_to_previous_mechanism(self):
+        # simple test for the "back-and-forth" case, where a project switches from legacy to latest and then back to
+        # legacy again. At least this proves that it works correctly for the simple case, I can't really think of a more
+        # complex scenario that would be worth testing for so we'll leave it at that for now.
+
+        request = self.request_factory.post("/api/1/store/")
+        now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        project = Project.objects.create(
+            name="back-and-forth-transition",
+            grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+            alert_on_new_issue=False,
+            alert_on_regression=False,
+            alert_on_unmute=False,
+        )
+
+        BaseIngestAPIView().digest_event(
+            **_digest_params(create_event_data(exception_type="BackAndForthError"), project, request, now))
+        old_issue = Issue.objects.get()
+
+        project.grouping_mechanism = LATEST_GROUPING_MECHANISM
+        project.previous_grouping_mechanism = LEGACY_GROUPING_MECHANISM
+        project.grouping_mechanism_upgraded_at = now
+        project.save()
+        BaseIngestAPIView().digest_event(**_digest_params(
+            create_event_data(exception_type="BackAndForthError"),
+            project,
+            request,
+            now + datetime.timedelta(minutes=1),
+        ))
+
+        project.grouping_mechanism = LEGACY_GROUPING_MECHANISM
+        project.previous_grouping_mechanism = LATEST_GROUPING_MECHANISM
+        project.grouping_mechanism_upgraded_at = now + datetime.timedelta(minutes=2)
+        project.save()
+        BaseIngestAPIView().digest_event(**_digest_params(
+            create_event_data(exception_type="BackAndForthError"),
+            project,
+            request,
+            now + datetime.timedelta(minutes=3),
+        ))
+
+        self.assertEqual(1, Issue.objects.count())
+        self.assertEqual(2, Grouping.objects.count())
+        self.assertEqual(3, Event.objects.count())
+        self.assertEqual(3, Issue.objects.get().digested_event_count)
+        self.assertEqual(
+            {LEGACY_GROUPING_MECHANISM, LATEST_GROUPING_MECHANISM},
+            set(Grouping.objects.values_list("grouping_mechanism", flat=True)),
+        )
+        self.assertEqual({old_issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
+
+    def test_expired_grouping_transition_creates_new_issue(self):
+        request = self.request_factory.post("/api/1/store/")
+        now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
+        project = Project.objects.create(
+            name="expired-transition",
+            grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+            alert_on_new_issue=False,
+            alert_on_regression=False,
+            alert_on_unmute=False,
+        )
+        first = create_event_data(exception_type="ExpiredTransitionError")
+
+        BaseIngestAPIView().digest_event(**_digest_params(first, project, request, now))
+
+        project.grouping_mechanism = LATEST_GROUPING_MECHANISM
+        project.previous_grouping_mechanism = LEGACY_GROUPING_MECHANISM
+        project.grouping_mechanism_upgraded_at = now - GROUPING_TRANSITION_PERIOD - datetime.timedelta(seconds=1)
+        project.save()
+
+        second = create_event_data(exception_type="ExpiredTransitionError")
+        BaseIngestAPIView().digest_event(
+            **_digest_params(second, project, request, now + datetime.timedelta(minutes=1)))
+
+        self.assertEqual(2, Issue.objects.count())
+        self.assertEqual(2, Grouping.objects.count())
+
+    def test_ingest_refreshes_issue_calculated_fields_on_subsequent_events(self):
+        # When a fingerprint groups events whose exception type/value differ, the issue's denormalized
+        # calculated_type/calculated_value should reflect the latest event so that the displayed title
+        # tracks reality instead of staying frozen on the first event.
+        request = self.request_factory.post("/api/1/store/")
+
+        first = create_event_data()
+        first["exception"] = {"values": [{"type": "FirstError", "value": "first message"}]}
+        first["fingerprint"] = ["shared-fingerprint"]
+        BaseIngestAPIView().digest_event(**_digest_params(first, self.quiet_project, request))
+
+        issue = Issue.objects.get()
+        self.assertEqual("FirstError", issue.calculated_type)
+        self.assertEqual("first message", issue.calculated_value)
+
+        second = create_event_data()
+        second["exception"] = {"values": [{"type": "SecondError", "value": "second message"}]}
+        second["fingerprint"] = ["shared-fingerprint"]
+        BaseIngestAPIView().digest_event(**_digest_params(second, self.quiet_project, request))
+
+        # still a single issue (same fingerprint), but its title fields now reflect the most recent event
+        self.assertEqual(1, Issue.objects.count())
+        issue.refresh_from_db()
+        self.assertEqual("SecondError", issue.calculated_type)
+        self.assertEqual("second message", issue.calculated_value)
+        self.assertEqual(2, issue.digested_event_count)
+
+
+class IngestSecurityViewTestCase(TransactionTestCase):
+    # Tests for the CSP report endpoint (POST /api/<project_pk>/security/). Goes through self.client so we exercise the
+    # full URL routing, content-type check, auth, parse, digest path. TransactionTestCase because digest.delay() relies
+    # on on_commit() callbacks (TASK_ALWAYS_EAGER is on for tests but the real task still calls into digest_event which
+    # itself runs inside immediate_atomic).
+
+    SAMPLE_REPORT = {
+        "csp-report": {
+            "document-uri": "https://example.com/page",
+            "referrer": "https://example.com/",
+            "violated-directive": "script-src 'self'",
+            "effective-directive": "script-src",
+            "original-policy": "default-src 'self'; script-src 'self'; report-uri /api/1/security/",
+            "blocked-uri": "https://evil.example.com/x.js",
+            "source-file": "https://example.com/page",
+            "line-number": 12,
+            "column-number": 7,
+            "status-code": 200,
+        },
+    }
+
+    def setUp(self):
+        super().setUp()
+        self.project = Project.objects.create(name="csp-test")
+
+    def _post_report(self, body, sentry_key=None, content_type="application/csp-report"):
+        if sentry_key is None:
+            sentry_key = self.project.sentry_key
+        url = "/api/%d/security/?sentry_key=%s" % (self.project.id, sentry_key)
+        if isinstance(body, (dict, list)):
+            body = json.dumps(body)
+        if isinstance(body, str):
+            body = body.encode("utf-8")
+        return self.client.post(url, data=body, content_type=content_type)
+
+    def test_happy_path_creates_event(self):
+        response = self._post_report(self.SAMPLE_REPORT)
+
+        self.assertEqual(200, response.status_code, response.content)
+        self.assertEqual(1, Event.objects.count())
+        self.assertEqual(1, Issue.objects.count())
+
+        issue = Issue.objects.get()
+        self.assertEqual("CSP: blocked https://evil.example.com/x.js (script-src)", issue.title())
+
+    def test_groups_by_directive_and_blocked_uri(self):
+        # Two reports with the same (effective-directive, blocked-uri) but different document-uri should collapse to one
+        # issue. The whole point: don't drown in one-issue-per-page noise.
+        self._post_report(self.SAMPLE_REPORT)
+
+        second = json.loads(json.dumps(self.SAMPLE_REPORT))
+        second["csp-report"]["document-uri"] = "https://example.com/other-page"
+        self._post_report(second)
+
+        self.assertEqual(2, Event.objects.count())
+        self.assertEqual(1, Issue.objects.count())
+
+    def test_different_blocked_uris_create_separate_issues(self):
+        self._post_report(self.SAMPLE_REPORT)
+
+        other = json.loads(json.dumps(self.SAMPLE_REPORT))
+        other["csp-report"]["blocked-uri"] = "https://other.example.com/y.js"
+        self._post_report(other)
+
+        self.assertEqual(2, Event.objects.count())
+        self.assertEqual(2, Issue.objects.count())
+
+    def test_falls_back_to_violated_directive_when_no_effective_directive(self):
+        # Older browsers (e.g. some Safari versions) only send violated-directive. We should still group cleanly.
+        report = json.loads(json.dumps(self.SAMPLE_REPORT))
+        del report["csp-report"]["effective-directive"]
+        report["csp-report"]["violated-directive"] = "script-src 'self' https://cdn.example.com"
+
+        response = self._post_report(report)
+        self.assertEqual(200, response.status_code, response.content)
+
+        issue = Issue.objects.get()
+        self.assertEqual("CSP: blocked https://evil.example.com/x.js (script-src)", issue.title())
+
+    def test_csp_context_contains_report_fields(self):
+        self._post_report(self.SAMPLE_REPORT)
+
+        event = Event.objects.get()
+        data = json.loads(event.data)
+        csp_ctx = data["contexts"]["csp"]
+        self.assertEqual("https://evil.example.com/x.js", csp_ctx["blocked-uri"])
+        self.assertEqual("script-src", csp_ctx["effective-directive"])
+        self.assertEqual(12, csp_ctx["line-number"])
+        self.assertEqual(7, csp_ctx["column-number"])
+        self.assertEqual(
+            "default-src 'self'; script-src 'self'; report-uri /api/1/security/",
+            csp_ctx["original-policy"],
+        )
+
+    def test_missing_sentry_key_returns_403(self):
+        url = "/api/%d/security/" % self.project.id  # no ?sentry_key=
+        response = self.client.post(url, data=json.dumps(self.SAMPLE_REPORT), content_type="application/csp-report")
+        self.assertEqual(403, response.status_code)
+        self.assertEqual(0, Event.objects.count())
+
+    def test_wrong_sentry_key_returns_403(self):
+        # A syntactically valid UUID that doesn't match any project. (A non-UUID-shaped key would fail UUIDField
+        # validation upstream and be returned as 400; that's a separate behavior we don't try to specifically test.)
+        response = self._post_report(self.SAMPLE_REPORT, sentry_key=str(uuid.uuid4()))
+        self.assertEqual(403, response.status_code)
+        self.assertEqual(0, Event.objects.count())
+
+    def test_wrong_content_type_returns_400(self):
+        response = self._post_report(self.SAMPLE_REPORT, content_type="application/json")
+        self.assertEqual(400, response.status_code)
+        self.assertEqual(0, Event.objects.count())
+
+    def test_oversized_body_returns_413(self):
+        with override_settings(MAX_CSP_REPORT_SIZE=200):
+            big = json.loads(json.dumps(self.SAMPLE_REPORT))
+            big["csp-report"]["original-policy"] = "x" * 1000
+            response = self._post_report(big)
+        self.assertEqual(413, response.status_code)
+        self.assertEqual(0, Event.objects.count())
+
+    def test_malformed_json_returns_400(self):
+        response = self._post_report(b"{not json")
+        self.assertEqual(400, response.status_code)
+        self.assertEqual(0, Event.objects.count())
+
+    def test_non_utf8_json_returns_400(self):
+        response = self._post_report(b"\xff")
+        self.assertEqual(400, response.status_code)
+        self.assertEqual(0, Event.objects.count())
+
+    def test_missing_csp_report_key_returns_400(self):
+        response = self._post_report({"something-else": {}})
+        self.assertEqual(400, response.status_code)
+        self.assertEqual(0, Event.objects.count())
+
+    def test_csp_report_not_an_object_returns_400(self):
+        response = self._post_report({"csp-report": "not an object"})
+        self.assertEqual(400, response.status_code)
+        self.assertEqual(0, Event.objects.count())
+
+    def test_content_type_with_charset_is_accepted(self):
+        # Some browsers/proxies append "; charset=utf-8". Django strips parameters off request.content_type, so this
+        # should still work; this test guards against a future regression where we start matching the raw header.
+        response = self._post_report(self.SAMPLE_REPORT, content_type="application/csp-report; charset=utf-8")
+        self.assertEqual(200, response.status_code, response.content)
+
+
+class IngestSecurityViewUnitTestCase(RegularTestCase):
+    # Pure unit tests against the report->event_data translator. No DB, no client, just the shape contract.
+
+    def test_event_shape(self):
+        ingested_at = datetime.datetime(2026, 4, 23, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        report = {
+            "document-uri": "https://example.com/p",
+            "violated-directive": "img-src 'self'",
+            "effective-directive": "img-src",
+            "blocked-uri": "data:image/png;base64,xxx",
+            "original-policy": "img-src 'self'",
+            "referrer": "",
+        }
+        event_id = "0" * 32
+
+        result = IngestSecurityAPIView._csp_report_to_event_data(event_id, report, ingested_at)
+
+        self.assertEqual(event_id, result["event_id"])
+        self.assertEqual("javascript", result["platform"])
+        self.assertEqual("warning", result["level"])
+        self.assertEqual("CSP", result["exception"]["values"][0]["type"])
+        self.assertEqual(
+            "blocked data:image/png;base64,xxx (img-src)",
+            result["exception"]["values"][0]["value"],
+        )
+        self.assertEqual(["csp", "img-src", "data:image/png;base64,xxx"], result["fingerprint"])
+        self.assertEqual("https://example.com/p", result["request"]["url"])
+        # empty referrer -> no Referer header attached
+        self.assertNotIn("headers", result["request"])
+
+    def test_event_shape_with_referrer(self):
+        ingested_at = datetime.datetime(2026, 4, 23, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        report = {
+            "document-uri": "https://example.com/p",
+            "referrer": "https://example.com/r",
+            "effective-directive": "script-src",
+            "blocked-uri": "https://evil.example.com/x.js",
+        }
+
+        result = IngestSecurityAPIView._csp_report_to_event_data("0" * 32, report, ingested_at)
+
+        self.assertEqual({"Referer": "https://example.com/r"}, result["request"]["headers"])
+
+    def test_unknown_blocked_uri_falls_back_gracefully(self):
+        ingested_at = datetime.datetime(2026, 4, 23, 12, 0, 0, tzinfo=datetime.timezone.utc)
+
+        result = IngestSecurityAPIView._csp_report_to_event_data("0" * 32, {}, ingested_at)
+
+        self.assertEqual("CSP", result["exception"]["values"][0]["type"])
+        self.assertEqual("blocked <unknown> (<unknown>)", result["exception"]["values"][0]["value"])
+        self.assertEqual(["csp", "<unknown>", "<unknown>"], result["fingerprint"])
+        self.assertNotIn("request", result)
+
+    def test_unexpected_report_value_types_are_stringified(self):
+        ingested_at = datetime.datetime(2026, 4, 23, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        report = {
+            "document-uri": 123,
+            "violated-directive": ["script-src", "'self'"],
+            "blocked-uri": {"uri": "https://evil.example.com/x.js"},
+        }
+
+        result = IngestSecurityAPIView._csp_report_to_event_data("0" * 32, report, ingested_at)
+
+        self.assertEqual(["csp", "['script-src',", "{'uri': 'https://evil.example.com/x.js'}"], result["fingerprint"])
+        self.assertEqual("123", result["request"]["url"])
 
 
 class MinidumpAPIViewTestCase(TransactionTestCase):
@@ -974,6 +1767,13 @@ class TestParser(RegularTestCase):
         with self.assertRaises(ParseError) as e:
             header, item = next(items)
         self.assertEqual("Header not JSON", str(e.exception))
+
+    def test_non_utf8_header(self):
+        parser = StreamingEnvelopeParser(io.BytesIO(b"\x8b"))
+
+        with self.assertRaises(ParseError) as e:
+            parser.get_envelope_headers()
+        self.assertEqual("Header not UTF-8", str(e.exception))
 
     def test_eof_after_envelope_headers(self):
         # whether this is valid or not: not entirely clear from the docs. It won't matter in practice, of course

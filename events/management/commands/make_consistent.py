@@ -117,6 +117,13 @@ def make_consistent():
             project.stored_event_count = project.event_set.count()
             project.save()
 
+        correct_issue_count = project.issue_set.filter(is_deleted=False).count()
+        if project.issue_count != correct_issue_count:
+            print("Updating issue count for project %s from %d to %d" % (
+                project, project.issue_count, correct_issue_count))
+            project.issue_count = correct_issue_count
+            project.save()
+
     # Alternatively (but does it work in MySQL?)
     # Issue.objects.update(
     #     stored_event_count=Subquery(

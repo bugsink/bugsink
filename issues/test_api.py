@@ -6,9 +6,10 @@ from rest_framework.test import APIClient
 
 from bsmain.models import AuthToken
 from projects.models import Project
-from issues.models import Issue
+from releases.models import create_release_if_needed
+from issues.models import Issue, TurningPoint, TurningPointKind
 from issues.factories import get_or_create_issue
-from events.factories import create_event_data
+from events.factories import create_event, create_event_data
 
 from issues.api_views import IssueViewSet
 
@@ -65,6 +66,23 @@ class IssueApiTests(TransactionTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], str(self.issue0.id))
 
+    def test_friendly_id_alias(self):
+        event = create_event(issue=self.issue0)
+        friendly_id = self.issue0.friendly_id().lower()
+
+        response = self.client.get(reverse("api:issue-detail", args=[friendly_id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["id"], str(self.issue0.id))
+        self.assertEqual(response.json()["friendly_id"], self.issue0.friendly_id())
+
+        response = self.client.post(reverse("api:issue-mute", args=[friendly_id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["is_muted"])
+
+        response = self.client.get(reverse("api:event-list"), {"issue": friendly_id})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["id"], str(event.id))
+
     def test_detail_ignores_query_filters(self):
         url = reverse("api:issue-detail", args=[self.issue0.id])
         response = self.client.get(url, {"project": "00000000-0000-0000-0000-000000000000", "order": "asc"})
@@ -84,6 +102,225 @@ class IssueApiTests(TransactionTestCase):
         )
         self.assertEqual(r.status_code, 400)
         self.assertEqual(r.json(), {"sort": ["Must be 'digest_order' or 'last_seen'."]})
+
+    def test_resolve(self):
+        response = self.client.post(reverse("api:issue-resolve", args=[self.issue0.id]))
+        self.assertEqual(response.status_code, 200)
+
+        self.issue0.refresh_from_db()
+        self.assertTrue(self.issue0.is_resolved)
+        self.assertTrue(self.issue0.is_resolved_unconditionally)
+        self.assertEqual(self.issue0.fixed_at, "")
+        self.assertEqual(response.json()["is_resolved"], True)
+        self.assertEqual(response.json()["is_resolved_unconditionally"], True)
+
+        turningpoint = TurningPoint.objects.get(issue=self.issue0)
+        self.assertEqual(turningpoint.kind, TurningPointKind.RESOLVED)
+        self.assertIsNone(turningpoint.user)
+
+    def test_resolve_next(self):
+        response = self.client.post(reverse("api:issue-resolve-next", args=[self.issue0.id]))
+        self.assertEqual(response.status_code, 200)
+
+        self.issue0.refresh_from_db()
+        self.assertTrue(self.issue0.is_resolved)
+        self.assertTrue(self.issue0.is_resolved_by_next_release)
+
+    def test_resolve_latest(self):
+        create_release_if_needed(self.project, "1.0.0", timezone.now())
+
+        response = self.client.post(reverse("api:issue-resolve-latest", args=[self.issue0.id]))
+        self.assertEqual(response.status_code, 200)
+
+        self.issue0.refresh_from_db()
+        self.assertTrue(self.issue0.is_resolved)
+        self.assertFalse(self.issue0.is_resolved_unconditionally)
+        self.assertEqual(self.issue0.fixed_at, "1.0.0\n")
+
+    def test_resolve_latest_allows_existing_occurrence(self):
+        create_release_if_needed(self.project, "1.0.0", timezone.now())
+        self.issue0.events_at = "1.0.0\n"
+        self.issue0.save()
+
+        response = self.client.post(reverse("api:issue-resolve-latest", args=[self.issue0.id]))
+        self.assertEqual(response.status_code, 200)
+
+        self.issue0.refresh_from_db()
+        self.assertTrue(self.issue0.is_resolved)
+        self.assertFalse(self.issue0.is_resolved_unconditionally)
+        self.assertEqual(self.issue0.fixed_at, "1.0.0\n")
+
+    def test_resolve_latest_requires_releases(self):
+        response = self.client.post(reverse("api:issue-resolve-latest", args=[self.issue0.id]))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"detail": "Project has no releases."})
+
+    def test_reopen(self):
+        Issue.objects.filter(id=self.issue0.id).update(is_resolved=True, is_resolved_by_next_release=True)
+
+        response = self.client.post(reverse("api:issue-reopen", args=[self.issue0.id]))
+        self.assertEqual(response.status_code, 200)
+
+        self.issue0.refresh_from_db()
+        self.assertFalse(self.issue0.is_resolved)
+        self.assertFalse(self.issue0.is_resolved_unconditionally)
+        self.assertFalse(self.issue0.is_resolved_by_next_release)
+        self.assertEqual(response.json()["is_resolved"], False)
+        self.assertEqual(response.json()["is_resolved_unconditionally"], False)
+        self.assertEqual(response.json()["is_resolved_by_next_release"], False)
+
+        turningpoint = TurningPoint.objects.get(issue=self.issue0)
+        self.assertEqual(turningpoint.kind, TurningPointKind.REOPENED)
+
+    def test_reopen_requires_resolved(self):
+        response = self.client.post(reverse("api:issue-reopen", args=[self.issue0.id]))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"detail": "Issue is not resolved."})
+
+    def test_mute(self):
+        response = self.client.post(reverse("api:issue-mute", args=[self.issue0.id]))
+        self.assertEqual(response.status_code, 200)
+
+        self.issue0.refresh_from_db()
+        self.assertTrue(self.issue0.is_muted)
+
+        turningpoint = TurningPoint.objects.get(issue=self.issue0)
+        self.assertEqual(turningpoint.kind, TurningPointKind.MUTED)
+
+    def test_mute_for(self):
+        response = self.client.post(
+            reverse("api:issue-mute-for", args=[self.issue0.id]),
+            {"period_name": "day", "nr_of_periods": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        self.issue0.refresh_from_db()
+        self.assertTrue(self.issue0.is_muted)
+        self.assertIsNotNone(self.issue0.unmute_after)
+
+    def test_mute_until(self):
+        response = self.client.post(
+            reverse("api:issue-mute-until", args=[self.issue0.id]),
+            {"period_name": "hour", "nr_of_periods": 1, "gte_threshold": 5},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        self.issue0.refresh_from_db()
+        self.assertTrue(self.issue0.is_muted)
+        self.assertEqual(
+            self.issue0.unmute_on_volume_based_conditions,
+            '[{"period": "hour", "nr_of_periods": 1, "volume": 5}]',
+        )
+
+    def test_mute_for_accepts_non_ui_period(self):
+        response = self.client.post(
+            reverse("api:issue-mute-for", args=[self.issue0.id]),
+            {"period_name": "minute", "nr_of_periods": 30},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        self.issue0.refresh_from_db()
+        self.assertTrue(self.issue0.is_muted)
+        self.assertIsNotNone(self.issue0.unmute_after)
+
+    def test_mute_for_rejects_bad_period(self):
+        response = self.client.post(
+            reverse("api:issue-mute-for", args=[self.issue0.id]),
+            {"period_name": "decade", "nr_of_periods": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("period_name", response.json())
+
+    def test_mute_for_rejects_bad_period_count(self):
+        response = self.client.post(
+            reverse("api:issue-mute-for", args=[self.issue0.id]),
+            {"period_name": "day", "nr_of_periods": -1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("nr_of_periods", response.json())
+
+    def test_mute_until_rejects_bad_threshold(self):
+        response = self.client.post(
+            reverse("api:issue-mute-until", args=[self.issue0.id]),
+            {"period_name": "day", "nr_of_periods": 1, "gte_threshold": 0},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("gte_threshold", response.json())
+
+    def test_unmute(self):
+        Issue.objects.filter(id=self.issue0.id).update(is_muted=True)
+
+        response = self.client.post(reverse("api:issue-unmute", args=[self.issue0.id]))
+        self.assertEqual(response.status_code, 200)
+
+        self.issue0.refresh_from_db()
+        self.assertFalse(self.issue0.is_muted)
+
+    def test_invalid_action(self):
+        Issue.objects.filter(id=self.issue0.id).update(is_resolved=True)
+
+        response = self.client.post(reverse("api:issue-mute", args=[self.issue0.id]))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"detail": "Issue is already resolved."})
+
+    def test_delete(self):
+        self.project.issue_count = 2
+        self.project.save(update_fields=["issue_count"])
+
+        response = self.client.delete(reverse("api:issue-detail", args=[self.issue0.id]))
+        self.assertEqual(response.status_code, 204)
+
+        self.project.refresh_from_db()
+        # Snappea runs eagerly in tests, so delete_deferred() has completed by the time the response returns.
+        self.assertFalse(Issue.objects.filter(id=self.issue0.id).exists())
+        self.assertEqual(self.project.issue_count, 1)
+
+    def test_unresolve_does_not_exist(self):
+        response = self.client.post("/api/canonical/0/issues/%s/unresolve/" % self.issue0.id)
+        self.assertEqual(response.status_code, 404)
+
+    def test_create_comment(self):
+        response = self.client.post(
+            reverse("api:issue-comment-list"),
+            {"issue": self.issue0.friendly_id(), "comment": "Needs a closer look."},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+
+        turningpoint = TurningPoint.objects.get(issue=self.issue0)
+        self.assertEqual(turningpoint.kind, TurningPointKind.MANUAL_ANNOTATION)
+        self.assertEqual(turningpoint.project, self.project)
+        self.assertEqual(turningpoint.comment, "Needs a closer look.")
+        self.assertIsNone(turningpoint.user)
+
+        self.assertEqual(response.json()["id"], turningpoint.id)
+        self.assertEqual(response.json()["issue"], str(self.issue0.id))
+        self.assertEqual(response.json()["project"], self.project.id)
+        self.assertEqual(response.json()["user"], None)
+
+    def test_create_comment_rejects_bad_issue_identifier(self):
+        response = self.client.post(
+            reverse("api:issue-comment-list"),
+            {"issue": "not-an-issue", "comment": "Needs a closer look."},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"issue": ["Invalid issue identifier."]})
+
+    def test_create_comment_rejects_missing_issue(self):
+        response = self.client.post(
+            reverse("api:issue-comment-list"),
+            {"issue": "00000000-0000-0000-0000-000000000000", "comment": "Needs a closer look."},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"issue": ["Issue not found."]})
 
 
 class IssuePaginationTests(TransactionTestCase):

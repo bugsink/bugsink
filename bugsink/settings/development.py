@@ -69,17 +69,19 @@ SNAPPEA = {
     "TASK_ALWAYS_EAGER": True,  # at least for (unit) tests, this is a requirement
     "NUM_WORKERS": 1,
 
-    # no_bandit_expl: development setting, we know that this is insecure "in theory" at least
+    # development.py is precisly the intended use for a non-None PID_FILE: no systemd/Docker, i.e. no process manager
+    # no_bandit_expl: usage locations use b108_makedirs;
     "PID_FILE": "/tmp/bugsink/snappea.pid",  # nosec B108
 }
 
-EMAIL_HOST = os.getenv("EMAIL_HOST")
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# EMAIL_HOST = os.getenv("EMAIL_HOST")
+# EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+# EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
 
-SERVER_EMAIL = DEFAULT_FROM_EMAIL = 'Klaas van Schelven <klaas@bugsink.com>'
+SERVER_EMAIL = DEFAULT_FROM_EMAIL = 'Bugsink Development Server <bugsink@example.org>'
 
 
 BUGSINK = {
@@ -91,8 +93,8 @@ BUGSINK = {
     "BASE_URL": "http://bugsink:8000",  # no trailing slash
     "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 
-    # undocumented feature: this enables links to the admin interface in the header/footer. I'm not sure where the admin
-    # will fit in the final version, so that's why it's not documented.
+    # undocumented feature: this enables the admin interface. I'm not sure where the admin will fit in the final
+    # version, so that's why it's not documented.
     "USE_ADMIN": True,
 
     # In development, I want to be able to upload broken events, so I can test their downstream rendering/processing.
@@ -105,13 +107,23 @@ BUGSINK = {
     # set MAX_EVENTS* very high to be able to do serious performance testing (which I do often in my dev environment)
     "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES": 1_000_000,
     "MAX_EVENTS_PER_PROJECT_PER_HOUR": 50_000_000,
+    "MAX_EVENTS_PER_PROJECT_PER_MONTH": 1_000_000_000,
 
-    "MAX_EMAILS_PER_MONTH": 10,  # for development: a thing to tune if you want to the the quota system
+    "MAX_EVENTS_PER_5_MINUTES": 1_000_000,
+    "MAX_EVENTS_PER_HOUR": 50_000_000,
+    "MAX_EVENTS_PER_MONTH": 1_000_000_000,
+
+    # for development: things to tune if you want to test the the quota system
+    "MAX_RETENTION_PER_PROJECT_EVENT_COUNT": None,
+    "MAX_RETENTION_EVENT_COUNT": None,
+    "MAX_EMAILS_PER_MONTH": 10,
 
     "KEEP_ARTIFACT_BUNDLES": True,  # in development: useful to preserve sourcemap uploads
 
     # in development we want optional features enabled to [1] play with them and [2] have the tests work
     "FEATURE_MINIDUMPS": True,
+    # Avoid polluting phonehome from local development and test runs.
+    "PHONEHOME": False,
 }
 
 
@@ -121,6 +133,13 @@ if not I_AM_RUNNING == "TEST":
             "STORAGE": "events.storage.FileEventStorage",
             "OPTIONS": {
                 "basepath": safe_join(BASE_DIR, "filestorage"),
+            },
+        },
+        "local_flat_files_br": {
+            "STORAGE": "events.storage.FileEventStorage",
+            "OPTIONS": {
+                "basepath": safe_join(BASE_DIR, "filestorage"),
+                "compression_algorithm": "br",
             },
             "USE_FOR_WRITE": True,
         },
@@ -147,7 +166,7 @@ else:
     LOGGING['loggers']['bugsink.performance']["handlers"] = ["look_below_in_stream"]
 
 
-# snappea development settings: see all details, and include timestamps (we have no sytemd journal here)
+# snappea development settings: see all details, and include timestamps (we have no systemd journal here)
 LOGGING["handlers"]["snappea"]["level"] = "DEBUG"
 LOGGING["loggers"]["snappea"]["level"] = "DEBUG"
 LOGGING["formatters"]["snappea"]["format"] = "{asctime} - {threadName} - {levelname:7} - {message}"

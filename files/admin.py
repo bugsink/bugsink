@@ -14,9 +14,9 @@ class ChunkAdmin(admin.ModelAdmin):
 
 @admin.register(File)
 class FileAdmin(admin.ModelAdmin):
-    list_display = ('filename', 'checksum', 'size', 'download_link', 'created_at', 'accessed_at')
+    list_display = ('filename', 'checksum', 'storage_backend', 'size', 'download_link', 'created_at', 'accessed_at')
     search_fields = ('checksum',)
-    readonly_fields = ('data', 'download_link')
+    readonly_fields = ('data', 'storage_backend', 'download_link')
 
     def download_link(self, obj):
         return format_html(
@@ -27,6 +27,6 @@ class FileAdmin(admin.ModelAdmin):
 
 @admin.register(FileMetadata)
 class FileMetadataAdmin(admin.ModelAdmin):
-    list_display = ('debug_id', 'file_type', 'file', 'created_at')
-    search_fields = ('file__checksum', 'debug_id', 'file_type')
-    readonly_fields = ('file', 'debug_id', 'file_type', 'data', 'created_at')
+    list_display = ('debug_id', 'file_type', 'project', 'file', 'created_at')
+    search_fields = ('file__checksum', 'debug_id', 'file_type', 'project__name', 'project__slug')
+    readonly_fields = ('file', 'project', 'debug_id', 'file_type', 'data', 'created_at')

@@ -1,10 +1,14 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.utils.html import format_html
+from django.db.models import Sum
 
 from bugsink.utils import assert_
+from bugsink.app_settings import get_settings
+from issues.grouping_mechanisms import GROUPING_TRANSITION_PERIOD, get_grouping_mechanism
 from teams.models import TeamMembership
 from bsmain.utils import yesno
 
@@ -77,17 +81,35 @@ class ProjectMembershipForm(forms.ModelForm):
 
 class ProjectForm(forms.ModelForm):
 
+    slug = forms.CharField(label="Slug", disabled=True)
     dsn = forms.CharField(label="DSN", disabled=True)
 
     def __init__(self, *args, **kwargs):
         team_qs = kwargs.pop("team_qs", None)
         super().__init__(*args, **kwargs)
+        self.old_grouping_mechanism = None
 
         self.fields["retention_max_event_count"].help_text = _("The maximum number of events to store before evicting.")
+
+        maxes = []
+        if get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT is not None:
+            maxes.append(get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT)
+        if get_settings().MAX_RETENTION_EVENT_COUNT is not None:
+            # pick an initial value that will leave some room for other projects
+            maxes.append(get_settings().MAX_RETENTION_EVENT_COUNT // 5)
+        if maxes:
+            self.fields["retention_max_event_count"].initial = min(maxes)
+
         if self.instance is not None and self.instance.pk is not None:
+            self.old_grouping_mechanism = self.instance.grouping_mechanism
+
             # for editing, we disallow changing the team. consideration: it's somewhat hard to see what the consequences
             # for authorization are (from the user's perspective).
             del self.fields["team"]
+
+            # for editing, the slug is available, but read-only (editing affects the issue's short identifier)
+            self.fields["slug"].initial = self.instance.slug
+            self.fields["slug"].label = _("Slug (read-only)")
 
             # for editing, the DSN is availabe, but read-only
             self.fields["dsn"].initial = self.instance.dsn
@@ -99,9 +121,22 @@ class ProjectForm(forms.ModelForm):
                 link=format_html('<a href="{}" class="text-cyan-800 font-bold">{}</a>', href, _("set up the SDK")),
             )
 
-            # if we ever push slug to the form, editing it should probably be disallowed as well (but mainly because it
-            # has consequences on the issue's short identifier)
-            # del self.fields["slug"]
+            transition_ends_at = (
+                self.instance.grouping_mechanism_upgraded_at + GROUPING_TRANSITION_PERIOD
+                if self.instance.grouping_mechanism_upgraded_at is not None else None
+            )
+            if transition_ends_at is not None and timezone.now() <= transition_ends_at:
+                previous_grouping_mechanism = get_grouping_mechanism(self.instance.previous_grouping_mechanism)
+                self.fields["grouping_mechanism"].choices = [
+                    (
+                        value,
+                        _("%(name)s -- previous, transitioning until %(date)s") % {
+                            "name": label,
+                            "date": timezone.localtime(transition_ends_at).strftime("%Y-%m-%d"),
+                        } if value == previous_grouping_mechanism.identifier else label,
+                    )
+                    for value, label in self.fields["grouping_mechanism"].choices
+                ]
         else:
             # for creation, we allow changing the team; (as an additional improvement we _could_ consider hiding this
             # field if there is only one team, and especially if SINGLE_TEAM is True, but being explicit is fine too as
@@ -116,15 +151,53 @@ class ProjectForm(forms.ModelForm):
             elif team_qs.count() == 1:
                 self.fields["team"].initial = team_qs.first()
 
-            # for creation, we don't show the DSN field
+            # for creation, we don't show the slug or DSN fields
+            del self.fields["slug"]
             del self.fields["dsn"]
 
     class Meta:
         model = Project
 
-        fields = ["team", "name", "visibility", "retention_max_event_count"]
-        # "slug",  <= for now, we just do this in the model; if we want to do it in the form, I would want to have some
-        # JS in place like we have in the admin. django/contrib/admin/static/admin/js/prepopulate.js is an example of
-        # how Django does this (but it requires JQuery)
+        fields = ["team", "name", "visibility", "retention_max_event_count", "grouping_mechanism"]
+        # slug is shown read-only via an explicit (declared) field for edit; creation auto-generates it on the model.
+        # If we ever make slug editable, we'd want JS like django/contrib/admin/static/admin/js/prepopulate.js.
 
         # "alert_on_new_issue", "alert_on_regression", "alert_on_unmute" later
+
+    def clean_retention_max_event_count(self):
+        retention_max_event_count = self.cleaned_data['retention_max_event_count']
+
+        if self.instance and self.instance.pk:
+            # skip validation / have better error message when the value is unchanged or decreased; otherwise one would
+            # get "stuck" (have no more allowed edits, even for other values) after a budget decrease.
+            grace = self.instance.retention_max_event_count
+        else:
+            grace = 0
+
+        if get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT is not None:
+            if retention_max_event_count > max(get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT, grace):
+                raise forms.ValidationError("The maximum allowed retention per project is %d events." %
+                                            get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT)
+
+        if get_settings().MAX_RETENTION_EVENT_COUNT is not None:
+            sum_of_others = Project.objects.exclude(pk=self.instance.pk).aggregate(
+                total=Sum('retention_max_event_count'))['total'] or 0
+            budget_left = max(get_settings().MAX_RETENTION_EVENT_COUNT - sum_of_others, 0, grace)
+
+            if retention_max_event_count > budget_left:
+                # grace not mentioned explicitly here as a reason for "why so high" but that's ok.
+                raise forms.ValidationError("The maximum allowed retention for this project is %d events (based on the "
+                                            "installation-wide max of %d events)." % (
+                                                budget_left,
+                                                get_settings().MAX_RETENTION_EVENT_COUNT))
+
+        return retention_max_event_count
+
+    def save(self, commit=True):
+        if self.old_grouping_mechanism is not None:
+            new_grouping_mechanism = self.cleaned_data["grouping_mechanism"]
+            if new_grouping_mechanism != self.old_grouping_mechanism:
+                self.instance.previous_grouping_mechanism = self.old_grouping_mechanism
+                self.instance.grouping_mechanism_upgraded_at = timezone.now()
+
+        return super().save(commit=commit)

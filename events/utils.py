@@ -10,7 +10,7 @@ from bugsink.utils import assert_
 
 from compat.timestamp import format_timestamp
 
-from files.models import FileMetadata
+from files.models import get_file_metadata_for_debug_ids
 from files.tasks import record_file_accesses
 
 
@@ -78,11 +78,13 @@ def annotate_var_with_meta(var, meta_var):
 
     if isinstance(var, list):
         Incomplete = IncompleteList
-        at = lambda k: int(k)  # noqa; (for some reason the meta_k for list lookups is stored as a string)
+        at = lambda k: int(k)  # (for some reason the meta_k for list lookups is stored as a string)
+        isinvar = lambda k: 0 <= int(k) < len(var)
 
     elif isinstance(var, dict):
         Incomplete = IncompleteDict
-        at = lambda k: k  # noqa
+        at = lambda k: k
+        isinvar = lambda k: k in var
 
     else:  # str
         # The case I've seen: var == '[Filtered]' and meta_var == {"": {"rem": [["!config", "s"]]}}
@@ -91,8 +93,12 @@ def annotate_var_with_meta(var, meta_var):
 
     for meta_k, meta_v in meta_var.items():
         if meta_k == "":
+            # meta_k == "" means the var (dict or list) itself was trimmed, so we add-in the incompleteness info for it
             var = Incomplete(var, meta_v["len"] - len(var))
+        elif not isinvar(meta_k):
+            pass  # the meta describes something that's not in the actual var; skip it.
         else:
+            # recusrse
             var[at(meta_k)] = annotate_var_with_meta(var[at(meta_k)], meta_v)
 
     return var
@@ -107,7 +113,7 @@ def _postgres_fix(memoryview_or_bytes):
     return memoryview_or_bytes
 
 
-def apply_sourcemaps(event_data):
+def apply_sourcemaps(event_data, project):
     images = event_data.get("debug_meta", {}).get("images", [])
     if not images:
         return
@@ -118,11 +124,7 @@ def apply_sourcemaps(event_data):
         if "debug_id" in image and "code_file" in image and image["type"] == "sourcemap"
     }
 
-    metadata_obj_lookup = {
-        metadata_obj.debug_id: metadata_obj
-        for metadata_obj in FileMetadata.objects.filter(
-            debug_id__in=debug_id_for_filename.values(), file_type="source_map").select_related("file")
-    }
+    metadata_obj_lookup = get_file_metadata_for_debug_ids(project, debug_id_for_filename.values(), "source_map")
 
     metadata_ids = [metadata_obj.id for metadata_obj in metadata_obj_lookup.values()]
     delay_on_commit(record_file_accesses, metadata_ids, format_timestamp(datetime.now(timezone.utc)))
@@ -134,28 +136,37 @@ def apply_sourcemaps(event_data):
         ]
 
     sourcemap_for_filename = {
-        filename: ecma426.loads(_postgres_fix(meta.file.data))
+        filename: ecma426.loads(_postgres_fix(meta.file.get_raw_data()))
         for (filename, meta) in filenames_with_metas
     }
 
     source_for_filename = {}
     for filename, meta in filenames_with_metas:
-        sm_data = json.loads(_postgres_fix(meta.file.data))
+        sm_data = json.loads(_postgres_fix(meta.file.get_raw_data()))
 
         sources = sm_data.get("sources", [])
         sources_content = sm_data.get("sourcesContent", [])
 
         for (source_file_name, source_file) in zip(sources, sources_content):
-            source_for_filename[source_file_name] = source_file.splitlines()
+            if source_file is not None:
+                source_for_filename[source_file_name] = source_file.splitlines()
 
     for exception in get_values(event_data.get("exception", {})):
         for frame in exception.get("stacktrace", {}).get("frames", []):
-            # NOTE: try/except in the loop would allow us to selectively skip frames that we fail to process
-
             if frame.get("filename") in sourcemap_for_filename:
                 sm = sourcemap_for_filename[frame["filename"]]
-
-                mapping = sm.lookup_left(frame["lineno"] + FROM_DISPLAY, frame["colno"])
+                generated_line = frame["lineno"] + FROM_DISPLAY
+                generated_column = frame["colno"]
+                try:
+                    mapping = sm.lookup_left(generated_line, generated_column)
+                except (IndexError, KeyError):
+                    # Some source maps simply have no mapping for the generated line/column in the frame.
+                    # We skip sourcemap enrichment for that frame and leave the original frame data intact.
+                    frame["debug_id"] = str(debug_id_for_filename[frame["filename"]])
+                    frame["sourcemap_error"] = (
+                        f"Error mapping ({generated_line}, {generated_column}) into sourcemap ({frame['debug_id']})"
+                    )
+                    continue
 
                 if mapping.source in source_for_filename:
                     lines = source_for_filename[mapping.source]
@@ -175,7 +186,7 @@ def apply_sourcemaps(event_data):
                 frame["debug_id"] = str(debug_id_for_filename[frame["filename"]])
 
 
-def get_sourcemap_images(event_data):
+def get_sourcemap_images(event_data, project):
     # NOTE: butchered copy/paste of apply_sourcemaps; refactoring for DRY is a TODO
     images = event_data.get("debug_meta", {}).get("images", [])
     if not images:
@@ -187,11 +198,7 @@ def get_sourcemap_images(event_data):
         if "debug_id" in image and "code_file" in image and image["type"] == "sourcemap"
     }
 
-    metadata_obj_lookup = {
-        metadata_obj.debug_id: metadata_obj
-        for metadata_obj in FileMetadata.objects.filter(
-            debug_id__in=debug_id_for_filename.values(), file_type="source_map").select_related("file")
-    }
+    metadata_obj_lookup = get_file_metadata_for_debug_ids(project, debug_id_for_filename.values(), "source_map")
 
     return [
         (basename(filename),

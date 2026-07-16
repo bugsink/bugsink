@@ -1,0 +1,178 @@
+import ipaddress
+import socket
+
+import requests
+from requests import RequestException
+from urllib3.exceptions import LocationParseError
+from urllib3.util.url import Url
+
+from urllib3.util import parse_url as parse_url_from_urllib3
+
+from bugsink.app_settings import get_settings
+
+
+_URL_ALLOWED_CHARACTERS = set(
+    "abcdefghijklmnopqrstuvwxyz" +
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +  # ASCII letters
+    "0123456789" +  # ASCII digits
+    "-._~" +  # RFC 3986 unreserved marks
+    ":/?#[]@" +  # RFC 3986 gen-delims
+    "!$&'()*+,;=" +  # RFC 3986 sub-delims
+    "%"  # Percent-encoding marker
+)
+
+
+def _parse_hosts_and_networks(entries, setting_name):
+    hosts = set()
+    networks = []
+    for entry in entries:
+        value = entry.strip().lower()
+        if value == "":
+            continue
+        if "://" in value:
+            raise ValueError(f"Invalid entry in {setting_name}: {value} (use hostname/IP/CIDR, not full URLs)")
+        try:
+            networks.append(ipaddress.ip_network(value, strict=False))
+            continue
+        except ValueError:
+            if "/" in value:
+                raise ValueError(f"Invalid entry in {setting_name}: {value}") from None
+        hosts.add(value)
+    return hosts, networks
+
+
+def _resolve_ip_addresses(hostname):
+    if hostname.startswith("[") and hostname.endswith("]"):
+        # In URL authority syntax, brackets are only used for IP literals. urllib3 keeps those brackets in `hostname`,
+        # but the the usage in socket.getaddrinfo expects the plain IP address so we must strip them back out.
+        inner_hostname = hostname[1:-1]
+        try:
+            # Rather than "just strip brackets if present", we verify that the inner value is actually a valid IP
+            # address; we don't want to "just generally strip stuff" in security-sentitive code.
+            ipaddress.ip_address(inner_hostname)
+        except ValueError:
+            pass
+        else:
+            hostname = inner_hostname
+
+    infos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+    return [info[4][0] for info in infos]
+
+
+def _match_entries(target_hostname, resolved_ips, hosts, networks):
+    if target_hostname in hosts:
+        return True
+
+    for ip in resolved_ips:
+        for network in networks:
+            if ip in network:
+                return True
+
+    return False
+
+
+def _validate_raw_url_characters(webhook_url):
+    # There's no need to be user-friendly in accepting malformed URLs in code that is security-sensitive; we just want
+    # to be strict and reject anything that isn't a valid URL character. People will be able to set up their webhooks
+    # without the "friendlyness" of a browser's URL bar.
+    for char in webhook_url:
+        if char in _URL_ALLOWED_CHARACTERS:
+            continue
+        raise ValueError("Webhook URL must contain only ASCII URL characters.")
+
+
+def _prepare_webhook_url(webhook_url):
+    try:
+        return requests.Request("POST", webhook_url).prepare().url
+    except RequestException as e:
+        raise ValueError("Webhook URL is malformed.") from e
+
+
+def parse_webhook_url(webhook_url):
+    """Parse a webhook URL and return a urllib3.util.url.Url object with the parsed components (validated and
+    normalized). Raises ValueError if the URL is invalid."""
+
+    _validate_raw_url_characters(webhook_url)
+
+    # Both requests and urllib3 make some attempts to normalize malformed URLs. We must apply the
+    # same normalization before our own parsing and checks, to avoid discrepancies between what we
+    # check and what then actually happens.
+    prepared_webhook_url = _prepare_webhook_url(webhook_url)
+
+    try:
+        # NOTE: requests uses urllib3's URL parsing logic, so we must use the same to ensure consistency; do not change
+        # this import to something else, doing so may have security implications if the URL parsing logic differs in how
+        # it normalizes or rejects certain inputs.
+        parsed = parse_url_from_urllib3(prepared_webhook_url)
+    except LocationParseError as e:
+        raise ValueError("Webhook URL is malformed.") from e
+
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("Webhook URL must use http:// or https://.")
+    if parsed.hostname is None:
+        raise ValueError("Webhook URL must include a hostname.")
+
+    return parsed
+
+
+def validate_webhook_url(webhook_url):
+    parsed = parse_webhook_url(webhook_url)
+    validate_webhook_destination(parsed.hostname)
+
+
+def pin_url_to_ip(parsed, ip):
+    # Return a URL that uses the resolved IP address in place of the hostname
+    host = f"[{ip}]" if ip.version == 6 else str(ip)  # Use brackets for IPv6 addresses in URL authority syntax
+
+    return Url(
+        scheme=parsed.scheme,
+        auth=parsed.auth,
+        host=host,
+        port=parsed.port,
+        path=parsed.path,
+        query=parsed.query,
+        fragment=parsed.fragment,
+    ).url
+
+
+def validate_webhook_destination(hostname):
+    hostname = hostname.lower()
+
+    settings = get_settings()
+    mode = settings.ALERTS_WEBHOOK_OUTBOUND_MODE
+
+    allow_hosts, allow_networks = _parse_hosts_and_networks(
+        settings.ALERTS_WEBHOOK_ALLOW_LIST, "ALERTS_WEBHOOK_ALLOW_LIST")
+    deny_hosts, deny_networks = _parse_hosts_and_networks(
+        settings.ALERTS_WEBHOOK_DENY_LIST, "ALERTS_WEBHOOK_DENY_LIST")
+
+    # Resolve on every send to defend against DNS changes after configuration time.
+    try:
+        resolved_ips = [ipaddress.ip_address(ip) for ip in _resolve_ip_addresses(hostname)]
+    except OSError as e:
+        raise ValueError(f"Webhook hostname could not be resolved: {hostname}") from e
+    if not resolved_ips:
+        raise ValueError(f"Webhook hostname could not be resolved: {hostname}")
+
+    allow_match = _match_entries(hostname, resolved_ips, allow_hosts, allow_networks)
+    deny_match = _match_entries(hostname, resolved_ips, deny_hosts, deny_networks)
+
+    if mode == "allowlist_only" and not allow_match:
+        raise ValueError(
+            f"Webhook target {hostname} is not allowlisted in ALERTS_WEBHOOK_ALLOW_LIST "
+            "(mode=allowlist_only)."
+        )
+
+    if deny_match:
+        raise ValueError(
+            f"Webhook target {hostname} matches ALERTS_WEBHOOK_DENY_LIST."
+        )
+
+    for ip in resolved_ips:
+        if settings.ALERTS_WEBHOOK_DENY_NON_GLOBAL and not ip.is_global:
+            raise ValueError(
+                f"Webhook target resolves to non-global IP address {ip}. "
+                "If this destination is intentional, add it to ALERTS_WEBHOOK_ALLOW_LIST."
+            )
+
+    return resolved_ips

@@ -1,4 +1,4 @@
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 
 from .version import version
@@ -53,6 +53,46 @@ def deduce_script_name(base_url):
     return path if path not in (None, "", "/") else None
 
 
+def parse_database_url(url):
+    """Parse DATABASE_URL into a Django DATABASES entry dict."""
+    parsed = urlparse(url)
+
+    # urlparse returns percent-encoded username/password/path; decode each component individually
+    # so that reserved characters (e.g. @ or : in a password) are passed to the driver correctly.
+    def _unquote(value):
+        return unquote(value) if value is not None else None
+
+    if parsed.scheme == "mysql":
+        return {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": unquote(parsed.path.lstrip("/")),
+            "USER": _unquote(parsed.username),
+            "PASSWORD": _unquote(parsed.password),
+            "HOST": parsed.hostname,
+            "PORT": parsed.port or "3306",
+        }
+    elif parsed.scheme in ["postgres", "postgresql"]:
+        return {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": unquote(parsed.path.lstrip("/")),
+            "USER": _unquote(parsed.username),
+            "PASSWORD": _unquote(parsed.password),
+            "HOST": parsed.hostname,
+            "PORT": parsed.port or "5432",
+        }
+    else:
+        raise ValueError("For DATABASE_URL, only mysql and postgres are supported, not '%s'" % parsed.scheme)
+
+
+def int_or_none(value):
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
+
 def eat_your_own_dogfood(sentry_dsn, **kwargs):
     """
     Configures your Bugsink installation to send messages to some Bugsink-compatible installation.
@@ -67,7 +107,12 @@ def eat_your_own_dogfood(sentry_dsn, **kwargs):
 
     default_kwargs = {
         "dsn": sentry_dsn,
+
+        # Don't event types which are not supported by Bugsink:
         "traces_sample_rate": 0,
+        "send_client_reports": False,
+        "auto_session_tracking": False,
+
         "send_default_pii": True,
 
         # see (e.g.) https://github.com/getsentry/sentry-python/issues/377 for why this is necessary; I really really

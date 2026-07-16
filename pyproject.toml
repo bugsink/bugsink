@@ -37,6 +37,35 @@ documentation = "https://www.bugsink.com/docs/"
 issues = "https://github.com/bugsink/bugsink/issues"
 repository = "https://github.com/bugsink/bugsink"
 
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+force-exclude = true
+extend-exclude = [
+    "bugsink/event_schema.py",
+    "sentry/**",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "W",
+]
+ignore = [
+    # E226: missing whitespace around arithmetic operator; ignored by Flake8 by default
+    "E226",
+    # E741: ambiguous variable name
+    "E741",
+    # E731: do not assign a lambda expression, use a def; turned off as per https://stackoverflow.com/a/37489941/339144
+    "E731",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/migrations/*" = [
+    "E501",
+]
+
 [tool.setuptools]
 include-package-data = true  # this is the default, but explicit is better than implicit
 

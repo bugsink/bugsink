@@ -16,7 +16,7 @@
         <div class="flex place-content-end">
             {# copy/paste of _event_nav, but not based on any event (we have none), prev/next are meaningless also; first/last only when we have an event_qs to navigate through #}
                 <form action="{% url this_view issue_pk=issue.pk nav="last" %}" method="get">{# nav="last": when doing a new search on an event-page, you want the most recent matching event to show up #}
-                <input type="text" name="q" value="{{ q }}" placeholder="search..." class="focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md mr-2"/>
+                <input type="text" name="q" value="{{ q }}" placeholder="search..." class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md mr-2"/>
                 </form>
 
                 {% if event_qs_count %}

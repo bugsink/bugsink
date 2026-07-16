@@ -1,4 +1,5 @@
 from collections import defaultdict
+from enum import Enum
 import uuid
 import hashlib
 import os
@@ -10,7 +11,7 @@ import fastjsonschema
 
 from django.conf import settings
 from django.shortcuts import get_object_or_404
-from django.db.models import Max, F
+from django.db.models import Max, F, Sum
 from django.views import View
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.http import HttpResponse, JsonResponse
@@ -23,7 +24,9 @@ from compat.dsn import get_sentry_key, build_dsn
 
 from projects.models import Project
 from issues.models import Issue, IssueStateManager, Grouping, TurningPoint, TurningPointKind
-from issues.utils import get_type_and_value_for_data, get_issue_grouper_for_data, get_denormalized_fields_for_data
+from issues.grouping_mechanisms import (
+    GROUPING_TRANSITION_PERIOD, LEGACY_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING)
+from issues.utils import get_type_and_value_for_data, get_key_with_mechanism_for_data, get_denormalized_fields_for_data
 from issues.regressions import issue_is_regression
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
@@ -36,18 +39,21 @@ from bugsink.utils import set_path
 
 from events.models import Event
 from events.retention import evict_for_max_events, should_evict, EvictionCounts
+from events.usage import record_event_counts
 from releases.models import create_release_if_needed
 from alerts.tasks import send_new_issue_alert, send_regression_alert
 from compat.timestamp import format_timestamp, parse_timestamp
 from tags.models import digest_tags
 from bsmain.utils import b108_makedirs
+from phonehome.models import Installation
+
 from sentry_sdk_extensions import capture_or_log_exception
 from sentry.minidump import merge_minidump_event
 
 from .parsers import StreamingEnvelopeParser, ParseError
 from .filestore import get_filename_for_event_id
 from .tasks import digest
-from .event_counter import check_for_thresholds
+from .event_counter import check_for_thresholds, count_for_thresholds, filter_for_periods, state_for_threshold
 from .models import StoreEnvelope, DontStoreEnvelope, Envelope
 
 
@@ -57,6 +63,24 @@ HTTP_404_NOT_FOUND = 404
 HTTP_413_CONTENT_TOO_LARGE = 413
 HTTP_501_NOT_IMPLEMENTED = 501
 
+class GroupingPath(Enum):
+    FOUND = "found"
+    NEW = "new"
+    ATTACH = "attach"
+
+
+QUOTA_THRESHOLDS = {
+    "Installation": [
+        ("minute", 5, "MAX_EVENTS_PER_5_MINUTES"),
+        ("hour", 1, "MAX_EVENTS_PER_HOUR",),
+        ("month", 1, "MAX_EVENTS_PER_MONTH"),
+    ],
+    "Project": [
+        ("minute", 5, "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES"),
+        ("hour", 1, "MAX_EVENTS_PER_PROJECT_PER_HOUR",),
+        ("month", 1, "MAX_EVENTS_PER_PROJECT_PER_MONTH"),
+    ],
+}
 
 logger = logging.getLogger("bugsink.ingest")
 performance_logger = logging.getLogger("bugsink.performance.ingest")
@@ -71,6 +95,99 @@ def update_issue_counts(per_issue):
 
     for count, issue_ids in by_count.items():
         Issue.objects.filter(id__in=issue_ids).update(stored_event_count=F("stored_event_count") - count)
+
+
+def get_grouping_key_hash(grouping_key):
+    return hashlib.sha256(grouping_key.encode()).hexdigest()
+
+
+def get_existing_grouping(project_id, key_with_mechanism):
+    # helper to get the existing grouping for a given key/mechanism pair, if it exists.
+    return Grouping.objects.filter(
+        project_id=project_id,
+        grouping_key=key_with_mechanism.key,
+        grouping_key_hash=get_grouping_key_hash(key_with_mechanism.key),
+        grouping_mechanism=key_with_mechanism.mechanism,
+    ).first()
+
+
+def get_legacy_grouping_for_mechanism_independent_key(project_id, key_with_mechanism):
+    return Grouping.objects.filter(
+        project_id=project_id,
+        grouping_key=key_with_mechanism.key,
+        grouping_key_hash=get_grouping_key_hash(key_with_mechanism.key),
+        grouping_mechanism=LEGACY_GROUPING_MECHANISM,
+    ).first()
+
+
+def create_grouping(project_id, key_with_mechanism, issue):
+    return Grouping.objects.create(
+        project_id=project_id,
+        grouping_key=key_with_mechanism.key,
+        grouping_key_hash=get_grouping_key_hash(key_with_mechanism.key),
+        grouping_mechanism=key_with_mechanism.mechanism,
+        issue=issue,
+    )
+
+
+def grouping_transition_is_active(project, digested_at):
+    if project.previous_grouping_mechanism is None or project.grouping_mechanism_upgraded_at is None:
+        return False
+
+    return digested_at <= project.grouping_mechanism_upgraded_at + GROUPING_TRANSITION_PERIOD
+
+
+def get_grouping_path_for_event(project, event_data, calculated_type, calculated_value, digested_at):
+    # First try the project's current mechanism.
+    current_key_with_mechanism = get_key_with_mechanism_for_data(
+        event_data, calculated_type, calculated_value, project.grouping_mechanism)
+    if (current_grouping := get_existing_grouping(project.id, current_key_with_mechanism)) is not None:
+        return GroupingPath.FOUND, (current_grouping,)
+
+    if current_key_with_mechanism.mechanism == MECHANISM_INDEPENDENT_GROUPING:
+        # special case for imprecisely migrated data, i.e. this is "another piece of legacy-handling code in the digest
+        # path" as mentioned in the migration file: because we may not have correctly identified all mechanismless
+        # groupings we allow matching with v1 here.
+        #
+        # this is really the 10%/1% correctness for avoiding some unnecesary splits so it can be removed "quite soon",
+        # e.g. in October 2026.
+        legacy_grouping = get_legacy_grouping_for_mechanism_independent_key(project.id, current_key_with_mechanism)
+        if legacy_grouping is not None:
+            return GroupingPath.ATTACH, (current_key_with_mechanism, legacy_grouping)
+        return GroupingPath.NEW, (current_key_with_mechanism,)
+
+    # Current mechanism not found, no special-case, and we're not in the transition window: this is a new grouping.
+    if not grouping_transition_is_active(project, digested_at):
+        return GroupingPath.NEW, (current_key_with_mechanism,)
+
+    # During the transition window, retry the previous mechanism.
+    previous_key_with_mechanism = get_key_with_mechanism_for_data(
+        event_data, calculated_type, calculated_value, project.previous_grouping_mechanism)
+    if (previous_grouping := get_existing_grouping(project.id, previous_key_with_mechanism)) is not None:
+        return GroupingPath.ATTACH, (current_key_with_mechanism, previous_grouping)
+
+    # No grouping found for either mechanism, so this is a new grouping.
+    return GroupingPath.NEW, (current_key_with_mechanism,)
+
+
+def check_for_thresholds_on_installation(qs, now, thresholds, add_for_current=0):
+    # project_digest_order is only monotonic per project, so installation-wide counting sums project-local results
+    # rather than trying to pretend there is a single installation-wide order.
+    project_ids = list(qs.order_by().values_list("project_id", flat=True).distinct())
+    total_events_in_periods = [add_for_current] * len(thresholds)
+
+    for project_id in project_ids:
+        project_counts = count_for_thresholds(qs.filter(project_id=project_id), now, thresholds)
+        for i, (project_total_events_in_period, _) in enumerate(project_counts):
+            total_events_in_periods[i] += project_total_events_in_period
+
+    states = []
+    for i, threshold in enumerate(thresholds):
+        period_name, nr_of_periods, _ = threshold
+        qs_for_period = filter_for_periods(qs, period_name, nr_of_periods, now)
+        states.append(state_for_threshold(qs_for_period, now, total_events_in_periods[i], threshold))
+
+    return states
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -159,6 +276,17 @@ class BaseIngestAPIView(View):
         return cls.get_project(project_pk, sentry_key)
 
     @classmethod
+    def cleanup_ingestion_files(cls, ingestion_id):
+        for filetype in ["event", "minidump"]:
+            filename = get_filename_for_event_id(ingestion_id, filetype=filetype)
+            try:
+                os.unlink(filename)
+            except FileNotFoundError:
+                pass
+            except OSError as e:
+                logger.warning("Failed to clean up ingestion file %s", filename, exc_info=e)
+
+    @classmethod
     def _minidump_post_data(cls, request):
         event_data = {}
         extra_data = {}
@@ -187,7 +315,7 @@ class BaseIngestAPIView(View):
         return event_data
 
     @classmethod
-    def process_minidump(cls, ingested_at, minidump_bytes, project, request):
+    def process_minidump(cls, ingested_at, ingestion_id, minidump_bytes, project, request):
         # This is for the "pure" minidump case, i.e. full separate event (however: event data/extra data _can_ be
         # provided via POST). TSTTCPW: convert the minidump data to an event and then proceed as usual.
         performance_logger.info("ingested minidump with %s bytes", len(minidump_bytes))
@@ -202,21 +330,21 @@ class BaseIngestAPIView(View):
         event_data["platform"] = "native"
         event_data["errors"] = []
 
-        merge_minidump_event(event_data, minidump_bytes)
+        merge_minidump_event(event_data, minidump_bytes, project)
 
         # write the event data to disk:
-        filename = get_filename_for_event_id(event_data["event_id"])
+        filename = get_filename_for_event_id(ingestion_id)
         b108_makedirs(os.path.dirname(filename))
         with open(filename, 'w') as f:
             json.dump(event_data, f)
 
-        event_metadata = cls.get_event_meta(event_data["event_id"], ingested_at, request, project)
+        event_metadata = cls.get_event_meta(event_data["event_id"], ingested_at, ingestion_id, request, project)
         digest.delay(event_data["event_id"], event_metadata)
 
         return event_id
 
     @classmethod
-    def get_event_meta(cls, event_id, ingested_at, request, project):
+    def get_event_meta(cls, event_id, ingested_at, ingestion_id, request, project):
         # .get(..) -- don't want to crash on this and it's non-trivial to find a source that tells me with certainty
         # that the REMOTE_ADDR is always in request.META (it probably is in practice)
         remote_addr = request.META.get("REMOTE_ADDR")
@@ -225,6 +353,7 @@ class BaseIngestAPIView(View):
             "event_id": event_id,
             "project_id": project.id,
             "ingested_at": format_timestamp(ingested_at),
+            "ingestion_id": ingestion_id,
             "remote_addr": remote_addr,
         }
 
@@ -308,7 +437,16 @@ class BaseIngestAPIView(View):
             # (covers both "deletion in progress (is_deleted=True)" and "fully deleted").
             return
 
-        if not cls.count_project_periods_and_act_on_it(project, digested_at):
+        if project.get_retention_max_event_count() == 0:
+            if project.stored_event_count > 0:
+                from events.tasks import delete_by_age_until_under_retention_max
+                delay_on_commit(delete_by_age_until_under_retention_max, project.id)
+            return
+
+        installation = Installation.objects.get()
+        if (not cls.count_installation_periods_and_act_on_it(installation, digested_at)
+                or not cls.count_project_periods_and_act_on_it(project, digested_at)):
+
             return  # if over-quota: just return (any cleanup is done calling-side)
 
         if get_settings().VALIDATE_ON_DIGEST in ["warn", "strict"]:
@@ -318,7 +456,7 @@ class BaseIngestAPIView(View):
             # we merge after validation: validation is about what's provided _externally_, not our own merging.
             # TODO error handling
             # TODO should not be inside immediate_atomic if it turns out to be slow
-            merge_minidump_event(event_data, minidump_bytes)
+            merge_minidump_event(event_data, minidump_bytes, project)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
@@ -329,21 +467,30 @@ class BaseIngestAPIView(View):
         denormalized_fields["calculated_type"] = calculated_type
         denormalized_fields["calculated_value"] = calculated_value
 
-        grouping_key = get_issue_grouper_for_data(event_data, calculated_type, calculated_value)
+        grouping_path, path_context = get_grouping_path_for_event(
+            project, event_data, calculated_type, calculated_value, digested_at)
 
-        try:
-            grouping = Grouping.objects.get(
-                project_id=event_metadata["project_id"], grouping_key=grouping_key,
-                grouping_key_hash=hashlib.sha256(grouping_key.encode()).hexdigest())
+        if grouping_path in [GroupingPath.FOUND, GroupingPath.ATTACH]:
+            if grouping_path == GroupingPath.FOUND:
+                grouping, = path_context
+            else:
+                key_with_mechanism, grouping_to_attach_to = path_context
+                grouping = create_grouping(
+                    event_metadata["project_id"], key_with_mechanism, grouping_to_attach_to.issue)
 
             issue = grouping.issue
             issue_created = False
 
-            # update the denormalized fields
+            # update the denormalized fields; calculated_type/value track the latest event so the issue title
+            # reflects the most recent exception (otherwise it stays frozen to the first event's message).
             issue.last_seen = ingested_at
             issue.digested_event_count += 1
+            issue.calculated_type = calculated_type
+            issue.calculated_value = calculated_value
 
-        except Grouping.DoesNotExist:
+        elif grouping_path == GroupingPath.NEW:
+            key_with_mechanism, = path_context
+
             # we don't have Project.issue_count here ('premature optimization') so we just do an aggregate instead.
             max_current = Issue.objects.filter(project_id=event_metadata["project_id"]).aggregate(
                 Max("digest_order"))["digest_order__max"]
@@ -362,12 +509,7 @@ class BaseIngestAPIView(View):
             )
             issue_created = True
 
-            grouping = Grouping.objects.create(
-                project_id=event_metadata["project_id"],
-                grouping_key=grouping_key,
-                grouping_key_hash=hashlib.sha256(grouping_key.encode()).hexdigest(),
-                issue=issue,
-            )
+            grouping = create_grouping(event_metadata["project_id"], key_with_mechanism, issue)
 
         # +1 because we're about to add one event.
         project_stored_event_count = project.stored_event_count + 1
@@ -390,12 +532,17 @@ class BaseIngestAPIView(View):
         # +1 because we're about to add one event
         issue.stored_event_count = issue.stored_event_count + 1 - evicted.per_issue.get(issue.id, 0)
         project.stored_event_count = project_stored_event_count - evicted.total
-        project.save(update_fields=["stored_event_count"])
+        if issue_created:
+            project.issue_count += 1
+            project.save(update_fields=["stored_event_count", "issue_count"])
+        else:
+            project.save(update_fields=["stored_event_count"])
 
         event, event_created = Event.from_ingested(
             event_metadata,
             digested_at,
             issue.digested_event_count,
+            project.digested_event_count,
             issue.stored_event_count,
             issue,
             grouping,
@@ -415,7 +562,11 @@ class BaseIngestAPIView(View):
             # Validating by letting the DB raise an exception, and only after taking some other actions already, is not
             # "by the book" (some book), but it's the most efficient way of doing it when your basic expectation is that
             # multiple events with the same event_id "don't happen" (i.e. are the result of badly misbehaving clients)
+            # Note: given the ordering here this may hit after an eviction; that was not imagined (but will still work,
+            # albeit with considerable wasted work in that scenario).
             raise ValidationError("Event already exists", code="event_already_exists")
+
+        record_event_counts(project, issue, digested_at, event.digest_order)
 
         release, _ = create_release_if_needed(project, event.release, event.ingested_at, issue)
 
@@ -459,6 +610,8 @@ class BaseIngestAPIView(View):
                     issue, triggering_event=event,
                     unmute_metadata={"mute_for": {"unmute_after": issue.unmute_after}})
 
+        cls.count_issue_periods_and_act_on_it(issue, event, digested_at)
+
         if event.never_evict:
             # as a sort of poor man's django-dirtyfields (which we haven't adopted for simplicity's sake) we simply do
             # this manually for a single field; we know that if never_evict has been set, it's always been set after the
@@ -470,8 +623,6 @@ class BaseIngestAPIView(View):
         if release.version + "\n" not in issue.events_at:
             issue.events_at += release.version + "\n"
 
-        cls.count_issue_periods_and_act_on_it(issue, event, digested_at)
-
         issue.save()
 
         # intentionally at the end: possible future optimization is to push this out of the transaction (or even use
@@ -479,15 +630,64 @@ class BaseIngestAPIView(View):
         digest_tags(event_data, event, issue)
 
     @classmethod
+    def count_installation_periods_and_act_on_it(cls, installation, now):
+        # Copy/pasted from count_project_periods_and_act_on_it and adapted. Explaining comments from over there were not
+        # kept; the comments below are specific to the adapations.
+        thresholds = [(p, n, get_settings()[key]) for (p, n, key) in QUOTA_THRESHOLDS["Installation"]]
+        min_threshold = min([gte_threshold for (_, _, gte_threshold) in thresholds])
+
+        if cls.is_quota_still_exceeded(installation, now):
+            return False
+
+        # We don't do per-event-digest bookkeeping on the installation because doing so would tie us in further into
+        # "global locking"; the assumption is that a group by over (a few) projects is still quite cheap. The per-exceed
+        # bookkeeping _is_ done on the installation level (moments of exceeding are quite rare; cost is amortized).
+        # +1 because about-to-add and the installation-wide call precedes the per-project bookkeeping.
+        digested_event_count = (Project.objects.aggregate(total=Sum("digested_event_count"))["total"] or 0) + 1
+
+        if ((digested_event_count >= installation.next_quota_check) or
+                (installation.next_quota_check - digested_event_count > min_threshold)):
+
+            states = check_for_thresholds_on_installation(Event.objects.all(), now, thresholds, 1)
+
+            until, threshold_info = max(
+                [(below_from, ti) for (is_exceeded, below_from, _, ti) in states if is_exceeded],
+                default=(None, None))
+
+            check_again_after = max(1, min([check_after for (_, _, check_after, _) in states], default=1))
+
+            installation.quota_exceeded_until = until  # note: never reset to None, but the `now <` will still just work
+            installation.quota_exceeded_reason = json.dumps(threshold_info)
+            installation.next_quota_check = digested_event_count + check_again_after
+            installation.save()  # conditional in the if-statement because no per-digest bookkeeping on the installation
+
+        return True
+
+    @classmethod
+    def is_quota_still_exceeded(cls, obj, now):
+        if obj.quota_exceeded_until is None or now >= obj.quota_exceeded_until:
+            return False
+
+        # check if the setting has not been made more lax since the quota was tripped (an alternative would be: always
+        # reset these on snappea/server start)
+        period_name, nr_of_periods, gte_threshold = json.loads(obj.quota_exceeded_reason)
+        relevant_setting = [
+            k for (p, n, k) in QUOTA_THRESHOLDS[type(obj).__name__]
+            if p == period_name and n == nr_of_periods
+        ][0]
+        current_gte_threshold = get_settings()[relevant_setting]
+        if current_gte_threshold > gte_threshold:
+            return False
+
+        return True
+
+    @classmethod
     def count_project_periods_and_act_on_it(cls, project, now):
         # returns: True if any further processing should be done.
+        thresholds = [(p, n, get_settings()[key]) for (p, n, key) in QUOTA_THRESHOLDS["Project"]]
+        min_threshold = min([gte_threshold for (_, _, gte_threshold) in thresholds])
 
-        thresholds = [
-            ("minute", 5, get_settings().MAX_EVENTS_PER_PROJECT_PER_5_MINUTES),
-            ("minute", 60, get_settings().MAX_EVENTS_PER_PROJECT_PER_HOUR),
-        ]
-
-        if project.quota_exceeded_until is not None and now < project.quota_exceeded_until:
+        if cls.is_quota_still_exceeded(project, now):
             # This is the same check that we do on-ingest. Naively, one might think that it is superfluous. However,
             # because by design there is the potential for a digestion backlog to exist, it is possible that the update
             # of `project.quota_exceeded_until` happens only after any number of events have already passed through
@@ -498,7 +698,13 @@ class BaseIngestAPIView(View):
 
         project.digested_event_count += 1
 
-        if project.digested_event_count >= project.next_quota_check:
+        if ((project.digested_event_count >= project.next_quota_check) or
+                (project.next_quota_check - project.digested_event_count > min_threshold)):
+
+            # diff > min_threshold guards against shrunken thresholds (changed settings): if this condition holds, we've
+            # been able to detect the setting-change and trigger a recheck. (in the case it's not detectable, we may at
+            # worst get a "fresh quotum batch" of the new quotom size which is fine too).
+
             # check_for_thresholds is relatively expensive (SQL group by); we do it as little as possible
 
             # Notes on off-by-one:
@@ -509,14 +715,15 @@ class BaseIngestAPIView(View):
             #   and because of the previous bullet we know that it will always be digested.
             states = check_for_thresholds(Event.objects.filter(project=project), now, thresholds, 1)
 
-            until = max([below_from for (state, below_from, _, _) in states if state], default=None)
+            until = max([below_from for (is_exceeded, below_from, _, _) in states if is_exceeded], default=None)
+            until, threshold_info = max(
+                [(below_from, ti) for (is_exceeded, below_from, _, ti) in states if is_exceeded],
+                default=(None, None))
 
-            # "at least 1" is a matter of taste; because the actual usage of `next_quota_check` is with a gte, leaving
-            # it out would result in the same behavior. But once we reach this point we know that digested_event_count
-            # will increase, so we know that a next check cannot happen before current + 1, we might as well be explicit
-            check_again_after = max(1, min([check_after for (_, _, check_after, _) in states], default=1))
+            check_again_after = min([check_after for (_, _, check_after, _) in states], default=1)
 
             project.quota_exceeded_until = until
+            project.quota_exceeded_reason = json.dumps(threshold_info)
 
             # note on correction of `digested_event_count += 1`: as long as we don't do that between the check on
             # next_quota_check (the if-statement) and the setting (the statement below) we're good.
@@ -545,8 +752,8 @@ class BaseIngestAPIView(View):
 
             issue.next_unmute_check = issue.digested_event_count + check_again_after
 
-            for (state, until, _, (period_name, nr_of_periods, gte_threshold)) in states:
-                if not state:
+            for (is_exceeded, until, _, (period_name, nr_of_periods, gte_threshold)) in states:
+                if not is_exceeded:
                     continue
 
                 IssueStateManager.unmute(issue, triggering_event=event, unmute_metadata={"mute_until": {
@@ -570,8 +777,14 @@ class IngestEventAPIView(BaseIngestAPIView):
         # The main point of "inefficiency" is that the event data is parsed twice: once here (to get the event_id), and
         # once in the actual digest.delay()
         ingested_at = datetime.now(timezone.utc)
+        ingestion_id = str(uuid.uuid4())
+
+        installation = Installation.objects.get()
+        if self.is_quota_still_exceeded(installation, ingested_at):
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
+
         project = self.get_project_for_request(project_pk, request)
-        if project.quota_exceeded_until is not None and ingested_at < project.quota_exceeded_until:
+        if self.is_quota_still_exceeded(project, ingested_at):
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         event_data_bytes = MaxDataReader(
@@ -579,23 +792,30 @@ class IngestEventAPIView(BaseIngestAPIView):
 
         performance_logger.info("ingested event with %s bytes", len(event_data_bytes))
 
-        event_data = json.loads(event_data_bytes)
-        filename = get_filename_for_event_id(event_data["event_id"])
+        try:
+            event_data = json.loads(event_data_bytes)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise ParseError("invalid JSON in event: %s" % e)
+
+        if "event_id" not in event_data:
+            event_data["event_id"] = uuid.uuid4().hex
+        filename = get_filename_for_event_id(ingestion_id)
         b108_makedirs(os.path.dirname(filename))
         with open(filename, 'w') as f:
             json.dump(event_data, f)
 
-        event_metadata = self.get_event_meta(event_data["event_id"], ingested_at, request, project)
+        event_metadata = self.get_event_meta(event_data["event_id"], ingested_at, ingestion_id, request, project)
 
         digest.delay(event_data["event_id"], event_metadata)
 
-        return HttpResponse()
+        return JsonResponse({"id": event_data["event_id"]})
 
 
 class IngestEnvelopeAPIView(BaseIngestAPIView):
 
     def _post(self, request, project_pk=None):
         ingested_at = datetime.now(timezone.utc)
+        ingestion_id = str(uuid.uuid4())
 
         input_stream = MaxDataReader("MAX_ENVELOPE_SIZE", content_encoding_reader(
             MaxDataReader("MAX_ENVELOPE_COMPRESSED_SIZE", request)))
@@ -605,7 +825,10 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             else DontStoreEnvelope(input_stream)
 
         try:
-            return self._post2(request, input_stream, ingested_at, project_pk)
+            return self._post2(request, input_stream, ingested_at, ingestion_id, project_pk)
+        except Exception:
+            self.cleanup_ingestion_files(ingestion_id)
+            raise
         finally:
             # storing stuff in the DB on-ingest (rather than on digest-only) is not "as architected"; it's only
             # acceptible because this is a debug-only thing which is turned off by default; but even for me and other
@@ -619,7 +842,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             # transaction" in the DB).
             input_stream.store()
 
-    def _post2(self, request, input_stream, ingested_at, project_pk=None):
+    def _post2(self, request, input_stream, ingested_at, ingestion_id, project_pk=None):
         # Note: wrapping the COMPRESSES_SIZE checks arount request makes it so that when clients do not compress their
         # requests, they are still subject to the (smaller) maximums that apply pre-uncompress. This is exactly what we
         # want.
@@ -627,8 +850,8 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
         envelope_headers = parser.get_envelope_headers()
 
-        # Getting the project is the only DB-touching (a read) we do before we (only in IMMEDIATE/EAGER modes), start
-        # start read/writing in digest_event. Notes on transactions:
+        # Getting the installation & project is the only DB-touching (a read) we do before we (only in IMMEDIATE/EAGER
+        # modes), start start read/writing in digest_event. Notes on transactions:
         #
         # * we could add `durable_atomic` here for explicitness / if we ever do more than one read (for consistent
         #   snapshots. As it stands, not needed. (I believe this is implicit due to Django or even sqlite itself)
@@ -641,6 +864,10 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         #   only modes where this would make sense). This allows for passing of project between the 2 methods, but the
         #   added complexity (conditional transactions both here and in digest_event) is not worth it for modes that are
         #   non-production anyway.
+        installation = Installation.objects.get()
+        if self.is_quota_still_exceeded(installation, ingested_at):
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
+
         if "dsn" in envelope_headers:
             # as in get_sentry_key_for_request, we don't verify that the DSN contains the project_pk, for the same
             # reason ("reasons unconvincing")
@@ -648,7 +875,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         else:
             project = self.get_project_for_request(project_pk, request)
 
-        if project.quota_exceeded_until is not None and ingested_at < project.quota_exceeded_until:
+        if self.is_quota_still_exceeded(project, ingested_at):
             # Sentry has x-sentry-rate-limits, but for now 429 is just fine. Client-side this is implemented as a 60s
             # backoff.
             #
@@ -676,9 +903,9 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
                      item_headers.get("attachment_type") == "event.minidump" and
                      not get_settings().FEATURE_MINIDUMPS)):
 
-                # non-event/minidumps can be discarded; (we don't check for individual size limits, because these differ
-                # per item type, we have the envelope limit to protect us, and we incur almost no cost (NullWriter))
-                return NullWriter()
+                # non-event/minidumps can be discarded; (the somewhat arbitrary size limit is no problem because we have
+                # the envelope limit to protect us, and we incur almost no cost (NullWriter))
+                return MaxDataWriter("MAX_ATTACHMENT_SIZE", NullWriter())
 
             # envelope_headers["event_id"] is required when type in ["event", "attachment"] per the spec (and takes
             # precedence over the payload's event_id), so we can rely on it having been set.
@@ -692,7 +919,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
                 raise ParseError("event_id in envelope headers is not a valid UUID")
 
             filetype = "event" if type_ == "event" else "minidump"
-            filename = get_filename_for_event_id(envelope_headers["event_id"], filetype=filetype)
+            filename = get_filename_for_event_id(ingestion_id, filetype=filetype)
             b108_makedirs(os.path.dirname(filename))
 
             size_conf = "MAX_EVENT_SIZE" if type_ == "event" else "MAX_ATTACHMENT_SIZE"
@@ -714,7 +941,15 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             items_by_type[type_].append(output_stream)
 
         event_count = len(items_by_type.get("event", []))
-        minidump_count = len(items_by_type.get("attachment", []))
+        minidump_count = len(items_by_type.get("attachment", [])) if get_settings().FEATURE_MINIDUMPS else 0
+
+        if event_count + minidump_count == 0:
+            logger.info("no event or minidump found in envelope, ignoring this envelope.")
+            # event_id is only required in envelope headers when event/attachment items are present (enforced in
+            # factory), so it may be absent here; only echo it back when the SDK actually provided one.
+            if "event_id" in envelope_headers:
+                return JsonResponse({"id": envelope_headers["event_id"]})
+            return HttpResponse()
 
         if event_count > 1 or minidump_count > 1:
             # TODO: we do 2 passes (one for storing, one for calling the right task), and we check certain conditions
@@ -724,9 +959,10 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             logger.info(
                 "can only deal with one event/minidump per envelope but found %s/%s, ignoring this envelope.",
                 event_count, minidump_count)
-            return HttpResponse()
+            self.cleanup_ingestion_files(ingestion_id)
+            return JsonResponse({"id": envelope_headers["event_id"]})
 
-        event_metadata = self.get_event_meta(envelope_headers["event_id"], ingested_at, request, project)
+        event_metadata = self.get_event_meta(envelope_headers["event_id"], ingested_at, ingestion_id, request, project)
 
         if event_count == 1:
             if minidump_count == 1:
@@ -736,14 +972,14 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         else:
             # as it stands, we implement the minidump->event path for the minidump-only case on-ingest; we could push
             # this to a task too if needed or for reasons of symmetry.
-            with open(get_filename_for_event_id(envelope_headers["event_id"], filetype="minidump"), 'rb') as f:
+            with open(get_filename_for_event_id(ingestion_id, filetype="minidump"), 'rb') as f:
                 minidump_bytes = f.read()
 
             # TODO: error handling
             # NOTE "The file should start with the MDMP magic bytes." is not checked yet.
-            self.process_minidump(ingested_at, minidump_bytes, project, request)
+            self.process_minidump(ingested_at, ingestion_id, minidump_bytes, project, request)
 
-        return HttpResponse()
+        return JsonResponse({"id": envelope_headers["event_id"]})
 
 
 # Just a few thoughts on the relative performance of the main building blocks of dealing with Envelopes, and how this
@@ -761,6 +997,128 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 # more stuff that we don't care about (up to 20MiB compressed) whereas the max event size (uncompressed) is 1MiB.
 # Another advantage: this allows us to raise the relevant Header parsing and size limitation Exceptions to the SDKs.
 #
+
+
+class IngestSecurityAPIView(BaseIngestAPIView):
+    # Browser-emitted CSP violation reports, posted via the `report-uri` directive. We translate the report into an
+    # event and run it through the same digest pipeline as everything else so it reuses quota, retention, grouping, etc.
+    #
+    # Two shape decisions worth calling out:
+    #
+    # * Auth via `?sentry_key=` query param. Browsers can't set custom headers on CSP report POSTs, so the X-Sentry-Auth
+    #   path isn't available to us here. `BaseIngestAPIView.get_sentry_key_for_request` already prefers the query param,
+    #   so this falls out for free.
+    #
+    # * Strict on Content-Type: we only accept `application/csp-report` (the value the spec mandates and that browsers
+    #   actually send). The `report-uri` flow is tightly defined; accepting `application/json` too would silently mask
+    #   misconfigured emitters/proxies and we'd rather reject early.
+    #
+    # Not yet supported: `application/reports+json` (the newer Reporting API / `report-to` directive). Browsers still
+    # emit the old `report-uri` format widely enough that the minimum viable version covers most cases.
+
+    CONTENT_TYPE = "application/csp-report"
+
+    def _post(self, request, project_pk=None):
+        if request.content_type != self.CONTENT_TYPE:
+            return JsonResponse(
+                {"message": "Content-Type must be %s" % self.CONTENT_TYPE},
+                status=HTTP_400_BAD_REQUEST,
+            )
+
+        ingested_at = datetime.now(timezone.utc)
+        ingestion_id = str(uuid.uuid4())
+
+        installation = Installation.objects.get()
+        if self.is_quota_still_exceeded(installation, ingested_at):
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
+
+        project = self.get_project_for_request(project_pk, request)
+        if self.is_quota_still_exceeded(project, ingested_at):
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
+
+        # CSP reports are small by spec; the cap is a defense against abuse, not a real-world ceiling. Oversized bodies
+        # raise MaxLengthExceeded, which BaseIngestAPIView.post turns into a 413.
+        body_bytes = MaxDataReader("MAX_CSP_REPORT_SIZE", request).read()
+        performance_logger.info("ingested CSP report with %s bytes", len(body_bytes))
+
+        try:
+            payload = json.loads(body_bytes)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise ParseError("invalid JSON in CSP report: %s" % e)
+
+        if not isinstance(payload, dict) or not isinstance(payload.get("csp-report"), dict):
+            raise ParseError("CSP report must be a JSON object with a 'csp-report' object")
+
+        report = payload["csp-report"]
+
+        event_id = uuid.uuid4().hex
+        event_data = self._csp_report_to_event_data(event_id, report, ingested_at)
+
+        filename = get_filename_for_event_id(ingestion_id)
+        b108_makedirs(os.path.dirname(filename))
+        with open(filename, 'w') as f:
+            json.dump(event_data, f)
+
+        event_metadata = self.get_event_meta(event_id, ingested_at, ingestion_id, request, project)
+        digest.delay(event_id, event_metadata)
+
+        return HttpResponse()
+
+    @staticmethod
+    def _report_value_as_string(report, key):
+        value = report.get(key)
+        if value is None:
+            return None
+        return str(value)
+
+    @staticmethod
+    def _csp_report_to_event_data(event_id, report, ingested_at):
+        # Older browsers only send `violated-directive` (which includes the source list, e.g. "script-src 'self'");
+        # newer ones also send `effective-directive` (just the directive name). Prefer the latter, fall back to the
+        # first token of the former. This is the value we group on, so consistency across browsers matters.
+        violated_directive = IngestSecurityAPIView._report_value_as_string(report, "violated-directive") or ""
+        effective_directive = (
+            IngestSecurityAPIView._report_value_as_string(report, "effective-directive")
+            or violated_directive.split(" ", 1)[0]
+            or "<unknown>"
+        )
+        blocked_uri = IngestSecurityAPIView._report_value_as_string(report, "blocked-uri") or "<unknown>"
+
+        # type/value drive the title via get_title_for_exception_type_and_value -> "CSP: blocked X (directive)".
+        # fingerprint drives grouping (overrides the default grouper) so each unique (directive, blocked-uri) pair
+        # becomes one issue rather than one per page that triggered it.
+        event_data = {
+            "event_id": event_id,
+            "timestamp": ingested_at.timestamp(),
+            "platform": "javascript",
+            "logger": "csp",
+            "level": "warning",
+            "exception": {
+                "values": [{
+                    "type": "CSP",
+                    "value": "blocked %s (%s)" % (blocked_uri, effective_directive),
+                }],
+            },
+            "fingerprint": ["csp", effective_directive, blocked_uri],
+            "contexts": {
+                "csp": {
+                    k: report[k] for k in (
+                        "document-uri", "referrer", "blocked-uri", "violated-directive", "effective-directive",
+                        "original-policy", "disposition", "source-file", "line-number", "column-number",
+                        "status-code", "script-sample",
+                    ) if k in report
+                },
+            },
+        }
+
+        document_uri = IngestSecurityAPIView._report_value_as_string(report, "document-uri")
+        if document_uri:
+            event_data["request"] = {"url": document_uri}
+            referrer = IngestSecurityAPIView._report_value_as_string(report, "referrer")
+            if referrer:
+                event_data["request"]["headers"] = {"Referer": referrer}
+
+        return event_data
 
 
 class MinidumpAPIView(BaseIngestAPIView):
@@ -784,7 +1142,7 @@ class MinidumpAPIView(BaseIngestAPIView):
                 return JsonResponse({"detail": "upload_file_minidump not found"}, status=HTTP_400_BAD_REQUEST)
 
             minidump_bytes = request.FILES["upload_file_minidump"].read()
-            event_id = self.process_minidump(ingested_at, minidump_bytes, project, request)
+            event_id = self.process_minidump(ingested_at, uuid.uuid4().hex, minidump_bytes, project, request)
 
             return JsonResponse({"id": event_id})
         except Exception as e:
