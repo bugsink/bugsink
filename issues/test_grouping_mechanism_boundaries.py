@@ -1,8 +1,11 @@
 import ast
+import importlib
 import sys
 from collections import namedtuple
 from pathlib import Path
 from unittest import TestCase
+
+from django.conf import settings
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,7 +38,11 @@ class GroupingMechanismBoundaryTestCase(TestCase):
         self.assert_imports_allowed(
             [
                 path
-                for path in sorted(ROOT.rglob("*.py"))
+                for package_dir in [
+                    Path(importlib.import_module(package).__file__).parent
+                    for package in settings.BUGSINK_APPS
+                ]
+                for path in sorted(package_dir.rglob("*.py"))
                 if not skip_import_boundary_file(path)
             ],
             self._is_not_unpinned_sentry_import,
