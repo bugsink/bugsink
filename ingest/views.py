@@ -24,8 +24,7 @@ from compat.dsn import get_sentry_key, build_dsn
 
 from projects.models import Project
 from issues.models import Issue, IssueStateManager, Grouping, TurningPoint, TurningPointKind
-from issues.grouping_mechanisms import (
-    GROUPING_TRANSITION_PERIOD, LEGACY_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING)
+from issues.grouping_mechanisms import GROUPING_TRANSITION_PERIOD
 from issues.utils import get_type_and_value_for_data, get_key_with_mechanism_for_data, get_denormalized_fields_for_data
 from issues.regressions import issue_is_regression
 
@@ -111,15 +110,6 @@ def get_existing_grouping(project_id, key_with_mechanism):
     ).first()
 
 
-def get_legacy_grouping_for_mechanism_independent_key(project_id, key_with_mechanism):
-    return Grouping.objects.filter(
-        project_id=project_id,
-        grouping_key=key_with_mechanism.key,
-        grouping_key_hash=get_grouping_key_hash(key_with_mechanism.key),
-        grouping_mechanism=LEGACY_GROUPING_MECHANISM,
-    ).first()
-
-
 def create_grouping(project_id, key_with_mechanism, issue):
     return Grouping.objects.create(
         project_id=project_id,
@@ -144,19 +134,7 @@ def get_grouping_path_for_event(project, event_data, calculated_type, calculated
     if (current_grouping := get_existing_grouping(project.id, current_key_with_mechanism)) is not None:
         return GroupingPath.FOUND, (current_grouping,)
 
-    if current_key_with_mechanism.mechanism == MECHANISM_INDEPENDENT_GROUPING:
-        # special case for imprecisely migrated data, i.e. this is "another piece of legacy-handling code in the digest
-        # path" as mentioned in the migration file: because we may not have correctly identified all mechanismless
-        # groupings we allow matching with v1 here.
-        #
-        # this is really the 10%/1% correctness for avoiding some unnecesary splits so it can be removed "quite soon",
-        # e.g. in October 2026.
-        legacy_grouping = get_legacy_grouping_for_mechanism_independent_key(project.id, current_key_with_mechanism)
-        if legacy_grouping is not None:
-            return GroupingPath.ATTACH, (current_key_with_mechanism, legacy_grouping)
-        return GroupingPath.NEW, (current_key_with_mechanism,)
-
-    # Current mechanism not found, no special-case, and we're not in the transition window: this is a new grouping.
+    # Current mechanism not found, and we're not in the transition window: this is a new grouping.
     if not grouping_transition_is_active(project, digested_at):
         return GroupingPath.NEW, (current_key_with_mechanism,)
 

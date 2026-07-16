@@ -40,7 +40,7 @@ from compat.dsn import get_header_value
 from bsmain.management.commands.send_json import Command as SendJsonCommand
 from phonehome.models import Installation
 
-from .views import BaseIngestAPIView, IngestSecurityAPIView, MinidumpAPIView, get_grouping_key_hash
+from .views import BaseIngestAPIView, IngestSecurityAPIView, MinidumpAPIView
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 from .event_counter import check_for_thresholds
 from .header_validators import (
@@ -1121,40 +1121,6 @@ class IngestViewTestCase(TransactionTestCase):
         BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
 
         self.assertEqual(MECHANISM_INDEPENDENT_GROUPING, Grouping.objects.get().grouping_mechanism)
-
-    def test_mechanism_independent_grouping_matches_legacy_multipart_fingerprint(self):
-        # test for "another piece of legacy-handling code in the digest path" (can be removed at some point)
-        issue = Issue.objects.create(
-            project=self.quiet_project,
-            digest_order=1,
-            first_seen=timezone.now(),
-            last_seen=timezone.now(),
-            digested_event_count=1,
-        )
-        # explicit fingerprint, but multi-part so cannot be identified as "none" by our migration
-        grouping_key = "shared ⋄ fingerprint"
-        Grouping.objects.create(
-            project=self.quiet_project,
-            grouping_key=grouping_key,
-            grouping_key_hash=get_grouping_key_hash(grouping_key),
-            grouping_mechanism=LEGACY_GROUPING_MECHANISM,  # the "cannot be identified as none" part of the test
-            issue=issue,
-        )
-
-        event_data = create_event_data()
-        event_data["fingerprint"] = ["shared", "fingerprint"]
-        request = self.request_factory.post("/api/1/store/")
-        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
-
-        # no new issue is created, but the correct mechanism-independent grouping is created for the old issue.
-        self.assertEqual(1, Issue.objects.count())
-        self.assertEqual(2, Grouping.objects.count())
-        self.assertEqual(
-            {LEGACY_GROUPING_MECHANISM, MECHANISM_INDEPENDENT_GROUPING},
-            set(Grouping.objects.values_list("grouping_mechanism", flat=True)),
-        )
-        self.assertEqual({issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
-        self.assertEqual(2, Issue.objects.get().digested_event_count)
 
     def test_grouping_transition_links_old_issue_to_new_mechanism(self):
         request = self.request_factory.post("/api/1/store/")
