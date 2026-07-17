@@ -229,14 +229,14 @@
             </div>
             <div class="p-4">
                 {% for issuetags in issue.tags_summary %}
-                    <div class="mb-4">
+                    <a href="{{ script_prefix }}/issues/issue/{{ issue.id }}/tags/{% current_qs %}" class="block mb-4">
                         <div class="text-sm font-bold text-slate-500 dark:text-slate-300">{{ issuetags.0.key.key }}:</div>
                         <div>
                         {% for issuetag in issuetags %}
                             <span>{{ issuetag.value.value }} <span class="text-xs">({{ issuetag.pct }}%)</span>{% if not forloop.last %}</span>,{% endif %}
                         {% endfor %}
                         </div>
-                    </div>
+                    </a>
                 {% endfor %}
 
                 <div class="text-sm font-bold italic text-slate-500 dark:text-slate-300"><a href="{{ script_prefix }}/issues/issue/{{ issue.id }}/tags/{% current_qs %}">{% translate "All tags..." %}</a></div>
