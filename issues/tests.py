@@ -465,6 +465,35 @@ class ViewTests(TransactionTestCase):
         other_issue.refresh_from_db()
         self.assertFalse(other_issue.is_resolved)
 
+    def test_global_issue_list_only_shows_issues_from_projects_the_user_can_access(self):
+        self.issue.calculated_type = "AccessibleError"
+        self.issue.calculated_value = "visible"
+        self.issue.save(update_fields=["calculated_type", "calculated_value"])
+        other_project = Project.objects.create(name="other")
+        other_issue, _ = get_or_create_issue(other_project)
+        other_issue.calculated_type = "InaccessibleError"
+        other_issue.calculated_value = "hidden"
+        other_issue.save(update_fields=["calculated_type", "calculated_value"])
+
+        response = self.client.get("/issues/")
+
+        self.assertContains(response, "AccessibleError")
+        self.assertContains(response, self.issue.friendly_id())
+        self.assertNotContains(response, "InaccessibleError")
+
+    def test_global_issue_list_bulk_action_ignores_issues_from_inaccessible_projects(self):
+        other_project = Project.objects.create(name="other")
+        other_issue, _ = get_or_create_issue(other_project)
+
+        response = self.client.post(
+            "/issues/",
+            {"issue_ids[]": [str(other_issue.id)], "action": "resolve"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        other_issue.refresh_from_db()
+        self.assertFalse(other_issue.is_resolved)
+
     def test_issue_stacktrace(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/")
         self.assertContains(response, self.issue.title())
