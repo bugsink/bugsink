@@ -26,7 +26,7 @@ def url_valid_according_to_discord(url):
 
 
 class DiscordConfigForm(forms.Form):
-    webhook_url = forms.URLField(required=True)
+    webhook_url = forms.URLField(required=True, assume_scheme="https")
 
     # Discord does not appear to support multi-channel webhooks; although this is not spelled out explicitly, the
     # section at https://discord.com/developers/docs/resources/webhook#execute-webhook does not have an attr for

@@ -18,7 +18,7 @@ from .wsgi import allowed_hosts_error_message
 from .test_utils import TransactionTestCase25251 as TransactionTestCase
 from .transaction import immediate_atomic
 from .volume_based_condition import VolumeBasedCondition
-from .utils import send_rendered_email
+from .utils import email_backend_delivers_mail, send_rendered_email
 from .streams import (
     compress_with_zlib, GeneratorReader, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE, MaxDataReader,
     MaxDataWriter, zlib_generator, brotli_generator, BrotliError)
@@ -42,6 +42,16 @@ class VolumeBasedConditionTestCase(RegularTestCase):
         self.assertEqual(vbc, vbc2)
 
 
+class EmailBackendDeliversMailTestCase(SimpleTestCase):
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_importable_delivering_backend_delivers_mail(self):
+        self.assertTrue(email_backend_delivers_mail())
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
+    def test_known_non_delivering_backend_does_not_deliver_mail(self):
+        self.assertFalse(email_backend_delivers_mail())
+
+
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class SendRenderedEmailTestCase(SimpleTestCase):
     def setUp(self):
@@ -62,7 +72,9 @@ class SendRenderedEmailTestCase(SimpleTestCase):
 
     @override_settings(DEFAULT_FROM_EMAIL="Bugsink <alerts@bugsink.com>", ALLOWED_HOSTS=["tenant.bugsink.com"])
     @patch("phonehome.models.Installation.check_and_inc_email_quota", return_value=True)
-    def test_send_rendered_email_allows_bugsink_sender_domain_when_hosted_on_bugsink_domain(self, _quota_ok):
+    @patch("phonehome.models.Installation.record_email_attempt")
+    def test_send_rendered_email_allows_bugsink_sender_domain_when_hosted_on_bugsink_domain(
+            self, record_attempt, _quota_ok):
         send_rendered_email(
             "Subject",
             "mails/welcome_email",
@@ -71,6 +83,7 @@ class SendRenderedEmailTestCase(SimpleTestCase):
         )
 
         self.assertEqual(1, len(mail.outbox))
+        record_attempt.assert_called_once()
 
 
 class StreamsTestCase(RegularTestCase):

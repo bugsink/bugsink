@@ -1,5 +1,6 @@
 import random
 import logging
+import time
 from collections import defaultdict
 
 from django.utils import timezone
@@ -19,6 +20,14 @@ from .conf_utils import deduce_allowed_hosts, deduce_script_name, eat_your_own_d
 nc_rnd = random
 
 logger = logging.getLogger("bugsink.email")
+
+
+def email_backend_delivers_mail():
+    return settings.EMAIL_BACKEND not in [
+        "bugsink.email_backends.QuietConsoleEmailBackend",
+        "django.core.mail.backends.console.EmailBackend",
+        "django.core.mail.backends.dummy.EmailBackend",
+    ]
 
 
 def is_safe_next_url(url, request):
@@ -94,7 +103,14 @@ def send_rendered_email(subject, base_template_name, recipient_list, context=Non
 
     msg.attach_alternative(html_content, "text/html")
 
-    msg.send(fail_silently=False)  # (fail_silently=False is the default)
+    t0 = time.monotonic()
+    try:
+        msg.send(fail_silently=False)  # (fail_silently=False is the default)
+    except Exception as e:
+        Installation.record_email_attempt(False, time.monotonic() - t0, e.__class__.__name__)
+        raise
+    else:
+        Installation.record_email_attempt(True, time.monotonic() - t0)
 
 
 def get_model_topography():

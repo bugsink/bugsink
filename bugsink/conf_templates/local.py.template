@@ -83,6 +83,9 @@ BUGSINK = {
     # "MAX_CSP_REPORT_SIZE": 64 * _KIBIBYTE,
     # "MAX_EVENT_TAGS": 100,
 
+    # "MAX_EMAILS_PER_HOUR": 60,
+    # "MAX_EMAILS_PER_MONTH": None,
+
     # Webhook outbound security:
     # "ALERTS_WEBHOOK_OUTBOUND_MODE": "open",  # or "allowlist_only"
     # For Telegram alerts in allowlist_only mode, allow api.telegram.org.

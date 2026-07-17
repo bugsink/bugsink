@@ -93,15 +93,20 @@ python manage.py test --exclude-tag=samples
 
 ### Commit messages
 
-No need for magical phrases in the messages; any tense is fine.
-Formatting: Linus-style (short summary, blank line, more detailed description if needed, 72-character line limit).
+Use the hand written (pre-2026) Bugsink commit style: concrete subjects, plain prose, and the vocabulary of the code or
+UI. Put the words that carry the most meaning early in the subject.
 
-Details: focus on _why_ things needed to be changed. For bugs this is often a story (in prose, not bullets) of:
+No need for magical phrases in the messages; any tense is fine. Formatting is Linus-style: short summary, blank line,
+more detailed description body (but only if it actually adds something), 72-character line limit.
+
+Description/body: focus on _why_ things needed to be changed. For bugs this is often a story (in prose, not bullets) of:
 
 1. "problem/symptom"
 2. cause
 3. design decisions/trade offs
 4. the fix.
+
+For features, mention paths not taken or snags that were resolved, but only when they explain the final design.
 
 ### Architectural notes
 

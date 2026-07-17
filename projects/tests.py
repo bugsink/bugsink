@@ -1,14 +1,20 @@
 from django.conf import settings
 from django.apps import apps
 from django.contrib.auth import get_user_model
+from django.test import override_settings
+from django.urls import reverse
 from unittest.mock import patch
+from datetime import datetime, timedelta, timezone
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.utils import get_model_topography
 from projects.forms import ProjectForm
 from projects.models import Project, ProjectMembership, ProjectRole, ProjectVisibility
+from teams.models import Team, TeamMembership, TeamRole
+from users.models import EmailVerification
 from events.factories import create_event
 from issues.factories import get_or_create_issue, denormalized_issue_fields
+from issues.grouping_mechanisms import BUGSINK_GROUPING_V1, BUGSINK_GROUPING_V2
 from tags.models import store_tags
 from issues.models import TurningPoint, TurningPointKind, Issue
 from alerts.models import MessagingServiceConfig
@@ -19,6 +25,100 @@ from events.usage import record_event_counts
 from .tasks import get_model_topography_with_project_override
 
 User = get_user_model()
+
+
+class ProjectInviteLinkTestCase(TransactionTestCase):
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(
+            username="project-admin@example.com",
+            email="project-admin@example.com",
+            password="test",
+        )
+        self.team = Team.objects.create(name="Invite Team")
+        TeamMembership.objects.create(team=self.team, user=self.admin, role=TeamRole.ADMIN, accepted=True)
+        self.project = Project.objects.create(name="Invite Project", team=self.team)
+        ProjectMembership.objects.create(
+            project=self.project, user=self.admin, role=ProjectRole.ADMIN, accepted=True)
+        self.client.force_login(self.admin)
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
+    def test_invite_shows_link_on_members_page_when_email_backend_does_not_deliver(self):
+        response = self.client.post(reverse("project_members_invite", kwargs={"project_pk": self.project.pk}), {
+            "email": "new-project-member@example.com",
+            "role": ProjectRole.MEMBER,
+            "action": "invite",
+        })
+
+        user = User.objects.get(username="new-project-member@example.com")
+        verification = EmailVerification.objects.get(user=user)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invitation not sent")
+        self.assertContains(
+            response,
+            "No invitation was sent because email is not set up. "
+            "Hand out the following link to new-project-member@example.com yourself:",
+        )
+        self.assertContains(response, "Project Members")
+        self.assertContains(response, reverse("project_members_accept_new_user", kwargs={
+            "project_pk": self.project.pk,
+            "token": verification.token,
+        }))
+        self.assertNotContains(response, "Invitation sent")
+        self.assertTrue(ProjectMembership.objects.filter(project=self.project, user=user, accepted=False).exists())
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
+    def test_invite_and_add_another_stays_on_invite_page_when_email_backend_does_not_deliver(self):
+        response = self.client.post(reverse("project_members_invite", kwargs={"project_pk": self.project.pk}), {
+            "email": "another-project-member@example.com",
+            "role": ProjectRole.MEMBER,
+            "action": "invite_and_add_another",
+        })
+
+        user = User.objects.get(username="another-project-member@example.com")
+        verification = EmailVerification.objects.get(user=user)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invitation not sent")
+        self.assertContains(
+            response,
+            "No invitation was sent because email is not set up. "
+            "Hand out the following link to another-project-member@example.com yourself:",
+        )
+        self.assertContains(response, "Invite members")
+        self.assertContains(response, reverse("project_members_accept_new_user", kwargs={
+            "project_pk": self.project.pk,
+            "token": verification.token,
+        }))
+        self.assertNotContains(response, "Invitation sent")
+        self.assertTrue(ProjectMembership.objects.filter(project=self.project, user=user, accepted=False).exists())
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
+    def test_members_page_replaces_reinvite_with_copy_invite_link(self):
+        user = User.objects.create_user(
+            username="pending-project-member@example.com",
+            email="pending-project-member@example.com",
+            is_active=False,
+        )
+        ProjectMembership.objects.create(project=self.project, user=user, accepted=False)
+
+        response = self.client.get(reverse("project_members", kwargs={"project_pk": self.project.pk}))
+
+        self.assertContains(response, "Show invite link")
+        self.assertNotContains(response, "Reinvite")
+
+        response = self.client.post(reverse("project_members", kwargs={"project_pk": self.project.pk}), {
+            "action": f"copy_invite_link:{user.id}",
+        })
+        verification = EmailVerification.objects.get(user=user)
+
+        self.assertContains(response, "Hand out the following link to pending-project-member@example.com yourself:")
+        self.assertNotContains(response, "Invitation not sent")
+        self.assertContains(response, reverse("project_members_accept_new_user", kwargs={
+            "project_pk": self.project.pk,
+            "token": verification.token,
+        }))
 
 
 class ProjectDeletionTestCase(TransactionTestCase):
@@ -169,6 +269,7 @@ class ProjectFormTestCase(TransactionTestCase):
                 "slug": "tampered-slug",
                 "visibility": ProjectVisibility.JOINABLE,
                 "retention_max_event_count": 10000,
+                "grouping_mechanism": project.grouping_mechanism,
             },
             instance=project,
         )
@@ -177,6 +278,68 @@ class ProjectFormTestCase(TransactionTestCase):
         saved = form.save()
         self.assertEqual(saved.slug, "original-slug")
         self.assertEqual(saved.name, "Renamed")
+
+    def test_changing_grouping_mechanism_starts_transition_window(self):
+        project = Project.objects.create(
+            name="Original Name",
+            slug="original-slug",
+            grouping_mechanism=BUGSINK_GROUPING_V1,
+        )
+
+        form = ProjectForm(
+            data={
+                "name": "Original Name",
+                "visibility": ProjectVisibility.JOINABLE,
+                "retention_max_event_count": 10000,
+                "grouping_mechanism": BUGSINK_GROUPING_V2,
+            },
+            instance=project,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        saved = form.save()
+        self.assertEqual(BUGSINK_GROUPING_V2, saved.grouping_mechanism)
+        self.assertEqual(BUGSINK_GROUPING_V1, saved.previous_grouping_mechanism)
+        self.assertIsNotNone(saved.grouping_mechanism_upgraded_at)
+
+    def test_changing_grouping_mechanism_back_and_forth_restarts_transition_window(self):
+        first_changed_at = datetime(2026, 6, 14, 12, 34, tzinfo=timezone.utc)
+        second_changed_at = datetime(2026, 6, 15, 12, 34, tzinfo=timezone.utc)
+        project = Project.objects.create(
+            name="Original Name",
+            slug="original-slug",
+            grouping_mechanism=BUGSINK_GROUPING_V1,
+        )
+
+        with patch("projects.forms.timezone.now", return_value=first_changed_at):
+            form = ProjectForm(
+                data={
+                    "name": "Original Name",
+                    "visibility": ProjectVisibility.JOINABLE,
+                    "retention_max_event_count": 10000,
+                    "grouping_mechanism": BUGSINK_GROUPING_V2,
+                },
+                instance=project,
+            )
+            self.assertTrue(form.is_valid(), form.errors)
+            saved = form.save()
+
+        with patch("projects.forms.timezone.now", return_value=second_changed_at):
+            form = ProjectForm(
+                data={
+                    "name": "Original Name",
+                    "visibility": ProjectVisibility.JOINABLE,
+                    "retention_max_event_count": 10000,
+                    "grouping_mechanism": BUGSINK_GROUPING_V1,
+                },
+                instance=saved,
+            )
+            self.assertTrue(form.is_valid(), form.errors)
+            saved = form.save()
+
+        self.assertEqual(BUGSINK_GROUPING_V1, saved.grouping_mechanism)
+        self.assertEqual(BUGSINK_GROUPING_V2, saved.previous_grouping_mechanism)
+        self.assertEqual(second_changed_at, saved.grouping_mechanism_upgraded_at)
 
 
 class ProjectListOpenIssueCountTestCase(TransactionTestCase):
@@ -208,12 +371,23 @@ class ProjectListOpenIssueCountTestCase(TransactionTestCase):
         response = self.client.get("/projects/mine/")
         self.assertContains(response, "0 open issues")
 
+    def test_project_list_shows_24h_sparkline(self):
+        issue = Issue.objects.filter(project=self.project, is_resolved=False, is_muted=False).get()
+        now = datetime.now(timezone.utc)
+        record_event_counts(self.project, issue, now, issue.digest_order)
+        record_event_counts(self.project, issue, datetime.now(timezone.utc) - timedelta(days=2), issue.digest_order)
+
+        response = self.client.get("/projects/mine/")
+
+        self.assertContains(response, "1 event in the past 24h")
+
     @patch("projects.views.OPEN_ISSUE_COUNT_SHOW_THRESHOLD", 2)
     def test_project_list_skips_open_issue_query_when_over_threshold(self):
         with patch.object(Issue.objects, "filter", wraps=Issue.objects.filter) as issue_filter:
             response = self.client.get("/projects/mine/")
 
         issue_filter.assert_not_called()
+        self.assertContains(response, "many issues")
         self.assertNotContains(response, "open issues")
 
 

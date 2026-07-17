@@ -13,6 +13,7 @@ from bugsink.app_settings import get_settings
 from bugsink.transaction import delay_on_commit
 
 from compat.dsn import build_dsn
+from issues.grouping_mechanisms import GROUPING_MECHANISM_CHOICES, CURRENT_GROUPING_MECHANISM
 
 from teams.models import TeamMembership
 
@@ -125,6 +126,20 @@ class Project(models.Model):
     # retention
     retention_max_event_count = models.PositiveIntegerField(_("Retention max event count"), default=10_000)
 
+    # grouping policy
+    grouping_mechanism = models.CharField(
+        max_length=64,
+        choices=GROUPING_MECHANISM_CHOICES,
+        default=CURRENT_GROUPING_MECHANISM,
+    )
+    previous_grouping_mechanism = models.CharField(
+        max_length=64,
+        choices=GROUPING_MECHANISM_CHOICES,
+        blank=True,
+        null=True,
+    )
+    grouping_mechanism_upgraded_at = models.DateTimeField(blank=True, null=True)
+
     def __str__(self):
         return self.name
 
@@ -219,3 +234,21 @@ class ProjectMembership(models.Model):
 
     def is_admin(self):
         return self.role == ProjectRole.ADMIN
+
+
+def get_issue_accessible_project_ids(user):
+    if user.is_superuser:
+        return list(Project.objects.filter(is_deleted=False).values_list("id", flat=True))
+
+    # See Visibility/Access-design above: issue access requires explicit project membership.
+    return list(
+        ProjectMembership.objects.filter(
+            user=user, accepted=True, project__is_deleted=False).values_list("project_id", flat=True))
+
+
+def user_has_issue_access(user, project):
+    if user.is_superuser:
+        return True
+
+    # See Visibility/Access-design above: issue access requires explicit project membership.
+    return ProjectMembership.objects.filter(project=project, user=user, accepted=True).exists()

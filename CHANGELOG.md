@@ -1,6 +1,6 @@
 # Changes
 
-## ..... (unreleased)
+## 2.4.0 (10 July 2026)
 
 ### Backwards incompatible changes
 
@@ -13,6 +13,34 @@ you must, in file in a directory "one level deep" (e.g. `/tmp/snappea/snappea.pi
 Otherwise you'll get a B108SecurityError ("Target path owned by uid other than me: ...")
 
 See #195, #196
+
+### Security
+
+Fix: prevent DNS rebinding bypasses in outbound webhook protection.
+
+A project admin who controlled webhook DNS responses could make the policy check see an allowed public IP while the
+actual HTTP request connected to a blocked internal destination. Bugsink now pins each webhook send to the validated DNS
+result while preserving normal Host/SNI behavior. See:
+
+https://github.com/bugsink/bugsink/security/advisories/GHSA-w589-2ffr-2prv
+
+### Sparklines / Trends
+
+Project and issue lists now show compact 24h event-volume trends. Sparkline bucket boundaries respect the installation
+timezone, and y-axis labels now use nicer count-oriented steps with a floor of 10 for low-volume charts. See #444,
+#445 and #447.
+
+### Issue resolution
+
+Resolved issues can be reopened manually. The Resolve controls also support a plain "Resolve" flow and resolve-by-current
+release when observations already exist. See #431 and #436.
+
+### Smaller fixes
+
+* Fix AuthToken description edits applying to the wrong token, see #424.
+* Use the ready endpoint in the sample Compose healthcheck, see #426.
+* Reduce Docker image size, see #430.
+* Improve invalid payload handling in envelope and deprecated `/store/` ingest paths, see #435.
 
 ## 2.3.1 (30 June 2026)
 

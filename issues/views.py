@@ -14,7 +14,7 @@ from django.db.utils import OperationalError
 from django.conf import settings
 from django.utils.functional import cached_property
 
-from sentry.utils.safe import get_path
+from sentry.at_glitchtip_af9a700a8706.utils.safe import get_path
 from sentry_sdk_extensions import capture_or_log_exception
 
 from bugsink.decorators import project_membership_required, issue_membership_required, atomic_for_request_method
@@ -24,10 +24,10 @@ from bugsink.utils import assert_
 from phonehome.utils import phone_home
 
 from events.models import Event
-from events.sparklines import get_issue_event_sparkline
+from events.sparklines import get_issue_event_sparkline, get_issue_list_event_sparklines
 from events.ua_stuff import get_contexts_enriched_with_ua
 
-from projects.models import ProjectMembership
+from projects.models import ProjectMembership, get_issue_accessible_project_ids
 from tags.search import search_issues, search_events, search_events_optimized
 from theme.templatetags.issues import timestamp_with_millis
 
@@ -38,6 +38,7 @@ from .forms import CommentForm
 from .utils import get_values, get_main_exception
 from events.utils import annotate_with_meta, apply_sourcemaps, get_sourcemap_images
 from .markdown_issue import render_issue_md
+from .grouping_mechanisms import GROUPING_MECHANISMS, MECHANISM_INDEPENDENT_GROUPING
 
 logger = logging.getLogger("bugsink.issues")
 
@@ -142,6 +143,14 @@ def issue_list(request, project_pk, state_filter="open"):
         return _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids)
 
 
+@phone_home
+def global_issue_list(request, state_filter="open"):
+    # The global list mirrors issue_list's split between the write part and pure display reads.
+    accessible_project_ids, unapplied_issue_ids = _global_issue_list_pt_1(request, state_filter=state_filter)
+    with durable_atomic():
+        return _global_issue_list_pt_2(request, accessible_project_ids, state_filter, unapplied_issue_ids)
+
+
 @atomic_for_request_method
 @project_membership_required
 def _issue_list_pt_1(request, project, state_filter="open"):
@@ -162,7 +171,32 @@ def _issue_list_pt_1(request, project, state_filter="open"):
     return project, unapplied_issue_ids
 
 
-def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
+@atomic_for_request_method
+def _global_issue_list_pt_1(request, state_filter="open"):
+    accessible_project_ids = get_issue_accessible_project_ids(request.user)
+
+    if request.method == "POST":
+        action = request.POST["action"]
+        if action.startswith("resolved_"):
+            raise PermissionDenied("Release-specific issue actions are project-scoped")
+
+        issue_ids = request.POST.getlist('issue_ids[]')
+        issue_qs = Issue.objects.filter(
+            project_id__in=accessible_project_ids, is_deleted=False, pk__in=issue_ids)
+        illegal_conditions = q_for_invalid_issue_action(action)
+        # list() is necessary because we need to evaluate the qs before any actions are actually applied (if we don't,
+        # actions are always marked as illegal, because they are applied first, then checked (and applying twice is
+        # illegal)
+        unapplied_issue_ids = list(issue_qs.filter(illegal_conditions).values_list("id", flat=True))
+        apply_issue_action(IssueQuerysetStateManager, issue_qs.exclude(illegal_conditions), action, request.user)
+
+    else:
+        unapplied_issue_ids = None
+
+    return accessible_project_ids, unapplied_issue_ids
+
+
+def _filter_issue_list_by_state(issue_list, state_filter):
     d_state_filter = {
         "open": lambda qs: qs.filter(is_resolved=False, is_muted=False),
         "unresolved": lambda qs: qs.filter(is_resolved=False),
@@ -171,8 +205,13 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
         "all": lambda qs: qs,
     }
 
-    issue_list = d_state_filter[state_filter](
-        Issue.objects.filter(project=project, is_deleted=False)
+    return d_state_filter[state_filter](issue_list)
+
+
+def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
+    issue_list = _filter_issue_list_by_state(
+        Issue.objects.filter(project=project, is_deleted=False),
+        state_filter,
     ).order_by("-last_seen")
 
     if request.GET.get("q"):
@@ -181,6 +220,10 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
     paginator = UncountablePaginator(issue_list, 250)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
+    issue_sparklines = get_issue_list_event_sparklines(
+        [issue.id for issue in page_obj.object_list], timezone.now(), project.id)
+    for issue in page_obj.object_list:
+        issue.list_sparkline = issue_sparklines[issue.id]
 
     try:
         member = ProjectMembership.objects.get(project=project, user=request.user)
@@ -201,6 +244,39 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
         "disable_mute_buttons": state_filter in ("resolved", "muted"),
         "disable_unmute_buttons": state_filter in ("resolved", "open"),
         "q": request.GET.get("q", ""),
+        "page_obj": page_obj,
+    })
+
+
+def _global_issue_list_pt_2(request, accessible_project_ids, state_filter, unapplied_issue_ids):
+    issue_list = _filter_issue_list_by_state(
+        Issue.objects.filter(project_id__in=accessible_project_ids, is_deleted=False),
+        state_filter,
+    ).select_related("project").order_by("-last_seen")
+
+    paginator = UncountablePaginator(issue_list, 250)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+    issue_sparklines = get_issue_list_event_sparklines(
+        [issue.id for issue in page_obj.object_list], timezone.now())
+    for issue in page_obj.object_list:
+        issue.list_sparkline = issue_sparklines[issue.id]
+
+    return render(request, "issues/issue_list.html", {
+        "project": None,
+        "member": None,
+        "is_global_issue_list": True,
+        "state_filter": state_filter,
+        "mute_options": GLOBAL_MUTE_OPTIONS,
+
+        "unapplied_issue_ids": unapplied_issue_ids,
+
+        # design decision: we statically determine some disabledness (i.e. choices that will never make sense are
+        # disallowed), but we don't have any dynamic disabling based on the selected issues.
+        "disable_resolve_buttons": state_filter in ("resolved"),
+        "disable_mute_buttons": state_filter in ("resolved", "muted"),
+        "disable_unmute_buttons": state_filter in ("resolved", "open"),
+        "q": "",
         "page_obj": page_obj,
     })
 
@@ -636,10 +712,21 @@ def issue_grouping(request, issue):
 
     event_qs = search_events(issue.project, issue, request.GET.get("q", ""))
     last_event = event_qs.order_by("digest_order").last()
+
+    grouping_mechanisms_by_age = [MECHANISM_INDEPENDENT_GROUPING] + [
+        mechanism.identifier for mechanism in reversed(GROUPING_MECHANISMS)
+    ]
+    grouping_order = {mechanism: i for i, mechanism in enumerate(grouping_mechanisms_by_age)}
+    groupers = sorted(
+        issue.grouping_set.all(),
+        key=lambda grouper: (grouping_order.get(grouper.grouping_mechanism, 999), grouper.grouping_key),
+    )
+
     return render(request, "issues/grouping.html", {
         "tab": "grouping",
         "project": issue.project,
         "issue": issue,
+        "groupers": groupers,
         "is_event_page": False,
         "request_repr": _request_repr(last_event.get_parsed_data()) if last_event is not None else "",
         "mute_options": GLOBAL_MUTE_OPTIONS,

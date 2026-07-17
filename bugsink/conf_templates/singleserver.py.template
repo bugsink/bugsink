@@ -117,6 +117,9 @@ BUGSINK = {
     # For large MAX_FILE_SIZE values, you may want OBJECT_STORAGES["file"] configured too.
     # "MAX_FILE_SIZE": 2 * _GIBIBYTE,
 
+    # "MAX_EMAILS_PER_HOUR": 60,
+    # "MAX_EMAILS_PER_MONTH": None,
+
     "INGEST_STORE_BASE_DIR": "{{ base_dir }}/ingestion",
 
     # Optionally, you can set the following to True to further minimize information exposure in the UI. (The default is

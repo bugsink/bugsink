@@ -28,6 +28,9 @@ class User(AbstractUser):
     # as long as the number of fields is small I think the User model makes more sense. We can always push them out
     # later)
 
+    # Django provides is_active. Bugsink currently uses it for both "may authenticate" and "email/setup is confirmed".
+    # If we ever allow login with an unconfirmed email address, split that state into an explicit field.
+
     send_email_alerts = models.BooleanField(default=True, blank=True)
 
     THEME_CHOICES = [
