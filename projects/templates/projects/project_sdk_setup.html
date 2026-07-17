@@ -16,10 +16,16 @@
             Bugsink is compatible with the <a href="https://docs.sentry.io/platforms/">Sentry SDKs</a>.
             Use the following DSN to connect your application to Bugsink:
         </div>
+        <div class="js-copy-container flex items-start gap-2">
+            <div class="js-copy-source flex-1 min-w-0">
 {% code %}:::text
 {{ dsn }}
 {% endcode %}
-        {% include "includes/copy_button.html" with copy_value=dsn %}
+            </div>
+            <div class="mt-4">
+                {% include "includes/copy_button_only.html" with secondary=True %}
+            </div>
+        </div>
 
         <h2 class="mt-8 text-2xl font-bold">Language-specific instructions</h2>
         <div class="mt-4">

@@ -34,11 +34,16 @@ class TeamInviteLinkTestCase(TransactionTestCase):
         verification = EmailVerification.objects.get(user=user)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Invite link")
+        self.assertContains(
+            response,
+            "No invitation was sent because email is not set up. "
+            "Hand out the following link to new-team-member@example.com yourself:",
+        )
         self.assertContains(response, reverse("team_members_accept_new_user", kwargs={
             "team_pk": self.team.pk,
             "token": verification.token,
         }))
+        self.assertNotContains(response, "Invitation sent")
         self.assertTrue(TeamMembership.objects.filter(team=self.team, user=user, accepted=False).exists())
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
@@ -52,7 +57,7 @@ class TeamInviteLinkTestCase(TransactionTestCase):
 
         response = self.client.get(reverse("team_members", kwargs={"team_pk": self.team.pk}))
 
-        self.assertContains(response, "Copy invite link")
+        self.assertContains(response, "Show invite link")
         self.assertNotContains(response, "Reinvite")
 
 

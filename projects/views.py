@@ -232,6 +232,7 @@ def project_members(request, project_pk):
     project = Project.objects.get(id=project_pk, is_deleted=False)
     _check_project_admin(project, request.user)
     invite_link = None
+    invite_link_email = None
 
     if request.method == 'POST':
         full_action_str = request.POST.get('action')
@@ -241,7 +242,7 @@ def project_members(request, project_pk):
         elif action == "copy_invite_link" and not email_backend_delivers_mail():
             user = User.objects.get(id=user_id)
             invite_link = _create_project_invite_link(user, project_pk)
-            messages.success(request, f"Invitation link created for {user.email}")
+            invite_link_email = user.email
         elif action == "reinvite":
             user = User.objects.get(id=user_id)
             _send_project_invite_email(user, project_pk)
@@ -252,6 +253,7 @@ def project_members(request, project_pk):
         'members': project.projectmembership_set.all().select_related('user'),
         'can_copy_invite_links': not email_backend_delivers_mail(),
         'invite_link': invite_link,
+        'invite_link_email': invite_link_email,
     })
 
 
@@ -315,19 +317,20 @@ def project_members_invite(request, project_pk):
                 'accepted': False,
             })
 
-            if membership_created:
-                messages.success(request, f"Invitation sent to {email}")
-            else:
-                messages.success(
-                    request, f"Invitation resent to {email} (it was previously sent and we just sent it again)")
-
             if invite_link is not None:
                 form = ProjectMemberInviteForm(user_must_exist)
                 return render(request, 'projects/project_members_invite.html', {
                     'project': project,
                     'form': form,
                     'invite_link': invite_link,
+                    'invite_link_email': user.email,
                 })
+
+            if membership_created:
+                messages.success(request, f"Invitation sent to {email}")
+            else:
+                messages.success(
+                    request, f"Invitation resent to {email} (it was previously sent and we just sent it again)")
 
             if request.POST.get('action') == "invite_and_add_another":
                 return redirect('project_members_invite', project_pk=project_pk)

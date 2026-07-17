@@ -163,6 +163,7 @@ def team_members(request, team_pk):
             not request.user.is_superuser):
         raise PermissionDenied("You are not an admin of this team")
     invite_link = None
+    invite_link_email = None
 
     if request.method == 'POST':
         full_action_str = request.POST.get('action')
@@ -172,7 +173,7 @@ def team_members(request, team_pk):
         elif action == "copy_invite_link" and not email_backend_delivers_mail():
             user = User.objects.get(id=user_id)
             invite_link = _create_team_invite_link(user, team_pk)
-            messages.success(request, f"Invitation link created for {user.email}")
+            invite_link_email = user.email
         elif action == "reinvite":
             user = User.objects.get(id=user_id)
             _send_team_invite_email(user, team_pk)
@@ -183,6 +184,7 @@ def team_members(request, team_pk):
         'members': team.teammembership_set.all().select_related('user'),
         'can_copy_invite_links': not email_backend_delivers_mail(),
         'invite_link': invite_link,
+        'invite_link_email': invite_link_email,
     })
 
 
@@ -244,19 +246,20 @@ def team_members_invite(request, team_pk):
                 'accepted': False,
             })
 
-            if membership_created:
-                messages.success(request, f"Invitation sent to {email}")
-            else:
-                messages.success(
-                    request, f"Invitation resent to {email} (it was previously sent and we just sent it again)")
-
             if invite_link is not None:
                 form = TeamMemberInviteForm(user_must_exist)
                 return render(request, 'teams/team_members_invite.html', {
                     'team': team,
                     'form': form,
                     'invite_link': invite_link,
+                    'invite_link_email': user.email,
                 })
+
+            if membership_created:
+                messages.success(request, f"Invitation sent to {email}")
+            else:
+                messages.success(
+                    request, f"Invitation resent to {email} (it was previously sent and we just sent it again)")
 
             if request.POST.get('action') == "invite_and_add_another":
                 return redirect('team_members_invite', team_pk=team_pk)

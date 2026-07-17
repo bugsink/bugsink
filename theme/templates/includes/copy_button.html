@@ -1,15 +1,8 @@
 {% load i18n %}
 
-<div class="js-copy-container flex items-stretch mt-2">
-    <code class="js-copy-source flex-1 min-w-0 overflow-x-auto whitespace-nowrap bg-slate-100 dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 rounded-l-md px-3 py-2 text-sm">{{ copy_value }}</code>
-    <button type="button" class="js-copy-btn inline-flex items-center gap-2 font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 border-2 border-l-0 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-r-md px-3 py-2">
-        <svg class="js-copy-svg w-5 h-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-            <path d="M7 2a2 2 0 0 0-2 2v2h2V4h8v8h-2v2h2a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H7Z" />
-            <path d="M3 8a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8Zm2 0v8h6V8H5Z" />
-        </svg>
-        <svg class="js-copied-svg hidden w-5 h-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-            <path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0l-3.5-3.5a1 1 0 1 1 1.4-1.4l2.8 2.8 6.8-6.8a1 1 0 0 1 1.4 0Z" clip-rule="evenodd" />
-        </svg>
-        <span class="js-copy-label">{% translate "Copy" %}</span>
-    </button>
+{% if copy_value %}
+<div class="js-copy-container flex items-center gap-2 mt-2">
+    <code class="js-copy-source flex-1 min-w-0 overflow-x-auto whitespace-nowrap bg-slate-100 dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 rounded-md px-3 py-2 text-sm">{{ copy_value }}</code>
+    {% include "includes/copy_button_only.html" %}
 </div>
+{% endif %}
