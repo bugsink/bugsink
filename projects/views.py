@@ -18,6 +18,7 @@ from teams.models import TeamMembership, Team, TeamRole
 
 from bugsink.app_settings import get_settings, CB_ANYBODY, CB_MEMBERS, CB_ADMINS
 from bugsink.decorators import login_exempt, atomic_for_request_method
+from bugsink.invite_links import email_not_sent_invite_link_notice, manual_invite_link_notice
 from bugsink.utils import assert_, email_backend_delivers_mail
 
 from alerts.models import MessagingServiceConfig, get_alert_service_backend_class, get_alert_service_kind_choices
@@ -231,8 +232,7 @@ def project_edit(request, project_pk):
 def project_members(request, project_pk):
     project = Project.objects.get(id=project_pk, is_deleted=False)
     _check_project_admin(project, request.user)
-    invite_link = None
-    invite_link_email = None
+    invite_link_notice = None
 
     if request.method == 'POST':
         full_action_str = request.POST.get('action')
@@ -242,18 +242,21 @@ def project_members(request, project_pk):
         elif action == "copy_invite_link" and not email_backend_delivers_mail():
             user = User.objects.get(id=user_id)
             invite_link = _create_project_invite_link(user, project_pk)
-            invite_link_email = user.email
+            invite_link_notice = manual_invite_link_notice(invite_link, user.email)
         elif action == "reinvite":
             user = User.objects.get(id=user_id)
             _send_project_invite_email(user, project_pk)
             messages.success(request, f"Invitation resent to {user.email}")
 
+    return _render_project_members(request, project, invite_link_notice)
+
+
+def _render_project_members(request, project, invite_link_notice=None):
     return render(request, 'projects/project_members.html', {
         'project': project,
         'members': project.projectmembership_set.all().select_related('user'),
         'can_copy_invite_links': not email_backend_delivers_mail(),
-        'invite_link': invite_link,
-        'invite_link_email': invite_link_email,
+        'invite_link_notice': invite_link_notice,
     })
 
 
@@ -318,13 +321,15 @@ def project_members_invite(request, project_pk):
             })
 
             if invite_link is not None:
+                invite_link_notice = email_not_sent_invite_link_notice(invite_link, user.email)
                 form = ProjectMemberInviteForm(user_must_exist)
-                return render(request, 'projects/project_members_invite.html', {
-                    'project': project,
-                    'form': form,
-                    'invite_link': invite_link,
-                    'invite_link_email': user.email,
-                })
+                if request.POST.get('action') == "invite_and_add_another":
+                    return render(request, 'projects/project_members_invite.html', {
+                        'project': project,
+                        'form': form,
+                        'invite_link_notice': invite_link_notice,
+                    })
+                return _render_project_members(request, project, invite_link_notice)
 
             if membership_created:
                 messages.success(request, f"Invitation sent to {email}")

@@ -23,7 +23,7 @@ class TeamInviteLinkTestCase(TransactionTestCase):
         self.client.force_login(self.admin)
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
-    def test_invite_shows_link_when_email_backend_does_not_deliver(self):
+    def test_invite_shows_link_on_members_page_when_email_backend_does_not_deliver(self):
         response = self.client.post(reverse("team_members_invite", kwargs={"team_pk": self.team.pk}), {
             "email": "new-team-member@example.com",
             "role": TeamRole.MEMBER,
@@ -34,11 +34,39 @@ class TeamInviteLinkTestCase(TransactionTestCase):
         verification = EmailVerification.objects.get(user=user)
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invitation not sent")
         self.assertContains(
             response,
             "No invitation was sent because email is not set up. "
             "Hand out the following link to new-team-member@example.com yourself:",
         )
+        self.assertContains(response, "Team Members")
+        self.assertContains(response, reverse("team_members_accept_new_user", kwargs={
+            "team_pk": self.team.pk,
+            "token": verification.token,
+        }))
+        self.assertNotContains(response, "Invitation sent")
+        self.assertTrue(TeamMembership.objects.filter(team=self.team, user=user, accepted=False).exists())
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
+    def test_invite_and_add_another_stays_on_invite_page_when_email_backend_does_not_deliver(self):
+        response = self.client.post(reverse("team_members_invite", kwargs={"team_pk": self.team.pk}), {
+            "email": "another-team-member@example.com",
+            "role": TeamRole.MEMBER,
+            "action": "invite_and_add_another",
+        })
+
+        user = User.objects.get(username="another-team-member@example.com")
+        verification = EmailVerification.objects.get(user=user)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invitation not sent")
+        self.assertContains(
+            response,
+            "No invitation was sent because email is not set up. "
+            "Hand out the following link to another-team-member@example.com yourself:",
+        )
+        self.assertContains(response, "Invite members")
         self.assertContains(response, reverse("team_members_accept_new_user", kwargs={
             "team_pk": self.team.pk,
             "token": verification.token,
@@ -59,6 +87,18 @@ class TeamInviteLinkTestCase(TransactionTestCase):
 
         self.assertContains(response, "Show invite link")
         self.assertNotContains(response, "Reinvite")
+
+        response = self.client.post(reverse("team_members", kwargs={"team_pk": self.team.pk}), {
+            "action": f"copy_invite_link:{user.id}",
+        })
+        verification = EmailVerification.objects.get(user=user)
+
+        self.assertContains(response, "Hand out the following link to pending-team-member@example.com yourself:")
+        self.assertNotContains(response, "Invitation not sent")
+        self.assertContains(response, reverse("team_members_accept_new_user", kwargs={
+            "team_pk": self.team.pk,
+            "token": verification.token,
+        }))
 
 
 class TeamScopedActionTestCase(TransactionTestCase):

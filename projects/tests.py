@@ -43,7 +43,7 @@ class ProjectInviteLinkTestCase(TransactionTestCase):
         self.client.force_login(self.admin)
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
-    def test_invite_shows_link_when_email_backend_does_not_deliver(self):
+    def test_invite_shows_link_on_members_page_when_email_backend_does_not_deliver(self):
         response = self.client.post(reverse("project_members_invite", kwargs={"project_pk": self.project.pk}), {
             "email": "new-project-member@example.com",
             "role": ProjectRole.MEMBER,
@@ -54,11 +54,39 @@ class ProjectInviteLinkTestCase(TransactionTestCase):
         verification = EmailVerification.objects.get(user=user)
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invitation not sent")
         self.assertContains(
             response,
             "No invitation was sent because email is not set up. "
             "Hand out the following link to new-project-member@example.com yourself:",
         )
+        self.assertContains(response, "Project Members")
+        self.assertContains(response, reverse("project_members_accept_new_user", kwargs={
+            "project_pk": self.project.pk,
+            "token": verification.token,
+        }))
+        self.assertNotContains(response, "Invitation sent")
+        self.assertTrue(ProjectMembership.objects.filter(project=self.project, user=user, accepted=False).exists())
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
+    def test_invite_and_add_another_stays_on_invite_page_when_email_backend_does_not_deliver(self):
+        response = self.client.post(reverse("project_members_invite", kwargs={"project_pk": self.project.pk}), {
+            "email": "another-project-member@example.com",
+            "role": ProjectRole.MEMBER,
+            "action": "invite_and_add_another",
+        })
+
+        user = User.objects.get(username="another-project-member@example.com")
+        verification = EmailVerification.objects.get(user=user)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invitation not sent")
+        self.assertContains(
+            response,
+            "No invitation was sent because email is not set up. "
+            "Hand out the following link to another-project-member@example.com yourself:",
+        )
+        self.assertContains(response, "Invite members")
         self.assertContains(response, reverse("project_members_accept_new_user", kwargs={
             "project_pk": self.project.pk,
             "token": verification.token,
@@ -79,6 +107,18 @@ class ProjectInviteLinkTestCase(TransactionTestCase):
 
         self.assertContains(response, "Show invite link")
         self.assertNotContains(response, "Reinvite")
+
+        response = self.client.post(reverse("project_members", kwargs={"project_pk": self.project.pk}), {
+            "action": f"copy_invite_link:{user.id}",
+        })
+        verification = EmailVerification.objects.get(user=user)
+
+        self.assertContains(response, "Hand out the following link to pending-project-member@example.com yourself:")
+        self.assertNotContains(response, "Invitation not sent")
+        self.assertContains(response, reverse("project_members_accept_new_user", kwargs={
+            "project_pk": self.project.pk,
+            "token": verification.token,
+        }))
 
 
 class ProjectDeletionTestCase(TransactionTestCase):

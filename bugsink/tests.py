@@ -18,7 +18,7 @@ from .wsgi import allowed_hosts_error_message
 from .test_utils import TransactionTestCase25251 as TransactionTestCase
 from .transaction import immediate_atomic
 from .volume_based_condition import VolumeBasedCondition
-from .utils import send_rendered_email
+from .utils import email_backend_delivers_mail, send_rendered_email
 from .streams import (
     compress_with_zlib, GeneratorReader, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE, MaxDataReader,
     MaxDataWriter, zlib_generator, brotli_generator, BrotliError)
@@ -40,6 +40,16 @@ class VolumeBasedConditionTestCase(RegularTestCase):
 
         vbc2 = VolumeBasedCondition.from_dict(vbc.to_dict())
         self.assertEqual(vbc, vbc2)
+
+
+class EmailBackendDeliversMailTestCase(SimpleTestCase):
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_importable_delivering_backend_delivers_mail(self):
+        self.assertTrue(email_backend_delivers_mail())
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
+    def test_known_non_delivering_backend_does_not_deliver_mail(self):
+        self.assertFalse(email_backend_delivers_mail())
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")

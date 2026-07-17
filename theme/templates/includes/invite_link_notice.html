@@ -1,0 +1,13 @@
+{% load i18n %}
+
+{% if invite_link_notice %}
+<div class="mb-4 bg-cyan-50 dark:bg-cyan-900 border-2 border-cyan-800 dark:border-cyan-400 p-4 rounded-lg">
+    {% if invite_link_notice.kind == "email_not_sent" %}
+    <div class="font-bold">{% translate "Invitation not sent" %}</div>
+    <div>{% blocktranslate with email=invite_link_notice.email %}No invitation was sent because email is not set up. Hand out the following link to {{ email }} yourself:{% endblocktranslate %}</div>
+    {% else %}
+    <div>{% blocktranslate with email=invite_link_notice.email %}Hand out the following link to {{ email }} yourself:{% endblocktranslate %}</div>
+    {% endif %}
+    {% include "includes/copy_button.html" with copy_value=invite_link_notice.link %}
+</div>
+{% endif %}
