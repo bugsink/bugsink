@@ -33,6 +33,28 @@ EMAIL_BACKEND_WARNING = mark_safe(
     dark:text-slate-100">set up email</a>.""")  # nosec
 
 
+def get_email_failure_warnings(installation, now):
+    diagnostics = json.loads(installation.email_sending_diagnostics)
+    cutoff = now - timedelta(minutes=5)
+    recent_attempts = []
+
+    for attempt in diagnostics.get("attempts", []):
+        attempted_at = datetime.fromisoformat(attempt["at"])
+        if attempted_at >= cutoff:
+            recent_attempts.append(attempt)
+
+    if len(recent_attempts) < 5:
+        return []
+
+    failures = len([attempt for attempt in recent_attempts if not attempt.get("ok")])
+    if failures * 2 <= len(recent_attempts):
+        return []
+
+    return [SystemWarning(
+        f"Email sending appears to be failing: {failures} of {len(recent_attempts)} recent email attempts failed.",
+        None)]
+
+
 def get_snappea_warnings():
     # We warn in either of 2 cases, as documented per-case.
 
@@ -135,6 +157,8 @@ def useful_settings_processor(request):
 
         # copy pasted from project/models.py
         now = datetime.now(dt_timezone.utc)
+        system_warnings.extend(get_email_failure_warnings(installation, now))
+
         from ingest.views import BaseIngestAPIView
         if BaseIngestAPIView.is_quota_still_exceeded(installation, now):
             period_name, nr_of_periods, gte_threshold = json.loads(installation.quota_exceeded_reason)
