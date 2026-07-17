@@ -14,6 +14,8 @@ from django.utils.translation import gettext_lazy as _
 from users.models import EmailVerification
 from bugsink.app_settings import get_settings, CB_ANYBODY, CB_ADMINS, CB_MEMBERS
 from bugsink.decorators import login_exempt, atomic_for_request_method
+from bugsink.invite_links import email_not_sent_invite_link_notice, manual_invite_link_notice
+from bugsink.utils import email_backend_delivers_mail
 
 from .models import Team, TeamMembership, TeamRole, TeamVisibility
 from .forms import TeamMemberInviteForm, TeamMembershipForm, MyTeamMembershipForm, TeamForm
@@ -161,20 +163,31 @@ def team_members(request, team_pk):
     if (not TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists() and
             not request.user.is_superuser):
         raise PermissionDenied("You are not an admin of this team")
+    invite_link_notice = None
 
     if request.method == 'POST':
         full_action_str = request.POST.get('action')
         action, user_id = full_action_str.split(":", 1)
         if action == "remove":
             TeamMembership.objects.filter(team=team_pk, user=user_id).delete()
+        elif action == "copy_invite_link" and not email_backend_delivers_mail():
+            user = User.objects.get(id=user_id)
+            invite_link = _create_team_invite_link(user, team_pk)
+            invite_link_notice = manual_invite_link_notice(invite_link, user.email)
         elif action == "reinvite":
             user = User.objects.get(id=user_id)
             _send_team_invite_email(user, team_pk)
             messages.success(request, f"Invitation resent to {user.email}")
 
+    return _render_team_members(request, team, invite_link_notice)
+
+
+def _render_team_members(request, team, invite_link_notice=None):
     return render(request, 'teams/team_members.html', {
         'team': team,
         'members': team.teammembership_set.all().select_related('user'),
+        'can_copy_invite_links': not email_backend_delivers_mail(),
+        'invite_link_notice': invite_link_notice,
     })
 
 
@@ -187,6 +200,17 @@ def _send_team_invite_email(user, team_pk):
         # not yet accepted the invite. In the latter case, we just send a fresh email
         verification = EmailVerification.objects.create(user=user, email=user.username)
         send_team_invite_email_new_user.delay(user.email, team_pk, verification.token)
+
+
+def _create_team_invite_link(user, team_pk):
+    if user.is_active:
+        return get_settings().BASE_URL + reverse("team_members_accept", kwargs={"team_pk": team_pk})
+
+    verification = EmailVerification.objects.create(user=user, email=user.username)
+    return get_settings().BASE_URL + reverse("team_members_accept_new_user", kwargs={
+        "team_pk": team_pk,
+        "token": verification.token,
+    })
 
 
 @atomic_for_request_method
@@ -214,12 +238,27 @@ def team_members_invite(request, team_pk):
             user, user_created = User.objects.get_or_create(
                 email=email, defaults={'username': email, 'is_active': False})
 
-            _send_team_invite_email(user, team_pk)
+            if email_backend_delivers_mail():
+                _send_team_invite_email(user, team_pk)
+                invite_link = None
+            else:
+                invite_link = _create_team_invite_link(user, team_pk)
 
             _, membership_created = TeamMembership.objects.get_or_create(team=team, user=user, defaults={
                 'role': form.cleaned_data['role'],
                 'accepted': False,
             })
+
+            if invite_link is not None:
+                invite_link_notice = email_not_sent_invite_link_notice(invite_link, user.email)
+                form = TeamMemberInviteForm(user_must_exist)
+                if request.POST.get('action') == "invite_and_add_another":
+                    return render(request, 'teams/team_members_invite.html', {
+                        'team': team,
+                        'form': form,
+                        'invite_link_notice': invite_link_notice,
+                    })
+                return _render_team_members(request, team, invite_link_notice)
 
             if membership_created:
                 messages.success(request, f"Invitation sent to {email}")

@@ -22,6 +22,8 @@
         </ul>
         {% endif %}
 
+        {% include "includes/invite_link_notice.html" %}
+
         <div>
             <h1 class="text-4xl my-4 font-bold">{% blocktranslate with project_name=project.name %}Invite members ({{ project_name }}){% endblocktranslate %}</h1>
         </div>
@@ -56,4 +58,8 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/copy.js' %}"></script>
 {% endblock %}

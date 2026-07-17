@@ -47,7 +47,15 @@
         {% tailwind_formfield form.visibility %}
         {% tailwind_formfield form.retention_max_event_count %}
 
-        {% tailwind_formfield form.dsn %}
+        <div class="js-copy-container">
+            <div class="flex items-start gap-2">
+                <span class="js-copy-source hidden">{{ form.dsn.value }}</span>
+                <div class="flex-1 min-w-0">{% tailwind_formfield form.dsn %}</div>
+                <div class="mt-8">
+                    {% include "includes/copy_button_only.html" with secondary=True %}
+                </div>
+            </div>
+        </div>
         {% tailwind_formfield form.grouping_mechanism %}
 
         <div class="flex items-center mt-4">
@@ -66,4 +74,5 @@
     var csrftoken = '{{ csrf_token }}';
 </script>
 <script src="{% static 'js/entity_edit.js' %}"></script>
+<script src="{% static 'js/copy.js' %}"></script>
 {% endblock %}

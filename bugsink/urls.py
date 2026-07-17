@@ -12,7 +12,8 @@ from alerts.views import debug_email as debug_alerts_email
 from users.views import debug_email as debug_users_email
 from teams.views import debug_email as debug_teams_email
 from bugsink.app_settings import get_settings
-from users.views import signup, confirm_email, resend_confirmation, request_reset_password, reset_password, preferences
+from users.views import (
+    signup, confirm_email, resend_confirmation, request_reset_password, reset_password, preferences, change_password)
 from ingest.views import download_envelope
 from files.views import chunk_upload, artifact_bundle_assemble, difs_assemble, api_root, api_catch_all
 from bugsink.decorators import login_exempt
@@ -57,6 +58,7 @@ urlpatterns = [
     path("accounts/logout/", auth_views.LogoutView.as_view(template_name="users/logged_out.html"), name="logout"),
 
     path("accounts/preferences/", preferences, name="preferences"),
+    path("accounts/change-password/", change_password, name="change_password"),
 
     # many user-related views are directly exposed above (/accounts/), the rest is here:
     path("users/", include("users.urls")),
