@@ -37,7 +37,7 @@ class ViewTests(TransactionTestCase):
         super().setUp()
         self.user = User.objects.create_user(username='test', password='test')
         self.project = Project.objects.create()
-        ProjectMembership.objects.create(project=self.project, user=self.user)
+        ProjectMembership.objects.create(project=self.project, user=self.user, accepted=True)
         self.issue, _ = get_or_create_issue(project=self.project)
         self.event = create_event(self.project, self.issue)
         self.client.force_login(self.user)

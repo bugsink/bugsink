@@ -433,7 +433,7 @@ class ViewTests(TransactionTestCase):
         super().setUp()
         self.user = User.objects.create_user(username='test', password='test')
         self.project = Project.objects.create(name="test")
-        ProjectMembership.objects.create(project=self.project, user=self.user)
+        ProjectMembership.objects.create(project=self.project, user=self.user, accepted=True)
         self.issue, _ = get_or_create_issue(self.project)
         self.event = create_event(self.project, self.issue, project_digest_order=1)
         self.client.force_login(self.user)
@@ -441,6 +441,15 @@ class ViewTests(TransactionTestCase):
     def test_issue_list_view(self):
         response = self.client.get(f"/issues/{self.project.id}/")
         self.assertContains(response, self.issue.title())
+
+    def test_pending_project_membership_cannot_view_issue_list(self):
+        pending_user = User.objects.create_user(username='pending', password='test')
+        ProjectMembership.objects.create(project=self.project, user=pending_user, accepted=False)
+        self.client.force_login(pending_user)
+
+        response = self.client.get(f"/issues/{self.project.id}/")
+
+        self.assertEqual(response.status_code, 403)
 
     def test_issue_list_view_shows_24h_sparkline(self):
         now = datetime.now(timezone.utc)
@@ -458,6 +467,47 @@ class ViewTests(TransactionTestCase):
 
         response = self.client.post(
             f"/issues/{self.project.id}/",
+            {"issue_ids[]": [str(other_issue.id)], "action": "resolve"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        other_issue.refresh_from_db()
+        self.assertFalse(other_issue.is_resolved)
+
+    def test_global_issue_list_only_shows_issues_from_projects_the_user_can_access(self):
+        self.issue.calculated_type = "AccessibleError"
+        self.issue.calculated_value = "visible"
+        self.issue.save(update_fields=["calculated_type", "calculated_value"])
+        other_project = Project.objects.create(name="other")
+        other_issue, _ = get_or_create_issue(other_project)
+        other_issue.calculated_type = "InaccessibleError"
+        other_issue.calculated_value = "hidden"
+        other_issue.save(update_fields=["calculated_type", "calculated_value"])
+
+        response = self.client.get("/issues/")
+
+        self.assertContains(response, "AccessibleError")
+        self.assertContains(response, self.issue.friendly_id())
+        self.assertNotContains(response, "InaccessibleError")
+
+    def test_global_issue_list_ignores_pending_project_memberships(self):
+        pending_project = Project.objects.create(name="pending")
+        ProjectMembership.objects.create(project=pending_project, user=self.user, accepted=False)
+        pending_issue, _ = get_or_create_issue(pending_project)
+        pending_issue.calculated_type = "PendingError"
+        pending_issue.calculated_value = "hidden"
+        pending_issue.save(update_fields=["calculated_type", "calculated_value"])
+
+        response = self.client.get("/issues/")
+
+        self.assertNotContains(response, "PendingError")
+
+    def test_global_issue_list_bulk_action_ignores_issues_from_inaccessible_projects(self):
+        other_project = Project.objects.create(name="other")
+        other_issue, _ = get_or_create_issue(other_project)
+
+        response = self.client.post(
+            "/issues/",
             {"issue_ids[]": [str(other_issue.id)], "action": "resolve"},
         )
 
@@ -713,7 +763,7 @@ class ViewTests(TransactionTestCase):
         debug_id = uuid.uuid4()
         auth_token = AuthToken.objects.create()
         other_project = Project.objects.create(name="other")
-        ProjectMembership.objects.create(project=other_project, user=self.user)
+        ProjectMembership.objects.create(project=other_project, user=self.user, accepted=True)
         other_issue, _ = get_or_create_issue(other_project)
         sourcemap = json.dumps({
             "version": 3,
@@ -819,7 +869,7 @@ class IntegrationTest(TransactionTestCase):
     def test_many_issues_ingest_and_show(self):
         user = User.objects.create_user(username='test', password='test')
         project = Project.objects.create(name="test")
-        ProjectMembership.objects.create(project=project, user=user)
+        ProjectMembership.objects.create(project=project, user=user, accepted=True)
         self.client.force_login(user)
 
         sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
@@ -914,7 +964,7 @@ class IntegrationTest(TransactionTestCase):
     def test_render_stacktrace_md(self):
         user = User.objects.create_user(username='test', password='test')
         project = Project.objects.create(name="test")
-        ProjectMembership.objects.create(project=project, user=user)
+        ProjectMembership.objects.create(project=project, user=user, accepted=True)
         self.client.force_login(user)
 
         sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")

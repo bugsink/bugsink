@@ -215,6 +215,13 @@ class Issue(models.Model):
             models.Index(fields=["project", "is_muted", "last_seen"], name="issue_list_muted"),
             models.Index(fields=["project", "is_resolved", "last_seen"], name="issue_list_resolved"),  # and unresolved
             models.Index(fields=["project", "last_seen"], name="issue_list_all"),  # all
+
+            # Same filters/orderings for the global issue list, where the page is intentionally not anchored on one
+            # project. As above, no is_deleted: deleted issues should be a small minority.
+            models.Index(fields=["is_resolved", "is_muted", "last_seen"], name="issue_global_open"),
+            models.Index(fields=["is_muted", "last_seen"], name="issue_global_muted"),
+            models.Index(fields=["is_resolved", "last_seen"], name="issue_global_resolved"),  # and unresolved
+            models.Index(fields=["last_seen"], name="issue_global_all"),  # all
         ]
 
 

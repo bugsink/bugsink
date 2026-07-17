@@ -234,3 +234,21 @@ class ProjectMembership(models.Model):
 
     def is_admin(self):
         return self.role == ProjectRole.ADMIN
+
+
+def get_issue_accessible_project_ids(user):
+    if user.is_superuser:
+        return list(Project.objects.filter(is_deleted=False).values_list("id", flat=True))
+
+    # See Visibility/Access-design above: issue access requires explicit project membership.
+    return list(
+        ProjectMembership.objects.filter(
+            user=user, accepted=True, project__is_deleted=False).values_list("project_id", flat=True))
+
+
+def user_has_issue_access(user, project):
+    if user.is_superuser:
+        return True
+
+    # See Visibility/Access-design above: issue access requires explicit project membership.
+    return ProjectMembership.objects.filter(project=project, user=user, accepted=True).exists()

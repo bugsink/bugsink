@@ -1,9 +1,9 @@
 from django.urls import path, register_converter
 
 from .views import (
-    issue_list, issue_event_stacktrace, issue_event_details, issue_event_list, issue_history, issue_grouping,
-    issue_event_breadcrumbs, event_by_id, history_comment_new, history_comment_edit, history_comment_delete,
-    issue_tags, issue_markdown)
+    issue_list, global_issue_list, issue_event_stacktrace, issue_event_details, issue_event_list, issue_history,
+    issue_grouping, issue_event_breadcrumbs, event_by_id, history_comment_new, history_comment_edit,
+    history_comment_delete, issue_tags, issue_markdown)
 
 
 def regex_converter(passed_regex):
@@ -25,6 +25,12 @@ register_converter(regex_converter("(prev|next)"), "prev-next")
 
 
 urlpatterns = [
+    path('', global_issue_list, {"state_filter": "open"}, name="global_issue_list_open"),
+    path('unresolved/', global_issue_list, {"state_filter": "unresolved"}, name="global_issue_list_unresolved"),
+    path('resolved/', global_issue_list, {"state_filter": "resolved"}, name="global_issue_list_resolved"),
+    path('muted/', global_issue_list, {"state_filter": "muted"}, name="global_issue_list_muted"),
+    path('all/', global_issue_list, {"state_filter": "all"}, name="global_issue_list_all"),
+
     path('<int:project_pk>/', issue_list, {"state_filter": "open"}, name="issue_list_open"),
     path('<int:project_pk>/unresolved', issue_list, {"state_filter": "unresolved"}, name="issue_list_unresolved"),
     path('<int:project_pk>/resolved/', issue_list, {"state_filter": "resolved"}, name="issue_list_resolved"),
