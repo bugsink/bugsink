@@ -61,7 +61,7 @@ class FilesTests(TransactionTestCase):
         super().setUp()
         self.user = User.objects.create_user(username='test', password='test')
         self.project = Project.objects.create(name="test")
-        ProjectMembership.objects.create(project=self.project, user=self.user)
+        ProjectMembership.objects.create(project=self.project, user=self.user, accepted=True)
         self.client.force_login(self.user)
         self.auth_token = AuthToken.objects.create()
         self.token_headers = {"Authorization": f"Bearer {self.auth_token.token}"}
