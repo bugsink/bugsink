@@ -1,7 +1,6 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 from django.db.models import Sum, Max
 
 from bugsink.transaction import durable_atomic
