@@ -55,6 +55,27 @@ def get_email_failure_warnings(installation, now):
         None)]
 
 
+def get_email_quota_warnings(installation, now):
+    warnings = []
+    email_quota_usage = json.loads(installation.email_quota_usage)
+
+    if get_settings().MAX_EMAILS_PER_HOUR is not None:
+        this_hour_usage = email_quota_usage.get("per_hour", {}).get(now.strftime("%Y-%m-%dT%H"), 0)
+        if this_hour_usage >= get_settings().MAX_EMAILS_PER_HOUR:
+            warnings.append(SystemWarning(
+                f"Bugsink has sent {this_hour_usage} emails this hour, which is the maximum. "
+                "No more emails will be sent until the next hour.", None))
+
+    if get_settings().MAX_EMAILS_PER_MONTH is not None:
+        this_month_usage = email_quota_usage.get("per_month", {}).get(now.strftime("%Y-%m"), 0)
+        if this_month_usage >= get_settings().MAX_EMAILS_PER_MONTH:
+            warnings.append(SystemWarning(
+                f"Bugsink has sent {this_month_usage} emails this month, which is the maximum. "
+                "No more emails will be sent until the 1st of next month.", None))
+
+    return warnings
+
+
 def get_snappea_warnings():
     # We warn in either of 2 cases, as documented per-case.
 
@@ -147,16 +168,9 @@ def useful_settings_processor(request):
 
             system_warnings.append(SystemWarning(EMAIL_BACKEND_WARNING, ignore_url))
 
-        if get_settings().MAX_EMAILS_PER_MONTH is not None:
-            email_quota_usage = json.loads(installation.email_quota_usage)
-            this_month_usage = email_quota_usage.get("per_month", {}).get(timezone.now().strftime("%Y-%m"), 0)
-            if this_month_usage >= get_settings().MAX_EMAILS_PER_MONTH:
-                system_warnings.append(SystemWarning(
-                    f"Bugsink has sent {this_month_usage} emails this month, which is the maximum. "
-                    "No more emails will be sent until the 1st of next month.", None))
-
         # copy pasted from project/models.py
         now = datetime.now(dt_timezone.utc)
+        system_warnings.extend(get_email_quota_warnings(installation, now))
         system_warnings.extend(get_email_failure_warnings(installation, now))
 
         from ingest.views import BaseIngestAPIView

@@ -3,7 +3,8 @@ from datetime import timedelta
 
 from django.test import TestCase
 from django.utils import timezone
-from bugsink.context_processors import get_email_failure_warnings
+from bugsink.app_settings import override_settings as override_bugsink_settings
+from bugsink.context_processors import get_email_failure_warnings, get_email_quota_warnings
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 
 from .models import Installation
@@ -64,3 +65,36 @@ class EmailSendingDiagnosticsTestCase(TransactionTestCase):
         installation.email_sending_diagnostics = json.dumps({"attempts": attempts})
 
         self.assertEqual([], get_email_failure_warnings(installation, now))
+
+
+class EmailQuotaTestCase(TransactionTestCase):
+
+    def test_hourly_email_quota(self):
+        now = timezone.now()
+
+        with override_bugsink_settings(MAX_EMAILS_PER_HOUR=2, MAX_EMAILS_PER_MONTH=None):
+            self.assertTrue(Installation.check_and_inc_email_quota(now))
+            self.assertTrue(Installation.check_and_inc_email_quota(now))
+            self.assertFalse(Installation.check_and_inc_email_quota(now))
+
+        usage = json.loads(Installation.objects.get().email_quota_usage)
+        self.assertEqual(2, usage["per_hour"][now.strftime("%Y-%m-%dT%H")])
+        self.assertEqual(2, usage["per_month"][now.strftime("%Y-%m")])
+
+    def test_hourly_email_quota_warning(self):
+        now = timezone.now()
+        installation = Installation.objects.get()
+        installation.email_quota_usage = json.dumps({
+            "per_hour": {now.strftime("%Y-%m-%dT%H"): 2},
+            "per_month": {},
+        })
+
+        with override_bugsink_settings(MAX_EMAILS_PER_HOUR=2, MAX_EMAILS_PER_MONTH=None):
+            warnings = get_email_quota_warnings(installation, now)
+
+        self.assertEqual(1, len(warnings))
+        self.assertEqual(
+            "Bugsink has sent 2 emails this hour, which is the maximum. "
+            "No more emails will be sent until the next hour.",
+            warnings[0].message,
+        )

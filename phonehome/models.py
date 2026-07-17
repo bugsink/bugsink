@@ -36,15 +36,24 @@ class Installation(models.Model):
 
         email_quota_usage = json.loads(obj.email_quota_usage)
 
-        key = date.strftime('%Y-%m')
-        if key not in email_quota_usage["per_month"]:
-            email_quota_usage['per_month'] = {key: 0}  # full overwrite: no need to keep old info around.
+        hour_key = date.strftime('%Y-%m-%dT%H')
+        if hour_key not in email_quota_usage.get("per_hour", {}):
+            email_quota_usage['per_hour'] = {hour_key: 0}  # full overwrite: no need to keep old info around.
 
-        if (get_settings().MAX_EMAILS_PER_MONTH is not None
-                and email_quota_usage['per_month'][key] >= get_settings().MAX_EMAILS_PER_MONTH):
+        month_key = date.strftime('%Y-%m')
+        if month_key not in email_quota_usage["per_month"]:
+            email_quota_usage['per_month'] = {month_key: 0}  # full overwrite: no need to keep old info around.
+
+        if (get_settings().MAX_EMAILS_PER_HOUR is not None
+                and email_quota_usage['per_hour'][hour_key] >= get_settings().MAX_EMAILS_PER_HOUR):
             return False
 
-        email_quota_usage['per_month'][key] += 1
+        if (get_settings().MAX_EMAILS_PER_MONTH is not None
+                and email_quota_usage['per_month'][month_key] >= get_settings().MAX_EMAILS_PER_MONTH):
+            return False
+
+        email_quota_usage['per_hour'][hour_key] += 1
+        email_quota_usage['per_month'][month_key] += 1
 
         obj.email_quota_usage = json.dumps(email_quota_usage)
         obj.save()

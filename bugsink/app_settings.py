@@ -71,6 +71,9 @@ DEFAULTS = {
     "MAX_EVENTS_PER_HOUR": 5_000,
     "MAX_EVENTS_PER_MONTH": 1_000_000,
 
+    # Sending more than 1 email per minute sustained is self-spam territory, and should require explicit configuration.
+    # Extra benefit of this default: it avoids hogging Snappea workers accidentally.
+    "MAX_EMAILS_PER_HOUR": 60,
     "MAX_EMAILS_PER_MONTH": None,  # None means "no limit"; for non-None values, the quota is per calendar month
 
     "MAX_RETENTION_PER_PROJECT_EVENT_COUNT": None,  # None means "no limit"

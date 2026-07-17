@@ -167,6 +167,9 @@ BUGSINK = {
     "MAX_EVENTS_PER_HOUR": int(os.getenv("MAX_EVENTS_PER_HOUR", 5_000)),
     "MAX_EVENTS_PER_MONTH": int(os.getenv("MAX_EVENTS_PER_MONTH", 1_000_000)),
 
+    "MAX_EMAILS_PER_HOUR": int_or_none(os.getenv("MAX_EMAILS_PER_HOUR", 60)),
+    "MAX_EMAILS_PER_MONTH": int_or_none(os.getenv("MAX_EMAILS_PER_MONTH", None)),
+
     "MAX_RETENTION_PER_PROJECT_EVENT_COUNT": int_or_none(os.getenv("MAX_RETENTION_PER_PROJECT_EVENT_COUNT", None)),
     "MAX_RETENTION_EVENT_COUNT": int_or_none(os.getenv("MAX_RETENTION_EVENT_COUNT", None)),
     "MAX_EVENT_AGE_DAYS": int_or_none(os.getenv("MAX_EVENT_AGE_DAYS", None)),
