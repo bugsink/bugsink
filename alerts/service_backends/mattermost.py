@@ -15,7 +15,7 @@ from .webhook_security import validate_webhook_url
 
 
 class MattermostConfigForm(forms.Form):
-    webhook_url = forms.URLField(required=True)
+    webhook_url = forms.URLField(required=True, assume_scheme="https")
     channel = forms.CharField(
         required=False,
         help_text='Optional: Override channel (e.g., "town-square" or "@username" for DMs)',

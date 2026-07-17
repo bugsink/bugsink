@@ -15,7 +15,7 @@ from .webhook_security import validate_webhook_url
 
 
 class SlackConfigForm(forms.Form):
-    webhook_url = forms.URLField(required=True)
+    webhook_url = forms.URLField(required=True, assume_scheme="https")
 
     # Slack does not support multi-channel webhooks, as per the docs:
     # > You cannot override the default channel (chosen by the user who installed your app), username, or icon when
