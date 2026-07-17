@@ -508,6 +508,21 @@ class ViewTests(TransactionTestCase):
         response = self.client.get(f"/issues/issue/{self.issue.id}/tags/")
         self.assertContains(response, self.issue.title())
 
+    def test_issue_sidebar_summarizes_long_release_lists(self):
+        self.issue.events_at = "\n".join(f"2026.1.{i}.0" for i in range(10)) + "\n"
+        self.issue.save()
+
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/")
+
+        self.assertContains(response, "... «4 more» ...,")
+        self.assertContains(response, "2026.1.0.0")
+        self.assertContains(response, "2026.1.1.0")
+        self.assertContains(response, "2026.1.2.0")
+        self.assertContains(response, "2026.1.7.0")
+        self.assertContains(response, "2026.1.8.0")
+        self.assertContains(response, "2026.1.9.0")
+        self.assertNotContains(response, "2026.1.4.0")
+
     def test_issue_grouping(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/grouping/")
         self.assertContains(response, self.issue.title())

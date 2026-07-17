@@ -210,8 +210,13 @@
                 <div class="mb-4">
                     <div class="text-sm font-bold text-slate-500 dark:text-slate-300">Seen in releases:</div>
                     <div>
-                    {% for version in issue.get_events_at_2 %}
-                        <span {% if version|issha %}class="font-mono"{% endif %}>{{ version|shortsha }}{% if not forloop.last %}</span>,{% endif %}
+                    {% summarized_releases issue.get_events_at_2 as seen_releases %}
+                    {% for item in seen_releases %}
+                        {% if item.hidden_count %}
+                            ... «{{ item.hidden_count }} more» ...{% if item.comma %},{% endif %}
+                        {% else %}
+                            <span {% if item.version|issha %}class="font-mono"{% endif %}>{{ item.version|shortsha }}</span>{% if item.comma %},{% endif %}
+                        {% endif %}
                     {% endfor %}
                     </div>
                 </div>

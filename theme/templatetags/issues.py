@@ -17,6 +17,25 @@ from bugsink.pygments_extensions import guess_lexer_for_filename, lexer_for_plat
 register = template.Library()
 
 
+@register.simple_tag
+def summarized_releases(versions):
+    versions = list(versions)
+    if len(versions) <= 7:
+        return [
+            {"version": version, "comma": i < len(versions) - 1}
+            for i, version in enumerate(versions)
+        ]
+
+    return (
+        [{"version": version, "comma": True} for version in versions[:3]]
+        + [{"hidden_count": len(versions) - 6, "comma": True}]
+        + [
+            {"version": version, "comma": i < 2}
+            for i, version in enumerate(versions[-3:])
+        ]
+    )
+
+
 def _split(joined, lengths):
     result = []
     start = 0
