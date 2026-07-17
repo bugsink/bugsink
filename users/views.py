@@ -231,38 +231,47 @@ def reset_password(request, token=None):
 def preferences(request):
     user = request.user
     if request.method == 'POST':
-        if request.POST.get("action") == "set_password":
-            form = PreferencesForm(instance=user)
-            password_form = PasswordChangeForm(user, request.POST)
+        form = PreferencesForm(request.POST, instance=user)
 
-            if password_form.is_valid():
-                password_form.save()
-                update_session_auth_hash(request, user)
-                messages.success(request, _("Password updated"))
-                return redirect('preferences')
+        if form.is_valid():
+            user = form.save()
 
-        else:
-            form = PreferencesForm(request.POST, instance=user)
-            password_form = PasswordChangeForm(user)
+            # activate the selected language immediately for the Success message; we've already passed the
+            # middleware stage (which looked at the pre-change language), so we need to do this ourselves with the
+            # fresh value.
+            translation.activate(get_chosen_language(user, request))
 
-            if form.is_valid():
-                user = form.save()
-
-                # activate the selected language immediately for the Success message; we've already passed the
-                # middleware stage (which looked at the pre-change language), so we need to do this ourselves with the
-                # fresh value.
-                translation.activate(get_chosen_language(user, request))
-
-                messages.success(request, _("Updated preferences"))
-                return redirect('preferences')
+            messages.success(request, _("Updated preferences"))
+            return redirect('preferences')
 
     else:
         form = PreferencesForm(instance=user)
-        password_form = PasswordChangeForm(user)
 
     return render(request, 'users/preferences.html', {
         'form': form,
-        'password_form': password_form,
+    })
+
+
+@atomic_for_request_method
+# in the general case this is done by Middleware but we're under /accounts/, so we need it back.
+# not security-critical because we simply get a failure on request.user if this wasn't there, but still the right thing.
+@login_required
+def change_password(request):
+    user = request.user
+    if request.method == 'POST':
+        form = PasswordChangeForm(user, request.POST)
+
+        if form.is_valid():
+            form.save()
+            update_session_auth_hash(request, user)
+            messages.success(request, _("Password updated"))
+            return redirect('preferences')
+
+    else:
+        form = PasswordChangeForm(user)
+
+    return render(request, 'users/change_password.html', {
+        'form': form,
     })
 
 

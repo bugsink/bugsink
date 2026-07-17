@@ -64,7 +64,7 @@ class CreateSetPasswordLinkCommandTestCase(TransactionTestCase):
 
 
 class PreferencesPasswordTestCase(TransactionTestCase):
-    def test_preferences_can_change_own_password(self):
+    def test_change_password_page_can_change_own_password(self):
         user = User.objects.create_user(
             username="preferences@example.com",
             email="preferences@example.com",
@@ -72,8 +72,10 @@ class PreferencesPasswordTestCase(TransactionTestCase):
         )
         self.client.force_login(user)
 
-        response = self.client.post(reverse("preferences"), {
-            "action": "set_password",
+        preferences_response = self.client.get(reverse("preferences"))
+        self.assertContains(preferences_response, reverse("change_password"))
+
+        response = self.client.post(reverse("change_password"), {
             "old_password": "OldSecurePassw0rd!",
             "new_password1": "NewSecurePassw0rd!",
             "new_password2": "NewSecurePassw0rd!",
