@@ -72,7 +72,9 @@ class SendRenderedEmailTestCase(SimpleTestCase):
 
     @override_settings(DEFAULT_FROM_EMAIL="Bugsink <alerts@bugsink.com>", ALLOWED_HOSTS=["tenant.bugsink.com"])
     @patch("phonehome.models.Installation.check_and_inc_email_quota", return_value=True)
-    def test_send_rendered_email_allows_bugsink_sender_domain_when_hosted_on_bugsink_domain(self, _quota_ok):
+    @patch("phonehome.models.Installation.record_email_attempt")
+    def test_send_rendered_email_allows_bugsink_sender_domain_when_hosted_on_bugsink_domain(
+            self, record_attempt, _quota_ok):
         send_rendered_email(
             "Subject",
             "mails/welcome_email",
@@ -81,6 +83,7 @@ class SendRenderedEmailTestCase(SimpleTestCase):
         )
 
         self.assertEqual(1, len(mail.outbox))
+        record_attempt.assert_called_once()
 
 
 class StreamsTestCase(RegularTestCase):

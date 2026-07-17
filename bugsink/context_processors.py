@@ -33,6 +33,49 @@ EMAIL_BACKEND_WARNING = mark_safe(
     dark:text-slate-100">set up email</a>.""")  # nosec
 
 
+def get_email_failure_warnings(installation, now):
+    diagnostics = json.loads(installation.email_sending_diagnostics)
+    cutoff = now - timedelta(minutes=5)
+    recent_attempts = []
+
+    for attempt in diagnostics.get("attempts", []):
+        attempted_at = datetime.fromisoformat(attempt["at"])
+        if attempted_at >= cutoff:
+            recent_attempts.append(attempt)
+
+    if len(recent_attempts) < 5:
+        return []
+
+    failures = len([attempt for attempt in recent_attempts if not attempt.get("ok")])
+    if failures * 2 <= len(recent_attempts):
+        return []
+
+    return [SystemWarning(
+        f"Email sending appears to be failing: {failures} of {len(recent_attempts)} recent email attempts failed.",
+        None)]
+
+
+def get_email_quota_warnings(installation, now):
+    warnings = []
+    email_quota_usage = json.loads(installation.email_quota_usage)
+
+    if get_settings().MAX_EMAILS_PER_HOUR is not None:
+        this_hour_usage = email_quota_usage.get("per_hour", {}).get(now.strftime("%Y-%m-%dT%H"), 0)
+        if this_hour_usage >= get_settings().MAX_EMAILS_PER_HOUR:
+            warnings.append(SystemWarning(
+                f"Bugsink has sent {this_hour_usage} emails this hour, which is the maximum. "
+                "No more emails will be sent until the next hour.", None))
+
+    if get_settings().MAX_EMAILS_PER_MONTH is not None:
+        this_month_usage = email_quota_usage.get("per_month", {}).get(now.strftime("%Y-%m"), 0)
+        if this_month_usage >= get_settings().MAX_EMAILS_PER_MONTH:
+            warnings.append(SystemWarning(
+                f"Bugsink has sent {this_month_usage} emails this month, which is the maximum. "
+                "No more emails will be sent until the 1st of next month.", None))
+
+    return warnings
+
+
 def get_snappea_warnings():
     # We warn in either of 2 cases, as documented per-case.
 
@@ -125,16 +168,11 @@ def useful_settings_processor(request):
 
             system_warnings.append(SystemWarning(EMAIL_BACKEND_WARNING, ignore_url))
 
-        if get_settings().MAX_EMAILS_PER_MONTH is not None:
-            email_quota_usage = json.loads(installation.email_quota_usage)
-            this_month_usage = email_quota_usage.get("per_month", {}).get(timezone.now().strftime("%Y-%m"), 0)
-            if this_month_usage >= get_settings().MAX_EMAILS_PER_MONTH:
-                system_warnings.append(SystemWarning(
-                    f"Bugsink has sent {this_month_usage} emails this month, which is the maximum. "
-                    "No more emails will be sent until the 1st of next month.", None))
-
         # copy pasted from project/models.py
         now = datetime.now(dt_timezone.utc)
+        system_warnings.extend(get_email_quota_warnings(installation, now))
+        system_warnings.extend(get_email_failure_warnings(installation, now))
+
         from ingest.views import BaseIngestAPIView
         if BaseIngestAPIView.is_quota_still_exceeded(installation, now):
             period_name, nr_of_periods, gte_threshold = json.loads(installation.quota_exceeded_reason)
