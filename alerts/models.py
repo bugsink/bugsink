@@ -4,6 +4,7 @@ from projects.models import Project
 from .service_backends.slack import SlackBackend
 from .service_backends.mattermost import MattermostBackend
 from .service_backends.discord import DiscordBackend
+from .service_backends.msteams import MsTeamsBackend
 
 
 def get_alert_service_kind_choices():
@@ -12,6 +13,7 @@ def get_alert_service_kind_choices():
     return [
         ("discord", "Discord"),
         ("mattermost", "Mattermost"),
+        ("msteams", "Microsoft Teams"),
         ("slack", "Slack"),
     ]
 
@@ -21,6 +23,8 @@ def get_alert_service_backend_class(kind):
         return DiscordBackend
     if kind == "mattermost":
         return MattermostBackend
+    if kind == "msteams":
+        return MsTeamsBackend
     if kind == "slack":
         return SlackBackend
     raise ValueError(f"Unknown backend kind: {kind}")

@@ -21,6 +21,8 @@ from .service_backends.slack import slack_backend_send_test_message, slack_backe
 from .service_backends.discord import discord_backend_send_test_message, discord_backend_send_alert
 from .service_backends.discord import DiscordConfigForm
 from .service_backends.mattermost import MattermostConfigForm
+from .service_backends.msteams import msteams_backend_send_test_message, msteams_backend_send_alert
+from .service_backends.msteams import MsTeamsConfigForm
 from .service_backends.slack import SlackConfigForm
 from .service_backends.webhook_security import validate_webhook_url
 from .tasks import send_new_issue_alert, send_regression_alert, send_unmute_alert, _get_users_for_email_alert
@@ -491,6 +493,92 @@ class TestDiscordBackendErrorHandling(DjangoTestCase):
         self.assertFalse(self.config.has_recent_failure())
 
 
+class TestMsTeamsBackend(DjangoTestCase):
+    def setUp(self):
+        self.project = Project.objects.create(name="Test project")
+        self.config = MessagingServiceConfig.objects.create(
+            project=self.project,
+            display_name="Test Teams",
+            kind="msteams",
+            config=json.dumps({"webhook_url": "https://example.logic.azure.com/workflows/test"}),
+        )
+
+    def _get_card(self, mock_post):
+        data = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertEqual(data["type"], "message")
+        attachment = data["attachments"][0]
+        self.assertEqual(attachment["contentType"], "application/vnd.microsoft.card.adaptive")
+        return attachment["content"]
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_msteams_test_message_sends_adaptive_card(self, mock_post):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        msteams_backend_send_test_message(
+            "https://example.logic.azure.com/workflows/test",
+            "Test project",
+            "Test Teams",
+            self.config.id,
+        )
+
+        card = self._get_card(mock_post)
+        self.assertEqual(card["type"], "AdaptiveCard")
+        self.assertEqual(card["body"][0]["text"], "TEST issue")
+
+        self.config.refresh_from_db()
+        self.assertIsNone(self.config.last_failure_timestamp)
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_msteams_alert_links_to_issue(self, mock_post):
+        issue, _ = get_or_create_issue(project=self.project)
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        msteams_backend_send_alert(
+            "https://example.logic.azure.com/workflows/test",
+            issue.id,
+            "New issue",
+            "a",
+            "NEW",
+            self.config.id,
+        )
+
+        card = self._get_card(mock_post)
+        self.assertEqual(card["actions"][0]["type"], "Action.OpenUrl")
+        self.assertTrue(card["actions"][0]["url"].endswith(issue.get_absolute_url()))
+        self.assertEqual(card["body"][-1]["facts"], [{"title": "project", "value": "Test project"}])
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_msteams_test_message_http_error_stores_failure(self, mock_post):
+        mock_response = Mock()
+        mock_response.status_code = 404
+        mock_response.text = 'Not Found'
+
+        http_error = requests.HTTPError()
+        http_error.response = mock_response
+        mock_response.raise_for_status.side_effect = http_error
+
+        mock_post.return_value = mock_response
+
+        msteams_backend_send_test_message(
+            "https://example.logic.azure.com/workflows/test",
+            "Test project",
+            "Test Teams",
+            self.config.id,
+        )
+
+        self.config.refresh_from_db()
+        self.assertIsNotNone(self.config.last_failure_timestamp)
+        self.assertEqual(self.config.last_failure_status_code, 404)
+        self.assertEqual(self.config.last_failure_error_type, "HTTPError")
+
+
 class TestWebhookSecurityValidation(DjangoTestCase):
     def test_safe_post_does_not_re_resolve_after_validation(self):
         original_getaddrinfo = socket.getaddrinfo
@@ -651,6 +739,21 @@ class TestWebhookConfigForms(DjangoTestCase):
     def test_discord_form_accepts_public_target(self, mock_resolve):
         mock_resolve.return_value = {"93.184.216.34"}
         form = DiscordConfigForm(data={"webhook_url": "https://discord.com/api/webhooks/test"})
+
+        self.assertTrue(form.is_valid())
+
+    def test_msteams_form_rejects_blocked_target(self):
+        form = MsTeamsConfigForm(data={"webhook_url": "http://10.0.0.42/workflows/test"})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("non-global IP address", form.errors["webhook_url"][0])
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_msteams_form_accepts_long_workflow_url(self, mock_resolve):
+        mock_resolve.return_value = {"93.184.216.34"}
+        form = MsTeamsConfigForm(data={
+            "webhook_url": "https://prod-1.westeurope.logic.azure.com:443/workflows/" + ("a" * 300),
+        })
 
         self.assertTrue(form.is_valid())
 
