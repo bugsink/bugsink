@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -88,7 +88,7 @@ class Command(BaseCommand):
                     print(f"  ingestion window: {ingestion_window:.1f}s, factor: {factor:.1f}")
 
     def snappea_stats(self, filter_task_name, window=None):
-        now_floor = datetime(*(datetime.now(timezone.utc).timetuple()[:5]), tzinfo=timezone.utc)
+        now_floor = datetime(*(datetime.now(dt_timezone.utc).timetuple()[:5]), tzinfo=dt_timezone.utc)
 
         print("""past n minutes  task                                              AVG                 SAT    MAX
                                                   done/s err/s   wall   wait  write   sat   wall   wait  write backlog""")  # noqa
