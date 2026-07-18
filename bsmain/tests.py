@@ -125,3 +125,24 @@ class AuthTokenDescriptionUpdateTestCase(TransactionTestCase):
         token_2.refresh_from_db()
         self.assertEqual("updated first", token_1.description)
         self.assertEqual("second", token_2.description)
+
+
+class AuthTokenListTestCase(TransactionTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(
+            User.objects.create_superuser(username="admin", password="admin", email="admin@example.org"))
+
+    def test_tokens_are_hidden_with_independent_reveal_buttons(self):
+        token_1 = AuthToken.objects.create()
+        token_2 = AuthToken.objects.create()
+
+        response = self.client.get(reverse("auth_token_list"))
+
+        self.assertContains(response, "•" * 40, count=2)
+        self.assertContains(response, f'id="token-hidden-{token_1.pk}"')
+        self.assertContains(response, f'id="token-revealed-{token_1.pk}" class="hidden font-mono"')
+        self.assertContains(response, f'id="token-toggle-{token_1.pk}"')
+        self.assertContains(response, f'id="token-hidden-{token_2.pk}"')
+        self.assertContains(response, f'id="token-revealed-{token_2.pk}" class="hidden font-mono"')
+        self.assertContains(response, f'id="token-toggle-{token_2.pk}"')
