@@ -44,8 +44,20 @@
                 {% for auth_token in auth_tokens %}
                 <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
                 <td class="w-full p-4">
-                    <div>
-                        {{ auth_token.token }}
+                    <div class="flex items-center gap-2">
+                        <span id="token-hidden-{{ auth_token.id }}" class="font-mono" aria-hidden="true">
+                            ••••••••••••••••••••••••••••••••••••••••
+                        </span>
+                        <span id="token-revealed-{{ auth_token.id }}" class="hidden font-mono">
+                            {{ auth_token.token }}
+                        </span>
+                        <button type="button" id="token-toggle-{{ auth_token.id }}"
+                                onclick="toggleAuthToken({{ auth_token.id }})" aria-expanded="false"
+                                aria-controls="token-revealed-{{ auth_token.id }}"
+                                class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 text-sm underline">
+                            <span id="token-reveal-label-{{ auth_token.id }}">{% translate "Reveal" %}</span>
+                            <span id="token-hide-label-{{ auth_token.id }}" class="hidden">{% translate "Hide" %}</span>
+                        </button>
                     </div>
                     <div class="mt-1" id="description-view-{{ auth_token.id }}">
                         {% if auth_token.description %}
@@ -92,6 +104,21 @@
 </div>
 
 <script>
+function toggleAuthToken(id) {
+    const hiddenToken = document.getElementById('token-hidden-' + id);
+    const revealedToken = document.getElementById('token-revealed-' + id);
+    const toggleButton = document.getElementById('token-toggle-' + id);
+    const revealLabel = document.getElementById('token-reveal-label-' + id);
+    const hideLabel = document.getElementById('token-hide-label-' + id);
+    const reveal = revealedToken.classList.contains('hidden');
+
+    hiddenToken.classList.toggle('hidden', reveal);
+    revealedToken.classList.toggle('hidden', !reveal);
+    revealLabel.classList.toggle('hidden', reveal);
+    hideLabel.classList.toggle('hidden', !reveal);
+    toggleButton.setAttribute('aria-expanded', reveal);
+}
+
 function showEditDescription(id) {
     document.getElementById('description-view-' + id).classList.add('hidden');
     document.getElementById('description-edit-' + id).classList.remove('hidden');
