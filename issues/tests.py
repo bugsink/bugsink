@@ -8,7 +8,7 @@ import gzip
 from io import BytesIO, StringIO
 from glob import glob
 from unittest import TestCase as RegularTestCase
-from unittest.mock import call, patch
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -39,7 +39,7 @@ from .models import (
     Issue, IssueStateManager, TurningPoint, TurningPointKind)
 from .regressions import is_regression, is_regression_2, issue_is_regression
 from .factories import denormalized_issue_fields
-from .tasks import delete_issue_deps, delete_issue_deps_sync, get_model_topography_with_issue_override
+from .tasks import get_model_topography_with_issue_override
 
 User = get_user_model()
 
@@ -1058,34 +1058,6 @@ _no source context available_
 
 ### django/core/management/__init__.py in `missing_everything` [in-app]
 _no source context available_''', md)
-
-
-class IssueDeletionTaskTestCase(RegularTestCase):
-
-    @patch("issues.tasks.delay_on_commit")
-    @patch("issues.tasks.delete_issue_deps_batch", return_value=True)
-    def test_async_deletion_schedules_another_batch(self, delete_issue_deps_batch, delay_on_commit):
-        delete_issue_deps("project", "issue")
-
-        delete_issue_deps_batch.assert_called_once_with("project", "issue")
-        delay_on_commit.assert_called_once_with(delete_issue_deps, "project", "issue")
-
-    @patch("issues.tasks.delay_on_commit")
-    @patch("issues.tasks.delete_issue_deps_batch", return_value=False)
-    def test_async_deletion_stops_after_last_batch(self, delete_issue_deps_batch, delay_on_commit):
-        delete_issue_deps("project", "issue")
-
-        delete_issue_deps_batch.assert_called_once_with("project", "issue")
-        delay_on_commit.assert_not_called()
-
-    @patch("issues.tasks.delete_issue_deps_batch", side_effect=[True, True, False])
-    def test_sync_deletion_runs_until_last_batch(self, delete_issue_deps_batch):
-        delete_issue_deps_sync("project", "issue")
-
-        self.assertEqual(
-            [call("project", "issue"), call("project", "issue"), call("project", "issue")],
-            delete_issue_deps_batch.call_args_list,
-        )
 
 
 class IssueDeletionTestCase(TransactionTestCase):

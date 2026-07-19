@@ -5,6 +5,67 @@ from bugsink.transaction import immediate_atomic, delay_on_commit
 
 
 DELETE_ISSUE_DEPS_BATCH_SIZE = 500
+MARK_ORPHANED_ISSUES_BATCH_SIZE = 250
+DELETE_MARKED_ISSUES_BATCH_SIZE = 250
+
+
+def get_orphaned_issues(cutoff=None):
+    from .models import Issue
+
+    queryset = Issue.objects.filter(is_deleted=False, stored_event_count=0)
+    if cutoff is not None:
+        queryset = queryset.filter(last_seen__lt=cutoff)
+    return queryset
+
+
+def mark_orphaned_issues_sync(cutoff=None):
+    min_issue_id = None
+    while True:
+        min_issue_id = mark_orphaned_issues_batch(cutoff, min_issue_id)
+        if min_issue_id is None:
+            return
+
+
+def mark_orphaned_issues_batch(cutoff=None, min_issue_id=None):
+    # Returns the last examined issue ID, or None when there are no candidates left.
+    from .models import mark_issues_for_deletion
+
+    with immediate_atomic():
+        queryset = get_orphaned_issues(cutoff)
+        if min_issue_id is not None:
+            queryset = queryset.filter(id__gt=min_issue_id)
+
+        issue_project_pairs = list(
+            queryset.order_by("id").values_list("id", "project_id")[:MARK_ORPHANED_ISSUES_BATCH_SIZE]
+        )
+        if not issue_project_pairs:
+            return None
+
+        mark_issues_for_deletion(issue_project_pairs)
+        return issue_project_pairs[-1][0]
+
+
+def delete_marked_issues_sync():
+    from .models import Issue
+
+    while True:
+        # This selection needs no write transaction: each dependency batch is atomic, and a root deleted after this read
+        # is harmless because dependency deletion is idempotent.
+        issue_project_pairs = list(
+            Issue.objects.filter(is_deleted=True)
+            .order_by("id")
+            .values_list("id", "project_id")[:DELETE_MARKED_ISSUES_BATCH_SIZE]
+        )
+        if not issue_project_pairs:
+            return
+
+        for issue_id, project_id in issue_project_pairs:
+            delete_issue_deps_sync(project_id, issue_id)
+
+
+def cleanup_orphaned_issues_sync(cutoff=None):
+    mark_orphaned_issues_sync(cutoff)
+    delete_marked_issues_sync()
 
 
 def get_model_topography_with_issue_override():

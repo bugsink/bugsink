@@ -1,9 +1,10 @@
 import json
 import uuid
+from collections import Counter
 from functools import partial
 
 from django.db import models, transaction
-from django.db.models import F, Q, Value
+from django.db.models import Case, F, Q, Value, When
 from django.db.models.functions import Concat
 from django.template.defaultfilters import date as default_date_filter
 from django.conf import settings
@@ -90,18 +91,7 @@ class Issue(models.Model):
             return  # quick check for performance; also: idempotency w.r.t. updates to counts.
 
         self.is_deleted = True
-        self.save(update_fields=["is_deleted"])
-        from projects.models import Project
-        Project.objects.filter(id=self.project_id).update(issue_count=F("issue_count") - 1)
-
-        # we set grouping_key_hash to None to ensure that event digests that happen simultaneously with the delayed
-        # cleanup will get their own fresh Grouping and hence Issue. This matches with the behavior that would happen
-        # if Issue deletion would have been instantaneous (i.e. it's the least surprising behavior).
-        #
-        # `issue=None` is explicitly _not_ part of this update, such that the actual deletion of the Groupings will be
-        # picked up as part of the delete_issue_deps task.
-        self.grouping_set.all().update(grouping_key_hash=None)
-
+        mark_issues_for_deletion([(self.id, self.project_id)])
         delay_on_commit(delete_issue_deps, str(self.project_id), str(self.id))
 
     def friendly_id(self):
@@ -270,6 +260,32 @@ class Grouping(models.Model):
             # looking up groupings has an appropriate index.
             ("project", "grouping_key_hash", "grouping_mechanism"),
         ]
+
+
+def mark_issues_for_deletion(issue_project_pairs):
+    from projects.models import Project
+
+    # The caller first reads issue and project IDs into a list. Reusing the list means all three bulk updates affect the
+    # same issues and lets us count deletions per project without another query. This costs three writes for the whole
+    # list, rather than three writes per issue.
+    issue_ids = [issue_id for issue_id, _project_id in issue_project_pairs]
+    deletions_per_project = Counter(project_id for _issue_id, project_id in issue_project_pairs)
+
+    Issue.objects.filter(id__in=issue_ids).update(is_deleted=True)
+    Project.objects.filter(id__in=deletions_per_project).update(
+        issue_count=Case(*[
+            When(id=project_id, then=F("issue_count") - count)
+            for project_id, count in deletions_per_project.items()
+        ])
+    )
+
+    # We set grouping_key_hash to None to ensure that event digests that happen simultaneously with the delayed cleanup
+    # will get their own fresh Grouping and hence Issue. This matches the behavior that would happen if Issue deletion
+    # were instantaneous (i.e. it's the least surprising behavior).
+    #
+    # `issue=None` is explicitly _not_ part of this update, such that the actual deletion of the Groupings will be
+    # picked up as part of dependency cleanup.
+    Grouping.objects.filter(issue_id__in=issue_ids).update(grouping_key_hash=None)
 
 
 def format_unmute_reason(unmute_metadata):

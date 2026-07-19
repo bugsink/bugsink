@@ -1,12 +1,13 @@
 from datetime import timedelta
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from bugsink.app_settings import get_settings
 from events.tasks import delete_events_older_than_sync
 from files.tasks import vacuum_files_sync
 from ingest.management.commands.vacuum_ingest_dir import vacuum_ingest_dir_sync
+from issues.tasks import delete_marked_issues_sync, mark_orphaned_issues_sync
 from tags.tasks import vacuum_eventless_issuetags_sync, vacuum_tags_sync
 
 
@@ -38,6 +39,16 @@ class Command(BaseCommand):
             '--ingest-dir',
             action='store_true',
             help="Clean up stale files from the ingest directory.",
+        )
+        parser.add_argument(
+            '--deleted-issues',
+            action='store_true',
+            help="Finish deleting issues already marked for deletion.",
+        )
+        parser.add_argument(
+            '--orphaned-issues',
+            action='store_true',
+            help="Delete issues without stored events. Not included by default.",
         )
         parser.add_argument(
             '--chunk-max-days',
@@ -72,6 +83,11 @@ class Command(BaseCommand):
             default=7,
             help="Delete ingest-dir files older than this many days (default: 7).",
         )
+        parser.add_argument(
+            '--orphaned-issue-max-days',
+            type=int,
+            help="Only delete orphaned issues last seen more than this many days ago.",
+        )
 
     def handle(self, *args, **options):
         run_files = options['files']
@@ -79,14 +95,30 @@ class Command(BaseCommand):
         run_eventless_issuetags = options['eventless_issuetags']
         run_old_events = options['old_events']
         run_ingest_dir = options['ingest_dir']
+        run_deleted_issues = options['deleted_issues']
+        run_orphaned_issues = options['orphaned_issues']
 
-        if not any([run_files, run_tags, run_eventless_issuetags, run_old_events, run_ingest_dir]):
-            # If no specific options were provided, run all vacuum tasks by default.
+        orphaned_issue_max_days = options["orphaned_issue_max_days"]
+        if orphaned_issue_max_days is not None and orphaned_issue_max_days < 0:
+            raise CommandError("--orphaned-issue-max-days must be 0 or greater.")
+
+        if not any([
+            run_files,
+            run_tags,
+            run_eventless_issuetags,
+            run_old_events,
+            run_ingest_dir,
+            run_deleted_issues,
+            run_orphaned_issues,
+        ]):
+            # If no specific options were provided, run all vacuum tasks by default, except orphaned issue cleanup,
+            # because deleting issues is destructive and must be explicitly requested.
             run_files = True
             run_tags = True
             run_eventless_issuetags = True
             run_old_events = True
             run_ingest_dir = True
+            run_deleted_issues = True
 
         if run_files:
             settings = get_settings()
@@ -103,14 +135,6 @@ class Command(BaseCommand):
                 log_progress=log_progress,
             )
 
-        if run_eventless_issuetags:
-            self.stdout.write("Vacuuming eventless issuetags...")
-            vacuum_eventless_issuetags_sync()
-
-        if run_tags:
-            self.stdout.write("Vacuuming tags...")
-            vacuum_tags_sync()
-
         if run_old_events:
             self.stdout.write("Vacuuming old events...")
             days = options["max_event_age_days"]
@@ -123,6 +147,26 @@ class Command(BaseCommand):
                 delete_events_older_than_sync(
                     cutoff=timezone.now() - timedelta(days=days),
                 )
+
+        if run_orphaned_issues:
+            cutoff = (
+                timezone.now() - timedelta(days=orphaned_issue_max_days)
+                if orphaned_issue_max_days is not None else None
+            )
+            self.stdout.write("Vacuuming orphaned issues...")
+            mark_orphaned_issues_sync(cutoff)
+
+        if run_orphaned_issues or run_deleted_issues:
+            self.stdout.write("Vacuuming deleted issues...")
+            delete_marked_issues_sync()
+
+        if run_eventless_issuetags:
+            self.stdout.write("Vacuuming eventless issuetags...")
+            vacuum_eventless_issuetags_sync()
+
+        if run_tags:
+            self.stdout.write("Vacuuming tags...")
+            vacuum_tags_sync()
 
         if run_ingest_dir:
             self.stdout.write("Checking for stale temporary ingest files...")
