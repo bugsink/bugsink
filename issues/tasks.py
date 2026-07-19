@@ -46,6 +46,17 @@ def get_model_topography_with_issue_override():
 
 @shared_task
 def delete_issue_deps(project_id, issue_id):
+    if delete_issue_deps_batch(project_id, issue_id):
+        delay_on_commit(delete_issue_deps, project_id, issue_id)
+
+
+def delete_issue_deps_sync(project_id, issue_id):
+    while delete_issue_deps_batch(project_id, issue_id):
+        pass
+
+
+def delete_issue_deps_batch(project_id, issue_id):
+    # Returns True when the deletion budget was exhausted and another batch is needed.
     from .models import Issue   # avoid circular import
     with immediate_atomic():
         # matches what we do in events/retention.py (and for which argumentation exists); in practive I have seen _much_
@@ -71,13 +82,13 @@ def delete_issue_deps(project_id, issue_id):
             num_deleted += this_num_deleted
 
             if num_deleted >= budget:
-                delay_on_commit(delete_issue_deps, project_id, issue_id)
-                return
+                break
 
         if budget - num_deleted <= 0:
             # no more budget for the self-delete.
-            delay_on_commit(delete_issue_deps, project_id, issue_id)
+            return True
 
         else:
             # final step: delete the issue itself
             Issue.objects.filter(pk=issue_id).delete()
+            return False
