@@ -4,6 +4,9 @@ from bugsink.utils import get_model_topography, delete_deps_with_budget
 from bugsink.transaction import immediate_atomic, delay_on_commit
 
 
+DELETE_ISSUE_DEPS_BATCH_SIZE = 500
+
+
 def get_model_topography_with_issue_override():
     """
     Returns the model topography with ordering adjusted to prefer deletions via .issue, when available.
@@ -63,7 +66,6 @@ def delete_issue_deps_batch(project_id, issue_id):
         # faster deletion times (in the order of .03s per task on my local laptop) when using a budget of 500, _but_
         # it's not a given those were for "expensive objects" (e.g. events); and I'd rather err on the side of caution
         # (worst case we have a bit of inefficiency; in any case this avoids hogging the global write lock / timeouts).
-        budget = 500
         num_deleted = 0
 
         dep_graph = get_model_topography_with_issue_override()
@@ -74,17 +76,17 @@ def delete_issue_deps_batch(project_id, issue_id):
                 model_for_recursion,
                 fk_name_for_recursion,
                 [issue_id],
-                budget - num_deleted,
+                DELETE_ISSUE_DEPS_BATCH_SIZE - num_deleted,
                 dep_graph,
                 is_for_project=False,
             )
 
             num_deleted += this_num_deleted
 
-            if num_deleted >= budget:
+            if num_deleted >= DELETE_ISSUE_DEPS_BATCH_SIZE:
                 break
 
-        if budget - num_deleted <= 0:
+        if DELETE_ISSUE_DEPS_BATCH_SIZE - num_deleted <= 0:
             # no more budget for the self-delete.
             return True
 
