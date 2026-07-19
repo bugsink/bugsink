@@ -279,6 +279,46 @@ class ProjectFormTestCase(TransactionTestCase):
         self.assertEqual(saved.slug, "original-slug")
         self.assertEqual(saved.name, "Renamed")
 
+    def test_same_project_name_is_allowed_in_another_team(self):
+        team_a = Team.objects.create(name="Team A")
+        team_b = Team.objects.create(name="Team B")
+        Project.objects.create(name="Backend", team=team_a)
+
+        form = ProjectForm(
+            data={
+                "team": team_b.id,
+                "name": "Backend",
+                "visibility": ProjectVisibility.JOINABLE,
+                "retention_max_event_count": 10000,
+                "grouping_mechanism": BUGSINK_GROUPING_V2,
+            },
+            team_qs=Team.objects.all(),
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        saved = form.save()
+        self.assertEqual("backend-0", saved.slug)  # slug stays globally unique; it identifies the project in the API
+
+    def test_duplicate_project_name_in_same_team_is_reported_on_the_name_field(self):
+        # On the name field specifically: our templates render per-field errors only, so a non-field error would be
+        # invisible and the form would appear to do nothing.
+        team = Team.objects.create(name="Team A")
+        Project.objects.create(name="Backend", team=team)
+
+        form = ProjectForm(
+            data={
+                "team": team.id,
+                "name": "Backend",
+                "visibility": ProjectVisibility.JOINABLE,
+                "retention_max_event_count": 10000,
+                "grouping_mechanism": BUGSINK_GROUPING_V2,
+            },
+            team_qs=Team.objects.all(),
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(["name"], list(form.errors))
+
     def test_changing_grouping_mechanism_starts_transition_window(self):
         project = Project.objects.create(
             name="Original Name",

@@ -164,6 +164,24 @@ class ProjectForm(forms.ModelForm):
 
         # "alert_on_new_issue", "alert_on_regression", "alert_on_unmute" later
 
+    def clean(self):
+        cleaned_data = super().clean()
+
+        # Checked here rather than left to validate_unique(), for 2 reasons: Django reports unique_together violations
+        # as non-field errors, which our templates don't render, and it skips the check entirely when editing, because
+        # the team field is not part of the form then.
+        name = cleaned_data.get("name")
+        team = cleaned_data.get("team") if "team" in self.fields else self.instance.team
+
+        if name and team:
+            others = Project.objects.filter(team=team, name=name)
+            if self.instance.pk:
+                others = others.exclude(pk=self.instance.pk)
+            if others.exists():
+                self.add_error("name", _("A project with this name already exists in this team."))
+
+        return cleaned_data
+
     def clean_retention_max_event_count(self):
         retention_max_event_count = self.cleaned_data['retention_max_event_count']
 
