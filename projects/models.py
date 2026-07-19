@@ -216,8 +216,6 @@ class Project(models.Model):
             models.Index(fields=["name"]),
         ]
         constraints = [
-            # Team-less projects (SET_NULL when a team is deleted from the admin) are not covered: NULLs compare as
-            # distinct, and a condition to exclude them is not an option, since MariaDB silently drops those.
             models.UniqueConstraint(fields=["team", "name"], name="unique_project_name_per_team"),
         ]
 

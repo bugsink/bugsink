@@ -167,9 +167,8 @@ class ProjectForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
 
-        # Checked here rather than left to validate_unique(), for 2 reasons: Django reports unique_together violations
-        # as non-field errors, which our templates don't render, and it skips the check entirely when editing, because
-        # the team field is not part of the form then.
+        # Surface the team/name constraint on the name field. The templates don't render non-field errors, and the
+        # team field is excluded when editing, so ModelForm doesn't validate the constraint then.
         name = cleaned_data.get("name")
         team = cleaned_data.get("team") if "team" in self.fields else self.instance.team
 
