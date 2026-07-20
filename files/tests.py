@@ -749,7 +749,8 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
         assert "debugId=" in injected_js, injected_js[-500:]
 
         sourcemap = json.loads(map_path.read_text(encoding="utf-8"))
-        assert ("debugId" in sourcemap) or ("debug_id" in sourcemap), sourcemap.keys()
+        debug_id = sourcemap.get("debugId") or sourcemap.get("debug_id")
+        assert debug_id is not None, sourcemap.keys()
 
         # sentry-cli sourcemaps upload
         self._run([
@@ -770,9 +771,8 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
         self.assertTrue(File.objects.filter(filename="captureException.js.map").exists())
         self.assertTrue(File.objects.filter(filename__endswith=".zip").exists())
 
-        # > When using sentry-cli or [..] Debug IDs are deterministically generated based on the source file contents.
         self.assertEqual(
-            UUID('9b40e0f3-8084-5931-94d4-8d941780a177'),
+            UUID(debug_id),
             FileMetadata.objects.get(file__filename="captureException.js.map").debug_id)
         self.assertEqual(self.project, FileMetadata.objects.get(file__filename="captureException.js.map").project)
 
