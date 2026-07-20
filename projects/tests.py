@@ -60,7 +60,7 @@ class ProjectInviteLinkTestCase(TransactionTestCase):
             "No invitation was sent because email is not set up. "
             "Hand out the following link to new-project-member@example.com yourself:",
         )
-        self.assertContains(response, "Project Members")
+        self.assertContains(response, f"Members · {self.project.name}")
         self.assertContains(response, reverse("project_members_accept_new_user", kwargs={
             "project_pk": self.project.pk,
             "token": verification.token,

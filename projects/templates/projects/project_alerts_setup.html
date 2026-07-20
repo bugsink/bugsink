@@ -2,7 +2,7 @@
 {% load static %}
 {% load i18n %}
 
-{% block title %}{% translate "Alerts" %} · {{ project.name }}  · {{ site_title }}{% endblock %}
+{% block title %}{% translate "Alerts" %} · {{ project.name }} · {{ site_title }}{% endblock %}
 
 {% block content %}
 
@@ -22,7 +22,7 @@
         {% endif %}
 
         <div class="flex">
-            <h1 class="text-4xl mt-4 font-bold">{{ project.name }} · {% translate "Alerts" %}</h1>
+            <h1 class="text-4xl mt-4 font-bold">{% translate "Alerts" %} · {{ project.name }}</h1>
 
             <div class="ml-auto mt-6">
                 <a class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md" href="{% url "project_messaging_service_add" project_pk=project.pk %}">{% translate "Add" %}</a>

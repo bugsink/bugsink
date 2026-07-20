@@ -3,7 +3,7 @@
 {% load tailwind_forms %}
 {% load i18n %}
 
-{% block title %}{% translate "Edit" %} {{ project.name }} · {{ site_title }}{% endblock %}
+{% block title %}{% translate "Settings" %} · {{ project.name }} · {{ site_title }}{% endblock %}
 
 {% block content %}
 
@@ -35,7 +35,7 @@
         {% csrf_token %}
 
         <div>
-            <h1 class="text-4xl my-4 font-bold">{% blocktranslate with project_name=project.name %}Settings ({{ project_name }}){% endblocktranslate %}</h1>
+            <h1 class="text-4xl my-4 font-bold">{% translate "Settings" %} · {{ project.name }}</h1>
         </div>
 
         <div class="mt-4 mb-4">

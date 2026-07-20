@@ -37,7 +37,7 @@
 {% endif %}
 
 <div class="m-4">
-<h1 class="text-4xl mt-4 font-bold">{% if project %}{{ project.name }} - {% endif %}{% translate "Issues" %}</h1>
+<h1 class="text-4xl mt-4 font-bold">{% translate "Issues" %}{% if project %} · {{ project.name }}{% endif %}</h1>
 
 
 {% if unapplied_issue_ids %}

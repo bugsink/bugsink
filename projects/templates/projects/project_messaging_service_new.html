@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% load static %}
 {% load tailwind_forms %}
+{% load i18n %}
 
-{% block title %}Messaging Service · {{ project.name }}  · {{ site_title }}{% endblock %}
+{% block title %}{% translate "Messaging Service" %} · {{ project.name }} · {{ site_title }}{% endblock %}
 
 {% block content %}
 
@@ -22,7 +23,7 @@
         {% endif %}
 
         <div>
-            <h1 class="text-4xl my-4 font-bold">Messaging Service | {{ project.name }}</h1>
+            <h1 class="text-4xl my-4 font-bold">{% translate "Messaging Service" %} · {{ project.name }}</h1>
         </div>
 
         {% for field in form %}
