@@ -515,6 +515,32 @@ class ViewTests(TransactionTestCase):
         other_issue.refresh_from_db()
         self.assertFalse(other_issue.is_resolved)
 
+    def test_global_issue_list_deletes_issues_from_multiple_projects(self):
+        self.project.issue_count = 1
+        self.project.stored_event_count = 1
+        self.project.save(update_fields=["issue_count", "stored_event_count"])
+        self.issue.stored_event_count = 1
+        self.issue.save(update_fields=["stored_event_count"])
+
+        other_project = Project.objects.create(name="other", issue_count=1)
+        ProjectMembership.objects.create(project=other_project, user=self.user, accepted=True)
+        other_issue, _ = get_or_create_issue(other_project)
+
+        response = self.client.post(
+            "/issues/",
+            {
+                "issue_ids[]": [str(self.issue.id), str(other_issue.id)],
+                "action": "delete",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Issue.objects.filter(id__in=[self.issue.id, other_issue.id]).exists())
+        self.project.refresh_from_db()
+        other_project.refresh_from_db()
+        self.assertEqual(0, self.project.issue_count)
+        self.assertEqual(0, other_project.issue_count)
+
     def test_issue_stacktrace(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/")
         self.assertContains(response, self.issue.title())

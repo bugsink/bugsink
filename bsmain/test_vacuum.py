@@ -4,15 +4,18 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.utils import timezone
 
 from bugsink.app_settings import override_settings as bugsink_override_settings
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
+from bugsink.transaction import immediate_atomic
 from events.factories import create_event
 from events.models import Event
 from files.tasks import vacuum_files_batch
 from files.models import Chunk, File, FileMetadata
 from issues.factories import get_or_create_issue
+from issues.models import Grouping, Issue, mark_issues_for_deletion
 from projects.models import Project
 from tags.models import IssueTag, TagKey, TagValue, store_tags
 
@@ -34,6 +37,10 @@ class VacuumCommandTestCase(TransactionTestCase):
         event = create_event(project, issue=issue)
         store_tags(event, issue, {"stale": "value"})
         event.delete_deferred()
+        orphan, _ = get_or_create_issue(
+            project,
+            {"exception": {"values": [{"type": "NotDeletedByDefault"}]}},
+        )
 
         call_command("vacuum", stdout=io.StringIO())
 
@@ -41,6 +48,88 @@ class VacuumCommandTestCase(TransactionTestCase):
         self.assertFalse(IssueTag.objects.exists())
         self.assertFalse(TagValue.objects.exists())
         self.assertFalse(TagKey.objects.exists())
+        self.assertTrue(Issue.objects.filter(id=orphan.id).exists())
+
+    def test_vacuum_deletes_marked_issues_before_tags(self):
+        project = Project.objects.create(
+            name="Marked issue",
+            issue_count=1,
+            stored_event_count=1,
+        )
+        issue, _ = get_or_create_issue(project)
+        issue.stored_event_count = 1
+        issue.save(update_fields=["stored_event_count"])
+        event = create_event(project, issue=issue)
+        store_tags(event, issue, {"cleanup-order": "test"})
+
+        with immediate_atomic():
+            mark_issues_for_deletion([(issue.id, project.id)])
+
+        call_command("vacuum", stdout=io.StringIO())
+
+        self.assertFalse(Issue.objects.exists())
+        self.assertFalse(Event.objects.exists())
+        self.assertFalse(IssueTag.objects.exists())
+        self.assertFalse(TagValue.objects.exists())
+        self.assertFalse(TagKey.objects.exists())
+
+    def test_vacuum_orphaned_issues_runs_to_completion(self):
+        project = Project.objects.create(name="Orphans", issue_count=2)
+        old_orphan, _ = get_or_create_issue(
+            project,
+            {"exception": {"values": [{"type": "OldOrphan"}]}},
+        )
+        recent_orphan, _ = get_or_create_issue(
+            project,
+            {"exception": {"values": [{"type": "RecentOrphan"}]}},
+        )
+        now = timezone.now()
+        Issue.objects.filter(id=old_orphan.id).update(last_seen=now - timedelta(days=20))
+        Issue.objects.filter(id=recent_orphan.id).update(last_seen=now - timedelta(days=5))
+        old_grouping_id = old_orphan.grouping_set.get().id
+        stdout = io.StringIO()
+
+        with patch("bsmain.management.commands.vacuum.timezone.now", return_value=now):
+            call_command(
+                "vacuum",
+                "--orphaned-issues",
+                "--orphaned-issue-max-days",
+                "10",
+                stdout=stdout,
+            )
+
+        self.assertFalse(Issue.objects.filter(id=old_orphan.id).exists())
+        self.assertTrue(Issue.objects.filter(id=recent_orphan.id).exists())
+        self.assertFalse(Grouping.objects.filter(id=old_grouping_id).exists())
+        self.assertIn("Vacuuming orphaned issues", stdout.getvalue())
+        self.assertIn("Vacuum complete", stdout.getvalue())
+
+    def test_vacuum_orphaned_issues_rejects_negative_days(self):
+        with self.assertRaisesMessage(CommandError, "--orphaned-issue-max-days must be 0 or greater."):
+            call_command("vacuum", "--orphaned-issues", "--orphaned-issue-max-days", "-1")
+
+    def test_vacuum_deletes_old_events_before_finding_orphaned_issues(self):
+        project = Project.objects.create(
+            name="Old event",
+            issue_count=1,
+            stored_event_count=1,
+        )
+        issue, _ = get_or_create_issue(project)
+        issue.stored_event_count = 1
+        issue.save(update_fields=["stored_event_count"])
+        create_event(project, issue=issue)
+
+        call_command(
+            "vacuum",
+            "--old-events",
+            "--orphaned-issues",
+            "--max-event-age-days",
+            "0",
+            stdout=io.StringIO(),
+        )
+
+        self.assertFalse(Issue.objects.exists())
+        self.assertFalse(Event.objects.exists())
 
     @patch("files.tasks.VACUUM_FILES_BATCH_SIZE", 2)
     def test_vacuum_files_runs_inline_to_completion(self):
