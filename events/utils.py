@@ -14,7 +14,7 @@ from files.models import get_file_metadata_for_debug_ids
 from files.tasks import record_file_accesses
 
 
-# Dijkstra, Sourcemaps and Python lists start at 0, but editors and our UI show lines starting at 1.
+# Dijkstra, sourcemaps and Python lists start at 0, but sentry-event frames, editors and our UI (lines/cols) start at 1.
 FROM_DISPLAY = -1
 TO_DISPLAY = 1
 
@@ -154,9 +154,12 @@ def apply_sourcemaps(event_data, project):
     for exception in get_values(event_data.get("exception", {})):
         for frame in exception.get("stacktrace", {}).get("frames", []):
             if frame.get("filename") in sourcemap_for_filename:
+                if not frame.get("lineno"):
+                    continue
+
                 sm = sourcemap_for_filename[frame["filename"]]
                 generated_line = frame["lineno"] + FROM_DISPLAY
-                generated_column = frame["colno"]
+                generated_column = (frame.get("colno") or 1) + FROM_DISPLAY
                 try:
                     mapping = sm.lookup_left(generated_line, generated_column)
                 except (IndexError, KeyError):
@@ -175,9 +178,9 @@ def apply_sourcemaps(event_data, project):
                     frame["context_line"] = lines[mapping.original_line]
                     frame["post_context"] = lines[mapping.original_line + 1:mapping.original_line + 5]
                     frame["lineno"] = mapping.original_line + TO_DISPLAY
+                    frame["colno"] = mapping.original_column + TO_DISPLAY
                     frame['filename'] = mapping.source
                     frame['function'] = mapping.name
-                    # frame["colno"] = mapping.original_column + TO_DISPLAY  not actually used
 
             elif frame.get("filename") in debug_id_for_filename:
                 # The event_data reports that a debug_id is available for this filename, but we don't have it; this
