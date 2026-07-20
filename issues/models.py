@@ -545,8 +545,13 @@ class IssueQuerysetStateManager(object):
 
     @staticmethod
     def delete(issue_qs):
-        for issue in issue_qs:
-            issue.delete_deferred()
+        issue_project_pairs = list(issue_qs.values_list("id", "project_id"))
+        if not issue_project_pairs:
+            return
+
+        mark_issues_for_deletion(issue_project_pairs)
+        for issue_id, project_id in issue_project_pairs:
+            delay_on_commit(delete_issue_deps, str(project_id), str(issue_id))
 
 
 def is_valid_issue_action(action, issue):
