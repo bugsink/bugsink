@@ -60,6 +60,25 @@ class ProjectApiTests(TransactionTestCase):
         self.assertEqual(body["visibility"], "team_members")
         self.assertIn("dsn", body)  # read-only; present on detail
 
+    def test_create_scopes_name_uniqueness_to_team(self):
+        Project.objects.create(team=self.team, name="Backend")
+
+        r = self.client.post(
+            reverse("api:project-list"),
+            {"team": str(self.team.id), "name": "Backend"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("non_field_errors", r.json())
+
+        other_team = Team.objects.create(name="Operations")
+        r = self.client.post(
+            reverse("api:project-list"),
+            {"team": str(other_team.id), "name": "Backend"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 201)
+
     def test_malformed_id_is_404(self):
         r = self.client.get(reverse("api:project-detail", args=["not-an-int"]))
         self.assertEqual(r.status_code, 404)
@@ -85,6 +104,18 @@ class ProjectApiTests(TransactionTestCase):
         body = r.json()
         self.assertEqual(body["name"], "New")
         self.assertFalse(body["alert_on_unmute"])
+
+    def test_patch_rejects_duplicate_name_in_team(self):
+        Project.objects.create(team=self.team, name="Backend")
+        project = Project.objects.create(team=self.team, name="Frontend")
+
+        r = self.client.patch(
+            reverse("api:project-detail", args=[project.id]),
+            {"name": "Backend"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("non_field_errors", r.json())
 
     def test_delete_not_allowed(self):
         p = Project.objects.create(team=self.team, name="Temp")

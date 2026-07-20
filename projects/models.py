@@ -81,7 +81,7 @@ class Project(models.Model):
 
     team = models.ForeignKey("teams.Team", blank=False, null=True, on_delete=models.SET_NULL)
 
-    name = models.CharField(pgettext_lazy("Project", "Name"), max_length=255, blank=False, null=False, unique=True)
+    name = models.CharField(pgettext_lazy("Project", "Name"), max_length=255, blank=False, null=False)
     slug = models.SlugField(max_length=50, blank=False, null=False, unique=True)
     is_deleted = models.BooleanField(default=False)
 
@@ -214,6 +214,9 @@ class Project(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["name"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=["team", "name"], name="unique_project_name_per_team"),
         ]
 
 
