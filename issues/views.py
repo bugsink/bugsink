@@ -205,8 +205,8 @@ def _filter_issue_list_by_state(issue_list, state_filter):
     d_state_filter = {
         "open": lambda qs: qs.filter(is_resolved=False, is_muted=False),
         "unresolved": lambda qs: qs.filter(is_resolved=False),
-        "resolved": lambda qs: qs.filter(is_resolved=True),
-        "muted": lambda qs: qs.filter(is_muted=True),
+        "resolved": lambda qs: qs.filter(is_resolved=True, is_muted=False),
+        "muted": lambda qs: qs.filter(is_resolved=False, is_muted=True),
         "all": lambda qs: qs,
     }
 
