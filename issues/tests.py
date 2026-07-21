@@ -442,6 +442,26 @@ class ViewTests(TransactionTestCase):
         response = self.client.get(f"/issues/{self.project.id}/")
         self.assertContains(response, self.issue.title())
 
+    def test_issue_list_sorting(self):
+        other_issue, _ = get_or_create_issue(
+            self.project, create_event_data(exception_type="FrequentError"))
+        now = datetime.now(timezone.utc)
+        Issue.objects.filter(id=self.issue.id).update(last_seen=now, digested_event_count=1)
+        Issue.objects.filter(id=other_issue.id).update(
+            last_seen=now - timedelta(days=1), digested_event_count=10)
+
+        response = self.client.get(f"/issues/{self.project.id}/", {"sort": "events"})
+        self.assertEqual([other_issue.id, self.issue.id], [issue.id for issue in response.context["page_obj"]])
+        self.assertContains(response, '<option value="events" selected>')
+        self.assertContains(response, f'href="/issues/{self.project.id}/muted/?sort=events"')
+
+        response = self.client.get(f"/issues/{self.project.id}/", {"sort": "last_seen"})
+        self.assertEqual([self.issue.id, other_issue.id], [issue.id for issue in response.context["page_obj"]])
+
+        response = self.client.get(f"/issues/{self.project.id}/", {"sort": "invalid"})
+        self.assertEqual("last_seen", response.context["sort"])
+        self.assertEqual([self.issue.id, other_issue.id], [issue.id for issue in response.context["page_obj"]])
+
     def test_pending_project_membership_cannot_view_issue_list(self):
         pending_user = User.objects.create_user(username='pending', password='test')
         ProjectMembership.objects.create(project=self.project, user=pending_user, accepted=False)
@@ -489,6 +509,19 @@ class ViewTests(TransactionTestCase):
         self.assertContains(response, "AccessibleError")
         self.assertContains(response, self.issue.friendly_id())
         self.assertNotContains(response, "InaccessibleError")
+
+    def test_global_issue_list_sorts_by_event_count_across_projects(self):
+        other_project = Project.objects.create(name="other")
+        ProjectMembership.objects.create(project=other_project, user=self.user, accepted=True)
+        other_issue, _ = get_or_create_issue(other_project)
+        self.issue.digested_event_count = 1
+        self.issue.save(update_fields=["digested_event_count"])
+        other_issue.digested_event_count = 10
+        other_issue.save(update_fields=["digested_event_count"])
+
+        response = self.client.get("/issues/", {"sort": "events"})
+
+        self.assertEqual([other_issue.id, self.issue.id], [issue.id for issue in response.context["page_obj"]])
 
     def test_global_issue_list_ignores_pending_project_memberships(self):
         pending_project = Project.objects.create(name="pending")

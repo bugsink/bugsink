@@ -55,6 +55,25 @@ class IssueApiTests(TransactionTestCase):
         self.assertEqual(ids[0], str(self.issue1.id))
         self.assertEqual(ids[1], str(self.issue0.id))
 
+    def test_list_by_digested_event_count(self):
+        Issue.objects.filter(id=self.issue0.id).update(digested_event_count=10)
+        Issue.objects.filter(id=self.issue1.id).update(digested_event_count=1)
+        params = {"project": str(self.project.id), "sort": "digested_event_count"}
+
+        response = self.client.get(reverse("api:issue-list"), params)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [str(self.issue1.id), str(self.issue0.id)],
+            [row["id"] for row in response.json()["results"]],
+        )
+
+        response = self.client.get(reverse("api:issue-list"), params | {"order": "desc"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [str(self.issue0.id), str(self.issue1.id)],
+            [row["id"] for row in response.json()["results"]],
+        )
+
     def test_list_rejects_bad_order(self):
         response = self.client.get(reverse("api:issue-list"), {"project": str(self.project.id), "order": "sideways"})
         self.assertEqual(response.status_code, 400)
@@ -101,7 +120,10 @@ class IssueApiTests(TransactionTestCase):
             {"project": str(self.project.id), "sort": "nope"},
         )
         self.assertEqual(r.status_code, 400)
-        self.assertEqual(r.json(), {"sort": ["Must be 'digest_order' or 'last_seen'."]})
+        self.assertEqual(
+            r.json(),
+            {"sort": ["Must be 'digest_order', 'last_seen', or 'digested_event_count'."]},
+        )
 
     def test_resolve(self):
         response = self.client.post(reverse("api:issue-resolve", args=[self.issue0.id]))
@@ -325,6 +347,7 @@ class IssueApiTests(TransactionTestCase):
 
 class IssuePaginationTests(TransactionTestCase):
     last_seen_deltas = [3, 1, 4, 0, 2]
+    event_counts = [4, 2, 5, 1, 3]
 
     def setUp(self):
         self.client = APIClient()
@@ -345,7 +368,8 @@ class IssuePaginationTests(TransactionTestCase):
             iss = get_or_create_issue(project=proj, event_data=data)[0]
             iss.digest_order = i + 1
             iss.last_seen = base + timezone.timedelta(minutes=delta)
-            iss.save(update_fields=["digest_order", "last_seen"])
+            iss.digested_event_count = self.event_counts[i]
+            iss.save(update_fields=["digest_order", "last_seen", "digested_event_count"])
             issues.append(iss)
         return proj, issues
 
@@ -357,6 +381,9 @@ class IssuePaginationTests(TransactionTestCase):
 
     def _idx_by_digest(self, issues, n):
         return issues[n - 1].id  # digest_order = n
+
+    def _idx_by_event_count(self, issues, count):
+        return issues[self.event_counts.index(count)].id
 
     def test_digest_order_asc(self):
         proj, issues = self._make_issues()
@@ -403,3 +430,39 @@ class IssuePaginationTests(TransactionTestCase):
         r2 = self.client.get(r1.json()["next"])
         self.assertEqual(
             self._ids(r2), [str(self._idx_by_last_seen(issues, 2)), str(self._idx_by_last_seen(issues, 1))])
+
+    def test_digested_event_count_asc(self):
+        proj, issues = self._make_issues()
+        r1 = self.client.get(
+            reverse("api:issue-list"),
+            {"project": str(proj.id), "sort": "digested_event_count", "order": "asc"},
+        )
+
+        self.assertEqual(
+            self._ids(r1),
+            [str(self._idx_by_event_count(issues, 1)), str(self._idx_by_event_count(issues, 2))],
+        )
+
+        r2 = self.client.get(r1.json()["next"])
+        self.assertEqual(
+            self._ids(r2),
+            [str(self._idx_by_event_count(issues, 3)), str(self._idx_by_event_count(issues, 4))],
+        )
+
+    def test_digested_event_count_desc(self):
+        proj, issues = self._make_issues()
+        r1 = self.client.get(
+            reverse("api:issue-list"),
+            {"project": str(proj.id), "sort": "digested_event_count", "order": "desc"},
+        )
+
+        self.assertEqual(
+            self._ids(r1),
+            [str(self._idx_by_event_count(issues, 5)), str(self._idx_by_event_count(issues, 4))],
+        )
+
+        r2 = self.client.get(r1.json()["next"])
+        self.assertEqual(
+            self._ids(r2),
+            [str(self._idx_by_event_count(issues, 3)), str(self._idx_by_event_count(issues, 2))],
+        )

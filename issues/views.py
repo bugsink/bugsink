@@ -58,6 +58,11 @@ GLOBAL_MUTE_OPTIONS = [
     MuteOption("until", "hour", 24, 100),
 ]
 
+ISSUE_LIST_SORTS = {
+    "last_seen": ("-last_seen",),
+    "events": ("-digested_event_count", "-last_seen"),
+}
+
 
 class EagerPaginator(Paginator):
     # Eager meaning non-lazy; this is a paginator that doesn't postpone the query (implicit in object_list) until the
@@ -200,19 +205,25 @@ def _filter_issue_list_by_state(issue_list, state_filter):
     d_state_filter = {
         "open": lambda qs: qs.filter(is_resolved=False, is_muted=False),
         "unresolved": lambda qs: qs.filter(is_resolved=False),
-        "resolved": lambda qs: qs.filter(is_resolved=True),
-        "muted": lambda qs: qs.filter(is_muted=True),
+        "resolved": lambda qs: qs.filter(is_resolved=True, is_muted=False),
+        "muted": lambda qs: qs.filter(is_resolved=False, is_muted=True),
         "all": lambda qs: qs,
     }
 
     return d_state_filter[state_filter](issue_list)
 
 
+def _get_issue_list_sort(request):
+    sort = request.GET.get("sort", "last_seen")
+    return sort if sort in ISSUE_LIST_SORTS else "last_seen"
+
+
 def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
+    sort = _get_issue_list_sort(request)
     issue_list = _filter_issue_list_by_state(
         Issue.objects.filter(project=project, is_deleted=False),
         state_filter,
-    ).order_by("-last_seen")
+    ).order_by(*ISSUE_LIST_SORTS[sort])
 
     if request.GET.get("q"):
         issue_list = search_issues(project, issue_list, request.GET["q"])
@@ -244,15 +255,17 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
         "disable_mute_buttons": state_filter in ("resolved", "muted"),
         "disable_unmute_buttons": state_filter in ("resolved", "open"),
         "q": request.GET.get("q", ""),
+        "sort": sort,
         "page_obj": page_obj,
     })
 
 
 def _global_issue_list_pt_2(request, accessible_project_ids, state_filter, unapplied_issue_ids):
+    sort = _get_issue_list_sort(request)
     issue_list = _filter_issue_list_by_state(
         Issue.objects.filter(project_id__in=accessible_project_ids, is_deleted=False),
         state_filter,
-    ).select_related("project").order_by("-last_seen")
+    ).select_related("project").order_by(*ISSUE_LIST_SORTS[sort])
 
     paginator = UncountablePaginator(issue_list, 250)
     page_number = request.GET.get("page")
@@ -277,6 +290,7 @@ def _global_issue_list_pt_2(request, accessible_project_ids, state_filter, unapp
         "disable_mute_buttons": state_filter in ("resolved", "muted"),
         "disable_unmute_buttons": state_filter in ("resolved", "open"),
         "q": "",
+        "sort": sort,
         "page_obj": page_obj,
     })
 

@@ -46,36 +46,40 @@
 </div>
 {% endif %}
 
-<div class="flex bg-slate-50 dark:bg-slate-800 border-b-2 mt-4 items-end">
+<div class="flex flex-wrap bg-slate-50 dark:bg-slate-800 border-b-2 mt-4 items-end">
     <div class="flex">
     {% if is_global_issue_list %}
-    <a href="{% url "global_issue_list_open" %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "open" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">{% translate "Open" %}</div></a>
-    <a href="{% url "global_issue_list_unresolved" %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "unresolved" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">{% translate "Unresolved" %}</div></a>
-    <a href="{% url "global_issue_list_muted" %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "muted" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "Muted" %}</div></a>
-    <a href="{% url "global_issue_list_resolved" %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "resolved" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "Resolved" %}</div></a>
-    <a href="{% url "global_issue_list_all" %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "all" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "All" %}</div></a>
+    <a href="{% url "global_issue_list_open" %}{% querystring sort=sort page=None %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "open" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">{% translate "Open" %}</div></a>
+    <a href="{% url "global_issue_list_unresolved" %}{% querystring sort=sort page=None %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "unresolved" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">{% translate "Unresolved" %}</div></a>
+    <a href="{% url "global_issue_list_muted" %}{% querystring sort=sort page=None %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "muted" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "Muted" %}</div></a>
+    <a href="{% url "global_issue_list_resolved" %}{% querystring sort=sort page=None %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "resolved" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "Resolved" %}</div></a>
+    <a href="{% url "global_issue_list_all" %}{% querystring sort=sort page=None %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "all" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "All" %}</div></a>
     {% else %}
-    <a href="{% url "issue_list_open" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "open" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">{% translate "Open" %}</div></a>
-    <a href="{% url "issue_list_unresolved" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "unresolved" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">{% translate "Unresolved" %}</div></a>
-    <a href="{% url "issue_list_muted" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "muted" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "Muted" %}</div></a>
-    <a href="{% url "issue_list_resolved" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "resolved" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "Resolved" %}</div></a>
-    <a href="{% url "issue_list_all" project_pk=project.id %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "all" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "All" %}</div></a>
+    <a href="{% url "issue_list_open" project_pk=project.id %}{% querystring sort=sort page=None %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "open" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">{% translate "Open" %}</div></a>
+    <a href="{% url "issue_list_unresolved" project_pk=project.id %}{% querystring sort=sort page=None %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "unresolved" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">{% translate "Unresolved" %}</div></a>
+    <a href="{% url "issue_list_muted" project_pk=project.id %}{% querystring sort=sort page=None %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "muted" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "Muted" %}</div></a>
+    <a href="{% url "issue_list_resolved" project_pk=project.id %}{% querystring sort=sort page=None %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "resolved" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "Resolved" %}</div></a>
+    <a href="{% url "issue_list_all" project_pk=project.id %}{% querystring sort=sort page=None %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "all" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "All" %}</div></a>
     {% endif %}
     </div>
-    {% if is_global_issue_list %}
-    <!-- Global tag search is intentionally hidden for now. Project-level tag search was tuned around project-scoped tag-value lookups; do not port it to cross-project search without a fresh performance pass. -->
-    {% else %}
     <div class="ml-auto p-2">
-        <form action="." method="get">
+        <form action="." method="get" class="flex flex-wrap items-center justify-end gap-2">
+        <select id="issue-sort" name="sort" aria-label="{% translate 'Sort issues' %}" onchange="this.form.submit()" class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md">
+            <option value="last_seen"{% if sort == "last_seen" %} selected{% endif %}>{% translate "Last seen" %}</option>
+            <option value="events"{% if sort == "events" %} selected{% endif %}>{% translate "Most events" %}</option>
+        </select>
+        {% if is_global_issue_list %}
+        <!-- Global tag search is intentionally hidden for now. Project-level tag search was tuned around project-scoped tag-value lookups; do not port it to cross-project search without a fresh performance pass. -->
+        {% else %}
         <input type="text" name="q" value="{{ q }}" placeholder="{% translate 'Search issues...' %}" class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md"/>
+        {% endif %}
         </form>
     </div>
-    {% endif %}
 </div>
 
     <div>
 
-      <form action="." method="post" id="issueForm">
+      <form action=".{% querystring sort=sort %}" method="post" id="issueForm">
       {% csrf_token %}
 
       <table class="w-full">
@@ -191,7 +195,7 @@
                 <div class="flex items-end gap-4">
                 <div class="min-w-0 flex-1">
                 <div>
-                    <a href="{{ script_prefix }}/issues/issue/{{ issue.id }}/event/last/{% current_qs %}" class="text-cyan-500 dark:text-cyan-300 fill-cyan-500 font-bold {% if issue.is_resolved %}italic{% endif %}">{% if issue.is_resolved %}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6 inline"><path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+                    <a href="{{ script_prefix }}/issues/issue/{{ issue.id }}/event/last/{% querystring page=None sort=None %}" class="text-cyan-500 dark:text-cyan-300 fill-cyan-500 font-bold {% if issue.is_resolved %}italic{% endif %}">{% if issue.is_resolved %}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6 inline"><path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
 </svg>{% endif %}{% if issue.is_muted %}<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 inline">
   <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 9.75 19.5 12m0 0 2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6 4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" />
 </svg>&nbsp;&nbsp;{% endif %}{{ issue.title|truncatechars:100 }}</a>

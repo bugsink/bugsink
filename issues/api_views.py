@@ -23,8 +23,9 @@ class IssuesCursorPagination(CursorPagination):
     Cursor paginator for /issues supporting ?sort=… and ?order=asc|desc.
 
     Sort modes are named after the *primary* column:
-      - sort=digest_order → unique per project → no tie-breakers needed
-      - sort=last_seen    → timestamp          → tie-breaker on id
+      - sort=digest_order         → unique per project → no tie-breakers needed
+      - sort=last_seen            → timestamp          → tie-breaker on id
+      - sort=digested_event_count → lifetime count     → tie-breakers on last_seen and id
 
     Direction applies to primary *and beyond* (i.e. all fields in the list).
     The view MUST filter by project; ordering is handled here.
@@ -36,17 +37,20 @@ class IssuesCursorPagination(CursorPagination):
     # We also offer a "recent" mode: sort=last_seen. This is not stable, as new events can come in mid-cursor, and
     # reshuffle things causing misses or duplicates. However, this is the desired UX for a "recent activity" view.
     # i.e. the typical usage would in fact just be to get the "first page" of recent activity.
+    # Event-count sorting has the same instability when new events arrive.
     page_size = 250
     default_direction = "asc"
     default_sort = "digest_order"
 
-    VALID_SORTS = ("digest_order", "last_seen")
+    VALID_SORTS = ("digest_order", "last_seen", "digested_event_count")
     VALID_ORDERS = ("asc", "desc")
 
     def get_ordering(self, request, queryset, view):
         sort = request.query_params.get("sort", self.default_sort)
         if sort not in self.VALID_SORTS:
-            raise ValidationError({"sort": ["Must be 'digest_order' or 'last_seen'."]})
+            raise ValidationError({
+                "sort": ["Must be 'digest_order', 'last_seen', or 'digested_event_count'."],
+            })
 
         order = request.query_params.get("order", self.default_direction)
         if order not in self.VALID_ORDERS:
@@ -58,10 +62,8 @@ class IssuesCursorPagination(CursorPagination):
             # Unique per project; stable cursor once filtered by project.
             return ["-digest_order" if desc else "digest_order"]
 
-        # sort == "last_seen": timestamp needs a deterministic tie-breaker.
-        if desc:
-            return ["-last_seen", "-id"]
-        return ["last_seen", "id"]
+        fields = ["last_seen", "id"] if sort == "last_seen" else ["digested_event_count", "last_seen", "id"]
+        return [f"-{field}" for field in fields] if desc else fields
 
 
 class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
@@ -89,7 +91,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
                 required=False,
-                enum=["digest_order", "last_seen"],
+                enum=["digest_order", "last_seen", "digested_event_count"],
                 description="Sort mode (default: digest_order).",
             ),
             OpenApiParameter(

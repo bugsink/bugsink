@@ -198,20 +198,46 @@ class Issue(models.Model):
             ("project", "digest_order"),
         ]
         indexes = [
-            # 4 indexes for the list view (state_filter). Note: no is_deleted here; basic assumption is: is_deleted=True
-            # are such a minority that a post-index filter is more efficient than having more indexes. see 7b340fd8ff1d
+            # Resolved and muted cannot overlap. The list queries include the implied condition: resolved also filters
+            # on is_muted=False, muted also filters on is_resolved=False, and open already filters on both fields. This
+            # lets open, muted, and resolved share the (is_resolved, is_muted, ordering) index.
+            #
+            # Unresolved only fixes is_resolved. Because is_muted comes before the ordering field, that index cannot
+            # return open and muted issues together in the requested order. Unresolved therefore scans the broad
+            # ordering index and skips resolved issues. A sparse or empty unresolved list can scan most or all of the
+            # relevant range. This is accepted because unresolved is the least interesting tab and should work well
+            # enough in practice.
+            # Note: no is_deleted here; basic assumption is:
+            # is_deleted=True are such a minority that a post-index filter is more efficient than having more indexes.
+            # See 7b340fd8ff1d.
             # `issue_list_open` is also used for project-level open-issue counting (same where-clause prefix).
             models.Index(fields=["project", "is_resolved", "is_muted", "last_seen"], name="issue_list_open"),
-            models.Index(fields=["project", "is_muted", "last_seen"], name="issue_list_muted"),
-            models.Index(fields=["project", "is_resolved", "last_seen"], name="issue_list_resolved"),  # and unresolved
-            models.Index(fields=["project", "last_seen"], name="issue_list_all"),  # all
+            models.Index(fields=["project", "last_seen"], name="issue_list_all"),
+
+            # Equivalent indexes for event-count sorting; last_seen breaks count ties.
+            models.Index(
+                fields=["project", "is_resolved", "is_muted", "digested_event_count", "last_seen"],
+                name="issue_count_open",
+            ),
+            models.Index(
+                fields=["project", "digested_event_count", "last_seen"],
+                name="issue_count_all",
+            ),
 
             # Same filters/orderings for the global issue list, where the page is intentionally not anchored on one
             # project. As above, no is_deleted: deleted issues should be a small minority.
             models.Index(fields=["is_resolved", "is_muted", "last_seen"], name="issue_global_open"),
-            models.Index(fields=["is_muted", "last_seen"], name="issue_global_muted"),
-            models.Index(fields=["is_resolved", "last_seen"], name="issue_global_resolved"),  # and unresolved
-            models.Index(fields=["last_seen"], name="issue_global_all"),  # all
+            models.Index(fields=["last_seen"], name="issue_global_all"),
+
+            # Equivalent indexes for event-count sorting across projects.
+            models.Index(
+                fields=["is_resolved", "is_muted", "digested_event_count", "last_seen"],
+                name="issue_global_count_open",
+            ),
+            models.Index(
+                fields=["digested_event_count", "last_seen"],
+                name="issue_global_count_all",
+            ),
         ]
 
 
