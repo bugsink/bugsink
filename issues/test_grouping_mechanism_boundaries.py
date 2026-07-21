@@ -11,10 +11,9 @@ from django.conf import settings
 ROOT = Path(__file__).resolve().parents[1]
 GROUPING_MECHANISMS_DIR = ROOT / "issues" / "grouping_mechanisms"
 BUILDING_BLOCKS_DIR = GROUPING_MECHANISMS_DIR / "building_blocks"
-SENTRY_IMPORT_HASH = "597d25951d00"
-VENDORED_SENTRY_DIR = ROOT / "sentry" / f"at_{SENTRY_IMPORT_HASH}"
 VENDORED_SENTRY_PACKAGES = (
     "sentry.at_597d25951d00",
+    "sentry.at_906235e0aa31",
     "sentry.at_glitchtip_af9a700a8706",
 )
 UNPINNED_SENTRY_PACKAGES = ("sentry.assemble", "sentry.minidump")
@@ -29,11 +28,14 @@ class GroupingMechanismBoundaryTestCase(TestCase):
             if relative_parts[0].startswith("."):
                 return True
 
-            try:
-                path.relative_to(VENDORED_SENTRY_DIR)
-                return True
-            except ValueError:
-                return False
+            for package in VENDORED_SENTRY_PACKAGES:
+                try:
+                    path.relative_to(ROOT / "sentry" / package.removeprefix("sentry."))
+                    return True
+                except ValueError:
+                    pass
+
+            return False
 
         self.assert_imports_allowed(
             [
@@ -60,11 +62,13 @@ class GroupingMechanismBoundaryTestCase(TestCase):
             self._is_building_block_import,
         )
 
-    def test_vendored_sentry_package_imports_only_relative_modules_or_generic_python(self):
-        self.assert_imports_allowed(
-            sorted((VENDORED_SENTRY_DIR / "grouping").rglob("*.py")),
-            self._is_relative_or_generic_python_import,
-        )
+    def test_vendored_sentry_package_imports_only_relative_modules_or_generic_python_or_django(self):
+        for package in VENDORED_SENTRY_PACKAGES:
+            package_dir = ROOT / "sentry" / package.removeprefix("sentry.")
+            self.assert_imports_allowed(
+                sorted((package_dir / "grouping").rglob("*.py")),
+                self._is_relative_or_generic_python_or_django_import,
+            )
 
     def test_vendored_sentry_packages_do_not_cross_import(self):
         for path in sorted((ROOT / "sentry").glob("at_*")):
@@ -115,8 +119,8 @@ class GroupingMechanismBoundaryTestCase(TestCase):
             or self._is_stdlib(imported.module)
         )
 
-    def _is_relative_or_generic_python_import(self, path, imported):
-        return imported.level > 0 or self._is_stdlib(imported.module)
+    def _is_relative_or_generic_python_or_django_import(self, path, imported):
+        return imported.level > 0 or self._is_stdlib(imported.module) or self._is_django_import(imported.module)
 
     def _is_not_unpinned_sentry_import(self, path, imported):
         if imported.module is None:
