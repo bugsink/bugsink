@@ -95,11 +95,10 @@ class ProjectInviteLinkTestCase(TransactionTestCase):
         self.assertTrue(ProjectMembership.objects.filter(project=self.project, user=user, accepted=False).exists())
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
-    def test_members_page_replaces_reinvite_with_copy_invite_link(self):
+    def test_members_page_shows_invite_link_for_active_user_when_email_backend_does_not_deliver(self):
         user = User.objects.create_user(
             username="pending-project-member@example.com",
             email="pending-project-member@example.com",
-            is_active=False,
         )
         ProjectMembership.objects.create(project=self.project, user=user, accepted=False)
 
@@ -111,14 +110,65 @@ class ProjectInviteLinkTestCase(TransactionTestCase):
         response = self.client.post(reverse("project_members", kwargs={"project_pk": self.project.pk}), {
             "action": f"copy_invite_link:{user.id}",
         })
-        verification = EmailVerification.objects.get(user=user)
 
         self.assertContains(response, "Hand out the following link to pending-project-member@example.com yourself:")
         self.assertNotContains(response, "Invitation not sent")
-        self.assertContains(response, reverse("project_members_accept_new_user", kwargs={
-            "project_pk": self.project.pk,
-            "token": verification.token,
-        }))
+        self.assertContains(response, reverse("project_members_accept", kwargs={"project_pk": self.project.pk}))
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
+    def test_members_page_shows_disabled_reinvite_for_inactive_user_when_email_backend_does_not_deliver(self):
+        user = User.objects.create_user(
+            username="inactive-project-member@example.com",
+            email="inactive-project-member@example.com",
+            is_active=False,
+        )
+        ProjectMembership.objects.create(project=self.project, user=user, accepted=False)
+
+        response = self.client.get(reverse("project_members", kwargs={"project_pk": self.project.pk}))
+
+        self.assertNotContains(response, "Show invite link")
+        self.assertContains(response, "Reinvite")
+        self.assertContains(response, "disabled")
+        self.assertContains(response, "cursor-not-allowed")
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+
+        response = self.client.post(reverse("project_members", kwargs={"project_pk": self.project.pk}), {
+            "action": f"copy_invite_link:{user.id}",
+        })
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+
+        response = self.client.post(reverse("project_members", kwargs={"project_pk": self.project.pk}), {
+            "action": f"reinvite:{user.id}",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
+    def test_invite_existing_inactive_user_does_not_create_invite_link(self):
+        user = User.objects.create_user(
+            username="existing-inactive-project-member@example.com",
+            email="existing-inactive-project-member@example.com",
+            is_active=False,
+        )
+
+        response = self.client.post(reverse("project_members_invite", kwargs={"project_pk": self.project.pk}), {
+            "email": "existing-inactive-project-member@example.com",
+            "role": ProjectRole.MEMBER,
+            "action": "invite",
+        }, follow=True)
+
+        self.assertContains(
+            response,
+            "Invitation created for existing-inactive-project-member@example.com, "
+            "but no email was sent because email is not set up.",
+        )
+        self.assertNotContains(response, "Invitation sent")
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+        self.assertTrue(ProjectMembership.objects.filter(project=self.project, user=user, accepted=False).exists())
 
 
 class ProjectDeletionTestCase(TransactionTestCase):

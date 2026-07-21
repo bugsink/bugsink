@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.db import models
-from django.shortcuts import render, redirect
+from django.shortcuts import get_object_or_404, render, redirect
 from django.contrib.auth import get_user_model
 from django.http import Http404, HttpResponseRedirect
 from django.core.exceptions import PermissionDenied
@@ -171,10 +171,13 @@ def team_members(request, team_pk):
         if action == "remove":
             TeamMembership.objects.filter(team=team_pk, user=user_id).delete()
         elif action == "copy_invite_link" and not email_backend_delivers_mail():
-            user = User.objects.get(id=user_id)
-            invite_link = _create_team_invite_link(user, team_pk)
-            invite_link_notice = manual_invite_link_notice(invite_link, user.email)
-        elif action == "reinvite":
+            membership = get_object_or_404(
+                TeamMembership.objects.select_related("user"), team=team, user_id=user_id, accepted=False)
+            invite_link = _create_team_invite_link(membership.user, team_pk, create_account_setup_link=False)
+            if invite_link is None:
+                raise PermissionDenied("Cannot show an account setup link for an existing inactive user")
+            invite_link_notice = manual_invite_link_notice(invite_link, membership.user.email)
+        elif action == "reinvite" and email_backend_delivers_mail():
             user = User.objects.get(id=user_id)
             _send_team_invite_email(user, team_pk)
             messages.success(request, f"Invitation resent to {user.email}")
@@ -186,6 +189,7 @@ def _render_team_members(request, team, invite_link_notice=None):
     return render(request, 'teams/team_members.html', {
         'team': team,
         'members': team.teammembership_set.all().select_related('user'),
+        'can_send_invites': email_backend_delivers_mail(),
         'can_copy_invite_links': not email_backend_delivers_mail(),
         'invite_link_notice': invite_link_notice,
     })
@@ -202,9 +206,12 @@ def _send_team_invite_email(user, team_pk):
         send_team_invite_email_new_user.delay(user.email, team_pk, verification.token)
 
 
-def _create_team_invite_link(user, team_pk):
+def _create_team_invite_link(user, team_pk, create_account_setup_link):
     if user.is_active:
         return get_settings().BASE_URL + reverse("team_members_accept", kwargs={"team_pk": team_pk})
+
+    if not create_account_setup_link:
+        return None
 
     verification = EmailVerification.objects.create(user=user, email=user.username)
     return get_settings().BASE_URL + reverse("team_members_accept_new_user", kwargs={
@@ -242,7 +249,7 @@ def team_members_invite(request, team_pk):
                 _send_team_invite_email(user, team_pk)
                 invite_link = None
             else:
-                invite_link = _create_team_invite_link(user, team_pk)
+                invite_link = _create_team_invite_link(user, team_pk, create_account_setup_link=user_created)
 
             _, membership_created = TeamMembership.objects.get_or_create(team=team, user=user, defaults={
                 'role': form.cleaned_data['role'],
@@ -261,10 +268,18 @@ def team_members_invite(request, team_pk):
                 return _render_team_members(request, team, invite_link_notice)
 
             if membership_created:
-                messages.success(request, f"Invitation sent to {email}")
+                if email_backend_delivers_mail():
+                    messages.success(request, f"Invitation sent to {email}")
+                else:
+                    messages.success(
+                        request, f"Invitation created for {email}, but no email was sent because email is not set up.")
             else:
-                messages.success(
-                    request, f"Invitation resent to {email} (it was previously sent and we just sent it again)")
+                if email_backend_delivers_mail():
+                    messages.success(
+                        request, f"Invitation resent to {email} (it was previously sent and we just sent it again)")
+                else:
+                    messages.success(request, (
+                        f"Invitation already exists for {email}, but no email was sent because email is not set up."))
 
             if request.POST.get('action') == "invite_and_add_another":
                 return redirect('team_members_invite', team_pk=team_pk)

@@ -58,10 +58,12 @@
                 <td class="p-4">
                     <div class="flex justify-end">
                         {% if not member.accepted %}
-                            {% if can_copy_invite_links %}
+                            {% if can_copy_invite_links and member.user.is_active %}
                             <button name="action" value="copy_invite_link:{{ member.user_id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Show invite link" %}</button>
-                            {% else %}
+                            {% elif can_send_invites %}
                             <button name="action" value="reinvite:{{ member.user_id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Reinvite" %}</button>
+                            {% else %}
+                            <button type="button" disabled class="font-bold text-slate-400 dark:text-slate-600 border-slate-200 dark:border-slate-800 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 rounded-md whitespace-nowrap cursor-not-allowed">{% translate "Reinvite" %}</button>
                             {% endif %}
                         {% endif %}
                         {% if request.user == member.user %}

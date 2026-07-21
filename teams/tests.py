@@ -75,11 +75,10 @@ class TeamInviteLinkTestCase(TransactionTestCase):
         self.assertTrue(TeamMembership.objects.filter(team=self.team, user=user, accepted=False).exists())
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
-    def test_members_page_replaces_reinvite_with_copy_invite_link(self):
+    def test_members_page_shows_invite_link_for_active_user_when_email_backend_does_not_deliver(self):
         user = User.objects.create_user(
             username="pending-team-member@example.com",
             email="pending-team-member@example.com",
-            is_active=False,
         )
         TeamMembership.objects.create(team=self.team, user=user, accepted=False)
 
@@ -91,14 +90,65 @@ class TeamInviteLinkTestCase(TransactionTestCase):
         response = self.client.post(reverse("team_members", kwargs={"team_pk": self.team.pk}), {
             "action": f"copy_invite_link:{user.id}",
         })
-        verification = EmailVerification.objects.get(user=user)
 
         self.assertContains(response, "Hand out the following link to pending-team-member@example.com yourself:")
         self.assertNotContains(response, "Invitation not sent")
-        self.assertContains(response, reverse("team_members_accept_new_user", kwargs={
-            "team_pk": self.team.pk,
-            "token": verification.token,
-        }))
+        self.assertContains(response, reverse("team_members_accept", kwargs={"team_pk": self.team.pk}))
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
+    def test_members_page_shows_disabled_reinvite_for_inactive_user_when_email_backend_does_not_deliver(self):
+        user = User.objects.create_user(
+            username="inactive-team-member@example.com",
+            email="inactive-team-member@example.com",
+            is_active=False,
+        )
+        TeamMembership.objects.create(team=self.team, user=user, accepted=False)
+
+        response = self.client.get(reverse("team_members", kwargs={"team_pk": self.team.pk}))
+
+        self.assertNotContains(response, "Show invite link")
+        self.assertContains(response, "Reinvite")
+        self.assertContains(response, "disabled")
+        self.assertContains(response, "cursor-not-allowed")
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+
+        response = self.client.post(reverse("team_members", kwargs={"team_pk": self.team.pk}), {
+            "action": f"copy_invite_link:{user.id}",
+        })
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+
+        response = self.client.post(reverse("team_members", kwargs={"team_pk": self.team.pk}), {
+            "action": f"reinvite:{user.id}",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
+    def test_invite_existing_inactive_user_does_not_create_invite_link(self):
+        user = User.objects.create_user(
+            username="existing-inactive-team-member@example.com",
+            email="existing-inactive-team-member@example.com",
+            is_active=False,
+        )
+
+        response = self.client.post(reverse("team_members_invite", kwargs={"team_pk": self.team.pk}), {
+            "email": "existing-inactive-team-member@example.com",
+            "role": TeamRole.MEMBER,
+            "action": "invite",
+        }, follow=True)
+
+        self.assertContains(
+            response,
+            "Invitation created for existing-inactive-team-member@example.com, "
+            "but no email was sent because email is not set up.",
+        )
+        self.assertNotContains(response, "Invitation sent")
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+        self.assertTrue(TeamMembership.objects.filter(team=self.team, user=user, accepted=False).exists())
 
 
 class TeamScopedActionTestCase(TransactionTestCase):
