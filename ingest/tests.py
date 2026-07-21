@@ -28,6 +28,7 @@ from issues.factories import get_or_create_issue
 from issues.grouping_mechanisms import (
     GROUPING_TRANSITION_PERIOD,
     CURRENT_GROUPING_MECHANISM,
+    BUGSINK_GROUPING_V3,
     BUGSINK_GROUPING_V2,
     BUGSINK_GROUPING_V1,
     GROUPING_MECHANISMS,
@@ -1115,6 +1116,7 @@ class IngestViewTestCase(TransactionTestCase):
         BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
 
         self.assertEqual(CURRENT_GROUPING_MECHANISM, Grouping.objects.get().grouping_mechanism)
+        self.assertEqual([], Event.objects.get().grouping_candidates)
 
     def test_ingest_stores_mechanism_independent_grouping_for_explicit_fingerprint(self):
         request = self.request_factory.post("/api/1/store/")
@@ -1190,6 +1192,71 @@ class IngestViewTestCase(TransactionTestCase):
             set(Grouping.objects.values_list("grouping_mechanism", flat=True)),
         )
         self.assertEqual({old_issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
+
+    def test_v3_stacktrace_system_candidate_keeps_issue_when_in_app_changes(self):
+        request = self.request_factory.post("/api/1/store/")
+        project = Project.objects.create(
+            name="v3-stacktrace",
+            grouping_mechanism=BUGSINK_GROUPING_V3,
+            alert_on_new_issue=False,
+            alert_on_regression=False,
+            alert_on_unmute=False,
+        )
+
+        first = create_event_data(exception_type="CapturedStacktraceForGrouping")
+        first["exception"]["values"][0]["value"] = "1234 kinds of frames"
+        first["exception"]["values"][0]["stacktrace"] = {
+            "frames": [
+                {
+                    "module": "django.core.management",
+                    "filename": "/venv/lib/python3.12/site-packages/django/core/management/__init__.py",
+                    "function": "execute",
+                },
+                {
+                    "module": "__main__",
+                    "filename": "manage.py",
+                    "function": "main",
+                },
+            ],
+        }
+
+        second = create_event_data(exception_type="CapturedStacktraceForGrouping")
+        second["exception"]["values"][0]["value"] = "1234 kinds of frames"
+        second["exception"]["values"][0]["stacktrace"] = {
+            "frames": [
+                {
+                    "module": "django.core.management",
+                    "filename": "/venv/lib/python3.12/site-packages/django/core/management/__init__.py",
+                    "function": "execute",
+                    "in_app": True,
+                },
+                {
+                    "module": "__main__",
+                    "filename": "manage.py",
+                    "function": "main",
+                },
+            ],
+        }
+
+        BaseIngestAPIView().digest_event(**_digest_params(first, project, request))
+        BaseIngestAPIView().digest_event(**_digest_params(second, project, request))
+
+        self.assertEqual(1, Issue.objects.count())
+        self.assertEqual(2, Event.objects.count())
+        self.assertEqual(2, Grouping.objects.count())
+
+        first_event, second_event = Event.objects.order_by("digest_order")
+        self.assertEqual(["app", "system"], [candidate["name"] for candidate in first_event.grouping_candidates])
+        self.assertEqual(["app", "system"], [candidate["name"] for candidate in second_event.grouping_candidates])
+        self.assertNotEqual(
+            first_event.grouping_candidates[0]["grouping_key"],
+            first_event.grouping_candidates[1]["grouping_key"],
+        )
+        self.assertEqual(
+            second_event.grouping_candidates[0]["grouping_key"],
+            first_event.grouping_candidates[1]["grouping_key"],
+        )
+        self.assertEqual(second_event.grouping_id, int(second_event.grouping_candidates[0]["grouping_id"]))
 
     def test_grouping_transition_handles_switching_back_to_previous_mechanism(self):
         # simple test for the "back-and-forth" case, where a project switches to another mechanism and then back again.

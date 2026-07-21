@@ -26,7 +26,12 @@ from projects.models import Project
 from issues.models import Issue, IssueStateManager, Grouping, TurningPoint, TurningPointKind
 from issues.grouping_mechanisms import (
     GROUPING_TRANSITION_PERIOD, BUGSINK_GROUPING_V1, MECHANISM_INDEPENDENT_GROUPING)
-from issues.utils import get_type_and_value_for_data, get_key_with_mechanism_for_data, get_denormalized_fields_for_data
+from issues.utils import (
+    KeyWithMechanism,
+    get_type_and_value_for_data,
+    get_grouping_result_for_data,
+    get_denormalized_fields_for_data,
+)
 from issues.regressions import issue_is_regression
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
@@ -111,6 +116,10 @@ def get_existing_grouping(project_id, key_with_mechanism):
     ).first()
 
 
+def get_existing_grouping_for_candidate(project_id, candidate):
+    return get_existing_grouping(project_id, KeyWithMechanism(candidate.key, candidate.mechanism))
+
+
 def get_legacy_grouping_for_mechanism_independent_key(project_id, key_with_mechanism):
     return Grouping.objects.filter(
         project_id=project_id,
@@ -130,6 +139,47 @@ def create_grouping(project_id, key_with_mechanism, issue):
     )
 
 
+def create_missing_groupings(project_id, grouping_candidates, issue):
+    groupings_by_name = {}
+    seen = set()
+
+    for candidate in grouping_candidates:
+        key_with_mechanism = KeyWithMechanism(candidate.key, candidate.mechanism)
+        lookup_key = (candidate.key, candidate.mechanism)
+        if lookup_key in seen:
+            groupings_by_name[candidate.name] = groupings_by_name[lookup_key]
+            continue
+
+        seen.add(lookup_key)
+        grouping = get_existing_grouping(project_id, key_with_mechanism)
+        if grouping is None:
+            grouping = create_grouping(project_id, key_with_mechanism, issue)
+
+        if grouping.issue_id == issue.id:
+            groupings_by_name[lookup_key] = grouping
+            groupings_by_name[candidate.name] = grouping
+
+    return groupings_by_name
+
+
+def get_event_grouping_candidates(grouping_candidates, groupings_by_name, primary_candidate_name):
+    if not any(candidate.component is not None for candidate in grouping_candidates):
+        return []
+
+    result = []
+    for candidate in grouping_candidates:
+        grouping = groupings_by_name.get(candidate.name)
+        result.append({
+            "name": candidate.name,
+            "grouping_key": candidate.key,
+            "grouping_mechanism": candidate.mechanism,
+            "grouping_id": str(grouping.id) if grouping is not None else None,
+            "primary": candidate.name == primary_candidate_name,
+            "component": candidate.component,
+        })
+    return result
+
+
 def grouping_transition_is_active(project, digested_at):
     if project.previous_grouping_mechanism is None or project.grouping_mechanism_upgraded_at is None:
         return False
@@ -139,35 +189,38 @@ def grouping_transition_is_active(project, digested_at):
 
 def get_grouping_path_for_event(project, event_data, digested_at):
     # First try the project's current mechanism.
-    current_key_with_mechanism = get_key_with_mechanism_for_data(
-        event_data, grouping_mechanism=project.grouping_mechanism)
-    if (current_grouping := get_existing_grouping(project.id, current_key_with_mechanism)) is not None:
-        return GroupingPath.FOUND, (current_grouping,)
+    current_grouping_result = get_grouping_result_for_data(event_data, grouping_mechanism=project.grouping_mechanism)
+    current_candidates = current_grouping_result.candidates
+    for candidate in current_candidates:
+        if (current_grouping := get_existing_grouping_for_candidate(project.id, candidate)) is not None:
+            return GroupingPath.FOUND, (current_grouping, current_candidates)
 
-    if current_key_with_mechanism.mechanism == MECHANISM_INDEPENDENT_GROUPING:
+    if current_candidates[0].mechanism == MECHANISM_INDEPENDENT_GROUPING:
         # special case for imprecisely migrated data, i.e. this is "another piece of legacy-handling code in the digest
         # path" as mentioned in the migration file: because we may not have correctly identified all mechanismless
         # groupings we allow matching with v1 here.
         #
         # this is really the 10%/1% correctness for avoiding some unnecesary splits so it can be removed "quite soon",
         # e.g. in October 2026.
+        current_key_with_mechanism = KeyWithMechanism(current_candidates[0].key, current_candidates[0].mechanism)
         legacy_grouping = get_legacy_grouping_for_mechanism_independent_key(project.id, current_key_with_mechanism)
         if legacy_grouping is not None:
-            return GroupingPath.ATTACH, (current_key_with_mechanism, legacy_grouping)
-        return GroupingPath.NEW, (current_key_with_mechanism,)
+            return GroupingPath.ATTACH, (current_candidates, legacy_grouping)
+        return GroupingPath.NEW, (current_candidates,)
 
     # Current mechanism not found, no special-case, and we're not in the transition window: this is a new grouping.
     if not grouping_transition_is_active(project, digested_at):
-        return GroupingPath.NEW, (current_key_with_mechanism,)
+        return GroupingPath.NEW, (current_candidates,)
 
     # During the transition window, retry the previous mechanism.
-    previous_key_with_mechanism = get_key_with_mechanism_for_data(
+    previous_grouping_result = get_grouping_result_for_data(
         event_data, grouping_mechanism=project.previous_grouping_mechanism)
-    if (previous_grouping := get_existing_grouping(project.id, previous_key_with_mechanism)) is not None:
-        return GroupingPath.ATTACH, (current_key_with_mechanism, previous_grouping)
+    for candidate in previous_grouping_result.candidates:
+        if (previous_grouping := get_existing_grouping_for_candidate(project.id, candidate)) is not None:
+            return GroupingPath.ATTACH, (current_candidates, previous_grouping)
 
     # No grouping found for either mechanism, so this is a new grouping.
-    return GroupingPath.NEW, (current_key_with_mechanism,)
+    return GroupingPath.NEW, (current_candidates,)
 
 
 def check_for_thresholds_on_installation(qs, now, thresholds, add_for_current=0):
@@ -472,13 +525,13 @@ class BaseIngestAPIView(View):
 
         if grouping_path in [GroupingPath.FOUND, GroupingPath.ATTACH]:
             if grouping_path == GroupingPath.FOUND:
-                grouping, = path_context
+                grouping_to_attach_to, grouping_candidates = path_context
             else:
-                key_with_mechanism, grouping_to_attach_to = path_context
-                grouping = create_grouping(
-                    event_metadata["project_id"], key_with_mechanism, grouping_to_attach_to.issue)
+                grouping_candidates, grouping_to_attach_to = path_context
 
-            issue = grouping.issue
+            issue = grouping_to_attach_to.issue
+            groupings_by_name = create_missing_groupings(event_metadata["project_id"], grouping_candidates, issue)
+            grouping = groupings_by_name[grouping_candidates[0].name]
             issue_created = False
 
             # update the denormalized fields; calculated_type/value track the latest event so the issue title
@@ -489,7 +542,7 @@ class BaseIngestAPIView(View):
             issue.calculated_value = calculated_value
 
         elif grouping_path == GroupingPath.NEW:
-            key_with_mechanism, = path_context
+            grouping_candidates, = path_context
 
             # we don't have Project.issue_count here ('premature optimization') so we just do an aggregate instead.
             max_current = Issue.objects.filter(project_id=event_metadata["project_id"]).aggregate(
@@ -509,7 +562,14 @@ class BaseIngestAPIView(View):
             )
             issue_created = True
 
-            grouping = create_grouping(event_metadata["project_id"], key_with_mechanism, issue)
+            groupings_by_name = create_missing_groupings(event_metadata["project_id"], grouping_candidates, issue)
+            grouping = groupings_by_name[grouping_candidates[0].name]
+
+        grouping_candidates_data = get_event_grouping_candidates(
+            grouping_candidates,
+            groupings_by_name,
+            grouping_candidates[0].name,
+        )
 
         # +1 because we're about to add one event.
         project_stored_event_count = project.stored_event_count + 1
@@ -548,6 +608,7 @@ class BaseIngestAPIView(View):
             grouping,
             event_data,
             denormalized_fields,
+            grouping_candidates_data,
         )
         if not event_created:
             if issue_created:

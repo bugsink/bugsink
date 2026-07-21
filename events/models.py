@@ -61,6 +61,7 @@ class Event(models.Model):
 
     issue = models.ForeignKey("issues.Issue", blank=False, null=False, on_delete=models.DO_NOTHING)
     grouping = models.ForeignKey("issues.Grouping", blank=False, null=False, on_delete=models.DO_NOTHING)
+    grouping_candidates = models.JSONField(default=list, blank=True)
 
     # The docs say:
     # > Required. Hexadecimal string representing a uuid4 value. The length is exactly 32 characters. Dashes are not
@@ -208,7 +209,7 @@ class Event(models.Model):
 
     @classmethod
     def from_ingested(cls, event_metadata, digested_at, digest_order, project_digest_order, stored_event_count, issue,
-                      grouping, parsed_data, denormalized_fields):
+                      grouping, parsed_data, denormalized_fields, grouping_candidates=None):
 
         # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
@@ -227,6 +228,7 @@ class Event(models.Model):
                 project_id=event_metadata["project_id"],
                 issue=issue,
                 grouping=grouping,
+                grouping_candidates=grouping_candidates or [],
                 ingested_at=event_metadata["ingested_at"],
                 digested_at=digested_at,
                 data=json.dumps(parsed_data) if write_storage is None else "",

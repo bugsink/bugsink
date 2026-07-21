@@ -1,15 +1,16 @@
 from datetime import timedelta
 
-from . import v1, v2
+from . import v1, v2, v3
 from .building_blocks import v1 as building_blocks_v1
 
 
 class GroupingMechanism:
-    def __init__(self, identifier, display_name, get_type_and_value_for_data, grouper):
+    def __init__(self, identifier, display_name, get_type_and_value_for_data, grouper, get_grouping_candidates=None):
         self.identifier = identifier
         self.display_name = display_name
         self.get_type_and_value_for_data = get_type_and_value_for_data
         self.grouper = grouper
+        self.get_grouping_candidates = get_grouping_candidates
 
 
 GROUPING_TRANSITION_PERIOD = timedelta(days=30)
@@ -17,6 +18,7 @@ GROUPING_TRANSITION_PERIOD = timedelta(days=30)
 MECHANISM_INDEPENDENT_GROUPING = "none"
 BUGSINK_GROUPING_V1 = "bugsink-v1"
 BUGSINK_GROUPING_V2 = "bugsink-v2"
+BUGSINK_GROUPING_V3 = "bugsink-v3"
 CURRENT_GROUPING_MECHANISM = BUGSINK_GROUPING_V2
 
 # I think in general it's a good idea to let legacy display names reflect the history, and have the latest name reflect
@@ -33,6 +35,13 @@ GROUPING_MECHANISMS = [
         "Value-normalized (latest)",
         building_blocks_v1.get_type_and_value_for_data,
         v2.default_issue_grouper,
+    ),
+    GroupingMechanism(
+        BUGSINK_GROUPING_V3,
+        "Experimental stacktrace-based",
+        building_blocks_v1.get_type_and_value_for_data,
+        v3.default_issue_grouper,
+        v3.get_grouping_candidates,
     ),
 ]
 

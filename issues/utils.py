@@ -134,31 +134,78 @@ def get_exception_type_and_value_for_exception(data):
 
 
 KeyWithMechanism = namedtuple("KeyWithMechanism", ["key", "mechanism"])
+GroupingCandidate = namedtuple("GroupingCandidate", ["name", "key", "mechanism", "component"])
+GroupingResult = namedtuple("GroupingResult", ["candidates"])
 
 
-def get_key_with_mechanism_for_data(data, grouping_mechanism):
+def _fallback_grouping_candidates(mechanism, data, calculated_type, calculated_value):
+    return [{
+        "name": "default",
+        "key": mechanism.grouper(data, calculated_type, calculated_value),
+        "component": None,
+    }]
+
+
+def _get_default_grouping_candidates(mechanism, data, calculated_type, calculated_value):
+    if mechanism.get_grouping_candidates is None:
+        raw_candidates = _fallback_grouping_candidates(mechanism, data, calculated_type, calculated_value)
+    else:
+        raw_candidates = mechanism.get_grouping_candidates(data, calculated_type, calculated_value)
+
+    return [
+        GroupingCandidate(
+            raw_candidate["name"],
+            raw_candidate["key"],
+            mechanism.identifier,
+            raw_candidate.get("component"),
+        )
+        for raw_candidate in raw_candidates
+    ]
+
+
+def _with_fingerprint(candidate, fingerprint):
+    parts = [
+        candidate.key if part == "{{ default }}" else str(part)
+        for part in fingerprint
+    ]
+    return GroupingCandidate(
+        candidate.name,
+        " ⋄ ".join(parts),
+        candidate.mechanism,
+        candidate.component,
+    )
+
+
+def get_grouping_result_for_data(data, grouping_mechanism):
     from issues.grouping_mechanisms import MECHANISM_INDEPENDENT_GROUPING, get_grouping_mechanism
 
     fingerprint = data.get("fingerprint")
     mechanism = get_grouping_mechanism(grouping_mechanism)
     calculated_type, calculated_value = mechanism.get_type_and_value_for_data(data)
+    default_candidates = _get_default_grouping_candidates(mechanism, data, calculated_type, calculated_value)
 
     if fingerprint:
-        used_default = False
-        parts = []
-        for part in fingerprint:
-            if part == "{{ default }}":
-                used_default = True
-                parts.append(mechanism.grouper(data, calculated_type, calculated_value))
-            else:
-                parts.append(str(part))
+        if "{{ default }}" not in fingerprint:
+            return GroupingResult([
+                GroupingCandidate(
+                    "custom-fingerprint",
+                    " ⋄ ".join(str(part) for part in fingerprint),
+                    MECHANISM_INDEPENDENT_GROUPING,
+                    None,
+                )
+            ])
 
-        return KeyWithMechanism(
-            " ⋄ ".join(parts),
-            grouping_mechanism if used_default else MECHANISM_INDEPENDENT_GROUPING,
-        )
+        return GroupingResult([
+            _with_fingerprint(candidate, fingerprint)
+            for candidate in default_candidates
+        ])
 
-    return KeyWithMechanism(mechanism.grouper(data, calculated_type, calculated_value), grouping_mechanism)
+    return GroupingResult(default_candidates)
+
+
+def get_key_with_mechanism_for_data(data, grouping_mechanism):
+    primary_candidate = get_grouping_result_for_data(data, grouping_mechanism).candidates[0]
+    return KeyWithMechanism(primary_candidate.key, primary_candidate.mechanism)
 
 
 def get_title_for_exception_type_and_value(type_, value):
