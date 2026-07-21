@@ -3,7 +3,7 @@
 {% load tailwind_forms %}
 {% load i18n %}
 
-{% block title %}Invite Members · {{ project.name }}  · {{ site_title }}{% endblock %}
+{% block title %}{% translate "Invite members" %} · {{ project.name }} · {{ site_title }}{% endblock %}
 
 {% block content %}
 
@@ -25,7 +25,7 @@
         {% include "includes/invite_link_notice.html" %}
 
         <div>
-            <h1 class="text-4xl my-4 font-bold">{% blocktranslate with project_name=project.name %}Invite members ({{ project_name }}){% endblocktranslate %}</h1>
+            <h1 class="text-4xl my-4 font-bold">{% translate "Invite members" %} · {{ project.name }}</h1>
         </div>
 
         <div class="mt-4 mb-4">

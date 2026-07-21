@@ -3,7 +3,7 @@
 {% load tailwind_forms %}
 {% load i18n %}
 
-{% block title %}Member settings · {{ team.name }}  · {{ site_title }}{% endblock %}
+{% block title %}{% translate "Membership settings" %} · {{ team.name }} · {{ site_title }}{% endblock %}
 
 {% block content %}
 
@@ -24,7 +24,7 @@
         {% endif %}
 
         <div>
-            <h1 class="text-4xl my-4 font-bold">{% trans "Membership settings" %}</h1>
+            <h1 class="text-4xl my-4 font-bold">{% trans "Membership settings" %} · {{ team.name }}</h1>
         </div>
 
         <div class="mt-4 mb-4">

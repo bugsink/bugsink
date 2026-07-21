@@ -2,7 +2,7 @@
 {% load static %}
 {% load i18n %}
 
-{% block title %}Invitation · {{ project.name }}  · {{ site_title }}{% endblock %}
+{% block title %}{% translate "Invitation" %} · {{ project.name }} · {{ site_title }}{% endblock %}
 
 {% block content %}
 
@@ -15,7 +15,7 @@
         {% csrf_token %}
 
         <div>
-            <h1 class="text-4xl my-4 font-bold">{% translate "Invitation to" %} "{{ project.name }}"</h1>
+            <h1 class="text-4xl my-4 font-bold">{% translate "Invitation" %} · {{ project.name }}</h1>
         </div>
 
         <div class="mt-4 mb-4">

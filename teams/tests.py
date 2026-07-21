@@ -40,7 +40,7 @@ class TeamInviteLinkTestCase(TransactionTestCase):
             "No invitation was sent because email is not set up. "
             "Hand out the following link to new-team-member@example.com yourself:",
         )
-        self.assertContains(response, "Team Members")
+        self.assertContains(response, f"Members · {self.team.name}")
         self.assertContains(response, reverse("team_members_accept_new_user", kwargs={
             "team_pk": self.team.pk,
             "token": verification.token,
