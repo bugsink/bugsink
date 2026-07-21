@@ -41,7 +41,7 @@ class CleanupOrphanedIssuesCommandTestCase(TransactionTestCase):
 
     def run_command(self, *args):
         stdout = io.StringIO()
-        call_command("cleanup_orphaned_issues", *args, stdout=stdout)
+        call_command("cleanup_orphaned_issues", *args, stdout=stdout, no_color=True)
         return stdout.getvalue()
 
     def test_command_deletes_old_orphans(self):
