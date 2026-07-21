@@ -1,0 +1,38 @@
+{% load issues %}
+
+<div class="mb-5">
+    <div class="flex flex-wrap gap-x-3 gap-y-1 items-baseline">
+        <h3 class="font-bold">{{ candidate.name }}</h3>
+        {% if candidate.primary %}<span class="text-sm text-slate-500 dark:text-slate-400">primary</span>{% endif %}
+        <span class="text-sm text-slate-500 dark:text-slate-400">{{ candidate.grouping_mechanism }}</span>
+        {% if candidate.grouping_id %}<span class="text-sm text-slate-500 dark:text-slate-400">Grouping {{ candidate.grouping_id }}</span>{% endif %}
+    </div>
+
+    <div class="font-mono text-sm break-all mb-2">{{ candidate.grouping_key }}</div>
+
+    <div class="border-t-2 border-slate-300 dark:border-slate-600">
+        {% for row in candidate.component|grouping_component_rows %}
+            <div class="flex flex-wrap border-b-2 border-dotted border-slate-300 dark:border-slate-600">
+                <div class="w-1/3 py-1 pr-3 break-words" style="padding-left: {{ row.indent }}px">
+                    {% if row.is_component %}
+                        {{ row.id }}
+                    {% else %}
+                        <span class="text-slate-400 dark:text-slate-500">value</span>
+                    {% endif %}
+                </div>
+                <div class="w-2/3 py-1 break-words">
+                    {% if row.is_component %}
+                        {% if row.contributes %}
+                            <span class="text-green-700 dark:text-green-300">contributes</span>
+                        {% else %}
+                            <span class="text-slate-500 dark:text-slate-400">does not contribute</span>
+                        {% endif %}
+                        {% if row.hint %}<span class="text-slate-500 dark:text-slate-400">({{ row.hint }})</span>{% endif %}
+                    {% else %}
+                        <span class="font-mono">{{ row.value }}</span>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>

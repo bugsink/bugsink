@@ -281,6 +281,41 @@ def incomplete(value):
     return hasattr(value, "incomplete")
 
 
+@register.filter()
+def grouping_component_rows(component):
+    if not component:
+        return []
+
+    rows = []
+    todo = [(component, 0)]
+
+    while todo:
+        value, depth = todo.pop()
+        if isinstance(value, dict):
+            rows.append({
+                "depth": depth,
+                "indent": depth * 20,
+                "id": value.get("id"),
+                "contributes": value.get("contributes"),
+                "hint": value.get("hint"),
+                "value": None,
+                "is_component": True,
+            })
+            todo.extend((child, depth + 1) for child in reversed(value.get("values") or []))
+        else:
+            rows.append({
+                "depth": depth,
+                "indent": depth * 20,
+                "id": None,
+                "contributes": None,
+                "hint": None,
+                "value": value,
+                "is_component": False,
+            })
+
+    return rows
+
+
 def _date_with_milis_html(timestamp):
     # no_bandit_expl: constant string w/ substitution of dates/milis (escaped even), see also TimestampWithMillisTagTest
     return (

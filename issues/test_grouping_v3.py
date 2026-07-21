@@ -1,4 +1,5 @@
 from django.test import TestCase as DjangoTestCase
+from django.template.loader import render_to_string
 
 from issues.grouping_mechanisms import BUGSINK_GROUPING_V3
 from issues.utils import get_grouping_result_for_data
@@ -62,3 +63,25 @@ class GroupingV3TestCase(DjangoTestCase):
         self.assertNotEqual(first.candidates[0].key, second.candidates[0].key)
         self.assertEqual(first.candidates[1].key, second.candidates[1].key)
         self.assertEqual(second.candidates[0].key, second.candidates[1].key)
+
+    def test_grouping_candidate_template_renders_component_tree(self):
+        candidate = get_grouping_result_for_data(
+            stacktrace_event_data(),
+            grouping_mechanism=BUGSINK_GROUPING_V3,
+        ).candidates[0]
+        html = render_to_string("issues/_grouping_candidate.html", {
+            "candidate": {
+                "name": candidate.name,
+                "grouping_key": candidate.key,
+                "grouping_mechanism": candidate.mechanism,
+                "grouping_id": "1",
+                "primary": True,
+                "component": candidate.component,
+            },
+        })
+
+        self.assertIn("app", html)
+        self.assertIn("primary", html)
+        self.assertIn("stacktrace", html)
+        self.assertIn("does not contribute", html)
+        self.assertIn("site-packages", html)

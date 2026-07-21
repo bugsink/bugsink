@@ -1,6 +1,7 @@
 {% extends "issues/base.html" %}
 {% load static %}
 {% load stricter_templates %}
+{% load issues %}
 {% load humanize %}
 
 {% block tab_content %}
@@ -32,6 +33,16 @@
         </div>
     {% endfor %}
 </div>
+
+{% if event.grouping_candidates %}
+    <h1 id="grouping-candidates" class="text-2xl font-bold mt-4">Grouping Candidates</h1>
+
+    <div class="mb-6">
+        {% for candidate in event.grouping_candidates %}
+            {% include "issues/_grouping_candidate.html" %}
+        {% endfor %}
+    </div>
+{% endif %}
 
 {% if logentry_info %}
     <h1 id="logentry" class="text-2xl font-bold mt-4">Log Entry</h1>
