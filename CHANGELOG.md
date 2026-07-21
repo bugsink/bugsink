@@ -1,5 +1,48 @@
 # Changes
 
+## 2.5.0 (21 July 2026)
+
+### Improved issue grouping
+
+New projects now use a grouping mechanism that ignores variable values such as IDs and IP addresses in exception and
+log messages. This keeps repeated occurrences together more reliably. Grouping mechanisms are now versioned: existing
+projects stay on the previous mechanism until a project-admin opts in, with a 30-day transition period to avoid
+splitting existing issues. See #255, #440, #441, #448 and #451.
+
+If you wish to convert an existing project to the new grouping mechanism, you can do so from the project settings page.
+
+### Issues across projects
+
+The new global issue list lets users triage issues across all projects they can access, including the usual state
+filters and bulk actions. Project and global issue lists can also be sorted by lifetime event count, making the
+highest-impact issues easy to find. The canonical API supports the same event-count ordering. See #190, #260, #457 and
+#469.
+
+### Self-hosted administration
+
+Installations without email delivery can now show invite links for manual sharing. Admins can generate set-password
+links from the command line, users can change their own passwords, and DSNs have copy buttons. Docker deployments can
+also configure `EMAIL_BACKEND` directly, including Django's dummy backend to disable email deliberately. See #78, #247,
+#333, #365, #453 and #456.
+
+### Smaller fixes
+
+* Add Go SDK setup instructions, see #450.
+* Show "many issues" instead of looking empty when an exact project issue count would be too expensive, see #455.
+* Clarify ingest-directory vacuum output and clean up stale minidump ingest files, see #454.
+* Fix Snappea statistics with Django 5.2's UTC handling, link issue tag summaries to filtered events, and shorten long
+  "seen in releases" lists, see #459.
+* Show column numbers in stacktraces, see #414 and #466.
+* Add cleanup of issues whose stored events have all been removed, see #138 and #468.
+* Use consistent page headings across project, team and settings pages, see #467.
+* Update development-only Tailwind dependencies, see c0c8e752.
+* Email delivery now has a configurable hourly limit, defaulting to 60, so repeated alerts cannot quietly monopolize task
+  workers. Recent email failures are surfaced as a system warning. See #458.
+* Users with unaccepted invitations no longer have project, issue or event access. See #437
+* Auth tokens are masked in the list view until explicitly revealed. See #457 and #460.
+* Project names now only need to be unique within a team, so different teams can use natural names such as "Backend" or
+  "API" independently. See #464.
+
 ## 2.4.0 (10 July 2026)
 
 ### Backwards incompatible changes
