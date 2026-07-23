@@ -82,7 +82,7 @@ class Migration(migrations.Migration):
         ('issues', '0001_initial'),
         ('projects', '0001_initial'),
         ('releases', '0001_initial'),
-        ('teams', '0001_initial'),
+        ('teams', '0001_b_squashed_initial'),
         ('users', '0001_initial'),
     ]
 

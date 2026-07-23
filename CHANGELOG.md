@@ -1,5 +1,13 @@
 # Changes
 
+## 2.x.x (to be released)
+
+### Backwards incompatible changes
+
+Some _very ancient_ migration files, long since squashed and replaced, have been removed. In the unlikely event that
+you are running a pre-1.2.0 release and have not yet run migrations, you will need to upgrade to any release from 1.2.0
+to 2.5.0 and run migrations, before upgrading to [2.x.x] or later.
+
 ## 2.5.0 (21 July 2026)
 
 ### Improved issue grouping

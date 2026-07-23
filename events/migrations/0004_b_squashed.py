@@ -7,27 +7,9 @@ import django.utils.timezone
 
 class Migration(migrations.Migration):
 
-    replaces = [
-        ('events', '0004_event_irrelevance_for_retention'),
-        ('events', '0005_event_events_even_project_abe572_idx'),
-        ('events', '0006_event_never_evict'),
-        ('events', '0007_set_never_evict'),
-        ('events', '0008_remove_event_events_even_project_abe572_idx_and_more'),
-        ('events', '0009_event_events_even_issue_i_90497b_idx'),
-        ('events', '0010_rename_ingest_order_event_digest_order_and_more'),
-        ('events', '0011_remove_event_events_even_project_adcdee_idx_and_more'),
-        ('events', '0012_event_ingested_at'),
-        ('events', '0013_harmonize_foogested_at'),
-        ('events', '0014_event_grouping'),
-        ('events', '0015_set_event_grouping'),
-    ]
-
     dependencies = [
         ("events", "0003_initial"),  # the previous migration
         ("issues", "0001_initial"),  # This defines the Grouping model, which the below FKs to
-
-        # This is what Django auto-detected, but I think it's too restrictive:
-        # ("issues", "0007_alter_turningpoint_options"),
 
         # Additionally, Django auto-detected the below, presumably because we add a (project, event_id) unique
         # constraint. However, we don't actually depend on this migration when adding that constraint, so we don't need

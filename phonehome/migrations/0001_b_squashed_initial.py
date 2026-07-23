@@ -11,14 +11,6 @@ def create_installation_id(apps, schema_editor):
 
 class Migration(migrations.Migration):
 
-    replaces = [
-        ('phonehome', '0001_initial'),
-        ('phonehome', '0002_create_installation_id'),
-        ('phonehome', '0003_outboundmessage'),
-        ('phonehome', '0004_installation_created_at'),
-        ('phonehome', '0005_installation_silence_email_system_warning'),
-    ]
-
     initial = True
 
     dependencies = []
