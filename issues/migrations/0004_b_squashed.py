@@ -5,13 +5,6 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
 
-    replaces = [
-        ('issues', '0004_rename_event_count_issue_digested_event_count'),
-        ('issues', '0005_rename_ingest_order_issue_digest_order_and_more'),
-        ('issues', '0006_issue_next_unmute_check'),
-        ('issues', '0007_alter_turningpoint_options'),
-    ]
-
     dependencies = [
         ("projects", "0002_b_squashed_initial"),
         ("issues", "0003_alter_turningpoint_triggering_event"),

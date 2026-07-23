@@ -7,20 +7,9 @@ import django.db.models.deletion
 
 class Migration(migrations.Migration):
 
-    replaces = [
-        ('projects', '0002_initial'),
-        ('projects', '0003_project_retention_max_event_count'),
-        ('projects', '0004_project_quota_exceeded_until'),
-        ('projects', '0005_project_ingested_event_count'),
-        ('projects', '0006_initial_ingested_count_value'),
-        ('projects', '0007_rename_ingested_event_count_project_digested_event_count'),
-        ('projects', '0008_project_next_quota_check'),
-        ('projects', '0009_alter_project_visibility'),
-    ]
-
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ("teams", "0001_initial"),  # defines the Team model, which we have a FK to
+        ("teams", "0001_b_squashed_initial"),  # defines the Team model, which we have a FK to
         ("projects", "0001_initial"),  # this is the previous migration
     ]
 

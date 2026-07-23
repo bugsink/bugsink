@@ -8,13 +8,6 @@ import uuid
 
 class Migration(migrations.Migration):
 
-    replaces = [
-        ('teams', '0001_initial'),
-        ('teams', '0002_initial'),
-        ('teams', '0003_alter_team_visibility'),
-        ('teams', '0004_remove_team_slug'),
-    ]
-
     initial = True
 
     dependencies = [
