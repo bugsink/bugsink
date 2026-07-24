@@ -30,15 +30,17 @@ def get_stacktrace_entries(event_data):
     if not threads:
         return []  # The threads interface is optional.
 
-    if len(threads) != 1:
-        return []  # Current evidence only covers the single-thread shape.
+    for thread in threads:
+        stacktrace = thread.get("stacktrace")
+        if not stacktrace:
+            continue  # The stacktrace interface is optional within threads.
 
-    stacktrace = threads[0].get("stacktrace")
-    if not stacktrace:
-        return []  # The stacktrace interface is optional within threads.
+        if not stacktrace.get("frames"):
+            continue  # Illegal in API, but as observed sample: exception_null_frames.json
 
-    if not stacktrace.get("frames"):
-        return []  # Illegal in API, but as observed sample: exception_null_frames.json
+        break  # found a thread with a stacktrace; use it.
+    else:
+        return []
 
     type_, value = get_type_and_value_for_data(event_data)
     return [{

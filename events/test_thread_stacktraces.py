@@ -38,6 +38,9 @@ THREAD_STACKTRACE_SAMPLES = [
     ),
 ]
 
+JAVA_MULTIPLE_THREADS_SAMPLE = "sentry-java-capture-message-attach-threads.json"
+JAVA_MULTIPLE_THREADS_MESSAGE = "capture_message with all Java threads from ProbeMultipleThreads.java"
+
 
 def load_generated_sample(filename):
     with open(GENERATED_SAMPLES_DIR / filename) as sample:
@@ -105,3 +108,24 @@ class ThreadStacktraceSampleTests(TransactionTestCase):
                 response = self.api_client.get(reverse("api:event-stacktrace", args=[event.id]))
                 self.assertEqual(200, response.status_code)
                 self.assertEqual(markdown, response.content.decode())
+
+    def test_multiple_threads_render_the_first_stacktrace_with_frames(self):
+        data = load_generated_sample(JAVA_MULTIPLE_THREADS_SAMPLE)
+        event = create_event(project=self.project, event_data=data, platform=data["platform"])
+
+        entries = get_stacktrace_entries(data)
+        self.assertEqual(1, len(entries))
+        self.assertEqual(data["threads"]["values"][1]["stacktrace"], entries[0]["stacktrace"])
+        self.assertEqual("Log Message", entries[0]["type"])
+        self.assertEqual(JAVA_MULTIPLE_THREADS_MESSAGE, entries[0]["value"])
+
+        response = self.client.get(f"/issues/issue/{event.issue.id}/event/{event.id}/")
+        self.assertContains(response, JAVA_MULTIPLE_THREADS_MESSAGE)
+        self.assertContains(response, "ProbeMultipleThreads.java")
+        self.assertNotContains(response, "bugsink-probe-background")
+        self.assertNotContains(response, "No stacktrace available for this event.")
+
+        markdown = render_stacktrace_md(event)
+        self.assertIn(JAVA_MULTIPLE_THREADS_MESSAGE, markdown)
+        self.assertIn("ProbeMultipleThreads.java", markdown)
+        self.assertNotIn("bugsink-probe-background", markdown)
