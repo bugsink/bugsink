@@ -141,7 +141,6 @@ if not I_AM_RUNNING == "TEST":
                 "basepath": safe_join(BASE_DIR, "filestorage"),
                 "compression_algorithm": "br",
             },
-            "USE_FOR_WRITE": True,
         },
     }
 
