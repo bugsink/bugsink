@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 import json
 import ecma426
-from issues.utils import get_values
+from issues.utils import get_type_and_value_for_data, get_values
 
 from bugsink.transaction import delay_on_commit
 from bugsink.utils import assert_
@@ -17,6 +17,38 @@ from files.tasks import record_file_accesses
 # Dijkstra, sourcemaps and Python lists start at 0, but sentry-event frames, editors and our UI (lines/cols) start at 1.
 FROM_DISPLAY = -1
 TO_DISPLAY = 1
+
+
+def get_stacktrace_entries(event_data):
+    exceptions = get_values(event_data.get("exception"))
+    if exceptions:
+        # Exception Stacktrace entries are preferred over thread stacktrace entries, so if we have any exceptions, we
+        # ignore the threads.
+        return [dict(exception, is_exception_stacktrace=True) for exception in exceptions]
+
+    threads = get_values(event_data.get("threads"))
+    if not threads:
+        return []  # The threads interface is optional.
+
+    for thread in threads:
+        stacktrace = thread.get("stacktrace")
+        if not stacktrace:
+            continue  # The stacktrace interface is optional within threads.
+
+        if not stacktrace.get("frames"):
+            continue  # Illegal in API, but as observed sample: exception_null_frames.json
+
+        break  # found a thread with a stacktrace; use it.
+    else:
+        return []
+
+    type_, value = get_type_and_value_for_data(event_data)
+    return [{
+        "type": type_,
+        "value": value,
+        "stacktrace": stacktrace,
+        "is_exception_stacktrace": False,
+    }]
 
 
 class IncompleteList(list):
