@@ -12,7 +12,7 @@
 
 import logging
 from django.conf import settings
-from events.utils import apply_sourcemaps
+from events.utils import apply_sourcemaps, get_stacktrace_entries
 
 from sentry_sdk_extensions import capture_or_log_exception
 
@@ -40,17 +40,6 @@ def _code_lines(frame):
         lines.append(ctx)
     lines.extend(post)
     return lines
-
-
-def _iter_exceptions(parsed):
-    exc = parsed.get("exception")
-    if not exc:
-        return []
-    if isinstance(exc, dict):
-        return list(exc.get("values") or [])
-    if isinstance(exc, (list, tuple)):
-        return list(exc)
-    return []
 
 
 def _frames_for_exception(exc):
@@ -145,7 +134,7 @@ def render_stacktrace_md(event, in_app_only=False, include_locals=True):
         # sourcemaps are still experimental; we don't want to fail on them, so we just log the error and move on.
         capture_or_log_exception(e, logger)
 
-    excs = _iter_exceptions(parsed)
+    excs = get_stacktrace_entries(parsed)
     if not excs:
         return "_No stacktrace available._"
 

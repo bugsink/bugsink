@@ -36,7 +36,7 @@ from .models import (
     apply_issue_action, is_valid_issue_action, q_for_invalid_issue_action)
 from .forms import CommentForm
 from .utils import get_values, get_main_exception
-from events.utils import annotate_with_meta, apply_sourcemaps, get_sourcemap_images
+from events.utils import annotate_with_meta, apply_sourcemaps, get_sourcemap_images, get_stacktrace_entries
 from .markdown_issue import render_issue_md
 from .grouping_mechanisms import GROUPING_MECHANISMS, MECHANISM_INDEPENDENT_GROUPING
 
@@ -416,7 +416,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
 
     parsed_data = event.get_parsed_data()
 
-    exceptions = get_values(parsed_data["exception"]) if "exception" in parsed_data else None
+    exceptions = get_stacktrace_entries(parsed_data)
 
     try:
         # get_values for consistency (whether it's needed: unclear, since _meta is not actually in the specs)
@@ -445,7 +445,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
     # (possibly later) have this as something that is configurable at the user level.
     stack_of_plates = event.platform != "python"  # Python is the only platform that has chronological stacktraces
 
-    if exceptions is not None and len(exceptions) > 0:
+    if exceptions:
         if exceptions[-1].get('stacktrace') and exceptions[-1]['stacktrace'].get('frames'):
             exceptions[-1]['stacktrace']['frames'][-1]['raise_point'] = True
 

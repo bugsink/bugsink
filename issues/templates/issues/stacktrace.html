@@ -94,6 +94,7 @@
                 </div>
 
                 <div class="ml-auto pr-4">{# indicator for frame's position in stacktrace #}
+                    {% if exception.is_exception_stacktrace %}
                     {% if stack_of_plates and forloop.first or not stack_of_plates and forloop.last %}
                         {% if stack_of_plates and forloop.parentloop.first or not stack_of_plates and forloop.parentloop.last %}
                             <span class="bg-slate-200 dark:bg-slate-800 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">raise {{ exception.type }}</span>
@@ -117,6 +118,7 @@
                             <span class="bg-slate-200 dark:bg-slate-800 pl-2 pr-2 pt-1 pb-1 rounded-md whitespace-nowrap">try…</span>
                         {% endif %}
 
+                    {% endif %}
                     {% endif %}
                 </div>
 
