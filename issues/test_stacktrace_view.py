@@ -1,8 +1,20 @@
+import json
+import os
+from pathlib import Path
+
 from django.contrib.auth import get_user_model
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from events.factories import create_event
 from projects.models import Project, ProjectMembership
+
+
+SAMPLES_DIR = Path(os.getenv("SAMPLES_DIR", "../event-samples"))
+
+
+def load_sample(relative_path):
+    with open(SAMPLES_DIR / relative_path) as sample:
+        return json.load(sample)
 
 
 class StacktraceViewTests(TransactionTestCase):
@@ -104,3 +116,50 @@ class StacktraceViewTests(TransactionTestCase):
 
         content = response.content.decode()
         self.assertLess(content.index("ErrorRaised.java"), content.index("CallStarted.java"))
+
+    def test_python_exception_chain_is_displayed_in_payload_order(self):
+        response = self.render_stacktrace({
+            "platform": "python",
+            "exception": {
+                "values": [
+                    {
+                        "type": "HandledError",
+                        "value": "The first failure",
+                    },
+                    {
+                        "type": "FinalError",
+                        "value": "The second failure",
+                    },
+                ],
+            },
+        })
+
+        content = response.content.decode()
+        separator = "During handling of the above exception another exception occurred or was intentionally reraised:"
+        self.assertLess(content.index("The first failure"), content.index(separator))
+        self.assertLess(content.index(separator), content.index("The second failure"))
+
+    def test_non_python_exception_chain_is_displayed_in_reverse_payload_order(self):
+        # Less realistic than a Java sample, but identical inputs make the ordering difference easier to inspect.
+        response = self.render_stacktrace({
+            "platform": "java",
+            "exception": {
+                "values": [
+                    {
+                        "type": "HandledError",
+                        "value": "The first failure",
+                    },
+                    {
+                        "type": "FinalError",
+                        "value": "The second failure",
+                    },
+                ],
+            },
+        })
+
+        content = response.content.decode()
+        separator = (
+            "The above exception was caused by or intentially reraised during the handling of the following exception:"
+        )
+        self.assertLess(content.index("The second failure"), content.index(separator))
+        self.assertLess(content.index(separator), content.index("The first failure"))
