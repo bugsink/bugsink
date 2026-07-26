@@ -36,7 +36,13 @@ from .models import (
     apply_issue_action, is_valid_issue_action, q_for_invalid_issue_action)
 from .forms import CommentForm
 from .utils import get_values, get_main_exception
-from events.utils import annotate_with_meta, apply_sourcemaps, get_sourcemap_images, get_stacktrace_entries
+from events.utils import (
+    annotate_with_meta,
+    apply_sourcemaps,
+    get_sourcemap_images,
+    get_stacktrace_entries,
+    get_thread_stacktrace_entries,
+)
 from .markdown_issue import render_issue_md
 from .grouping_mechanisms import GROUPING_MECHANISMS, MECHANISM_INDEPENDENT_GROUPING
 
@@ -417,6 +423,12 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
     parsed_data = event.get_parsed_data()
 
     exceptions = get_stacktrace_entries(parsed_data)
+    thread_stacktraces = (
+        get_thread_stacktrace_entries(parsed_data)
+        if exceptions and exceptions[0]["is_exception_stacktrace"] else []
+    )
+    if len(thread_stacktraces) < 2:
+        thread_stacktraces = []
 
     try:
         # get_values for consistency (whether it's needed: unclear, since _meta is not actually in the specs)
@@ -464,6 +476,10 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
                     continue
                 exception['stacktrace']['frames'] = [f for f in reversed(exception['stacktrace']['frames'])]
 
+    if stack_of_plates:
+        for thread in thread_stacktraces:
+            thread["stacktrace"]["frames"] = list(reversed(thread["stacktrace"].get("frames") or []))
+
     multiple_thread_stacktraces = bool(
         exceptions and len(exceptions) > 1 and not exceptions[0]["is_exception_stacktrace"]
     )
@@ -479,6 +495,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
         "request_repr": _request_repr(parsed_data),
         "exceptions": exceptions,
         "stack_of_plates": stack_of_plates,
+        "thread_stacktraces": thread_stacktraces,
         "multiple_thread_stacktraces": multiple_thread_stacktraces,
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),

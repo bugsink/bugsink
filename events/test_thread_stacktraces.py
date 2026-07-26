@@ -40,6 +40,7 @@ THREAD_STACKTRACE_SAMPLES = [
 
 JAVA_MULTIPLE_THREADS_SAMPLE = "sentry-java-capture-message-attach-threads.json"
 JAVA_MULTIPLE_THREADS_MESSAGE = "capture_message with all Java threads from ProbeMultipleThreads.java"
+JAVA_EXCEPTION_THREADS_SAMPLE = "sentry-java-capture-exception-attach-threads.json"
 
 
 def load_generated_sample(filename):
@@ -124,5 +125,23 @@ class ThreadStacktraceSampleTests(TransactionTestCase):
         self.assertIn("lambda$main$1", markdown)
         self.assertIn("_errored: yes, state: Runnable_", markdown)
         self.assertNotIn("was active:", markdown)
+        self.assertEqual(2, markdown.count("_No stacktrace found._"))
+        self.assertNotIn("During handling of the above exception", markdown)
+
+    def test_exception_and_threads_render_in_markdown(self):
+        data = load_generated_sample(JAVA_EXCEPTION_THREADS_SAMPLE)
+        event = create_event(project=self.project, event_data=data, platform=data["platform"])
+
+        markdown = render_stacktrace_md(event)
+
+        self.assertIn("# IllegalStateException", markdown)
+        self.assertIn("capture_exception with all Java threads from ProbeExceptionMultipleThreads.java", markdown)
+        self.assertIn("### ProbeExceptionMultipleThreads.java:35 in `captureException`", markdown)
+        self.assertIn("# Threads", markdown)
+        self.assertLess(markdown.index("# IllegalStateException"), markdown.index("# Threads"))
+        self.assertIn("## Thread #1: main", markdown)
+        self.assertIn("## Thread #22: bugsink-probe-background", markdown)
+        self.assertIn("### ProbeExceptionMultipleThreads.java:38 in `captureException`", markdown)
+        self.assertIn("lambda$main$1", markdown)
         self.assertEqual(2, markdown.count("_No stacktrace found._"))
         self.assertNotIn("During handling of the above exception", markdown)

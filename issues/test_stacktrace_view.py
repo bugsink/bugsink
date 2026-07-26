@@ -258,16 +258,22 @@ class StacktraceViewTests(TransactionTestCase):
         self.assertNotIn("During handling of the above exception", text)
 
     @tag("samples")
-    def test_exception_event_does_not_display_thread_snapshots(self):
+    def test_exception_event_displays_thread_snapshots_after_exception(self):
         event_data = load_sample("generated/sentry-java-capture-exception-attach-threads.json")
 
         text = visible_text(self.render_stacktrace(event_data))
 
         self.assertIn("IllegalStateException", text)
+        self.assertIn("capture_exception with all Java threads from ProbeExceptionMultipleThreads.java", text)
         self.assertIn("raise IllegalStateException", text)
-        self.assertIn("ProbeExceptionMultipleThreads.java", text)
-        self.assertNotIn("Thread #1: main", text)
-        self.assertNotIn("Thread #22: bugsink-probe-background", text)
+        self.assertIn("ProbeExceptionMultipleThreads.java in captureException line 35", text)
+        self.assertLess(text.index("IllegalStateException"), text.index("Threads"))
+        self.assertIn("Thread #1: main", text)
+        self.assertIn("Thread #22: bugsink-probe-background", text)
+        self.assertIn("ProbeExceptionMultipleThreads.java in captureException line 38", text)
+        self.assertIn("ProbeExceptionMultipleThreads.java in lambda$main$1 line 19", text)
+        self.assertEqual(2, text.count("No stacktrace found."))
+        self.assertNotIn("During handling of the above exception", text)
 
     def test_python_exception_chain_is_displayed_in_payload_order(self):
         response = self.render_stacktrace({

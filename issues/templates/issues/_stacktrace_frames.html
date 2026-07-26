@@ -7,7 +7,7 @@
     <div class="bg-white dark:bg-slate-700 w-full font-mono"> {# per frame div #}
         {% if frame.raise_point %}<span id="raise"></span>{% endif %}
         {% if frame.in_app %}<span id="in-app"></span>{% endif %}
-        {% if forloop.first and forloop.parentloop.first %}<span id="first-frame"></span>{% endif %}
+        {% if not is_thread_section and forloop.first and forloop.parentloop.first %}<span id="first-frame"></span>{% endif %}
 
         <div class="flex pl-4 pt-2 pb-2 border-b-2 {% if forloop.first %}border-t-2{% endif %} bg-slate-100 dark:bg-slate-700 border-slate-400 cursor-pointer" onclick="toggleFrameVisibility(this)"> {# per frame header div #}
 
@@ -55,7 +55,7 @@
             </div>
         </div> {# per frame header div #}
 
-        <div class="js-frame-details {% if frame.in_app %}js-in-app{% endif %} border-slate-400 overflow-hidden transition-all {% if stack_of_plates and forloop.parentloop.first and forloop.first or not stack_of_plates and forloop.parentloop.last and forloop.last %}js-raising-frame{% endif %}"
+        <div class="js-frame-details {% if frame.in_app %}js-in-app{% endif %} border-slate-400 overflow-hidden transition-all {% if not is_thread_section and stack_of_plates and forloop.parentloop.first and forloop.first or not is_thread_section and not stack_of_plates and forloop.parentloop.last and forloop.last %}js-raising-frame{% endif %}"
             {% if not frame.raise_point %}data-collapsed="true" style="height: 0px"{% endif %}> {# collapsable part #}
 
             <div class="pl-6 pr-6 {% if not forloop.last %}border-b-2 border-slate-400{% endif %}">{# convience div for padding & border; the border is basically the top-border of the next header #}

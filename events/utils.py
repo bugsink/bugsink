@@ -38,13 +38,7 @@ def _thread_description(thread):
     return ", ".join(parts)
 
 
-def get_stacktrace_entries(event_data):
-    exceptions = get_values(event_data.get("exception"))
-    if exceptions:
-        # Exception Stacktrace entries are preferred over thread stacktrace entries, so if we have any exceptions, we
-        # ignore the threads.
-        return [dict(exception, is_exception_stacktrace=True) for exception in exceptions]
-
+def get_thread_stacktrace_entries(event_data):
     threads = get_values(event_data.get("threads"))
     if not threads:
         return []  # The threads interface is optional.
@@ -71,6 +65,14 @@ def get_stacktrace_entries(event_data):
 
     entries.insert(0, entries.pop(first_with_frames))
     return entries
+
+
+def get_stacktrace_entries(event_data):
+    exceptions = get_values(event_data.get("exception"))
+    if exceptions:
+        return [dict(exception, is_exception_stacktrace=True) for exception in exceptions]
+
+    return get_thread_stacktrace_entries(event_data)
 
 
 class IncompleteList(list):
