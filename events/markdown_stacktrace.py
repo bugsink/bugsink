@@ -163,10 +163,27 @@ def render_stacktrace_md(event, in_app_only=False, include_locals=True):
         return "_No stacktrace available._"
 
     stack_of_plates = getattr(event, "platform", None) != "python"
-    if stack_of_plates:
+    is_exception_stacktrace = excs[0]["is_exception_stacktrace"]
+    if stack_of_plates and is_exception_stacktrace:
         excs = list(reversed(excs))
 
     lines = []
+    if not is_exception_stacktrace:
+        lines += _header_lines(event, excs[0])
+        for thread in excs:
+            if len(excs) > 1:
+                lines += ["", f"## {thread['thread_title']}"]
+                if thread["thread_description"]:
+                    lines.append(f"_{thread['thread_description']}_")
+
+            if not _frames_for_exception(thread):
+                lines += ["", "_No stacktrace found._"]
+                continue
+
+            lines += _frame_lines(thread, stack_of_plates, in_app_only, include_locals)
+
+        return "\n".join([s.rstrip() for s in lines]).strip()
+
     for i, exc in enumerate(excs):
         if i > 0:
             lines += ["", "**During handling of the above exception, another exception occurred:**", ""]

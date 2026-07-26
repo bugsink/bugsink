@@ -446,19 +446,27 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
     stack_of_plates = event.platform != "python"  # Python is the only platform that has chronological stacktraces
 
     if exceptions:
-        if exceptions[-1].get('stacktrace') and exceptions[-1]['stacktrace'].get('frames'):
-            exceptions[-1]['stacktrace']['frames'][-1]['raise_point'] = True
+        is_exception_stacktrace = exceptions[0]["is_exception_stacktrace"]
+        entry_to_mark = exceptions[-1] if is_exception_stacktrace else exceptions[0]
+
+        if entry_to_mark.get('stacktrace') and entry_to_mark['stacktrace'].get('frames'):
+            entry_to_mark['stacktrace']['frames'][-1]['raise_point'] = True
 
         if stack_of_plates:
             # NOTE manipulation of parsed_data going on here, this could be a trap if other parts depend on it
             # (e.g. grouper)
-            exceptions = [e for e in reversed(exceptions)]
+            if is_exception_stacktrace:
+                exceptions = [e for e in reversed(exceptions)]
             for exception in exceptions:
                 if not exception.get('stacktrace'):
                     continue
                 if not exception.get('stacktrace').get('frames'):
                     continue
                 exception['stacktrace']['frames'] = [f for f in reversed(exception['stacktrace']['frames'])]
+
+    multiple_thread_stacktraces = bool(
+        exceptions and len(exceptions) > 1 and not exceptions[0]["is_exception_stacktrace"]
+    )
 
     return render(request, "issues/stacktrace.html", {
         "tab": "stacktrace",
@@ -471,6 +479,7 @@ def issue_event_stacktrace(request, issue, event_pk=None, digest_order=None, nav
         "request_repr": _request_repr(parsed_data),
         "exceptions": exceptions,
         "stack_of_plates": stack_of_plates,
+        "multiple_thread_stacktraces": multiple_thread_stacktraces,
         "mute_options": GLOBAL_MUTE_OPTIONS,
         "q": request.GET.get("q", ""),
         # event_qs_count is not used when there is no q, so no need to calculate it in that case

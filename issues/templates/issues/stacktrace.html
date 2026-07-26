@@ -29,6 +29,7 @@
 
 {% for exception in exceptions %}
 
+    {% if exception.is_exception_stacktrace or forloop.first %}
     <div class="{% if forloop.counter0 > 0 %}mt-4{% endif %}">
         <div class="flex items-start flex-col-reverse lg:flex-row xl:flex-col-reverse 2xl:flex-row"> {# buttons above titles, or not? 'flips', because at 'xl:...' some space is eaten by the "Key Issue Info" box #}
             <div class="min-w-0 overflow-hidden">
@@ -74,6 +75,20 @@
 
         <div class="text-lg mb-4 text-ellipsis whitespace-nowrap overflow-hidden">{{ exception.value }}</div>
     </div>
+    {% endif %}
+
+    {% if not exception.is_exception_stacktrace and multiple_thread_stacktraces %}
+    <div class="{% if not forloop.first %}mt-6{% endif %} mb-4">
+        <h2 class="text-xl font-bold">{{ exception.thread_title }}</h2>
+        {% if exception.thread_description %}
+        <div class="text-slate-600 dark:text-slate-300">{{ exception.thread_description }}</div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if not exception.is_exception_stacktrace and not exception.stacktrace.frames %}
+    <div class="mb-4 italic">No stacktrace found.</div>
+    {% endif %}
 
     {% for frame in exception.stacktrace.frames %}
         {% with frame=frame|pygmentize:event.platform %}
@@ -190,7 +205,7 @@
     {% endfor %} {# frame #}
     {# </div> #} {# per-exception div in the multi-exception case #}
 
-    {% if not forloop.last %}
+    {% if exception.is_exception_stacktrace and not forloop.last %}
         {% if not stack_of_plates %}
             <div class="italic pt-4">During handling of the above exception another exception occurred or was intentionally reraised:</div>
             {# note: the above is specific to Python. We cannot distinguish between Python's 2 types of chained exceptions because the info is not sent by the client #}
