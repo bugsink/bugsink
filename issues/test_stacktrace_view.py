@@ -1,8 +1,11 @@
 import json
 import os
+from html import unescape
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
+from django.test import tag
+from django.utils.html import strip_tags
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from events.factories import create_event
@@ -15,6 +18,10 @@ SAMPLES_DIR = Path(os.getenv("SAMPLES_DIR", "../event-samples"))
 def load_sample(relative_path):
     with open(SAMPLES_DIR / relative_path) as sample:
         return json.load(sample)
+
+
+def visible_text(response):
+    return " ".join(unescape(strip_tags(response.content.decode())).split())
 
 
 class StacktraceViewTests(TransactionTestCase):
@@ -32,6 +39,12 @@ class StacktraceViewTests(TransactionTestCase):
             platform=event_data["platform"],
         )
         return self.client.get(f"/issues/issue/{event.issue.id}/event/{event.id}/")
+
+    def render_frame_from_sample(self, frame_index):
+        event_data = load_sample("bugsink/frames-with-missing-info.json")
+        frames = event_data["exception"]["values"][0]["stacktrace"]["frames"]
+        event_data["exception"]["values"][0]["stacktrace"]["frames"] = [frames[frame_index]]
+        return self.render_stacktrace(event_data)
 
     def test_event_without_stacktrace_says_none_is_available(self):
         response = self.render_stacktrace({
@@ -76,6 +89,39 @@ class StacktraceViewTests(TransactionTestCase):
         self.assertContains(response, "example.py")
         self.assertContains(response, "do_work")
         self.assertContains(response, "421337")
+
+    @tag("samples")
+    def test_frame_displays_source_context_and_variables(self):
+        response = self.render_frame_from_sample(0)
+        text = visible_text(response)
+
+        self.assertIn("main()", text)
+        self.assertIn("Variable", text)
+        self.assertIn("__name__", text)
+        self.assertNotIn("No code context or variables available for this frame.", text)
+
+    @tag("samples")
+    def test_frame_without_source_context_displays_variables(self):
+        response = self.render_frame_from_sample(1)
+        text = visible_text(response)
+
+        self.assertIn("execute_from_command_line", text)
+        self.assertNotIn("No code context or variables available for this frame.", text)
+
+    @tag("samples")
+    def test_frame_without_variables_displays_source_context(self):
+        response = self.render_frame_from_sample(2)
+        text = visible_text(response)
+
+        self.assertIn("utility.execute()", text)
+        self.assertNotIn("Variable", text)
+        self.assertNotIn("No code context or variables available for this frame.", text)
+
+    @tag("samples")
+    def test_frame_without_source_context_or_variables_says_so(self):
+        response = self.render_frame_from_sample(3)
+
+        self.assertContains(response, "No code context or variables available for this frame.")
 
     def test_python_frames_are_displayed_in_payload_order(self):
         response = self.render_stacktrace({
