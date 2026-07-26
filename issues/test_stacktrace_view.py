@@ -117,6 +117,33 @@ class StacktraceViewTests(TransactionTestCase):
         content = response.content.decode()
         self.assertLess(content.index("ErrorRaised.java"), content.index("CallStarted.java"))
 
+    def test_exception_stacktrace_marks_beginning_and_raise(self):
+        response = self.render_stacktrace({
+            "platform": "python",
+            "exception": {
+                "values": [{
+                    "type": "ExampleError",
+                    "value": "Something went wrong",
+                    "stacktrace": {
+                        "frames": [
+                            {"filename": "call_started.py"},
+                            {"filename": "error_raised.py"},
+                        ],
+                    },
+                }],
+            },
+        })
+
+        content = response.content.decode()
+        positions = [
+            content.index("call_started.py"),
+            content.index("\u2192 begin"),
+
+            content.index("error_raised.py"),
+            content.index("raise ExampleError"),
+        ]
+        self.assertEqual(positions, sorted(positions))
+
     def test_python_exception_chain_is_displayed_in_payload_order(self):
         response = self.render_stacktrace({
             "platform": "python",
