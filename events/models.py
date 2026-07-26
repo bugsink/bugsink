@@ -229,7 +229,7 @@ class Event(models.Model):
                 storage_backend=None if write_storage is None else write_storage.name,
 
                 timestamp=parse_timestamp(parsed_data.get("timestamp", event_metadata["ingested_at"])),
-                platform=parsed_data["platform"][:64],
+                platform=(parsed_data.get("platform") or "other")[:64],
 
                 level=maybe_empty(parsed_data.get("level", "")),
                 logger=maybe_empty(parsed_data.get("logger", ""))[:64],

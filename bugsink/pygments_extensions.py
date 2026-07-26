@@ -105,7 +105,8 @@ def guess_lexer_for_filename(_fn, platform, code=None, **options):
 
 
 def lexer_for_platform(platform, **options):
-    # We can depend on platform having been set: it's a required attribute as per Sentry's docs.
+    # We can depend on platform having been set: it's a required attribute and we fallback to "other" if it's not
+    # given.
     # The LHS in the table below is a fixed list of available platforms, as per the Sentry docs. (but: #143, #145)
     # The RHS is my educated guess for what these platforms map to in Pygments.
 
