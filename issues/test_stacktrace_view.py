@@ -64,3 +64,43 @@ class StacktraceViewTests(TransactionTestCase):
         self.assertContains(response, "example.py")
         self.assertContains(response, "do_work")
         self.assertContains(response, "421337")
+
+    def test_python_frames_are_displayed_in_payload_order(self):
+        response = self.render_stacktrace({
+            "platform": "python",
+            "exception": {
+                "values": [{
+                    "type": "ExampleError",
+                    "value": "Something went wrong",
+                    "stacktrace": {
+                        "frames": [
+                            {"filename": "call_started.py"},
+                            {"filename": "error_raised.py"},
+                        ],
+                    },
+                }],
+            },
+        })
+
+        content = response.content.decode()
+        self.assertLess(content.index("call_started.py"), content.index("error_raised.py"))
+
+    def test_non_python_frames_are_displayed_in_reverse_payload_order(self):
+        response = self.render_stacktrace({
+            "platform": "java",
+            "exception": {
+                "values": [{
+                    "type": "ExampleError",
+                    "value": "Something went wrong",
+                    "stacktrace": {
+                        "frames": [
+                            {"filename": "CallStarted.java"},
+                            {"filename": "ErrorRaised.java"},
+                        ],
+                    },
+                }],
+            },
+        })
+
+        content = response.content.decode()
+        self.assertLess(content.index("ErrorRaised.java"), content.index("CallStarted.java"))
