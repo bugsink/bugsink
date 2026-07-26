@@ -7,6 +7,9 @@ from sentry.at_glitchtip_af9a700a8706.utils.safe import get_path, trim
 from sentry.at_glitchtip_af9a700a8706.utils.strings import strip
 
 
+LOG_MESSAGE_TYPE = "Log Message"
+
+
 def maybe_empty(s):
     return "" if not s else s
 
@@ -54,9 +57,7 @@ def get_type_and_value_for_data(data):
 
 
 def get_exception_type_and_value_for_logmessage(data):
-    """In Sentry's data-model, log messages are retrofitted into the event model; personally I'm not a fan of using an
-    Error Tracking tool for logging, but we at least make sure to show meaningful titles for log messages. The Bugsink
-    choice is: just use "Log Message" as the type, which at least clarifies what you're looking at"""
+    """Use "Log Message" to classify non-exception events internally; their message is the useful display title."""
 
     message = strip(
         get_path(data, "logentry", "message")
@@ -72,9 +73,9 @@ def get_exception_type_and_value_for_logmessage(data):
         message = data.get("message")
 
     if message:
-        return "Log Message", message.splitlines()[0][:1024]
+        return LOG_MESSAGE_TYPE, message.splitlines()[0][:1024]
 
-    return "Log Message", "<no log message>"
+    return LOG_MESSAGE_TYPE, "<no log message>"
 
 
 def get_main_exception(data):
@@ -161,14 +162,14 @@ def get_key_with_mechanism_for_data(data, grouping_mechanism):
 
 
 def get_title_for_exception_type_and_value(type_, value):
-    # This is a simple function that formats the type and value of an exception in a way that's suitable for use as a
-    # title. It's used in grouping, but also to actually display the title of an issue in the UI.
-
     if not value:
         return type_
 
     if not isinstance(value, str):
         value = str(value)
+
+    if type_ == LOG_MESSAGE_TYPE:
+        return value.splitlines()[0]
 
     return "{}: {}".format(type_, value.splitlines()[0])
 

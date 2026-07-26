@@ -10,7 +10,7 @@ from projects.models import Project
 from compat.timestamp import parse_timestamp
 from bugsink.transaction import delay_on_commit
 
-from issues.utils import get_title_for_exception_type_and_value
+from issues.utils import get_title_for_exception_type_and_value, LOG_MESSAGE_TYPE
 
 from .retention import get_random_irrelevance
 from .storage_registry import get_write_storage, get_storage
@@ -201,6 +201,10 @@ class Event(models.Model):
 
     def title(self):
         return get_title_for_exception_type_and_value(self.calculated_type, self.calculated_value)
+
+    def is_log_message(self):
+        # Ingest derives calculated_type from this event's payload.
+        return self.calculated_type == LOG_MESSAGE_TYPE
 
     @classmethod
     def from_ingested(cls, event_metadata, digested_at, digest_order, project_digest_order, stored_event_count, issue,
