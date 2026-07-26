@@ -122,6 +122,30 @@ def _select_frames(frames, in_app_only):
     return filtered if filtered else frames
 
 
+def _frame_lines(exc, stack_of_plates, in_app_only, include_locals):
+    frames = _frames_for_exception(exc)
+    if stack_of_plates and frames:
+        frames = list(reversed(frames))
+
+    lines = []
+    for frame in _select_frames(frames, in_app_only):
+        lines.append("")
+        lines += _format_frame_header(frame)
+
+        code_listing = _format_code_gutter(frame)
+        if code_listing:
+            lines += code_listing
+        else:
+            lines.append("_no source context available_")
+
+        if include_locals:
+            loc_lines = _format_locals(frame)
+            if loc_lines:
+                lines += loc_lines
+
+    return lines
+
+
 def render_stacktrace_md(event, in_app_only=False, include_locals=True):
     parsed = event.get_parsed_data()
     try:
@@ -147,28 +171,6 @@ def render_stacktrace_md(event, in_app_only=False, include_locals=True):
         if i > 0:
             lines += ["", "**During handling of the above exception, another exception occurred:**", ""]
         lines += _header_lines(event, exc)
-
-        frames_list = _frames_for_exception(exc) or []
-        if stack_of_plates and frames_list:
-            frames_list = list(reversed(frames_list))
-
-        frames_list = _select_frames(frames_list, in_app_only)
-
-        for frame in frames_list:
-            # spacer above every frame header
-            lines.append("")
-            lines += _format_frame_header(frame)
-
-            code_listing = _format_code_gutter(frame)
-            if code_listing:
-                lines += code_listing
-            else:
-                # brief mention when no source context is available
-                lines.append("_no source context available_")
-
-            if include_locals:
-                loc_lines = _format_locals(frame)
-                if loc_lines:
-                    lines += loc_lines
+        lines += _frame_lines(exc, stack_of_plates, in_app_only, include_locals)
 
     return "\n".join([s.rstrip() for s in lines]).strip()
