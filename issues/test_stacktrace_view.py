@@ -144,6 +144,51 @@ class StacktraceViewTests(TransactionTestCase):
         ]
         self.assertEqual(positions, sorted(positions))
 
+    def test_handled_exception_stacktrace_marks_try_and_handled_raise(self):
+        response = self.render_stacktrace({
+            "platform": "python",
+            "exception": {
+                "values": [
+                    {
+                        "type": "HandledError",
+                        "value": "The first failure",
+                        "stacktrace": {
+                            "frames": [
+                                {"filename": "handled_call.py"},
+                                {"filename": "handled_raise.py"},
+                            ],
+                        },
+                    },
+                    {
+                        "type": "FinalError",
+                        "value": "The second failure",
+                        "stacktrace": {
+                            "frames": [
+                                {"filename": "final_call.py"},
+                                {"filename": "final_raise.py"},
+                            ],
+                        },
+                    },
+                ],
+            },
+        })
+
+        content = response.content.decode()
+        positions = [
+            content.index("handled_call.py"),
+            content.index("try\u2026"),
+
+            content.index("handled_raise.py"),
+            content.index("raise HandledError (handled)"),
+
+            content.index("final_call.py"),
+            content.index("\u2192 begin"),
+
+            content.index("final_raise.py"),
+            content.index("raise FinalError"),
+        ]
+        self.assertEqual(positions, sorted(positions))
+
     def test_python_exception_chain_is_displayed_in_payload_order(self):
         response = self.render_stacktrace({
             "platform": "python",
