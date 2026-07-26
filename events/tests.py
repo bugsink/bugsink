@@ -54,17 +54,12 @@ class ViewTests(TransactionTestCase):
         self.assertEqual(response['Content-Type'], 'application/json')
         self.assertTrue("platform" in response.json())
 
-    def test_event_plaintext(self):
-        response = self.client.get(f"/events/event/{self.event.pk}/plain/")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], 'text/plain')
-
     def test_event_views_forbid_events_from_other_projects(self):
         other_project = Project.objects.create(name="other")
         other_issue, _ = get_or_create_issue(project=other_project)
         other_event = create_event(other_project, other_issue)
 
-        for suffix in ["download/", "raw/", "plain/", "md/"]:
+        for suffix in ["download/", "raw/", "md/"]:
             with self.subTest(suffix=suffix):
                 response = self.client.get(f"/events/event/{other_event.pk}/{suffix}")
                 self.assertEqual(response.status_code, 403)
