@@ -1,8 +1,10 @@
 from io import StringIO
+from unittest import skipIf
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.db import connection
 from django.test import TestCase
 from django.urls import reverse
 
@@ -149,6 +151,7 @@ class LowercaseUserEmailsCommandTestCase(TransactionTestCase):
         self.assertTrue(User.objects.filter(username="mixed@example.com", email="mixed@example.com").exists())
         self.assertIn("1 user(s) updated", stdout.getvalue())
 
+    @skipIf(connection.vendor == "mysql", "MySQL's collation is case-insensitive, so such users cannot coexist")
     def test_refuses_on_collision(self):
         User.objects.create_user(username="Dup@Example.com", email="Dup@Example.com")
         User.objects.create_user(username="dup@example.com", email="dup@example.com")
