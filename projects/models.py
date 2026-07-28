@@ -188,7 +188,7 @@ class Project(models.Model):
         if user is not None:
             # take the user's team membership into account
             try:
-                TeamMembership.objects.get(team=self.team, user=user)
+                TeamMembership.objects.get(team=self.team, user=user, accepted=True)
                 return True
             except TeamMembership.DoesNotExist:
                 pass

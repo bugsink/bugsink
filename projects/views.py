@@ -46,7 +46,9 @@ def project_list(request, ownership_filter=None):
 
     my_teams_projects = \
         Project.objects \
-        .filter(team_id__in=TeamMembership.objects.filter(user=request.user).values('team_id'), is_deleted=False) \
+        .filter(
+            team_id__in=TeamMembership.objects.filter(user=request.user, accepted=True).values('team_id'),
+            is_deleted=False) \
         .exclude(projectmembership__in=my_memberships) \
         .order_by('name').distinct()
 
@@ -55,13 +57,13 @@ def project_list(request, ownership_filter=None):
         other_projects = Project.objects \
             .filter(is_deleted=False) \
             .exclude(id__in=ProjectMembership.objects.filter(user=request.user).values('project_id')) \
-            .exclude(team_id__in=TeamMembership.objects.filter(user=request.user).values('team_id')) \
+            .exclude(team_id__in=TeamMembership.objects.filter(user=request.user, accepted=True).values('team_id')) \
             .order_by('name').distinct()
     else:
         other_projects = Project.objects \
             .filter(is_deleted=False) \
             .exclude(id__in=ProjectMembership.objects.filter(user=request.user).values('project_id')) \
-            .exclude(team_id__in=TeamMembership.objects.filter(user=request.user).values('team_id')) \
+            .exclude(team_id__in=TeamMembership.objects.filter(user=request.user, accepted=True).values('team_id')) \
             .exclude(visibility=ProjectVisibility.TEAM_MEMBERS) \
             .order_by('name').distinct()
 
