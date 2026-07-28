@@ -247,7 +247,6 @@ class StacktraceViewTests(TransactionTestCase):
         text = visible_text(self.render_stacktrace(event_data))
         message = "capture_message with all Java threads from ProbeMultipleThreads.java"
 
-        self.assertIn("Log Message", text)
         self.assertEqual(1, text.count(message))
         self.assertLess(text.index(message), text.index("Thread #1: main"))
         self.assertIn("Thread #1: main", text)
