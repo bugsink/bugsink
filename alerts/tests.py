@@ -40,6 +40,7 @@ class TestAlertSending(DjangoTestCase):
             project=project,
             user=user,
             send_email_alerts=True,
+            accepted=True,
         )
 
         issue, _ = get_or_create_issue(project=project)
@@ -57,6 +58,7 @@ class TestAlertSending(DjangoTestCase):
             project=project,
             user=user,
             send_email_alerts=True,
+            accepted=True,
         )
 
         issue, _ = get_or_create_issue(project=project)
@@ -74,6 +76,7 @@ class TestAlertSending(DjangoTestCase):
             project=project,
             user=user,
             send_email_alerts=True,
+            accepted=True,
         )
 
         issue, _ = get_or_create_issue(project=project)
@@ -110,7 +113,7 @@ class TestAlertSending(DjangoTestCase):
         self.assertEqual(list(_get_users_for_email_alert(issue)), [])
 
         # ProjectMembership w/ send=False, should not be included
-        pm = ProjectMembership.objects.create(project=project, user=user, send_email_alerts=False)
+        pm = ProjectMembership.objects.create(project=project, user=user, send_email_alerts=False, accepted=True)
         self.assertEqual(list(_get_users_for_email_alert(issue)), [])
 
         # ProjectMembership w/ send=True, should be included
@@ -130,7 +133,7 @@ class TestAlertSending(DjangoTestCase):
 
         # Insert TeamMembership - this provides an intermediate layer of configuration between User and
         # ProjectMembership; we start with send=True at the tm level and expect the user to be included
-        tm = TeamMembership.objects.create(team=team, user=user, send_email_alerts=True)
+        tm = TeamMembership.objects.create(team=team, user=user, send_email_alerts=True, accepted=True)
         self.assertEqual(list(_get_users_for_email_alert(issue)), [user])
 
         # Set send=False at the tm level, user should not be included

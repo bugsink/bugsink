@@ -58,6 +58,12 @@ debug.technical_404_response = cors_for_api_view(debug.technical_404_response)
 debug.technical_500_response = cors_for_api_view(debug.technical_500_response)
 
 
+def _exception_for_error_page(exception):
+    if get_bugsink_settings().MINIMIZE_INFORMATION_EXPOSURE:
+        return Exception("")
+    return exception
+
+
 @phone_home
 def home(request):
     accepted_projects = request.user.project_set.filter(projectmembership__accepted=True).distinct()
@@ -228,8 +234,7 @@ def silence_email_system_warning(request):
 @cors_for_api_view
 def bad_request(request, exception, template_name=ERROR_400_TEMPLATE_NAME):
     # verbatim copy of Django's default bad_request view, but with "exception" in the context
-    # doing this for any-old-Django-site is probably a bad idea, but here the security/convenience tradeoff is fine,
-    # especially because we only show str(exception) in the template.
+    # (unless MINIMIZE_INFORMATION_EXPOSURE is enabled).
     if request.path.startswith("/api/"):
         template_name = "4xx_5xx_api.txt"
 
@@ -243,15 +248,14 @@ def bad_request(request, exception, template_name=ERROR_400_TEMPLATE_NAME):
             ERROR_PAGE_TEMPLATE % {"title": "Bad Request (400)", "details": ""},
         )
 
-    return HttpResponseBadRequest(template.render({"exception": exception}))
+    return HttpResponseBadRequest(template.render({"exception": _exception_for_error_page(exception)}))
 
 
 @requires_csrf_token
 @cors_for_api_view
 def server_error(request, template_name=ERROR_500_TEMPLATE_NAME):
     # verbatim copy of Django's default server_error view, but with "exception" in the context
-    # doing this for any-old-Django-site is probably a bad idea, but here the security/convenience tradeoff is fine,
-    # especially because we only show str(exception) in the template.
+    # (unless MINIMIZE_INFORMATION_EXPOSURE is enabled).
     _, exception, _ = sys.exc_info()
 
     if request.path.startswith("/api/"):
@@ -267,7 +271,7 @@ def server_error(request, template_name=ERROR_500_TEMPLATE_NAME):
             ERROR_PAGE_TEMPLATE % {"title": "Server Error (500)", "details": ""},
         )
 
-    return HttpResponseServerError(template.render({"exception": exception}))
+    return HttpResponseServerError(template.render({"exception": _exception_for_error_page(exception)}))
 
 
 @requires_csrf_token
@@ -280,7 +284,7 @@ def permission_denied(request, exception, template_name=ERROR_403_TEMPLATE_NAME)
     # * try to give a correct content-type on-response
     if request.path.startswith("/api/"):
         template_name = "4xx_5xx_api.txt"
-    return django_permission_denied(request, exception, template_name)
+    return django_permission_denied(request, _exception_for_error_page(exception), template_name)
 
 
 @requires_csrf_token
@@ -288,4 +292,4 @@ def permission_denied(request, exception, template_name=ERROR_403_TEMPLATE_NAME)
 def page_not_found(request, exception, template_name=ERROR_404_TEMPLATE_NAME):
     if request.path.startswith("/api/"):
         template_name = "4xx_5xx_api.txt"
-    return django_page_not_found(request, exception, template_name)
+    return django_page_not_found(request, _exception_for_error_page(exception), template_name)
