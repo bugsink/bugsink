@@ -24,7 +24,7 @@ from tags.models import IssueTag, TagValue
 from .grouping_mechanisms import GROUPING_CHOICES
 from .utils import (
     parse_lines, serialize_lines, filter_qs_for_fixed_at, exclude_qs_for_fixed_at,
-    get_title_for_exception_type_and_value)
+    get_title_for_exception_type_and_value, LOG_MESSAGE_TYPE)
 
 from .tasks import delete_issue_deps
 
@@ -102,6 +102,10 @@ class Issue(models.Model):
 
     def title(self):
         return get_title_for_exception_type_and_value(self.calculated_type, self.calculated_value)
+
+    def is_log_message(self):
+        # Ingest keeps calculated_type in sync with the issue's latest event.
+        return self.calculated_type == LOG_MESSAGE_TYPE
 
     def get_fixed_at(self):
         return parse_lines(self.fixed_at)

@@ -574,6 +574,37 @@ class ViewTests(TransactionTestCase):
         self.assertEqual(0, self.project.issue_count)
         self.assertEqual(0, other_project.issue_count)
 
+    def test_log_message_is_the_issue_page_heading(self):
+        self.issue.calculated_type = "Log Message"
+        self.issue.calculated_value = "Could not reach upstream"
+        self.issue.save(update_fields=["calculated_type", "calculated_value"])
+
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/")
+
+        self.assertRegex(response.content.decode(), r"<h1[^>]*>Could not reach upstream</h1>")
+
+    def test_log_level_is_shown_below_the_log_message_heading(self):
+        self.issue.calculated_type = "Log Message"
+        self.issue.calculated_value = "Could not reach upstream"
+        self.issue.save(update_fields=["calculated_type", "calculated_value"])
+        self.event.level = "warning"
+        self.event.save(update_fields=["level"])
+
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/")
+
+        self.assertContains(response, '<span class="font-bold">WARNING</span>')
+
+    def test_exception_type_and_value_remain_in_the_issue_page_header(self):
+        self.issue.calculated_type = "ValueError"
+        self.issue.calculated_value = "invalid value"
+        self.issue.save(update_fields=["calculated_type", "calculated_value"])
+
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/")
+
+        html = response.content.decode()
+        self.assertRegex(html, r"<h1[^>]*>ValueError</h1>")
+        self.assertRegex(html, r'<div class="text-xl[^"]*">invalid value</div>')
+
     def test_issue_details(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/details/")
         self.assertContains(response, self.issue.title())

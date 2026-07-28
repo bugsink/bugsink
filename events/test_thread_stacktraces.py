@@ -9,6 +9,7 @@ from rest_framework.test import APIClient
 
 from bsmain.models import AuthToken
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
+from issues.utils import get_denormalized_fields_for_data, get_type_and_value_for_data, maybe_empty
 from projects.models import Project, ProjectMembership
 
 from .factories import create_event
@@ -74,17 +75,35 @@ class ThreadStacktraceSampleTests(TransactionTestCase):
         for filename, message, probe_filename in THREAD_STACKTRACE_SAMPLES:
             with self.subTest(filename=filename):
                 data = load_generated_sample(filename)
-                event = create_event(project=self.project, event_data=data, platform=data["platform"])
-
                 entries = get_stacktrace_entries(data)
                 self.assertEqual(1, len(entries))
                 self.assertEqual("Log Message", entries[0]["type"])
                 self.assertEqual(message, entries[0]["value"])
                 self.assertFalse(entries[0]["is_exception_stacktrace"])
 
+                # Copied from digest_event: calculate the fields that normal ingestion stores on Event and Issue.
+                denormalized_fields = get_denormalized_fields_for_data(data)
+                calculated_type, calculated_value = get_type_and_value_for_data(data)
+                denormalized_fields["calculated_type"] = calculated_type
+                denormalized_fields["calculated_value"] = calculated_value
+
+                event = create_event(
+                    project=self.project,
+                    event_data=data,
+                    platform=data["platform"],
+                    level=maybe_empty(data.get("level", "")),
+                    **denormalized_fields,
+                )
+                event.issue.calculated_type = calculated_type
+                event.issue.calculated_value = calculated_value
+                event.issue.save(update_fields=["calculated_type", "calculated_value"])
+
                 response = self.client.get(f"/issues/issue/{event.issue.id}/event/{event.id}/")
-                self.assertContains(response, "Log Message")
                 self.assertContains(response, message)
+                html = response.content.decode()
+                self.assertIn(f">{message}</h1>", html)
+                self.assertIn(f'<span class="font-bold">{data["level"].upper()}</span>', html)
+                self.assertNotRegex(html, r"<h1[^>]*>Log Message</h1>")
                 self.assertContains(response, probe_filename)
                 self.assertNotContains(response, "capture point")
                 self.assertNotContains(response, "raise Log Message")
@@ -94,8 +113,8 @@ class ThreadStacktraceSampleTests(TransactionTestCase):
                 self.assertNotContains(response, "No stacktrace available for this event.")
 
                 markdown = render_stacktrace_md(event)
-                self.assertIn("# Log Message", markdown)
-                self.assertIn(message, markdown)
+                self.assertIn(f"# {message}", markdown)
+                self.assertNotIn("# Log Message", markdown)
                 self.assertIn(probe_filename, markdown)
                 self.assertNotIn("Thread 1", markdown)
                 self.assertNotEqual("_No stacktrace available._", markdown)
