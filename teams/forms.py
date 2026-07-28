@@ -4,6 +4,7 @@ from django.utils.translation import gettext_lazy as _
 
 from bugsink.utils import assert_
 from bsmain.utils import yesno
+from users.utils import normalize_email
 from .models import TeamRole, TeamMembership, Team
 
 User = get_user_model()
@@ -21,7 +22,7 @@ class TeamMemberInviteForm(forms.Form):
             self.fields['email'].help_text = "The user must already exist in the system"
 
     def clean_email(self):
-        email = self.cleaned_data['email']
+        email = normalize_email(self.cleaned_data['email'])
 
         if self.user_must_exist and not User.objects.filter(email=email).exists():
             raise forms.ValidationError('No user with this email address in the system.')
