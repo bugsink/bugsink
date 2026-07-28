@@ -19,36 +19,60 @@ FROM_DISPLAY = -1
 TO_DISPLAY = 1
 
 
-def get_stacktrace_entries(event_data):
-    exceptions = get_values(event_data.get("exception"))
-    if exceptions:
-        # Exception Stacktrace entries are preferred over thread stacktrace entries, so if we have any exceptions, we
-        # ignore the threads.
-        return [dict(exception, is_exception_stacktrace=True) for exception in exceptions]
+def _thread_title(thread):
+    if thread.get("id") is not None and thread.get("name"):
+        return f"Thread #{thread['id']}: {thread['name']}"
+    if thread.get("name"):
+        return f"Thread: {thread['name']}"
+    if thread.get("id") is not None:
+        return f"Thread #{thread['id']}"
+    return "Thread"
 
+
+def _thread_description(thread):
+    parts = []
+    if thread.get("crashed") is not None:
+        parts.append("errored: %s" % ("yes" if thread["crashed"] else "no"))
+    if thread.get("state"):
+        parts.append("state: %s" % thread["state"].replace("_", " ").title())
+    return ", ".join(parts)
+
+
+def get_thread_stacktrace_entries(event_data):
     threads = get_values(event_data.get("threads"))
     if not threads:
         return []  # The threads interface is optional.
 
-    for thread in threads:
-        stacktrace = thread.get("stacktrace")
-        if not stacktrace:
-            continue  # The stacktrace interface is optional within threads.
+    type_, value = get_type_and_value_for_data(event_data)
+    entries = []
+    first_with_frames = None
+    for i, thread in enumerate(threads):
+        stacktrace = thread.get("stacktrace") or {}
+        if first_with_frames is None and stacktrace.get("frames"):
+            first_with_frames = i
 
-        if not stacktrace.get("frames"):
-            continue  # Illegal in API, but as observed sample: exception_null_frames.json
+        entries.append({
+            "type": type_,
+            "value": value,
+            "stacktrace": stacktrace,
+            "is_exception_stacktrace": False,
+            "thread_title": _thread_title(thread),
+            "thread_description": _thread_description(thread),
+        })
 
-        break  # found a thread with a stacktrace; use it.
-    else:
+    if first_with_frames is None:
         return []
 
-    type_, value = get_type_and_value_for_data(event_data)
-    return [{
-        "type": type_,
-        "value": value,
-        "stacktrace": stacktrace,
-        "is_exception_stacktrace": False,
-    }]
+    entries.insert(0, entries.pop(first_with_frames))
+    return entries
+
+
+def get_stacktrace_entries(event_data):
+    exceptions = get_values(event_data.get("exception"))
+    if exceptions:
+        return [dict(exception, is_exception_stacktrace=True) for exception in exceptions]
+
+    return get_thread_stacktrace_entries(event_data)
 
 
 class IncompleteList(list):

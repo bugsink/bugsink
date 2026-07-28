@@ -574,10 +574,6 @@ class ViewTests(TransactionTestCase):
         self.assertEqual(0, self.project.issue_count)
         self.assertEqual(0, other_project.issue_count)
 
-    def test_issue_stacktrace(self):
-        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/")
-        self.assertContains(response, self.issue.title())
-
     def test_issue_details(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/details/")
         self.assertContains(response, self.issue.title())

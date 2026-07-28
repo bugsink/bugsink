@@ -40,6 +40,7 @@ THREAD_STACKTRACE_SAMPLES = [
 
 JAVA_MULTIPLE_THREADS_SAMPLE = "sentry-java-capture-message-attach-threads.json"
 JAVA_MULTIPLE_THREADS_MESSAGE = "capture_message with all Java threads from ProbeMultipleThreads.java"
+JAVA_EXCEPTION_THREADS_SAMPLE = "sentry-java-capture-exception-attach-threads.json"
 
 
 def load_generated_sample(filename):
@@ -88,7 +89,8 @@ class ThreadStacktraceSampleTests(TransactionTestCase):
                 self.assertNotContains(response, "capture point")
                 self.assertNotContains(response, "raise Log Message")
                 self.assertNotContains(response, "\u2192 begin")
-                self.assertNotContains(response, "Thread 1")
+                self.assertNotContains(response, "Thread #")
+                self.assertNotContains(response, "errored:")
                 self.assertNotContains(response, "No stacktrace available for this event.")
 
                 markdown = render_stacktrace_md(event)
@@ -109,23 +111,37 @@ class ThreadStacktraceSampleTests(TransactionTestCase):
                 self.assertEqual(200, response.status_code)
                 self.assertEqual(markdown, response.content.decode())
 
-    def test_multiple_threads_render_the_first_stacktrace_with_frames(self):
+    def test_multiple_threads_render_in_markdown(self):
         data = load_generated_sample(JAVA_MULTIPLE_THREADS_SAMPLE)
         event = create_event(project=self.project, event_data=data, platform=data["platform"])
 
-        entries = get_stacktrace_entries(data)
-        self.assertEqual(1, len(entries))
-        self.assertEqual(data["threads"]["values"][1]["stacktrace"], entries[0]["stacktrace"])
-        self.assertEqual("Log Message", entries[0]["type"])
-        self.assertEqual(JAVA_MULTIPLE_THREADS_MESSAGE, entries[0]["value"])
+        markdown = render_stacktrace_md(event)
 
-        response = self.client.get(f"/issues/issue/{event.issue.id}/event/{event.id}/")
-        self.assertContains(response, JAVA_MULTIPLE_THREADS_MESSAGE)
-        self.assertContains(response, "ProbeMultipleThreads.java")
-        self.assertNotContains(response, "bugsink-probe-background")
-        self.assertNotContains(response, "No stacktrace available for this event.")
+        self.assertIn(JAVA_MULTIPLE_THREADS_MESSAGE, markdown)
+        self.assertIn("## Thread #1: main", markdown)
+        self.assertIn("## Thread #18: Notification Thread", markdown)
+        self.assertIn("## Thread #22: bugsink-probe-background", markdown)
+        self.assertIn("ProbeMultipleThreads.java", markdown)
+        self.assertIn("lambda$main$1", markdown)
+        self.assertIn("_errored: yes, state: Runnable_", markdown)
+        self.assertNotIn("was active:", markdown)
+        self.assertEqual(2, markdown.count("_No stacktrace found._"))
+        self.assertNotIn("During handling of the above exception", markdown)
+
+    def test_exception_and_threads_render_in_markdown(self):
+        data = load_generated_sample(JAVA_EXCEPTION_THREADS_SAMPLE)
+        event = create_event(project=self.project, event_data=data, platform=data["platform"])
 
         markdown = render_stacktrace_md(event)
-        self.assertIn(JAVA_MULTIPLE_THREADS_MESSAGE, markdown)
-        self.assertIn("ProbeMultipleThreads.java", markdown)
-        self.assertNotIn("bugsink-probe-background", markdown)
+
+        self.assertIn("# IllegalStateException", markdown)
+        self.assertIn("capture_exception with all Java threads from ProbeExceptionMultipleThreads.java", markdown)
+        self.assertIn("### ProbeExceptionMultipleThreads.java:35 in `captureException`", markdown)
+        self.assertIn("# Threads", markdown)
+        self.assertLess(markdown.index("# IllegalStateException"), markdown.index("# Threads"))
+        self.assertIn("## Thread #1: main", markdown)
+        self.assertIn("## Thread #22: bugsink-probe-background", markdown)
+        self.assertIn("### ProbeExceptionMultipleThreads.java:38 in `captureException`", markdown)
+        self.assertIn("lambda$main$1", markdown)
+        self.assertEqual(2, markdown.count("_No stacktrace found._"))
+        self.assertNotIn("During handling of the above exception", markdown)
