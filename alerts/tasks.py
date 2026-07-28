@@ -15,9 +15,14 @@ def _get_users_for_email_alert(issue):
     # an async task)
 
     pms = list(
-        ProjectMembership.objects.filter(project=issue.project).exclude(send_email_alerts=False).select_related("user"))
+        ProjectMembership.objects.filter(
+            project=issue.project, accepted=True, user__is_active=True,
+        ).exclude(send_email_alerts=False).select_related("user"))
     user_ids = [pm.user_id for pm in pms]
-    tms = {tm.user_id: tm for tm in TeamMembership.objects.filter(team=issue.project.team, user_id__in=user_ids)}
+    tms = {
+        tm.user_id: tm
+        for tm in TeamMembership.objects.filter(team=issue.project.team, user_id__in=user_ids, accepted=True)
+    }
     for pm in pms:
         if pm.send_email_alerts is True:
             yield pm.user
