@@ -40,7 +40,8 @@ DEFAULTS = {
 
     # if True, emails are lowercased on the way in, which makes them effectively case-insensitive. Default False (i.e.
     # "keep what was typed") for backwards-compatibility; existing instances can switch after running
-    # `manage.py lowercase_user_emails`.
+    # `manage.py lowercase_user_emails`. On MySQL, matching is already case-insensitive by collation; the setting then
+    # only affects the casing that gets stored.
     "USER_EMAIL_CASE_INSENSITIVE": False,
 
     # if True, there is only one team, and all projects are in that team

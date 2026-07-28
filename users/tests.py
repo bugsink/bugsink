@@ -1,5 +1,5 @@
 from io import StringIO
-from unittest import skipIf
+from unittest import skipIf, skipUnless
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
@@ -165,6 +165,7 @@ class MixedCaseCheckTestCase(TransactionTestCase):
         User.objects.create_user(username="Mixed@Example.com", email="Mixed@Example.com")
         self.assertEqual([], check_emails_are_lowercase(None))
 
+    @skipIf(connection.vendor == "mysql", "MySQL matches case-insensitively; nobody is locked out")
     def test_error_when_setting_is_on_and_mixed_case_users_exist(self):
         User.objects.create_user(username="Mixed@Example.com", email="Mixed@Example.com")
 
@@ -174,6 +175,13 @@ class MixedCaseCheckTestCase(TransactionTestCase):
         self.assertEqual(1, len(errors))
         self.assertEqual("users.E001", errors[0].id)
         self.assertIn("Mixed@Example.com", errors[0].msg)
+
+    @skipUnless(connection.vendor == "mysql", "only MySQL matches case-insensitively by collation")
+    def test_no_error_on_mysql_despite_mixed_case_users(self):
+        User.objects.create_user(username="Mixed@Example.com", email="Mixed@Example.com")
+
+        with override_settings(USER_EMAIL_CASE_INSENSITIVE=True):
+            self.assertEqual([], check_emails_are_lowercase(None))
 
     def test_no_error_once_lowercased(self):
         User.objects.create_user(username="Mixed@Example.com", email="Mixed@Example.com")

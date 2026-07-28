@@ -13,6 +13,11 @@ def check_emails_are_lowercase(app_configs, **kwargs):
     if not get_settings().USER_EMAIL_CASE_INSENSITIVE:
         return []
 
+    if connection.vendor == "mysql":
+        # MySQL's default collation is case-insensitive, so mixed-case users match on login anyway; nobody is locked
+        # out and the setting only affects the casing of newly stored emails.
+        return []
+
     User = get_user_model()
     if User._meta.db_table not in connection.introspection.table_names():
         return []  # not migrated yet; there are no users to be locked out

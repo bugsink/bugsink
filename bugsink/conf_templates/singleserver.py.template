@@ -102,6 +102,7 @@ BUGSINK = {
 
     # if True, emails are lowercased on the way in (signup, invite, login), making them case-insensitive.
     # On existing instances, run `bugsink-manage lowercase_user_emails` before turning this on.
+    # (On MySQL, matching is already case-insensitive by collation; this only affects the casing that gets stored.)
     "USER_EMAIL_CASE_INSENSITIVE": False,
 
     # if True, there is only one team, and all projects are in that team
