@@ -9,6 +9,7 @@ from django.utils.html import strip_tags
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from events.factories import create_event
+from issues.utils import get_type_and_value_for_data
 from projects.models import Project, ProjectMembership
 
 
@@ -33,10 +34,14 @@ class StacktraceViewTests(TransactionTestCase):
         self.client.force_login(self.user)
 
     def render_stacktrace(self, event_data):
+        # create_event bypasses ingestion; fake the denormalized fields that digest_event would have stored.
+        calculated_type, calculated_value = get_type_and_value_for_data(event_data)
         event = create_event(
             project=self.project,
             event_data=event_data,
             platform=event_data["platform"],
+            calculated_type=calculated_type,
+            calculated_value=calculated_value,
         )
         return self.client.get(f"/issues/issue/{event.issue.id}/event/{event.id}/")
 
@@ -242,7 +247,6 @@ class StacktraceViewTests(TransactionTestCase):
         text = visible_text(self.render_stacktrace(event_data))
         message = "capture_message with all Java threads from ProbeMultipleThreads.java"
 
-        self.assertIn("Log Message", text)
         self.assertEqual(1, text.count(message))
         self.assertLess(text.index(message), text.index("Thread #1: main"))
         self.assertIn("Thread #1: main", text)

@@ -48,10 +48,11 @@ def _frames_for_exception(exc):
 
 
 def _header_lines(event, exc):
+    if not exc["is_exception_stacktrace"]:
+        return [f"# {event.title()}"]
+
     etype = exc.get("type") or "Exception"
     val = exc.get("value") or ""
-    if event.is_log_message():
-        return [f"# {event.title()}"]
 
     # Two-line title; no platform/event_id/timestamp clutter.
     return [f"# {etype}", val]

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 import json
 import ecma426
-from issues.utils import get_type_and_value_for_data, get_values
+from issues.utils import get_values
 
 from bugsink.transaction import delay_on_commit
 from bugsink.utils import assert_
@@ -43,7 +43,6 @@ def get_thread_stacktrace_entries(event_data):
     if not threads:
         return []  # The threads interface is optional.
 
-    type_, value = get_type_and_value_for_data(event_data)
     entries = []
     first_with_frames = None
     for i, thread in enumerate(threads):
@@ -53,10 +52,6 @@ def get_thread_stacktrace_entries(event_data):
 
         entries.append({
             "stacktrace": stacktrace,
-
-            # Bugsink's internal stacktrace-entry interface requires type/value; and threads have neither.
-            "type": type_,
-            "value": value,
 
             # thread stacktraces do not have "raise" frame labels / chained exceptions:
             "is_exception_stacktrace": False,
@@ -85,13 +80,8 @@ def get_stacktrace_entries(event_data):
     if not stacktrace.get("frames"):
         return []
 
-    type_, value = get_type_and_value_for_data(event_data)
     return [{
         "stacktrace": stacktrace,
-
-        # Bugsink's internal stacktrace-entry interface requires type/value; and an event-level stacktrace has neither.
-        "type": type_,
-        "value": value,
 
         # Event-level stacktraces do not have "raise" frame labels / chained exceptions:
         "is_exception_stacktrace": False,

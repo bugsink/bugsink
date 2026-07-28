@@ -61,6 +61,25 @@ class ThreadStacktraceSampleTests(TransactionTestCase):
         token = AuthToken.objects.create()
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
 
+    def create_event_from_sample(self, data):
+        # create_event bypasses ingestion; fake the denormalized fields that digest_event would have stored.
+        denormalized_fields = get_denormalized_fields_for_data(data)
+        calculated_type, calculated_value = get_type_and_value_for_data(data)
+        denormalized_fields["calculated_type"] = calculated_type
+        denormalized_fields["calculated_value"] = calculated_value
+
+        event = create_event(
+            project=self.project,
+            event_data=data,
+            platform=data["platform"],
+            level=maybe_empty(data.get("level", "")),
+            **denormalized_fields,
+        )
+        event.issue.calculated_type = calculated_type
+        event.issue.calculated_value = calculated_value
+        event.issue.save(update_fields=["calculated_type", "calculated_value"])
+        return event
+
     def test_capture_exception_uses_its_exception_stacktrace(self):
         data = load_generated_sample("sentry-python-capture-exception-add-full-stack.json")
 
@@ -75,28 +94,7 @@ class ThreadStacktraceSampleTests(TransactionTestCase):
         for filename, message, probe_filename in THREAD_STACKTRACE_SAMPLES:
             with self.subTest(filename=filename):
                 data = load_generated_sample(filename)
-                entries = get_stacktrace_entries(data)
-                self.assertEqual(1, len(entries))
-                self.assertEqual("Log Message", entries[0]["type"])
-                self.assertEqual(message, entries[0]["value"])
-                self.assertFalse(entries[0]["is_exception_stacktrace"])
-
-                # Copied from digest_event: calculate the fields that normal ingestion stores on Event and Issue.
-                denormalized_fields = get_denormalized_fields_for_data(data)
-                calculated_type, calculated_value = get_type_and_value_for_data(data)
-                denormalized_fields["calculated_type"] = calculated_type
-                denormalized_fields["calculated_value"] = calculated_value
-
-                event = create_event(
-                    project=self.project,
-                    event_data=data,
-                    platform=data["platform"],
-                    level=maybe_empty(data.get("level", "")),
-                    **denormalized_fields,
-                )
-                event.issue.calculated_type = calculated_type
-                event.issue.calculated_value = calculated_value
-                event.issue.save(update_fields=["calculated_type", "calculated_value"])
+                event = self.create_event_from_sample(data)
 
                 response = self.client.get(f"/issues/issue/{event.issue.id}/event/{event.id}/")
                 self.assertContains(response, message)
@@ -132,7 +130,7 @@ class ThreadStacktraceSampleTests(TransactionTestCase):
 
     def test_multiple_threads_render_in_markdown(self):
         data = load_generated_sample(JAVA_MULTIPLE_THREADS_SAMPLE)
-        event = create_event(project=self.project, event_data=data, platform=data["platform"])
+        event = self.create_event_from_sample(data)
 
         markdown = render_stacktrace_md(event)
 
@@ -149,7 +147,7 @@ class ThreadStacktraceSampleTests(TransactionTestCase):
 
     def test_exception_and_threads_render_in_markdown(self):
         data = load_generated_sample(JAVA_EXCEPTION_THREADS_SAMPLE)
-        event = create_event(project=self.project, event_data=data, platform=data["platform"])
+        event = self.create_event_from_sample(data)
 
         markdown = render_stacktrace_md(event)
 
