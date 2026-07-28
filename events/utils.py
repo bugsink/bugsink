@@ -52,10 +52,15 @@ def get_thread_stacktrace_entries(event_data):
             first_with_frames = i
 
         entries.append({
+            "stacktrace": stacktrace,
+
+            # Bugsink's internal stacktrace-entry interface requires type/value; and threads have neither.
             "type": type_,
             "value": value,
-            "stacktrace": stacktrace,
+
+            # thread stacktraces do not have "raise" frame labels / chained exceptions:
             "is_exception_stacktrace": False,
+
             "thread_title": _thread_title(thread),
             "thread_description": _thread_description(thread),
         })
@@ -72,7 +77,25 @@ def get_stacktrace_entries(event_data):
     if exceptions:
         return [dict(exception, is_exception_stacktrace=True) for exception in exceptions]
 
-    return get_thread_stacktrace_entries(event_data)
+    threads = get_thread_stacktrace_entries(event_data)
+    if threads:
+        return threads
+
+    stacktrace = event_data.get("stacktrace") or {}
+    if not stacktrace.get("frames"):
+        return []
+
+    type_, value = get_type_and_value_for_data(event_data)
+    return [{
+        "stacktrace": stacktrace,
+
+        # Bugsink's internal stacktrace-entry interface requires type/value; and an event-level stacktrace has neither.
+        "type": type_,
+        "value": value,
+
+        # Event-level stacktraces do not have "raise" frame labels / chained exceptions:
+        "is_exception_stacktrace": False,
+    }]
 
 
 class IncompleteList(list):

@@ -23,11 +23,39 @@ from .retention import (
 from .sparklines import (
     get_issue_event_sparkline, get_issue_list_event_sparklines, get_sparkline_range, get_y_labels)
 from .usage import EVENT_COUNTS_PER_HOUR_MAX_AGE, hour_bucket, record_event_counts
-from .utils import annotate_with_meta, annotate_var_with_meta
+from .utils import annotate_with_meta, annotate_var_with_meta, get_stacktrace_entries
 from tags.models import EventTag, store_tags
 from tags.search import search_events
 
 User = get_user_model()
+
+
+class StacktraceEntriesTestCase(RegularTestCase):
+    def test_top_level_stacktrace_is_used_as_last_fallback(self):
+        stacktrace = {"frames": [{"filename": "scheduler.php", "lineno": 176}]}
+
+        entries = get_stacktrace_entries({
+            "logentry": {"formatted": "Scheduler task failed"},
+            "stacktrace": stacktrace,
+        })
+
+        self.assertEqual([{
+            "type": "Log Message",
+            "value": "Scheduler task failed",
+            "stacktrace": stacktrace,
+            "is_exception_stacktrace": False,
+        }], entries)
+
+    def test_thread_stacktrace_takes_precedence_over_top_level_stacktrace(self):
+        thread_stacktrace = {"frames": [{"filename": "thread.php"}]}
+
+        entries = get_stacktrace_entries({
+            "logentry": {"formatted": "Scheduler task failed"},
+            "threads": {"values": [{"stacktrace": thread_stacktrace}]},
+            "stacktrace": {"frames": [{"filename": "deprecated.php"}]},
+        })
+
+        self.assertEqual(thread_stacktrace, entries[0]["stacktrace"])
 
 
 class ViewTests(TransactionTestCase):
