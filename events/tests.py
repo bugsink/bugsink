@@ -31,6 +31,26 @@ User = get_user_model()
 
 
 class StacktraceEntriesTestCase(RegularTestCase):
+    def test_thread_stacktrace_entry_contains_thread_fields(self):
+        stacktrace = {"frames": [{"filename": "worker.py"}]}
+
+        entries = get_stacktrace_entries({
+            "threads": {"values": [{
+                "id": 7,
+                "name": "worker",
+                "crashed": False,
+                "state": "waiting",
+                "stacktrace": stacktrace,
+            }]},
+        })
+
+        self.assertEqual([{
+            "stacktrace": stacktrace,
+            "is_exception_stacktrace": False,
+            "thread_title": "Thread #7: worker",
+            "thread_description": "errored: no, state: Waiting",
+        }], entries)
+
     def test_top_level_stacktrace_is_used_as_last_fallback(self):
         stacktrace = {"frames": [{"filename": "scheduler.php", "lineno": 176}]}
 
@@ -40,8 +60,6 @@ class StacktraceEntriesTestCase(RegularTestCase):
         })
 
         self.assertEqual([{
-            "type": "Log Message",
-            "value": "Scheduler task failed",
             "stacktrace": stacktrace,
             "is_exception_stacktrace": False,
         }], entries)
