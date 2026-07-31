@@ -948,7 +948,7 @@ class TestGoogleChatBackendErrorHandling(DjangoTestCase):
             config=json.dumps({"webhook_url": "https://chat.googleapis.com/v1/spaces/test/messages"}),
         )
 
-    @patch('alerts.service_backends.google_chat.requests.post')
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
     def test_google_chat_test_message_success_clears_failure_status(self, mock_post):
         # Set up existing failure status
         self.config.last_failure_timestamp = timezone.now()
@@ -976,7 +976,7 @@ class TestGoogleChatBackendErrorHandling(DjangoTestCase):
         self.assertIsNone(self.config.last_failure_status_code)
         self.assertIsNone(self.config.last_failure_response_text)
 
-    @patch('alerts.service_backends.google_chat.requests.post')
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
     def test_google_chat_test_message_http_error_stores_failure(self, mock_post):
         # Mock HTTP error response
         mock_response = Mock()
@@ -1009,7 +1009,7 @@ class TestGoogleChatBackendErrorHandling(DjangoTestCase):
         self.assertTrue(self.config.last_failure_is_json)
         self.assertEqual(self.config.last_failure_error_type, "HTTPError")
 
-    @patch('alerts.service_backends.google_chat.requests.post')
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
     def test_google_chat_test_message_non_json_error_stores_failure(self, mock_post):
         # Mock HTTP error response with non-JSON text
         mock_response = Mock()
@@ -1038,7 +1038,7 @@ class TestGoogleChatBackendErrorHandling(DjangoTestCase):
         self.assertEqual(self.config.last_failure_response_text, 'Internal Server Error')
         self.assertFalse(self.config.last_failure_is_json)
 
-    @patch('alerts.service_backends.google_chat.requests.post')
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
     def test_google_chat_test_message_connection_error_stores_failure(self, mock_post):
         # Mock connection error
         mock_post.side_effect = requests.ConnectionError("Connection failed")
@@ -1060,7 +1060,7 @@ class TestGoogleChatBackendErrorHandling(DjangoTestCase):
         self.assertEqual(self.config.last_failure_error_type, "ConnectionError")
         self.assertEqual(self.config.last_failure_error_message, "Connection failed")
 
-    @patch('alerts.service_backends.google_chat.requests.post')
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
     def test_google_chat_alert_message_success_clears_failure_status(self, mock_post):
         # Set up existing failure status
         self.config.last_failure_timestamp = timezone.now()
