@@ -91,7 +91,7 @@ BUGSINK = {
     "BASE_URL": "https://{{ host }}",  # no trailing slash
 
     # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
-    "SITE_TITLE": "Bugsink",  
+    "SITE_TITLE": "Bugsink",
 
     # Settings for Users, Teams and Projects
     "SINGLE_USER": False,

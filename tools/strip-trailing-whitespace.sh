@@ -7,7 +7,7 @@
 set -euo pipefail
 
 # Extensions to include
-EXT_REGEX='\.(py|js|ts|sh|md|txt|html|css|bash)$'
+EXT_REGEX='\.(py|js|ts|sh|md|txt|html|css|bash|template)$'
 
 # Detect sed flavor
 if sed --version >/dev/null 2>&1; then
