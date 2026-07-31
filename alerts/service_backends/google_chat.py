@@ -10,10 +10,12 @@ from bugsink.app_settings import get_settings
 from bugsink.transaction import immediate_atomic
 
 from issues.models import Issue
+from .base import BaseWebhookBackend
+from .webhook_security import validate_webhook_url
 
 
 class GoogleChatConfigForm(forms.Form):
-    webhook_url = forms.URLField(required=True)
+    webhook_url = forms.URLField(required=True, assume_scheme="https")
 
     def __init__(self, *args, **kwargs):
         config = kwargs.pop("config", None)
@@ -26,6 +28,14 @@ class GoogleChatConfigForm(forms.Form):
         return {
             "webhook_url": self.cleaned_data.get("webhook_url"),
         }
+
+    def clean_webhook_url(self):
+        webhook_url = self.cleaned_data["webhook_url"]
+        try:
+            validate_webhook_url(webhook_url)
+        except ValueError as e:
+            raise forms.ValidationError(str(e)) from e
+        return webhook_url
 
 
 def _store_failure_info(service_config_id, exception, response=None):
@@ -93,11 +103,10 @@ def google_chat_backend_send_test_message(
     }
 
     try:
-        result = requests.post(
+        result = GoogleChatBackend.safe_post(
             webhook_url,
             data=json.dumps(data),
             headers={"Content-Type": "application/json"},
-            timeout=5,
         )
 
         result.raise_for_status()
@@ -128,11 +137,10 @@ def google_chat_backend_send_alert(
     data = {"text": text}
 
     try:
-        result = requests.post(
+        result = GoogleChatBackend.safe_post(
             webhook_url,
             data=json.dumps(data),
             headers={"Content-Type": "application/json"},
-            timeout=5,
         )
 
         result.raise_for_status()
@@ -146,7 +154,7 @@ def google_chat_backend_send_alert(
         _store_failure_info(service_config_id, e)
 
 
-class GoogleChatBackend:
+class GoogleChatBackend(BaseWebhookBackend):
 
     def __init__(self, service_config):
         self.service_config = service_config
