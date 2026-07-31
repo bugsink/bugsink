@@ -38,6 +38,12 @@ class GoogleChatConfigForm(forms.Form):
         return webhook_url
 
 
+def _safe_markdown(text):
+    for character in "\\*_~`<>":
+        text = text.replace(character, "\\" + character)
+    return text
+
+
 def _store_failure_info(service_config_id, exception, response=None):
     """Store failure information in the MessagingServiceConfig with immediate_atomic"""
     from alerts.models import MessagingServiceConfig
@@ -94,8 +100,8 @@ def google_chat_backend_send_test_message(
     text = (
         f"*TEST issue*\n"
         f"Test message by Bugsink to test the webhook setup.\n"
-        f"• *Project*: {project_name}\n"
-        f"• *Message Backend*: {display_name}"
+        f"• *Project*: {_safe_markdown(project_name)}\n"
+        f"• *Message Backend*: {_safe_markdown(display_name)}"
     )
 
     data = {
@@ -127,12 +133,17 @@ def google_chat_backend_send_alert(
     issue = Issue.objects.get(id=issue_id)
 
     issue_url = get_settings().BASE_URL + issue.get_absolute_url()
-    issue_title = truncatechars(issue.title().replace("|", ""), 256)
+    issue_title = _safe_markdown(truncatechars(issue.title(), 256))
 
-    text = f"*{issue_title}*\n{alert_reason} issue\n• *Project*: {issue.project.name}\n<{issue_url}|view on Bugsink>"
+    text = (
+        f"*{issue_title}*\n"
+        f"{alert_reason} issue\n"
+        f"• *Project*: {_safe_markdown(issue.project.name)}\n"
+        f"<{issue_url}|view on Bugsink>"
+    )
 
     if unmute_reason:
-        text += f"\n*Unmute Reason*: {unmute_reason}"
+        text += f"\n*Unmute Reason*: {_safe_markdown(unmute_reason)}"
 
     data = {"text": text}
 
