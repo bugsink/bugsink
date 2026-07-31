@@ -15,7 +15,7 @@ from .webhook_security import validate_webhook_url
 
 
 class CustomBackendForm(forms.Form):
-    webhook_url = forms.URLField(required=True)
+    webhook_url = forms.URLField(required=True, assume_scheme="https")
 
     def __init__(self, *args, **kwargs):
         config = kwargs.pop("config", None)
