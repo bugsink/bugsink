@@ -856,6 +856,33 @@ class TestCustomBackendErrorHandling(DjangoTestCase):
         self.config.refresh_from_db()
         self.assertIsNone(self.config.last_failure_timestamp)
 
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_custom_test_message_fields_match_alert_message(self, mock_post):
+        mock_response = Mock()
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        custom_backend_send_test_message(
+            "https://hooks.example.com/test",
+            "Test project",
+            "Test Custom",
+            self.config.id,
+        )
+        test_payload = json.loads(mock_post.call_args.kwargs["data"])
+
+        issue, _ = get_or_create_issue(project=self.project)
+        custom_backend_send_alert(
+            "https://hooks.example.com/test",
+            issue.id,
+            "New issue",
+            "a",
+            "NEW",
+            self.config.id,
+        )
+        alert_payload = json.loads(mock_post.call_args.kwargs["data"])
+
+        self.assertEqual(set(test_payload), set(alert_payload))
+
     def test_has_recent_failure_method(self):
         # Initially no failure
         self.assertFalse(self.config.has_recent_failure())

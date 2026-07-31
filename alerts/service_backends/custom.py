@@ -102,6 +102,7 @@ def custom_backend_send_test_message(webhook_url, project_name, display_name, se
         "calculated_value": "invalid literal for int()",
         "transaction": "/api/users/login",
         "is_resolved": False,
+        "is_resolved_unconditionally": False,
         "is_resolved_by_next_release": False,
         "is_muted": False,
         "title": "ValueError: invalid literal for int()",
@@ -133,6 +134,8 @@ def custom_backend_send_alert(
     webhook_url, issue_id, state_description, alert_article, alert_reason, service_config_id, unmute_reason=None
 ):
     issue = Issue.objects.get(id=issue_id)
+
+    # Deliberately mirror the canonical issue API; a test keeps the test-message fields aligned with this payload.
     data = dict(IssueSerializer(issue).data)
 
     # Add additional convenience fields
