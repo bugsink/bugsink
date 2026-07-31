@@ -460,22 +460,24 @@ class IngestViewTestCase(TransactionTestCase):
             minidump_bytes
             )
 
-        response = self.client.post(
-            f"/api/{ project.id }/envelope/",
-            content_type="application/json",
-            headers={
-                "X-Sentry-Auth": sentry_auth_header,
-            },
-            data=data_bytes,
-        )
-        self.assertEqual(
-            200, response.status_code, response.content if response.status_code != 302 else response.url)
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            response = self.client.post(
+                f"/api/{ project.id }/envelope/",
+                content_type="application/json",
+                headers={
+                    "X-Sentry-Auth": sentry_auth_header,
+                },
+                data=data_bytes,
+            )
+            self.assertEqual(
+                200, response.status_code, response.content if response.status_code != 302 else response.url)
 
-        self.assertEqual(1, Event.objects.count())
-        event = Event.objects.get()
-        self.assertFalse("prod" in ([tag.value.value for tag in event.tags.all()]))  # no sample event, so False
+            self.assertEqual(1, Event.objects.count())
+            event = Event.objects.get()
+            self.assertFalse("prod" in ([tag.value.value for tag in event.tags.all()]))  # no sample event, so False
 
-        self.assertEqual('SIGABRT: Fatal Error: SIGABRT', Event.objects.get().title())
+            self.assertEqual('SIGABRT: Fatal Error: SIGABRT', Event.objects.get().title())
+            self.assertEqual([], os.listdir(tempdir))
 
     @tag("samples")
     @override_settings(FEATURE_MINIDUMPS=False)

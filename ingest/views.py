@@ -339,6 +339,7 @@ class BaseIngestAPIView(View):
             json.dump(event_data, f)
 
         event_metadata = cls.get_event_meta(event_data["event_id"], ingested_at, ingestion_id, request, project)
+        event_metadata["has_minidump"] = True
         digest.delay(event_data["event_id"], event_metadata)
 
         return event_id
