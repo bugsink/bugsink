@@ -952,10 +952,6 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             return HttpResponse()
 
         if event_count > 1 or minidump_count > 1:
-            # TODO: we do 2 passes (one for storing, one for calling the right task), and we check certain conditions
-            # only on the second pass; this means that we may not clean up after ourselves yet.
-            # TODO we don't do any minidump files cleanup yet in any of the cases.
-
             logger.info(
                 "can only deal with one event/minidump per envelope but found %s/%s, ignoring this envelope.",
                 event_count, minidump_count)
