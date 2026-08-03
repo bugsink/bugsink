@@ -142,6 +142,11 @@ BUGSINK = {
     "USER_REGISTRATION_VERIFY_EMAIL_EXPIRY":
         int(os.getenv("USER_REGISTRATION_VERIFY_EMAIL_EXPIRY", 7 * 24 * 60 * 60)),  # 7 days
 
+    # if True, emails are lowercased on the way in (signup, invite, login), making them case-insensitive.
+    # On existing instances, run `bugsink-manage lowercase_user_emails` before turning this on.
+    # (On MySQL, matching is already case-insensitive by collation; this only affects the casing that gets stored.)
+    "USER_EMAIL_CASE_INSENSITIVE": os.getenv("USER_EMAIL_CASE_INSENSITIVE", "False").lower() in ("true", "1", "yes"),
+
     # if True, there is only one team, and all projects are in that team
     "SINGLE_TEAM": os.getenv("SINGLE_TEAM", "False").lower() in ("true", "1", "yes"),
     "TEAM_CREATION": os.getenv("TEAM_CREATION", CB_MEMBERS),  # who can create new teams.

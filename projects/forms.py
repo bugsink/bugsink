@@ -11,6 +11,7 @@ from bugsink.app_settings import get_settings
 from issues.grouping_mechanisms import GROUPING_TRANSITION_PERIOD, get_grouping_mechanism
 from teams.models import TeamMembership
 from bsmain.utils import yesno
+from users.utils import normalize_email
 
 from .models import Project, ProjectMembership, ProjectRole
 
@@ -30,7 +31,7 @@ class ProjectMemberInviteForm(forms.Form):
             self.fields['email'].help_text = "The user must already exist in the system"
 
     def clean_email(self):
-        email = self.cleaned_data['email']
+        email = normalize_email(self.cleaned_data['email'])
 
         if self.user_must_exist and not User.objects.filter(email=email).exists():
             raise forms.ValidationError('No user with this email address in the system.')
