@@ -14,7 +14,7 @@
         <ul class="mb-4">
             {% for message in messages %}
                 {# if we introduce different levels we can use{% message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %} #}
-                <li class="bg-cyan-50 dark:bg-cyan-900 border-2 border-cyan-800 dark:border-cyan-400 p-4 rounded-lg">{{ message }}</li>
+                <li class="alert alert-info">{{ message }}</li>
             {% endfor %}
         </ul>
         {% endif %}
@@ -25,7 +25,7 @@
             <div class="ml-auto mt-6">
                 <form action="{% url "auth_token_create" %}" method="post">
                 {% csrf_token %} {# margins display slightly different from the <a href version that I have for e.g. project memembers, but I don't care _that_ much #}
-                    <button class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">{% translate "Add Token" %}</button>
+                    <button class="btn btn-primary">{% translate "Add Token" %}</button>
                 </form>
             </div>
         </div>
@@ -37,12 +37,12 @@
           <table class="w-full mt-8">
           <tbody>
                 <thead>
-                <tr class="bg-slate-200 dark:bg-slate-800">
+                <tr class="bg-base-200">
                     <th class="w-full p-4 text-left text-xl" colspan="2">{% translate "Auth Tokens" %}</th>
                 </tr>
 
                 {% for auth_token in auth_tokens %}
-                <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
+                <tr class="hover:bg-base-200 border-b border-base-300">
                 <td class="w-full p-4">
                     <div class="flex items-center gap-2">
                         <span id="token-hidden-{{ auth_token.id }}" class="font-mono" aria-hidden="true">
@@ -54,35 +54,35 @@
                         <button type="button" id="token-toggle-{{ auth_token.id }}"
                                 onclick="toggleAuthToken({{ auth_token.id }})" aria-expanded="false"
                                 aria-controls="token-revealed-{{ auth_token.id }}"
-                                class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 text-sm underline">
+                                class="link link-hover text-sm">
                             <span id="token-reveal-label-{{ auth_token.id }}">{% translate "Reveal" %}</span>
                             <span id="token-hide-label-{{ auth_token.id }}" class="hidden">{% translate "Hide" %}</span>
                         </button>
                     </div>
                     <div class="mt-1" id="description-view-{{ auth_token.id }}">
                         {% if auth_token.description %}
-                        <span class="text-slate-600 dark:text-slate-400 text-sm">{{ auth_token.description }}</span>
-                        <button type="button" onclick="showEditDescription({{ auth_token.id }})" class="ml-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 text-sm underline">{% translate "Edit" %}</button>
+                        <span class="text-sm opacity-70">{{ auth_token.description }}</span>
+                        <button type="button" onclick="showEditDescription({{ auth_token.id }})" class="ml-2 link link-hover text-sm">{% translate "Edit" %}</button>
                         {% else %}
-                        <button type="button" onclick="showEditDescription({{ auth_token.id }})" class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 text-sm underline">{% translate "Add description" %}</button>
+                        <button type="button" onclick="showEditDescription({{ auth_token.id }})" class="link link-hover text-sm">{% translate "Add description" %}</button>
                         {% endif %}
                     </div>
                     <div class="mt-1 hidden" id="description-edit-{{ auth_token.id }}">
-                        <input type="text" name="description-{{ auth_token.id }}" value="{{ auth_token.description }}" maxlength="255" class="border-2 border-slate-300 dark:border-slate-600 rounded-md px-2 py-1 text-sm w-80 dark:bg-slate-800 dark:text-slate-100" id="description-input-{{ auth_token.id }}">
-                        <button type="submit" name="action" value="update_description:{{ auth_token.id }}" class="inline-block ml-2 text-sm font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 px-3 py-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md">{% translate "Save" %}</button>
-                        <button type="button" onclick="hideEditDescription({{ auth_token.id }})" class="inline-block ml-2 text-sm font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 px-3 py-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md">{% translate "Cancel" %}</button>
+                        <input type="text" name="description-{{ auth_token.id }}" value="{{ auth_token.description }}" maxlength="255" class="input input-bordered input-sm w-80" id="description-input-{{ auth_token.id }}">
+                        <button type="submit" name="action" value="update_description:{{ auth_token.id }}" class="btn btn-ghost border border-base-300 btn-sm ml-2">{% translate "Save" %}</button>
+                        <button type="button" onclick="hideEditDescription({{ auth_token.id }})" class="btn btn-ghost border border-base-300 btn-sm ml-2">{% translate "Cancel" %}</button>
                     </div>
                 </td>
 
                 <td class="p-4">
                     <div class="flex justify-end">
-                        <button name="action" value="delete:{{ auth_token.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Delete" %}</button>
+                        <button name="action" value="delete:{{ auth_token.id }}" class="btn btn-ghost border border-base-300 whitespace-nowrap ml-2">{% translate "Delete" %}</button>
                     </div>
                 </td>
 
                 </tr>
                 {% empty %}
-                <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
+                <tr class="hover:bg-base-200 border-b border-base-300">
                 <td class="w-full p-4">
                     <div>
                         {% translate "No Auth Tokens." %}

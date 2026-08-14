@@ -16,7 +16,7 @@
         <ul class="mb-4">
             {% for message in messages %}
                 {# if we introduce different levels we can use{% message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %} #}
-                <li class="bg-cyan-50 dark:bg-cyan-900 border-2 border-cyan-800 dark:border-cyan-400 p-4 rounded-lg">{{ message }}</li>
+                <li class="alert alert-info">{{ message }}</li>
             {% endfor %}
         </ul>
         {% endif %}
@@ -27,7 +27,7 @@
             <h1 class="text-4xl mt-4 font-bold">{% translate "Members" %} · {{ team.name }}</h1>
 
             <div class="ml-auto mt-6">
-                <a class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md" href="{% url "team_members_invite" team_pk=team.pk %}">{% translate "Invite Member" %}</a>
+                <a class="btn btn-primary" href="{% url "team_members_invite" team_pk=team.pk %}">{% translate "Invite Member" %}</a>
             </div>
         </div>
 
@@ -38,19 +38,19 @@
           <table class="w-full mt-8">
           <tbody>
                 <thead>
-                <tr class="bg-slate-200 dark:bg-slate-800">
+                <tr class="bg-base-200">
                     <th class="w-full p-4 text-left text-xl" colspan="2">{{ team.name }}</th>
                 </tr>
 
                 {% for member in members %}
-                <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
+                <tr class="hover:bg-base-200 border-b border-base-300">
                 <td class="w-full p-4">
                     <div>
-                        <a href="{% url "team_member_settings" team_pk=team.pk user_pk=member.user_id %}" class="text-xl text-cyan-500 dark:text-cyan-300 font-bold">{{ member.user.email }}</a>  {# "best name" perhaps later? #}
+                        <a href="{% url "team_member_settings" team_pk=team.pk user_pk=member.user_id %}" class="text-xl link link-primary font-bold">{{ member.user.email }}</a>  {# "best name" perhaps later? #}
                         {% if not member.accepted %}
-                        <span class="bg-slate-100 dark:bg-slate-700 rounded-2xl px-4 py-2 ml-2 text-sm">{% translate "Invitation pending" %}</span>
+                        <span class="badge badge-ghost ml-2">{% translate "Invitation pending" %}</span>
                         {% elif member.is_admin %} {# NOTE: we intentionally hide admin-ness for non-accepted users #}
-                        <span class="bg-cyan-100 dark:bg-cyan-900 rounded-2xl px-4 py-2 ml-2 text-sm">{% translate "Admin" %}</span>
+                        <span class="badge badge-primary ml-2">{% translate "Admin" %}</span>
                         {% endif %}
                     </div>
                 </td>
@@ -59,28 +59,28 @@
                     <div class="flex justify-end">
                         {% if not member.accepted %}
                             {% if can_copy_invite_links and member.user.is_active %}
-                            <button name="action" value="copy_invite_link:{{ member.user_id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Show invite link" %}</button>
+                            <button name="action" value="copy_invite_link:{{ member.user_id }}" class="btn btn-ghost border border-base-300 whitespace-nowrap ml-2">{% translate "Show invite link" %}</button>
                             {% elif can_send_invites %}
-                            <button name="action" value="reinvite:{{ member.user_id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Reinvite" %}</button>
+                            <button name="action" value="reinvite:{{ member.user_id }}" class="btn btn-ghost border border-base-300 whitespace-nowrap ml-2">{% translate "Reinvite" %}</button>
                             {% else %}
-                            <button type="button" disabled class="font-bold text-slate-400 dark:text-slate-600 border-slate-200 dark:border-slate-800 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 rounded-md whitespace-nowrap cursor-not-allowed">{% translate "Reinvite" %}</button>
+                            <button type="button" disabled class="btn btn-ghost border border-base-300 btn-disabled whitespace-nowrap">{% translate "Reinvite" %}</button>
                             {% endif %}
                         {% endif %}
                         {% if request.user == member.user %}
-                            <button name="action" value="remove:{{ member.user_id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Leave" %}</button>
+                            <button name="action" value="remove:{{ member.user_id }}" class="btn btn-ghost border border-base-300 whitespace-nowrap ml-2">{% translate "Leave" %}</button>
                         {% else %}  {# NOTE: in our setup request_user_is_admin is implied because only admins may view the membership page #}
-                            <button name="action" value="remove:{{ member.user_id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Remove" %}</button>
+                            <button name="action" value="remove:{{ member.user_id }}" class="btn btn-ghost border border-base-300 whitespace-nowrap ml-2">{% translate "Remove" %}</button>
                         {% endif %}
                     </div>
                 </td>
 
                 </tr>
                 {% empty %}
-                <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
+                <tr class="hover:bg-base-200 border-b border-base-300">
                 <td class="w-full p-4">
                     <div>
                         {# Note: this is already somewhat exceptional, because the usually you'll at least see yourself here (unless you're a superuser and a team has become memberless) #}
-                        {% translate "No members yet." %} <a href="{% url "team_members_invite" team_pk=team.pk %}" class="text-cyan-500 dark:text-cyan-300 font-bold">{% translate "Invite someone</a>." %}
+                        {% translate "No members yet." %} <a href="{% url "team_members_invite" team_pk=team.pk %}" class="link link-primary font-bold">{% translate "Invite someone</a>." %}
                     </div>
                 </td>
                 </tr>
@@ -94,7 +94,7 @@
 
     <div class="flex flex-direction-row">
         <div class="ml-auto py-8 pr-4">
-            <a href="{% url "team_list" %}" class="text-cyan-500 dark:text-cyan-300 font-bold">{% translate "Back to Teams" %}</a>
+            <a href="{% url "team_list" %}" class="link link-primary font-bold">{% translate "Back to Teams" %}</a>
         </div>
     </div>
 </div>

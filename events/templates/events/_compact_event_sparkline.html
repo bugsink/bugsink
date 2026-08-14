@@ -5,9 +5,9 @@
         {% for bucket in event_sparkline.event_buckets %}
             <div title="{{ bucket.title }}" class="flex h-8 flex-1 items-end">
                 {% if bucket.count %}
-                    <div class="w-full bg-cyan-500" style="height: {{ bucket.pct }}%;"></div>
+                    <div class="w-full bg-primary" style="height: {{ bucket.pct }}%;"></div>
                 {% else %}
-                    <div class="h-0.5 w-full bg-slate-300 dark:bg-slate-500"></div>
+                    <div class="h-0.5 w-full bg-base-300"></div>
                 {% endif %}
             </div>
         {% endfor %}

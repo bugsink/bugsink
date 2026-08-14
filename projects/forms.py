@@ -118,7 +118,7 @@ class ProjectForm(forms.ModelForm):
 
             self.fields["dsn"].help_text = format_html(
                 _("Use the DSN to {link}."),
-                link=format_html('<a href="{}" class="text-cyan-800 font-bold">{}</a>', href, _("set up the SDK")),
+                link=format_html('<a href="{}" class="link link-primary font-bold">{}</a>', href, _("set up the SDK")),
             )
 
             transition_ends_at = (
@@ -146,7 +146,7 @@ class ProjectForm(forms.ModelForm):
                 href = reverse("team_new")
                 self.fields["team"].help_text = format_html(
                     "{}{}", _("You don't have any teams yet; "),
-                    format_html('<a href="{}" class="text-cyan-800 font-bold">{}</a>', href, _("Create a team first.")))
+                    format_html('<a href="{}" class="link link-primary font-bold">{}</a>', href, _("Create a team first.")))
 
             elif team_qs.count() == 1:
                 self.fields["team"].initial = team_qs.first()

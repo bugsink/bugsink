@@ -18,12 +18,12 @@ function initializeDeleteModal() {
         button.addEventListener('click', () => {
             const userId = button.getAttribute('data-user-id');
             deleteActionInput.value = 'delete:' + userId;
-            modal.classList.remove('hidden');
+            modal.showModal();
         });
     });
 
     cancelBtn.addEventListener('click', () => {
-        modal.classList.add('hidden');
+        modal.close();
     });
 }
 

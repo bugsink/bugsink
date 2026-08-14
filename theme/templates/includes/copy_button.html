@@ -2,7 +2,7 @@
 
 {% if copy_value %}
 <div class="js-copy-container flex items-center gap-2 mt-2">
-    <code class="js-copy-source flex-1 min-w-0 overflow-x-auto whitespace-nowrap bg-slate-100 dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 rounded-md px-3 py-2 text-sm">{{ copy_value }}</code>
+    <code class="js-copy-source flex-1 min-w-0 overflow-x-auto whitespace-nowrap bg-base-200 border border-base-300 rounded-field px-3 py-2 text-sm font-mono">{{ copy_value }}</code>
     {% include "includes/copy_button_only.html" %}
 </div>
 {% endif %}

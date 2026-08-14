@@ -11,10 +11,21 @@ def tailwind_formfield(formfield, implicit=False):
         return {"formfield": None}
 
     if formfield.errors:
-        formfield.field.widget.attrs['class'] = "bg-red-50 dark:bg-red-900"
+        formfield.field.widget.attrs['class'] = "input input-bordered input-error w-full"
     else:
-        formfield.field.widget.attrs['class'] = "bg-slate-50 dark:bg-slate-800"
-    formfield.field.widget.attrs['class'] += " pl-4 py-2 md:py-4 focus:outline-none w-full"
+        formfield.field.widget.attrs['class'] = "input input-bordered w-full"
+
+    widget_name = formfield.field.widget.__class__.__name__.lower()
+    if "select" in widget_name:
+        formfield.field.widget.attrs['class'] = formfield.field.widget.attrs['class'].replace("input input-bordered", "select select-bordered")
+        if formfield.errors:
+            formfield.field.widget.attrs['class'] = formfield.field.widget.attrs['class'].replace("input-error", "select-error")
+    elif "checkbox" in widget_name:
+        formfield.field.widget.attrs['class'] = "checkbox checkbox-primary"
+    elif "textarea" in widget_name:
+        formfield.field.widget.attrs['class'] = formfield.field.widget.attrs['class'].replace("input input-bordered", "textarea textarea-bordered")
+        if formfield.errors:
+            formfield.field.widget.attrs['class'] = formfield.field.widget.attrs['class'].replace("input-error", "textarea-error")
 
     if implicit:
         formfield.field.widget.attrs['placeholder'] = formfield.label

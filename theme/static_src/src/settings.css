@@ -1,0 +1,94 @@
+/* Bugsink design tokens — observability navy/teal palette.
+   Only place for theme colors; DaisyUI components read these via data-theme. */
+
+@plugin "daisyui/theme" {
+  name: "light";
+  default: true;
+  color-scheme: light;
+
+  --color-base-100: oklch(97.5% 0.008 240);
+  --color-base-200: oklch(94% 0.012 245);
+  --color-base-300: oklch(88% 0.018 245);
+  --color-base-content: oklch(22% 0.03 250);
+
+  --color-primary: oklch(55% 0.14 195);
+  --color-primary-content: oklch(98% 0.01 195);
+
+  --color-secondary: oklch(45% 0.06 250);
+  --color-secondary-content: oklch(97% 0.01 250);
+
+  --color-accent: oklch(62% 0.16 175);
+  --color-accent-content: oklch(98% 0.01 175);
+
+  --color-neutral: oklch(35% 0.04 250);
+  --color-neutral-content: oklch(96% 0.01 250);
+
+  --color-info: oklch(62% 0.12 230);
+  --color-info-content: oklch(98% 0.01 230);
+  --color-success: oklch(58% 0.14 155);
+  --color-success-content: oklch(98% 0.01 155);
+  --color-warning: oklch(78% 0.14 85);
+  --color-warning-content: oklch(25% 0.04 85);
+  --color-error: oklch(58% 0.2 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: "dark";
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-100: oklch(18% 0.025 250);
+  --color-base-200: oklch(22% 0.028 250);
+  --color-base-300: oklch(28% 0.03 250);
+  --color-base-content: oklch(92% 0.015 240);
+
+  --color-primary: oklch(72% 0.13 195);
+  --color-primary-content: oklch(18% 0.03 250);
+
+  --color-secondary: oklch(55% 0.06 250);
+  --color-secondary-content: oklch(95% 0.01 250);
+
+  --color-accent: oklch(70% 0.14 175);
+  --color-accent-content: oklch(18% 0.03 250);
+
+  --color-neutral: oklch(28% 0.03 250);
+  --color-neutral-content: oklch(92% 0.015 240);
+
+  --color-info: oklch(70% 0.1 230);
+  --color-info-content: oklch(18% 0.03 250);
+  --color-success: oklch(68% 0.14 155);
+  --color-success-content: oklch(18% 0.03 250);
+  --color-warning: oklch(80% 0.12 85);
+  --color-warning-content: oklch(22% 0.04 85);
+  --color-error: oklch(65% 0.18 25);
+  --color-error-content: oklch(98% 0.01 25);
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+:root {
+  --glow-primary: oklch(55% 0.14 195 / 0.35);
+  --header-bg: oklch(94% 0.012 245 / 0.85);
+}
+
+[data-theme="dark"] {
+  --glow-primary: oklch(72% 0.13 195 / 0.4);
+  --header-bg: oklch(22% 0.028 250 / 0.85);
+}

@@ -14,11 +14,11 @@ function initializeDeleteModal() {
     }
 
     deleteBtn.addEventListener('click', () => {
-        modal.classList.remove('hidden');
+        modal.showModal();
     });
 
     cancelBtn.addEventListener('click', () => {
-        modal.classList.add('hidden');
+        modal.close();
     });
 }
 

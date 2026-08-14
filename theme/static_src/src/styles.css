@@ -1,13 +1,13 @@
 @config "../tailwind.config.js";
 @import "tailwindcss";
-
-/* Preserve Tailwind 3 behavior: default border color was gray.200
-the dark-mode stuff is actually an improvement over our previous design @tailwind 3 that we simply added
-because we were in the process of fixing borders globally anyway */
+@plugin "daisyui" {
+  themes: false;
+}
+@import "./settings.css";
 
 @layer base {
   *, ::before, ::after {
-    @apply border-gray-200 dark:border-slate-800;
+    @apply border-base-300;
   }
 }
 
@@ -83,43 +83,15 @@ because we were in the process of fixing borders globally anyway */
   src: url('../../fonts/ibm-plex-mono-v19-cyrillic_cyrillic-ext_latin_latin-ext_vietnamese-700italic.woff2') format('woff2'); /* Chrome 36+, Opera 23+, Firefox 39+, Safari 12+, iOS 10+ */
 }
 
-/* The container <div> - needed to position the dropdown content */
-.dropdown {
-  position: relative;
-  display: inline-block;
-}
-
-/* Dropdown Content (Hidden by Default) */
-.dropdown-content-right {
-  display: none;
-  position: absolute;
-  z-index: 1;
-  margin-left: auto;
-  right: 0;
-}
-
-/* Dropdown Content (Hidden by Default) */
-.dropdown-content-left {
-  display: none;
-  position: absolute;
-  z-index: 1;
-  left: 0;
-}
-
-/* Show the dropdown menu on hover */
-.dropdown:hover .dropdown-content-left, .dropdown:hover .dropdown-content-right {
-    display: flex;
-}
-
 .triangle-left {
-    position:relative;
+    position: relative;
 }
 
 .triangle-left:before {
     content: "";
     border-style: solid;
     border-width: 9px 8px 9px 0;
-    border-color: transparent rgb(203 213 225) transparent transparent;
+    border-color: transparent var(--color-base-300) transparent transparent;
     position: absolute;
     left: -8px;
     top: 20px;
@@ -129,19 +101,10 @@ because we were in the process of fixing borders globally anyway */
     content: "";
     border-style: solid;
     border-width: 9px 8px 9px 0;
-    border-color: transparent white transparent transparent;
+    border-color: transparent var(--color-base-100) transparent transparent;
     position: absolute;
     left: -6px;
     top: 20px;
-}
-
-/* Tailwind dark mode support */
-[data-theme="dark"] .triangle-left:before {
-    border-color: transparent rgb(71 85 105) transparent transparent;
-}
-
-[data-theme="dark"] .triangle-left:after {
-    border-color: transparent rgb(51 65 85) transparent transparent;
 }
 
 /*
@@ -309,7 +272,5 @@ pre { line-height: 125%; }
 [data-theme="dark"] .syntax-coloring .il { color: #AE81FF } /* Literal.Number.Integer.Long */
 
 input[type='radio'] {
-    /* I wanted to style the whole of the radio button in a non-navy color (something that fits more with what we
-    do generally but I didn't manage to get it done in the self-allotted time. I'm still seeing a navy outer ring */
-    color: rgb(6 182 212);  /* cyan-500 */
+    color: var(--color-primary);
 }

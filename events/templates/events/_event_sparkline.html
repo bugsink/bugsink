@@ -6,7 +6,7 @@
      style="grid-template-columns: max-content 1fr; grid-template-rows: auto auto; column-gap: 0.5rem;">
 
     {# y-axis #}
-    <div class="flex flex-col justify-between h-24 {# h matches chart height #} mr-2 text-right tabular-nums text-xs text-slate-700 dark:text-slate-200">
+    <div class="flex flex-col justify-between h-24 {# h matches chart height #} mr-2 text-right tabular-nums text-xs text-base-content/70">
     {# basic idea: first and last are half-cells, middle are full-width; this way the outermost labels are aligned with the outsides #}
 
     {% for y_label in sparkline_variant.y_labels %}
@@ -61,7 +61,7 @@
         </div>
 
         {# baseline directly under bars #}
-        <div class="h-[1px] border-b border-slate-300 dark:border-slate-500"></div>
+        <div class="h-[1px] border-b border-base-300"></div>
 
         {# x-axis #}
         <div class="mt-1 flex text-xs">

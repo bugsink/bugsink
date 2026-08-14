@@ -23,11 +23,14 @@
     </script>
 	</head>
 
-	<body class="dark:bg-slate-700 dark:text-slate-100">
+	<body class="bg-base-100 text-base-content min-h-screen">
         <div id="content">
-            <div class="flex pl-4 bg-slate-200 dark:bg-slate-800">
-                <a href="{# probably broken? no (guaranteed) context! #}{{ script_prefix }}/"><img src="{% static 'images/bugsink-logo.png' %}" class="p-2 h-12 w-12 dark:hidden block" alt="Bugsink logo"><img src="{% static 'images/bugsink-logo-dark.png' %}" class="p-2 h-12 w-12 hidden dark:block" alt="Bugsink logo"></a>
-                <a href="{# probably broken? no (guaranteed) context #}{{ script_prefix }}/"><div class="pt-4 pb-4 pl-2 pr-2 font-bold">Bugsink</div></a>
+            <div class="navbar bg-[var(--header-bg)] backdrop-blur-md border-b border-base-300 px-4">
+                <a href="{# probably broken? no (guaranteed) context! #}{{ script_prefix }}/" class="btn btn-ghost gap-2 px-2">
+                    <img src="{% static 'images/bugsink-logo.png' %}" class="h-8 w-8 dark:hidden block" alt="Bugsink logo">
+                    <img src="{% static 'images/bugsink-logo-dark.png' %}" class="h-8 w-8 hidden dark:block" alt="Bugsink logo">
+                    <span class="font-bold text-lg">Bugsink</span>
+                </a>
             </div>
             <div>
                 {% block content %}{% endblock %}

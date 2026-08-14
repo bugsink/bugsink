@@ -16,7 +16,7 @@
         <ul class="mb-4">
             {% for message in messages %}
                 {# if we introduce different levels we can use{% message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %} #}
-                <li class="bg-cyan-50 dark:bg-cyan-900 border-2 border-cyan-800 dark:border-cyan-400 p-4 rounded-lg">{{ message }}</li>
+                <li class="alert alert-info">{{ message }}</li>
             {% endfor %}
         </ul>
         {% endif %}
@@ -25,7 +25,7 @@
             <h1 class="text-4xl mt-4 font-bold">{% translate "Alerts" %} · {{ project.name }}</h1>
 
             <div class="ml-auto mt-6">
-                <a class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md" href="{% url "project_messaging_service_add" project_pk=project.pk %}">{% translate "Add" %}</a>
+                <a class="btn btn-primary" href="{% url "project_messaging_service_add" project_pk=project.pk %}">{% translate "Add" %}</a>
             </div>
         </div>
 
@@ -36,25 +36,25 @@
           <table class="w-full mt-8">
           <tbody>
                 <thead>
-                <tr class="bg-slate-200 dark:bg-slate-800">
+                <tr class="bg-base-200">
                     <th class="w-full p-4 text-left text-xl" colspan="2">{% translate "Messaging Services" %}</th>
                 </tr>
 
                 {% for service_config in service_configs %}
-                <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
+                <tr class="hover:bg-base-200 border-b border-base-300">
                 <td class="w-full p-4">
                     <div class="flex items-center">
                         <div class="flex-grow">
-                            <a href="{% url "project_messaging_service_edit" project_pk=project.pk service_pk=service_config.pk %}" class="text-xl text-cyan-500 dark:text-cyan-300 font-bold">{{ service_config.display_name }}</a>
+                            <a href="{% url "project_messaging_service_edit" project_pk=project.pk service_pk=service_config.pk %}" class="text-xl link link-primary font-bold">{{ service_config.display_name }}</a>
                             {% if service_config.has_recent_failure %}
-                                <div class="text-sm text-red-600 dark:text-red-400 mt-1">
+                                <div class="text-sm text-error mt-1">
                                     <span class="inline-flex items-center leading-none">
                                         <svg class="w-4 h-4 mr-1 align-middle" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                                             <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                                         </svg>
                                         <span>Last alert failed ({{ service_config.last_failure_timestamp|date:"M j, H:i" }})</span>
                                         <a href="{% url "project_messaging_service_edit" project_pk=project.pk service_pk=service_config.pk %}#failure-details"
-                                           class="text-red-700 dark:text-red-300 underline ml-2">View details</a>
+                                           class="underline ml-2">View details</a>
                                     </span>
                                 </div>
                             {% endif %}
@@ -65,17 +65,17 @@
 
                 <td class="p-4">
                     <div class="flex justify-end">
-                        <button name="action" value="test:{{ service_config.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Test" context "Alerts" %}</button>
-                        <button name="action" value="remove:{{ service_config.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Remove" context "Alerts" %}</button>
+                        <button name="action" value="test:{{ service_config.id }}" class="btn btn-ghost border border-base-300 whitespace-nowrap ml-2">{% translate "Test" context "Alerts" %}</button>
+                        <button name="action" value="remove:{{ service_config.id }}" class="btn btn-ghost border border-base-300 whitespace-nowrap ml-2">{% translate "Remove" context "Alerts" %}</button>
                     </div>
                 </td>
 
                 </tr>
                 {% empty %}
-                <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
+                <tr class="hover:bg-base-200 border-b border-base-300">
                 <td class="w-full p-4">
                     <div>
-                        {% translate "No Messaging Services Configured." %} <a href="{% url "project_messaging_service_add" project_pk=project.pk %}" class="text-cyan-500 dark:text-cyan-300 font-bold">{% translate "Add Messaging Service" %}</a>.
+                        {% translate "No Messaging Services Configured." %} <a href="{% url "project_messaging_service_add" project_pk=project.pk %}" class="link link-primary font-bold">{% translate "Add Messaging Service" %}</a>.
                     </div>
                 </td>
                 </tr>
@@ -89,8 +89,8 @@
 
     <div class="flex flex-direction-row">
         <div class="ml-auto py-8 pr-4">
-            <a href="{% url "project_edit" project_pk=project.pk %}" class="text-cyan-500 dark:text-cyan-300 font-bold">{% translate "Settings" context "Alerts" %}</a>
-            <span class="font-bold text-slate-500 dark:text-slate-300">|</span> <a href="{% url "project_list" %}" class="text-cyan-500 dark:text-cyan-300 font-bold">{% translate "Back to Projects" %}</a>
+            <a href="{% url "project_edit" project_pk=project.pk %}" class="link link-primary font-bold">{% translate "Settings" context "Alerts" %}</a>
+            <span class="opacity-50">|</span> <a href="{% url "project_list" %}" class="link link-primary font-bold">{% translate "Back to Projects" %}</a>
         </div>
     </div>
 </div>

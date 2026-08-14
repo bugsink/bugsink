@@ -18,7 +18,7 @@
         <ul>
             {% for message in messages %}
                 {# if we introduce different levels we can use{% message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %} #}
-                <li class="bg-cyan-50 dark:bg-cyan-900 border-2 border-cyan-800 dark:border-cyan-400 p-4 rounded-lg">{{ message }}</li>
+                <li role="alert" class="alert alert-info mb-4">{{ message }}</li>
             {% endfor %}
         </ul>
         {% endif %}
@@ -31,11 +31,11 @@
         {% tailwind_formfield form.theme_preference %}
         {% tailwind_formfield form.language %}
 
-        <button name="action" value="preferences" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">{% translate "Save" %}</button>
+        <button name="action" value="preferences" class="btn btn-primary">{% translate "Save" %}</button>
         </form>
 
         <div class="mt-8 text-sm">
-            <a href="{% url 'change_password' %}" class="text-cyan-500 dark:text-cyan-300 font-bold">{% translate "Change password" %}</a>
+            <a href="{% url 'change_password' %}" class="link link-primary font-bold">{% translate "Change password" %}</a>
         </div>
 
     </div>
