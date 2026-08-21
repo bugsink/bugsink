@@ -1,4 +1,4 @@
-gunicorn==26.0.*
+gunicorn==26.1.*
 Django==5.2.*
 verbose_csrf_middleware==5.2.*
 sentry-sdk==2.*
