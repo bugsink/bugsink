@@ -2,7 +2,9 @@ import urllib.parse
 
 from django import forms
 from django.urls import reverse
-from django.contrib.auth.forms import UserCreationForm as BaseUserCreationForm, SetPasswordForm as BaseSetPasswordForm
+from django.contrib.auth.forms import (
+    AuthenticationForm as BaseAuthenticationForm, UserCreationForm as BaseUserCreationForm,
+    SetPasswordForm as BaseSetPasswordForm)
 from django.core.validators import EmailValidator
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -10,6 +12,8 @@ from django.contrib.auth import password_validation
 from django.forms import ModelForm
 from django.utils.html import escape, mark_safe
 from django.utils.translation import gettext_lazy as _
+
+from .utils import normalize_email
 
 
 TRUE_FALSE_CHOICES = (
@@ -47,12 +51,13 @@ class UserCreationForm(BaseUserCreationForm):
         fields = ("username",)
 
     def clean_username(self):
-        if User.objects.filter(username=self.cleaned_data['username'], is_active=False).exists():
+        username = normalize_email(self.cleaned_data['username'])
+        if User.objects.filter(username=username, is_active=False).exists():
             raise ValidationError(mark_safe(
                 'This email is already registered but not yet confirmed. Please check your email for the confirmation '
                 'link or <b><a href="' + reverse("resend_confirmation") + "?email=" +
-                urllib.parse.quote(escape(self.cleaned_data['username'])) + '">request it again</a></b>.'))
-        return self.cleaned_data['username']
+                urllib.parse.quote(escape(username)) + '">request it again</a></b>.'))
+        return username
 
     def _post_clean(self):
         # copy of django.contrib.auth.forms.UserCreationForm._post_clean; but with password1 instead of password2; I'd
@@ -92,9 +97,10 @@ class UserEditForm(ModelForm):
         fields = ("username",)
 
     def clean_username(self):
-        if User.objects.exclude(pk=self.instance.pk).filter(username=self.cleaned_data['username']).exists():
+        username = normalize_email(self.cleaned_data['username'])
+        if User.objects.exclude(pk=self.instance.pk).filter(username=username).exists():
             raise ValidationError(mark_safe("This email is already registered by another user."))
-        return self.cleaned_data['username']
+        return username
 
     def save(self, **kwargs):
         commit = kwargs.pop("commit", True)
@@ -108,12 +114,15 @@ class UserEditForm(ModelForm):
 class ResendConfirmationForm(forms.Form):
     email = forms.EmailField()
 
+    def clean_email(self):
+        return normalize_email(self.cleaned_data['email'])
+
 
 class RequestPasswordResetForm(forms.Form):
     email = forms.EmailField()
 
     def clean_email(self):
-        email = self.cleaned_data['email']
+        email = normalize_email(self.cleaned_data['email'])
         if not User.objects.filter(username=email).exists():
             # Many sites say "if the email is registered, we've sent you an email with a password reset link" instead.
             # The idea is not to leak information about which emails are registered. But in our setup we're already
@@ -122,6 +131,11 @@ class RequestPasswordResetForm(forms.Form):
             raise ValidationError("This email is not registered.")
 
         return email
+
+
+class AuthenticationForm(BaseAuthenticationForm):
+    def clean_username(self):
+        return normalize_email(self.cleaned_data['username'])
 
 
 class SetPasswordForm(BaseSetPasswordForm):

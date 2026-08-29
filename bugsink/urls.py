@@ -12,6 +12,7 @@ from alerts.views import debug_email as debug_alerts_email
 from users.views import debug_email as debug_users_email
 from teams.views import debug_email as debug_teams_email
 from bugsink.app_settings import get_settings
+from users.forms import AuthenticationForm
 from users.views import (
     signup, confirm_email, resend_confirmation, request_reset_password, reset_password, preferences, change_password)
 from ingest.views import download_envelope
@@ -54,7 +55,8 @@ urlpatterns = [
     path("accounts/request-reset-password/", request_reset_password, name="request_reset_password"),
     path("accounts/reset-password/<str:token>/", reset_password, name="reset_password"),
 
-    path("accounts/login/", auth_views.LoginView.as_view(template_name="bugsink/login.html"), name="login"),
+    path("accounts/login/", auth_views.LoginView.as_view(
+        template_name="bugsink/login.html", authentication_form=AuthenticationForm), name="login"),
     path("accounts/logout/", auth_views.LogoutView.as_view(template_name="users/logged_out.html"), name="logout"),
 
     path("accounts/preferences/", preferences, name="preferences"),

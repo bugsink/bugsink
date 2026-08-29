@@ -4,6 +4,7 @@ from django.urls import reverse
 
 from bugsink.app_settings import get_settings
 from users.models import EmailVerification
+from users.utils import normalize_email
 
 
 User = get_user_model()
@@ -17,7 +18,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         try:
-            user = User.objects.get(username=options["email"])
+            user = User.objects.get(username=normalize_email(options["email"]))
         except User.DoesNotExist as e:
             raise CommandError("No user with this email address exists") from e
 
