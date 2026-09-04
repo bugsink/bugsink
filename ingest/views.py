@@ -217,6 +217,7 @@ class BaseIngestAPIView(View):
             "X-Requested-With, Origin, Accept, Authentication, Authorization, Content-Encoding, sentry-trace, "
             "baggage, X-CSRFToken"
         )
+        response["Access-Control-Expose-Headers"] = "X-Sentry-Rate-Limits"
 
         return response
 
@@ -813,6 +814,19 @@ class IngestEventAPIView(BaseIngestAPIView):
 
 
 class IngestEnvelopeAPIView(BaseIngestAPIView):
+
+    def post(self, request, project_pk=None):
+        response = super().post(request, project_pk)
+
+        # We repurpose the Sentry rate-limits header to indicate lack of support for transaction & span.
+        rate_limits = "86400:transaction;span:organization"
+
+        if response.status_code == HTTP_429_TOO_MANY_REQUESTS:
+            # X-Sentry-Rate-Limits takes precedence over the generic backoff implied by a bare 429.
+            rate_limits = "60::key, " + rate_limits
+
+        response["X-Sentry-Rate-Limits"] = rate_limits
+        return response
 
     def _post(self, request, project_pk=None):
         ingested_at = datetime.now(timezone.utc)

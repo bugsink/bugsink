@@ -538,8 +538,36 @@ class IngestViewTestCase(TransactionTestCase):
             )
             self.assertEqual(
                 200, response.status_code, response.content if response.status_code != 302 else response.url)
+            self.assertEqual(
+                "86400:transaction;span:organization",
+                response["X-Sentry-Rate-Limits"],
+            )
+            self.assertEqual("X-Sentry-Rate-Limits", response["Access-Control-Expose-Headers"])
 
             self.assertEqual(0, Event.objects.count())
+
+    @override_settings(MAX_EVENTS_PER_5_MINUTES=1)
+    def test_envelope_endpoint_rate_limit_headers_when_quota_exceeded(self):
+        project = Project.objects.create(name="test")
+        installation = Installation.objects.get()
+        installation.quota_exceeded_until = timezone.now() + relativedelta(minutes=5)
+        installation.quota_exceeded_reason = json.dumps(["minute", 5, 1])
+        installation.save(update_fields=["quota_exceeded_until", "quota_exceeded_reason"])
+
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+        response = self.client.post(
+            f"/api/{ project.id }/envelope/",
+            content_type="application/json",
+            headers={"X-Sentry-Auth": sentry_auth_header},
+            data=b'{}\n{"type": "transaction"}\n{}',
+        )
+
+        self.assertEqual(429, response.status_code)
+        self.assertEqual(
+            "60::key, 86400:transaction;span:organization",
+            response["X-Sentry-Rate-Limits"],
+        )
+        self.assertEqual("X-Sentry-Rate-Limits", response["Access-Control-Expose-Headers"])
 
     def test_envelope_endpoint_unsupported_type_without_event_id(self):
         # dirty copy/paste from the integration test, let's start with "something", we can always clean it later.
