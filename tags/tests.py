@@ -243,6 +243,36 @@ class SearchParserTestCase(RegularTestCase):
             ({"key": "quoted value"}, "and further text"),
             parse_query('key:"quoted value" and further text'))
 
+        self.assertEqual(({"key": ""}, ""), parse_query('key:""'))
+
+        self.assertEqual(({}, 'key:"unterminated value'), parse_query('key:"unterminated value'))
+
+    def test_parser_supports_escaped_quotes(self):
+        self.assertEqual(({"key": 'a "quoted" value'}, ""), parse_query(r'key:"a \"quoted\" value"'))
+
+    def test_parser_supports_escaped_backslashes(self):
+        self.assertEqual(({"key": "a \\ value"}, ""), parse_query(r'key:"a \\ value"'))
+
+    def test_parser_ignores_colons_inside_quotes(self):
+        self.assertEqual(({"key": "value"}, '"not:a tag"'), parse_query('"not:a tag" key:value'))
+
+        self.assertEqual(({"key": "value:with:colons"}, ""), parse_query('key:"value:with:colons"'))
+
+    def test_parser_splits_on_leftmost_unquoted_colon(self):
+        self.assertEqual(
+            ({"url": "https://www.example.com/checkout/"}, ""), parse_query("url:https://www.example.com/checkout/"))
+
+        self.assertEqual(
+            ({"url": "https://www.example.com/checkout/"}, ""), parse_query('url:"https://www.example.com/checkout/"'))
+
+        self.assertEqual(({"key": "value:with:colons"}, ""), parse_query("key:value:with:colons"))
+
+    def test_parser_uses_last_duplicate_tag(self):
+        self.assertEqual(({"key": "plain"}, ""), parse_query('key:"quoted value" key:plain'))
+
+        self.assertEqual(({"key": "quoted value"}, ""), parse_query('key:plain key:"quoted value"'))
+
+    def test_parser_preserves_spacing_around_removed_tags(self):
         # This is the kind of test that just documents "what is" rather than "what I believe is right". The weirdness
         # here is mostly the double space "on  both" which is the result of just cutting out the key:value bits. But...
         # I'm not invested in getting this more precise (yet), because this whole case is a bit weird. I'd much rather
