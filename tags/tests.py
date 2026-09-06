@@ -41,6 +41,9 @@ class DeduceTagsTestCase(RegularTestCase):
                 "ip_address": "123.123.123.123",
             },
             "transaction": "main",
+            "request": {
+                "url": "https://www.example.com/checkout/",
+            },
             "contexts": {
                 "trace": {
                     "trace_id": "1f2d3e4f5a6b5c8df9e0a1b2c3d4e5f",
@@ -62,6 +65,7 @@ class DeduceTagsTestCase(RegularTestCase):
             "environment": "prod",
             "handled": "false",
             "transaction": "main",
+            "url": "https://www.example.com/checkout/",
             "trace": "1f2d3e4f5a6b5c8df9e0a1b2c3d4e5f",
             "trace.span": "9a8b7c6d5e4f3a2c",
             "trace.ctx": "1f2d3e4f5a6b5c8df9e0a1b2c3d4e5f.9a8b7c6d5e4f3a2c",
@@ -77,6 +81,16 @@ class DeduceTagsTestCase(RegularTestCase):
             "user.email": "john@doe.org",
             "user.ip_address": "123.123.123.123",
         })
+
+    def test_url_tag_excludes_query_and_fragment(self):
+        for url, expected in [
+            ("https://www.example.com/checkout/", "https://www.example.com/checkout/"),
+            ("https://www.example.com/checkout/?coupon=SAVE", "https://www.example.com/checkout/"),
+            ("https://www.example.com/checkout/#payment", "https://www.example.com/checkout/"),
+            ("https://www.example.com/checkout/?coupon=SAVE#payment", "https://www.example.com/checkout/"),
+        ]:
+            with self.subTest(url=url):
+                self.assertEqual(deduce_tags({"request": {"url": url}}), {"url": expected})
 
 
 class StoreTagsTestCase(DjangoTestCase):
@@ -362,6 +376,21 @@ class SearchTestCase(DjangoTestCase):
 
     def test_search_issues(self):
         self._test_search(lambda query: search_issues(self.project, Issue.objects.all(), query))
+
+    def test_search_issues_by_url(self):
+        issue, _ = get_or_create_issue(project=self.project, event_data=create_event_data("url"))
+        event = create_event(self.project, issue=issue)
+        digest_tags({
+            "request": {"url": "https://www.example.com/checkout/?coupon=SAVE#payment"},
+        }, event, issue)
+
+        result = search_issues(
+            self.project,
+            Issue.objects.all(),
+            'url:"https://www.example.com/checkout/"',
+        )
+
+        self.assertEqual([issue], list(result))
 
 
 class VacuumEventlessIssueTagsTestCase(TransactionTestCase):
