@@ -1,11 +1,18 @@
+from contextlib import redirect_stdout
+from datetime import timedelta
+from io import StringIO
+
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.core.checks import run_checks
+from django.core.management import call_command
 from django.db.migrations.loader import MigrationLoader
 from django.db.migrations.operations.base import OperationCategory
 from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
+from bugsink.api_capabilities import CAPABILITIES
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 
 from .models import AuthToken
@@ -126,7 +133,6 @@ class AuthTokenDescriptionUpdateTestCase(TransactionTestCase):
         self.assertEqual("updated first", token_1.description)
         self.assertEqual("second", token_2.description)
 
-
 class AuthTokenListTestCase(TransactionTestCase):
     def setUp(self):
         super().setUp()
@@ -146,3 +152,45 @@ class AuthTokenListTestCase(TransactionTestCase):
         self.assertContains(response, f'id="token-hidden-{token_2.pk}"')
         self.assertContains(response, f'id="token-revealed-{token_2.pk}" class="hidden font-mono"')
         self.assertContains(response, f'id="token-toggle-{token_2.pk}"')
+
+    def test_current_create_action_grants_full_installation_service_access(self):
+        # Transitional: this documents the old Add Token UI on top of the new token model. The granular UI will
+        # replace it with explicit bindings and capabilities.
+        response = self.client.post(reverse("auth_token_create"))
+
+        self.assertEqual(302, response.status_code)
+        token = AuthToken.objects.get()
+        self.assertFalse(token.is_user_bound)
+        self.assertFalse(token.is_project_bound)
+        self.assertEqual(set(CAPABILITIES), token.capabilities)
+
+    def test_revoke_expires_the_token_now_and_hides_it_from_the_list(self):
+        token = AuthToken.objects.create(
+            description="Deploy token",
+            expires_at=timezone.now() + timedelta(days=30),
+        )
+
+        response = self.client.get(reverse("auth_token_list"))
+        self.assertContains(response, "Deploy token")
+
+        response = self.client.post(reverse("auth_token_list"), {"action": f"revoke:{token.pk}"})
+
+        self.assertEqual(302, response.status_code)
+        token.refresh_from_db()
+        self.assertLessEqual(token.expires_at, timezone.now())
+        response = self.client.get(reverse("auth_token_list"))
+        self.assertNotContains(response, "Deploy token")
+        self.assertNotContains(response, f'id="token-hidden-{token.pk}"')
+
+
+class CreateAuthTokenCommandTests(TransactionTestCase):
+    def test_command_creates_a_full_access_installation_service_token(self):
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            call_command("create_auth_token")
+
+        token = AuthToken.objects.get()
+        self.assertEqual(token.token, stdout.getvalue().strip())
+        self.assertFalse(token.is_user_bound)
+        self.assertFalse(token.is_project_bound)
+        self.assertEqual(set(CAPABILITIES), token.capabilities)

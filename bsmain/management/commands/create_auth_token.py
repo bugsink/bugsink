@@ -7,5 +7,5 @@ class Command(BaseCommand):
     help = "Creates an auth_token and prints it on screen"""
 
     def handle(self, *args, **options):
-        auth_token = AuthToken.objects.create()
+        auth_token = AuthToken.create_full_access()
         print(auth_token.token)

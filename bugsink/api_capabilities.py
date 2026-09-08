@@ -18,6 +18,18 @@ CAPABILITIES = {
     "teams:manage": "Create and update teams.",
 }
 
+CAPABILITY_FIELD_NAMES = {
+    name: name.replace(":", "_").replace("-", "_")
+    for name in CAPABILITIES
+}
+
+INSTALLATION_ONLY_CAPABILITIES = {
+    "projects:read",
+    "projects:manage",
+    "teams:read",
+    "teams:manage",
+}
+
 
 def required_capabilities(*capability_names, methods=None):
     if not capability_names:
