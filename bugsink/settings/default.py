@@ -106,6 +106,7 @@ SPECTACULAR_SETTINGS = {
     "POSTPROCESSING_HOOKS": [
         "drf_spectacular.hooks.postprocess_schema_enums",
         "bugsink.api_schema.add_sentry_compatible_api",
+        "bugsink.api_schema.add_capability_documentation",
     ],
 }
 

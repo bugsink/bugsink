@@ -12,6 +12,7 @@ from django.http import Http404
 from sentry.assemble import ChunkFileState
 
 from bugsink.app_settings import get_settings
+from bugsink.api_capabilities import required_capabilities
 from bugsink.transaction import durable_atomic, immediate_atomic
 from bugsink.streams import handle_request_content_encoding, copy_stream_limited, MaxLengthExceeded
 from bsmain.models import AuthToken
@@ -157,6 +158,7 @@ def get_artifact_bundle_projects(data):
     return [projects_by_slug[slug] for slug in dict.fromkeys(project_slugs)], None
 
 
+@required_capabilities("debug-files:upload", methods=["GET", "POST"])
 @csrf_exempt
 @requires_auth_token
 def chunk_upload(request, organization_slug):
@@ -224,6 +226,7 @@ def chunk_upload(request, organization_slug):
     return HttpResponse()
 
 
+@required_capabilities("debug-files:upload", methods=["POST"])
 @csrf_exempt  # we're in API context here; this could potentially be pulled up to a higher level though
 @requires_auth_token
 def artifact_bundle_assemble(request, organization_slug):
@@ -258,6 +261,7 @@ def artifact_bundle_assemble(request, organization_slug):
     return JsonResponse({"state": ChunkFileState.CREATED, "missingChunks": []})
 
 
+@required_capabilities("debug-files:upload", methods=["POST"])
 @csrf_exempt  # we're in API context here; this could potentially be pulled up to a higher level though
 @requires_auth_token
 def difs_assemble(request, organization_slug, project_slug):
@@ -411,6 +415,7 @@ def api_catch_all(request, subpath):
     raise Http404("Unimplemented API endpoint: /api/" + subpath)
 
 
+@required_capabilities("debug-files:upload", methods=["GET"])
 @csrf_exempt
 @requires_auth_token
 def api_root(request):

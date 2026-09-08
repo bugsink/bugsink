@@ -3,6 +3,7 @@ from rest_framework.exceptions import ValidationError
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_pagination import AscDescCursorPagination
+from bugsink.api_capabilities import required_capabilities
 from bugsink.api_mixins import AtomicRequestMixin
 
 from .models import Release
@@ -24,6 +25,7 @@ class ReleaseViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "head", "options"]
     pagination_class = ReleasePagination
 
+    @required_capabilities("releases:read")
     @extend_schema(
         summary="List releases",
         description=(
@@ -43,6 +45,7 @@ class ReleaseViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
 
+    @required_capabilities("releases:create")
     @extend_schema(
         summary="Create a release",
         description=(
@@ -62,6 +65,7 @@ class ReleaseViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
 
+    @required_capabilities("releases:read")
     @extend_schema(
         summary="Retrieve a release",
         description="Retrieve a release by release UUID.",
