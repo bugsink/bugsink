@@ -4,7 +4,6 @@ since we have such a prominent role for tags in the actual implementation of sea
 least it means we have all of this together in a separate file this way.
 """
 
-import re
 from django.db.models import Q, Subquery, Count
 from collections import namedtuple
 
@@ -36,26 +35,95 @@ def _and_join(q_objects):
     return result
 
 
-def parse_query(q):
-    # The simplest possible query-language that could have any value: key:value is recognized as such; the rest is "free
-    # text"; no support for quoting of spaces.
-    tags = {}
+def _split_on_spaces_respecting_quotes(q):
+    terms = []
+    start = None
+    in_quotes = False
+    i = 0
 
+    while i < len(q):
+        if start is None:
+            if q[i].isspace():
+                i += 1
+                continue
+            start = i
+
+        if q[i] == "\\" and i + 1 < len(q) and q[i + 1] in ['"', "\\"]:
+            i += 2
+            continue
+
+        if q[i] == '"':
+            in_quotes = not in_quotes
+        elif q[i].isspace() and not in_quotes:
+            terms.append((start, i, True))
+            start = None
+
+        i += 1
+
+    if start is not None:
+        terms.append((start, len(q), not in_quotes))
+
+    return terms
+
+
+def _parse_tag_token(term):
+    in_quotes = False
+    i = 0
+
+    while i < len(term):
+        if term[i] == "\\" and i + 1 < len(term) and term[i + 1] in ['"', "\\"]:
+            i += 2
+            continue
+
+        if term[i] == '"':
+            in_quotes = not in_quotes
+        elif term[i] == ":" and not in_quotes:
+            if i == 0 or i == len(term) - 1:
+                return None
+            return _unquote(term[:i]), _unquote(term[i + 1:])
+
+        i += 1
+
+    return None
+
+
+def _unquote(value):
+    result = []
+    i = 0
+
+    while i < len(value):
+        if value[i] == "\\" and i + 1 < len(value) and value[i + 1] in ['"', "\\"]:
+            result.append(value[i + 1])
+            i += 2
+        elif value[i] == '"':
+            i += 1
+        else:
+            result.append(value[i])
+            i += 1
+
+    return "".join(result)
+
+
+def parse_query(q):
+    tags = {}
     slices_to_remove = []
 
-    # first, match all key:value pairs with unquoted values
-    for match in re.finditer(r'(\S+):([^\s"]+)', q):
-        slices_to_remove.append(match.span())
-        key, value = match.groups()
-        tags[key] = value
+    # First split the query on spaces outside quoted strings.
+    for start, stop, quotes_closed in _split_on_spaces_respecting_quotes(q):
+        if not quotes_closed:
+            continue
 
-    # then, match all key:"quoted value" pairs
-    for match in re.finditer(r'(\S+):"([^"]+)"', q):
-        slices_to_remove.append(match.span())
-        key, value = match.groups()
-        tags[key] = value
+        # Then split each complete token on its first unquoted colon.
+        tag = _parse_tag_token(q[start:stop])
+        if tag is None:
+            continue
 
-    slices_to_remove.sort(key=lambda tup: tup[0])  # _remove_slices expects the slices to be sorted
+        key, value = tag
+        if not key:
+            continue
+
+        tags[key] = value
+        slices_to_remove.append((start, stop))
 
     plain_text_q = _remove_slices(q, slices_to_remove).strip()
 

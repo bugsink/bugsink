@@ -41,6 +41,9 @@ class DeduceTagsTestCase(RegularTestCase):
                 "ip_address": "123.123.123.123",
             },
             "transaction": "main",
+            "request": {
+                "url": "https://www.example.com/checkout/",
+            },
             "contexts": {
                 "trace": {
                     "trace_id": "1f2d3e4f5a6b5c8df9e0a1b2c3d4e5f",
@@ -62,6 +65,7 @@ class DeduceTagsTestCase(RegularTestCase):
             "environment": "prod",
             "handled": "false",
             "transaction": "main",
+            "url": "https://www.example.com/checkout/",
             "trace": "1f2d3e4f5a6b5c8df9e0a1b2c3d4e5f",
             "trace.span": "9a8b7c6d5e4f3a2c",
             "trace.ctx": "1f2d3e4f5a6b5c8df9e0a1b2c3d4e5f.9a8b7c6d5e4f3a2c",
@@ -77,6 +81,16 @@ class DeduceTagsTestCase(RegularTestCase):
             "user.email": "john@doe.org",
             "user.ip_address": "123.123.123.123",
         })
+
+    def test_url_tag_excludes_query_and_fragment(self):
+        for url, expected in [
+            ("https://www.example.com/checkout/", "https://www.example.com/checkout/"),
+            ("https://www.example.com/checkout/?coupon=SAVE", "https://www.example.com/checkout/"),
+            ("https://www.example.com/checkout/#payment", "https://www.example.com/checkout/"),
+            ("https://www.example.com/checkout/?coupon=SAVE#payment", "https://www.example.com/checkout/"),
+        ]:
+            with self.subTest(url=url):
+                self.assertEqual(deduce_tags({"request": {"url": url}}), {"url": expected})
 
 
 class StoreTagsTestCase(DjangoTestCase):
@@ -243,6 +257,36 @@ class SearchParserTestCase(RegularTestCase):
             ({"key": "quoted value"}, "and further text"),
             parse_query('key:"quoted value" and further text'))
 
+        self.assertEqual(({"key": ""}, ""), parse_query('key:""'))
+
+        self.assertEqual(({}, 'key:"unterminated value'), parse_query('key:"unterminated value'))
+
+    def test_parser_supports_escaped_quotes(self):
+        self.assertEqual(({"key": 'a "quoted" value'}, ""), parse_query(r'key:"a \"quoted\" value"'))
+
+    def test_parser_supports_escaped_backslashes(self):
+        self.assertEqual(({"key": "a \\ value"}, ""), parse_query(r'key:"a \\ value"'))
+
+    def test_parser_ignores_colons_inside_quotes(self):
+        self.assertEqual(({"key": "value"}, '"not:a tag"'), parse_query('"not:a tag" key:value'))
+
+        self.assertEqual(({"key": "value:with:colons"}, ""), parse_query('key:"value:with:colons"'))
+
+    def test_parser_splits_on_leftmost_unquoted_colon(self):
+        self.assertEqual(
+            ({"url": "https://www.example.com/checkout/"}, ""), parse_query("url:https://www.example.com/checkout/"))
+
+        self.assertEqual(
+            ({"url": "https://www.example.com/checkout/"}, ""), parse_query('url:"https://www.example.com/checkout/"'))
+
+        self.assertEqual(({"key": "value:with:colons"}, ""), parse_query("key:value:with:colons"))
+
+    def test_parser_uses_last_duplicate_tag(self):
+        self.assertEqual(({"key": "plain"}, ""), parse_query('key:"quoted value" key:plain'))
+
+        self.assertEqual(({"key": "quoted value"}, ""), parse_query('key:plain key:"quoted value"'))
+
+    def test_parser_preserves_spacing_around_removed_tags(self):
         # This is the kind of test that just documents "what is" rather than "what I believe is right". The weirdness
         # here is mostly the double space "on  both" which is the result of just cutting out the key:value bits. But...
         # I'm not invested in getting this more precise (yet), because this whole case is a bit weird. I'd much rather
@@ -332,6 +376,21 @@ class SearchTestCase(DjangoTestCase):
 
     def test_search_issues(self):
         self._test_search(lambda query: search_issues(self.project, Issue.objects.all(), query))
+
+    def test_search_issues_by_url(self):
+        issue, _ = get_or_create_issue(project=self.project, event_data=create_event_data("url"))
+        event = create_event(self.project, issue=issue)
+        digest_tags({
+            "request": {"url": "https://www.example.com/checkout/?coupon=SAVE#payment"},
+        }, event, issue)
+
+        result = search_issues(
+            self.project,
+            Issue.objects.all(),
+            'url:"https://www.example.com/checkout/"',
+        )
+
+        self.assertEqual([issue], list(result))
 
 
 class VacuumEventlessIssueTagsTestCase(TransactionTestCase):

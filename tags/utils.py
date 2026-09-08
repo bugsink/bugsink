@@ -76,6 +76,10 @@ def _convert_non_strings(value):
     return value
 
 
+def _url_without_query_or_fragment(url):
+    return url.split("#", 1)[0].split("?", 1)[0]
+
+
 def deduce_tags(event_data):
     """
     Deduce tags for `event_data`. Used as an "opportunistic" (generic) way to implement counting and searching. Although
@@ -99,6 +103,10 @@ def deduce_tags(event_data):
         # is supposed to just pick the right (non-tag) location for standard tags.
         if value not in [None, ""]:
             tags[tag_key] = _convert_non_strings(value)
+
+    url = get_path(event_data, "request", "url")
+    if url not in [None, ""]:
+        tags["url"] = _url_without_query_or_fragment(url)
 
     # deduce from main exception
     main_exception = get_main_exception(event_data)
@@ -126,12 +134,6 @@ def deduce_tags(event_data):
         tags["os"] = f"{tags['os.name']} {tags['os.version']}"
 
     tags.update(deduce_user_tags(event_data))
-
-    # TODO url is probably useful, but I imagine that its `mostly_unique` property is not statically known, i.e. some
-    # issues may have single url, others may have a few (useful for tag-breakdown) and yet others may have very many
-    # (useful for search). We'll tie implementation of this to the implementation of dynamic `is_mostly_unique`
-    # determination.
-    # url
 
     # TODO For now this is not supported for the same reason as "level" (see above). But it's probably more useful than
     # level, because it will be more likely be a searchable term that "leads somewhere" (i.e. if you know you have a
