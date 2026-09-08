@@ -60,12 +60,8 @@
                         </button>
                     </div>
                     <div class="mt-1" id="description-view-{{ auth_token.id }}">
-                        {% if auth_token.description %}
                         <span class="text-slate-600 dark:text-slate-400 text-sm">{{ auth_token.description }}</span>
                         <button type="button" onclick="showEditDescription({{ auth_token.id }})" class="ml-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 text-sm underline">{% translate "Edit" %}</button>
-                        {% else %}
-                        <button type="button" onclick="showEditDescription({{ auth_token.id }})" class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 text-sm underline">{% translate "Add description" %}</button>
-                        {% endif %}
                     </div>
                     <div class="mt-1 hidden" id="description-edit-{{ auth_token.id }}">
                         <input type="text" name="description-{{ auth_token.id }}" value="{{ auth_token.description }}" maxlength="255" class="border-2 border-slate-300 dark:border-slate-600 rounded-md px-2 py-1 text-sm w-80 dark:bg-slate-800 dark:text-slate-100" id="description-input-{{ auth_token.id }}">
@@ -76,7 +72,7 @@
 
                 <td class="p-4">
                     <div class="flex justify-end">
-                        <button name="action" value="delete:{{ auth_token.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Delete" %}</button>
+                        <button name="action" value="revoke:{{ auth_token.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Revoke" %}</button>
                     </div>
                 </td>
 

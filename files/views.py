@@ -13,9 +13,9 @@ from sentry.assemble import ChunkFileState
 
 from bugsink.app_settings import get_settings
 from bugsink.api_capabilities import required_capabilities
+from bugsink.authentication import get_token_for_authentication
 from bugsink.transaction import durable_atomic, immediate_atomic
 from bugsink.streams import handle_request_content_encoding, copy_stream_limited, MaxLengthExceeded
-from bsmain.models import AuthToken
 from projects.models import Project
 
 from .models import Chunk, File, FileMetadata
@@ -132,7 +132,7 @@ def requires_auth_token(view_function):
 
         the_word_bearer, token = header_values
 
-        if AuthToken.objects.filter(token=token).count() < 1:
+        if get_token_for_authentication(token) is None:
             return JsonResponse({"error": "Invalid token"}, status=401)
 
         return view_function(request, *args, **kwargs)

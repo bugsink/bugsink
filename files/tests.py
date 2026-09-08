@@ -86,6 +86,14 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(401, response.status_code)
         self.assertEqual({"error": "Invalid token"}, response.json())
 
+    def test_auth_revoked_token(self):
+        self.auth_token.revoke()
+
+        response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers=self.token_headers)
+
+        self.assertEqual(401, response.status_code)
+        self.assertEqual({"error": "Invalid token"}, response.json())
+
     def test_chunk_upload_settings_use_real_limits(self):
         with bugsink_override_settings(MAX_FILE_SIZE=1234):
             response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers=self.token_headers)
