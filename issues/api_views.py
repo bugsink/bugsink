@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_mixins import AtomicRequestMixin
+from bugsink.api_capabilities import required_capabilities
 from bugsink.utils import assert_
 
 from .models import Issue, IssueStateManager, TurningPoint, apply_issue_action, issue_lookup_kwargs
@@ -75,6 +76,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return self.queryset
 
+    @required_capabilities("issues:read")
     @extend_schema(
         summary="List issues",
         description="List issues for a project.",
@@ -107,6 +109,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
 
+    @required_capabilities("issues:read")
     @extend_schema(
         summary="Retrieve an issue",
         description="Retrieve an issue by issue UUID or friendly ID.",
@@ -115,6 +118,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         return super().retrieve(request, *args, **kwargs)
 
+    @required_capabilities("issues:delete")
     @extend_schema(
         summary="Delete an issue",
         description="Delete an issue.",
@@ -176,6 +180,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         apply_issue_action(IssueStateManager, issue, action, user=None)
         return self._action_response(issue)
 
+    @required_capabilities("issues:triage")
     @extend_schema(
         summary="Resolve an issue",
         description="Mark this issue as resolved.",
@@ -188,6 +193,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         self._assert_unresolved(issue)
         return self._apply_issue_action(issue, "resolve")
 
+    @required_capabilities("issues:triage")
     @extend_schema(
         summary="Resolve an issue in the next release",
         description="Mark this issue as resolved by the next release.",
@@ -200,6 +206,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         self._assert_unresolved(issue)
         return self._apply_issue_action(issue, "resolved_next")
 
+    @required_capabilities("issues:triage")
     @extend_schema(
         summary="Resolve an issue in the latest release",
         description="Mark this issue as resolved in the latest release.",
@@ -216,6 +223,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         latest_release = issue.project.get_latest_release()
         return self._apply_issue_action(issue, "resolved_release:" + latest_release.version)
 
+    @required_capabilities("issues:triage")
     @extend_schema(
         summary="Reopen an issue",
         description="Mark this resolved issue as unresolved again.",
@@ -228,6 +236,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         self._assert_resolved(issue)
         return self._apply_issue_action(issue, "reopen")
 
+    @required_capabilities("issues:triage")
     @extend_schema(
         summary="Mute an issue",
         description="Mute this issue.",
@@ -241,6 +250,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         self._assert_unmuted(issue)
         return self._apply_issue_action(issue, "mute")
 
+    @required_capabilities("issues:triage")
     @extend_schema(
         summary="Mute an issue for a period",
         description="Mute this issue for a relative period, e.g. for 3 days.",
@@ -259,6 +269,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         self._assert_unmuted(issue)
         return self._apply_issue_action(issue, f"mute_for:{period_name},{nr_of_periods},")
 
+    @required_capabilities("issues:triage")
     @extend_schema(
         summary="Mute an issue until a threshold is reached",
         description="Mute this issue until a threshold is reached, e.g. more than 10 events in 1 hour.",
@@ -278,6 +289,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         self._assert_unmuted(issue)
         return self._apply_issue_action(issue, f"mute_until:{period_name},{nr_of_periods},{gte_threshold}")
 
+    @required_capabilities("issues:triage")
     @extend_schema(
         summary="Unmute an issue",
         description="Unmute this issue.",
@@ -299,6 +311,7 @@ class IssueCommentViewSet(AtomicRequestMixin, mixins.CreateModelMixin, viewsets.
     serializer_class = IssueCommentSerializer
     http_method_names = ["post", "head", "options"]
 
+    @required_capabilities("issues:comment")
     @extend_schema(
         summary="Create an issue comment",
         description="Add a comment to an issue. `issue` accepts an issue UUID or friendly ID.",

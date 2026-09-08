@@ -3,6 +3,7 @@ from rest_framework.generics import get_object_or_404
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_pagination import AscDescCursorPagination
+from bugsink.api_capabilities import required_capabilities
 from bugsink.api_mixins import ExpandViewSetMixin, AtomicRequestMixin
 
 from .models import Project
@@ -26,6 +27,7 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
     http_method_names = ["get", "post", "patch", "head", "options"]
     pagination_class = ProjectPagination
 
+    @required_capabilities("projects:read")
     @extend_schema(
         summary="List projects",
         description="List projects ordered by name.",
@@ -42,6 +44,7 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
 
+    @required_capabilities("projects:manage")
     @extend_schema(
         summary="Create a project",
         description="Create a project. `team` is the team UUID. `visibility` and alert settings are optional.",
@@ -51,6 +54,7 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
 
+    @required_capabilities("projects:read")
     @extend_schema(
         summary="Retrieve a project",
         description="Retrieve a project by integer project ID. Use `expand=team` to include the team object.",
@@ -69,6 +73,7 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
     def retrieve(self, request, *args, **kwargs):
         return super().retrieve(request, *args, **kwargs)
 
+    @required_capabilities("projects:manage")
     @extend_schema(
         summary="Update a project",
         description="Partially update a project by integer project ID.",

@@ -7,6 +7,7 @@ from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiParamete
 
 
 from bugsink.utils import assert_
+from bugsink.api_capabilities import required_capabilities
 from bugsink.api_pagination import AscDescCursorPagination
 from bugsink.api_mixins import AtomicRequestMixin
 from issues.models import issue_lookup_kwargs
@@ -40,6 +41,7 @@ class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         lookup_kwargs = {"issue__" + k: v for k, v in issue_lookup_kwargs(query_params["issue"]).items()}
         return queryset.filter(issue__is_deleted=False, **lookup_kwargs)
 
+    @required_capabilities("events:read")
     @extend_schema(
         summary="List events",
         description="List events for an issue. The list response omits the full event `data` payload.",
@@ -64,6 +66,7 @@ class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
 
+    @required_capabilities("events:read")
     @extend_schema(
         summary="Retrieve an event",
         description=(
@@ -102,6 +105,7 @@ class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     def get_serializer_class(self):
         return EventDetailSerializer if self.action == "retrieve" else EventListSerializer
 
+    @required_capabilities("events:read")
     @extend_schema(
         summary="Render an event stacktrace",
         description="Render the event's stacktrace (frames, source, locals) as Markdown-like text.",
