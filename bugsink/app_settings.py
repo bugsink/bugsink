@@ -114,6 +114,11 @@ DEFAULTS = {
     "EXTRA_URLCONF_MODULES": [],
     "EXTRA_NAV_LINKS": [],
     "SYSTEM_WARNING_PROVIDERS": [],
+
+    # Monitoring
+    # When enabled, a /metrics endpoint (Prometheus scrape target) is exposed. Off by default, because exposing it
+    # makes operational (request/template/model-activity) metrics readable to anyone who can reach the URL.
+    "PROMETHEUS_ENABLED": True,
 }
 
 
