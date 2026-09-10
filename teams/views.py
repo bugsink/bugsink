@@ -17,7 +17,14 @@ from bugsink.decorators import login_exempt, atomic_for_request_method
 from bugsink.invite_links import email_not_sent_invite_link_notice, manual_invite_link_notice
 from bugsink.utils import email_backend_delivers_mail
 
-from .models import Team, TeamMembership, TeamRole, TeamVisibility
+from .models import (
+    Team,
+    TeamMembership,
+    TeamRole,
+    teams_visible_to_user,
+    user_can_create_team,
+    user_is_team_admin,
+)
 from .forms import TeamMemberInviteForm, TeamMembershipForm, MyTeamMembershipForm, TeamForm
 from .tasks import send_team_invite_email, send_team_invite_email_new_user
 
@@ -27,20 +34,14 @@ User = get_user_model()
 @atomic_for_request_method
 def team_list(request, ownership_filter=None):
     my_memberships = TeamMembership.objects.filter(user=request.user)
+    visible_teams = teams_visible_to_user(Team.objects.all(), request.user)
 
     # using `id__in` here to ensure the member_count later on is not restricted to our own memberships (at most 1)
-    my_teams = Team.objects.filter(id__in=TeamMembership.objects.filter(user=request.user).values('team_id'))
+    my_teams = visible_teams.filter(id__in=TeamMembership.objects.filter(user=request.user).values('team_id'))
 
-    if request.user.is_superuser:
-        # superusers can see all teams, even hidden ones
-        other_teams = Team.objects\
-            .exclude(teammembership__in=my_memberships)\
-            .order_by('name').distinct()
-    else:
-        other_teams = Team.objects\
-            .exclude(teammembership__in=my_memberships)\
-            .exclude(visibility=TeamVisibility.HIDDEN)\
-            .order_by('name').distinct()
+    other_teams = visible_teams \
+        .exclude(teammembership__in=my_memberships) \
+        .order_by('name').distinct()
 
     if ownership_filter is None:
         # if no tab is provided, we redirect to the most informative one. generally we prefer "mine", but not when empty
@@ -87,9 +88,7 @@ def team_list(request, ownership_filter=None):
         team_list = team_list_2
 
     return render(request, 'teams/team_list.html', {
-        'can_create':
-            get_settings().TEAM_CREATION in [CB_ANYBODY, CB_MEMBERS] or
-            (request.user.is_superuser and get_settings().TEAM_CREATION == CB_ADMINS),
+        'can_create': user_can_create_team(request.user),
         'ownership_filter': ownership_filter,
         'team_list': team_list,
     })
@@ -97,8 +96,7 @@ def team_list(request, ownership_filter=None):
 
 @atomic_for_request_method
 def team_new(request):
-    if not (get_settings().TEAM_CREATION in [CB_ANYBODY, CB_MEMBERS] or
-            (request.user.is_superuser and get_settings().TEAM_CREATION == CB_ADMINS)):
+    if not user_can_create_team(request.user):
         raise PermissionDenied("You are not allowed to create teams")
 
     if request.method == 'POST':
@@ -122,8 +120,7 @@ def team_new(request):
 @atomic_for_request_method
 def team_edit(request, team_pk):
     team = Team.objects.get(id=team_pk)
-    if (not TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists() and
-            not request.user.is_superuser):
+    if not user_is_team_admin(request.user, team):
         raise PermissionDenied("You are not an admin of this team")
 
     if request.method == 'POST':
@@ -131,9 +128,7 @@ def team_edit(request, team_pk):
 
         if action == 'delete':
             # Double-check that the user is an admin or superuser
-            if not (TeamMembership.objects.filter(
-                        team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists() or
-                    request.user.is_superuser):
+            if not user_is_team_admin(request.user, team):
                 raise PermissionDenied("Only team admins can delete teams")
 
             # Delete all associated projects first
@@ -160,8 +155,7 @@ def team_edit(request, team_pk):
 @atomic_for_request_method
 def team_members(request, team_pk):
     team = Team.objects.get(id=team_pk)
-    if (not TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists() and
-            not request.user.is_superuser):
+    if not user_is_team_admin(request.user, team):
         raise PermissionDenied("You are not an admin of this team")
     invite_link_notice = None
 
@@ -223,8 +217,7 @@ def _create_team_invite_link(user, team_pk, create_account_setup_link):
 @atomic_for_request_method
 def team_members_invite(request, team_pk):
     team = Team.objects.get(id=team_pk)
-    if (not TeamMembership.objects.filter(team=team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists() and
-            not request.user.is_superuser):
+    if not user_is_team_admin(request.user, team):
         raise PermissionDenied("You are not an admin of this team")
 
     if get_settings().USER_REGISTRATION in [CB_ANYBODY, CB_MEMBERS]:

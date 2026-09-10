@@ -15,7 +15,7 @@ from bugsink.transaction import delay_on_commit
 from compat.dsn import build_dsn
 from issues.grouping_mechanisms import GROUPING_MECHANISM_CHOICES, CURRENT_GROUPING_MECHANISM
 
-from teams.models import TeamMembership
+from teams.models import TeamMembership, TeamRole, user_is_team_admin
 
 from .tasks import delete_project_deps
 
@@ -43,7 +43,7 @@ from .tasks import delete_project_deps
 # Some open ends/ choices to be made:
 #
 # * team admin role: should it be inherited on the project level? My sense is "yes", and this is implemented in
-#     `_check_project_admin` but not in the templates.
+#     `user_is_project_admin` but not in the templates.
 # * team admins currently have the ability to see projects, diverging from the "explicitly opted into" rule. Makes some
 #       sense, but could be an argument for the general "allow access" option mentioned above.
 # * if there are very many generally visible teams/projects, some more means of organisation may be needed (search?).
@@ -237,6 +237,37 @@ class ProjectMembership(models.Model):
 
     def is_admin(self):
         return self.role == ProjectRole.ADMIN
+
+
+def user_is_project_admin(user, project):
+    return (
+        user.is_superuser
+        or ProjectMembership.objects.filter(
+            project=project,
+            user=user,
+            role=ProjectRole.ADMIN,
+            accepted=True,
+        ).exists()
+        or user_is_team_admin(user, project.team)
+    )
+
+
+def projects_visible_to_user(queryset, user):
+    queryset = queryset.filter(is_deleted=False)
+    if user.is_superuser:
+        return queryset
+    return queryset.filter(
+        models.Q(projectmembership__user=user)
+        | models.Q(team__teammembership__user=user, team__teammembership__accepted=True)
+        | models.Q(visibility__lt=ProjectVisibility.TEAM_MEMBERS)
+    ).distinct()
+
+
+def user_can_create_project(user):
+    return (
+        user.is_superuser
+        or TeamMembership.objects.filter(user=user, role=TeamRole.ADMIN).exists()
+    )
 
 
 def get_issue_accessible_project_ids(user):

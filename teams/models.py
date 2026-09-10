@@ -5,6 +5,8 @@ from django.db import models
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _, pgettext_lazy
 
+from bugsink.app_settings import CB_ADMINS, CB_ANYBODY, CB_MEMBERS, get_settings
+
 
 class TeamRole(models.IntegerChoices):
     MEMBER = 0, _("Member")
@@ -62,3 +64,31 @@ class TeamMembership(models.Model):
 
     def is_admin(self):
         return self.role == TeamRole.ADMIN
+
+
+def teams_visible_to_user(queryset, user):
+    if user.is_superuser:
+        return queryset
+    return queryset.filter(
+        models.Q(teammembership__user=user) | models.Q(visibility__lt=TeamVisibility.HIDDEN)
+    ).distinct()
+
+
+def user_is_team_admin(user, team):
+    return (
+        user.is_superuser
+        or TeamMembership.objects.filter(
+            team=team,
+            user=user,
+            role=TeamRole.ADMIN,
+            accepted=True,
+        ).exists()
+    )
+
+
+def user_can_create_team(user):
+    team_creation = get_settings().TEAM_CREATION
+    return (
+        team_creation in (CB_ANYBODY, CB_MEMBERS)
+        or (user.is_superuser and team_creation == CB_ADMINS)
+    )
