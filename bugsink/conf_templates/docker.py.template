@@ -94,27 +94,29 @@ else:
 if os.getenv("EMAIL_BACKEND"):
     EMAIL_BACKEND = os.getenv("EMAIL_BACKEND")
 elif os.getenv("EMAIL_HOST"):
-    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"  # default, here for explicitness
-    EMAIL_HOST = os.getenv("EMAIL_HOST")
-    EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
-    EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
-    EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
-    # When neither EMAIL_USE_xxx is set, we default to EMAIL_USE_TLS=True (this matches port 587). If either is set to
-    # True, we use that.
-    EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False").lower() in ("true", "1", "yes")
-    EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", str(not EMAIL_USE_SSL)).lower() in ("true", "1", "yes")
-
-    if os.getenv("EMAIL_LOGGING", "false").lower() in ("true", "1", "yes"):
-        LOGGING['loggers']['bugsink.email']['level'] = "INFO"
-
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 else:
     # print("WARNING: EMAIL_HOST not set; email will not be sent")
     EMAIL_BACKEND = "bugsink.email_backends.QuietConsoleEmailBackend"
+
+if EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend" or os.getenv("EMAIL_HOST"):
+    EMAIL_HOST = os.getenv("EMAIL_HOST") or "localhost"
+    EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+    EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+    EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
+
+    # When neither EMAIL_USE_xxx is set, we default to EMAIL_USE_TLS=True (this matches port 587).
+    EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False").lower() in ("true", "1", "yes")
+    EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", str(not EMAIL_USE_SSL)).lower() in ("true", "1", "yes")
+
+if os.getenv("EMAIL_LOGGING", "false").lower() in ("true", "1", "yes"):
+    LOGGING['loggers']['bugsink.email']['level'] = "INFO"
 
 if os.getenv("EMAIL_TIMEOUT"):
     EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT"))
 
 SERVER_EMAIL = DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Bugsink <bugsink@example.org>")
+
 
 # constants for "create by" (user/team/project) settings
 CB_ANYBODY = "CB_ANYBODY"
