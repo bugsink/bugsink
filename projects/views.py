@@ -25,7 +25,15 @@ from alerts.forms import MessagingServiceConfigNewForm, MessagingServiceConfigEd
 from events.sparklines import get_project_list_event_sparklines
 from phonehome.utils import phone_home
 
-from .models import Project, ProjectMembership, ProjectRole, ProjectVisibility
+from .models import (
+    Project,
+    ProjectMembership,
+    ProjectRole,
+    projects_visible_to_user,
+    user_can_create_project,
+    user_has_issue_access,
+    user_is_project_admin,
+)
 from .forms import ProjectMembershipForm, MyProjectMembershipForm, ProjectMemberInviteForm, ProjectForm
 from .tasks import send_project_invite_email, send_project_invite_email_new_user
 
@@ -38,34 +46,24 @@ OPEN_ISSUE_COUNT_SHOW_THRESHOLD = 25_000
 @atomic_for_request_method
 def project_list(request, ownership_filter=None):
     my_memberships = ProjectMembership.objects.filter(user=request.user)
+    visible_projects = projects_visible_to_user(Project.objects.all(), request.user)
 
     # using `id__in` here to ensure the counts later on is not restricted to our own memberships (at most 1)
-    my_projects = Project.objects.filter(
-        id__in=ProjectMembership.objects.filter(user=request.user).values('project_id'), is_deleted=False) \
+    my_projects = visible_projects.filter(
+        id__in=ProjectMembership.objects.filter(user=request.user).values('project_id')) \
         .order_by('name').distinct()
 
     my_teams_projects = \
-        Project.objects \
+        visible_projects \
         .filter(
-            team_id__in=TeamMembership.objects.filter(user=request.user, accepted=True).values('team_id'),
-            is_deleted=False) \
+            team_id__in=TeamMembership.objects.filter(user=request.user, accepted=True).values('team_id')) \
         .exclude(projectmembership__in=my_memberships) \
         .order_by('name').distinct()
 
-    if request.user.is_superuser:
-        # superusers can see all projects, even hidden ones
-        other_projects = Project.objects \
-            .filter(is_deleted=False) \
-            .exclude(id__in=ProjectMembership.objects.filter(user=request.user).values('project_id')) \
-            .exclude(team_id__in=TeamMembership.objects.filter(user=request.user, accepted=True).values('team_id')) \
-            .order_by('name').distinct()
-    else:
-        other_projects = Project.objects \
-            .filter(is_deleted=False) \
-            .exclude(id__in=ProjectMembership.objects.filter(user=request.user).values('project_id')) \
-            .exclude(team_id__in=TeamMembership.objects.filter(user=request.user, accepted=True).values('team_id')) \
-            .exclude(visibility=ProjectVisibility.TEAM_MEMBERS) \
-            .order_by('name').distinct()
+    other_projects = visible_projects \
+        .exclude(id__in=ProjectMembership.objects.filter(user=request.user).values('project_id')) \
+        .exclude(team_id__in=TeamMembership.objects.filter(user=request.user, accepted=True).values('team_id')) \
+        .order_by('name').distinct()
 
     if ownership_filter is None:
         if my_projects.exists():
@@ -142,8 +140,7 @@ def project_list(request, ownership_filter=None):
         project_list = project_list_2
 
     return render(request, 'projects/project_list.html', {
-        'can_create':
-            request.user.is_superuser or TeamMembership.objects.filter(user=request.user, role=TeamRole.ADMIN).exists(),
+        'can_create': user_can_create_project(request.user),
         'ownership_filter': ownership_filter,
         'project_list': project_list,
     })
@@ -151,8 +148,7 @@ def project_list(request, ownership_filter=None):
 
 @atomic_for_request_method
 def project_new(request):
-    if not (request.user.is_superuser or TeamMembership.objects.filter(user=request.user,
-            role=TeamRole.ADMIN).exists()):
+    if not user_can_create_project(request.user):
         raise PermissionDenied("You need to be a team admin to create a project")
 
     if get_settings().SINGLE_TEAM and Team.objects.count() == 0:
@@ -184,10 +180,7 @@ def project_new(request):
 
 
 def _check_project_admin(project, user):
-    if not user.is_superuser and \
-       not ProjectMembership.objects.filter(
-            project=project, user=user, role=ProjectRole.ADMIN, accepted=True).exists() and \
-       not TeamMembership.objects.filter(team=project.team, user=user, role=TeamRole.ADMIN, accepted=True).exists():
+    if not user_is_project_admin(user, project):
         raise PermissionDenied("You are not an admin of this project")
 
 
@@ -202,11 +195,7 @@ def project_edit(request, project_pk):
 
         if action == 'delete':
             # Double-check that the user is an admin or superuser
-            if (not request.user.is_superuser
-                and not ProjectMembership.objects.filter(
-                    project=project, user=request.user, role=ProjectRole.ADMIN, accepted=True).exists()
-                and not TeamMembership.objects.filter(
-                    team=project.team, user=request.user, role=TeamRole.ADMIN, accepted=True).exists()):
+            if not user_is_project_admin(request.user, project):
                 raise PermissionDenied("Only project or team admins can delete projects")
 
             # Delete the project
@@ -496,8 +485,7 @@ def project_members_accept(request, project_pk):
 def project_sdk_setup(request, project_pk, platform=""):
     project = Project.objects.get(id=project_pk, is_deleted=False)
 
-    if not request.user.is_superuser and not ProjectMembership.objects.filter(project=project, user=request.user,
-                                                                              accepted=True).exists():
+    if not user_has_issue_access(request.user, project):
         raise PermissionDenied("You are not a member of this project")
 
     # NOTE about lexers:: I have bugsink/pyments_extensions; but the platforms mentioned there don't necessarily map to
