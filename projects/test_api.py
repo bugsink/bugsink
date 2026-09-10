@@ -117,6 +117,20 @@ class ProjectApiTests(TransactionTestCase):
         self.assertEqual(r.status_code, 400)
         self.assertIn("non_field_errors", r.json())
 
+    def test_patch_does_not_move_project_to_another_team(self):
+        project = Project.objects.create(team=self.team, name="Backend")
+        other_team = Team.objects.create(name="Operations")
+
+        r = self.client.patch(
+            reverse("api:project-detail", args=[project.id]),
+            {"team": str(other_team.id)},
+            format="json",
+        )
+
+        self.assertEqual(r.status_code, 200)
+        project.refresh_from_db()
+        self.assertEqual(project.team, self.team)
+
     def test_delete_not_allowed(self):
         p = Project.objects.create(team=self.team, name="Temp")
         r = self.client.delete(reverse("api:project-detail", args=[p.id]))

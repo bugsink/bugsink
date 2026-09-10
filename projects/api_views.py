@@ -10,7 +10,8 @@ from .models import Project
 from .serializers import (
     ProjectListSerializer,
     ProjectDetailSerializer,
-    ProjectCreateUpdateSerializer,
+    ProjectCreateSerializer,
+    ProjectUpdateSerializer,
 )
 
 
@@ -48,8 +49,8 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
     @extend_schema(
         summary="Create a project",
         description="Create a project. `team` is the team UUID. `visibility` and alert settings are optional.",
-        request=ProjectCreateUpdateSerializer,
-        responses=ProjectCreateUpdateSerializer,
+        request=ProjectCreateSerializer,
+        responses=ProjectCreateSerializer,
     )
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
@@ -77,8 +78,8 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
     @extend_schema(
         summary="Update a project",
         description="Partially update a project by integer project ID.",
-        request=ProjectCreateUpdateSerializer,
-        responses=ProjectCreateUpdateSerializer,
+        request=ProjectUpdateSerializer,
+        responses=ProjectUpdateSerializer,
     )
     def partial_update(self, request, *args, **kwargs):
         return super().partial_update(request, *args, **kwargs)
@@ -108,8 +109,10 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
         return obj
 
     def get_serializer_class(self):
-        if self.action in ("create", "partial_update"):
-            return ProjectCreateUpdateSerializer
+        if self.action == "create":
+            return ProjectCreateSerializer
+        if self.action == "partial_update":
+            return ProjectUpdateSerializer
         if self.action == "retrieve":
             return ProjectDetailSerializer
         return ProjectListSerializer
