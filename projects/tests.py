@@ -459,6 +459,48 @@ class ProjectFormTestCase(TransactionTestCase):
         self.assertEqual(second_changed_at, saved.grouping_mechanism_upgraded_at)
 
 
+class ProjectAccessTestCase(TransactionTestCase):
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(username="project-user", password="test")
+        self.superuser = User.objects.create_user(
+            username="project-superuser",
+            password="test",
+            is_superuser=True,
+        )
+        self.team = Team.objects.create(name="Project access team")
+
+    def test_project_creation_requires_a_team_admin_or_superuser(self):
+        self.client.force_login(self.user)
+        self.assertEqual(403, self.client.get(reverse("project_new")).status_code)
+
+        TeamMembership.objects.create(
+            team=self.team,
+            user=self.user,
+            role=TeamRole.ADMIN,
+            accepted=True,
+        )
+        self.assertEqual(200, self.client.get(reverse("project_new")).status_code)
+
+        self.client.force_login(self.superuser)
+        self.assertEqual(200, self.client.get(reverse("project_new")).status_code)
+
+    def test_only_superusers_see_projects_hidden_from_non_members(self):
+        project = Project.objects.create(
+            team=self.team,
+            name="Hidden project",
+            visibility=ProjectVisibility.TEAM_MEMBERS,
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("project_list_other"))
+        self.assertNotContains(response, project.name)
+
+        self.client.force_login(self.superuser)
+        response = self.client.get(reverse("project_list_other"))
+        self.assertContains(response, project.name)
+
+
 class ProjectListOpenIssueCountTestCase(TransactionTestCase):
 
     def setUp(self):
