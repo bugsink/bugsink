@@ -1,7 +1,7 @@
 from drf_spectacular.utils import extend_schema
 
 
-REQUIRED_CAPABILITIES_EXTENSION = "x-bugsink-required-capabilities"
+REQUIRED_CAPABILITY_EXTENSION = "x-bugsink-required-capability"
 
 CAPABILITIES = {
     "issues:read": "View issues and their details.",
@@ -31,27 +31,27 @@ INSTALLATION_ONLY_CAPABILITIES = {
 }
 
 
-def required_capabilities(*capability_names, methods=None):
-    if not capability_names:
-        raise ValueError("At least one capability is required.")
-
-    unknown_capabilities = set(capability_names) - set(CAPABILITIES)
-    if unknown_capabilities:
-        raise ValueError("Unknown capabilities: %s" % ", ".join(sorted(unknown_capabilities)))
+def required_capability(capability_name, methods=None):
+    if capability_name not in CAPABILITIES:
+        raise ValueError("Unknown capability: %s" % capability_name)
 
     def decorator(view):
-        view.required_capabilities = tuple(capability_names)
+        view.required_capability = capability_name
         if methods is not None:
             # TODO: enforce this declaration at runtime when the Sentry-compatible bearer capability checks are added.
             view.api_http_methods = tuple(method.upper() for method in methods)
 
         return extend_schema(
-            extensions={REQUIRED_CAPABILITIES_EXTENSION: list(capability_names)},
+            extensions={REQUIRED_CAPABILITY_EXTENSION: capability_name},
             methods=methods,
         )(view)
 
     return decorator
 
 
-def get_required_capabilities(view):
-    return getattr(view, "required_capabilities", ())
+def get_required_capability(view):
+    return getattr(view, "required_capability", None)
+
+
+def get_view_required_capability(view):
+    return get_required_capability(getattr(view, view.action))
