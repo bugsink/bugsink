@@ -1,4 +1,4 @@
-from bugsink.api_capabilities import CAPABILITIES, REQUIRED_CAPABILITIES_EXTENSION, get_required_capabilities
+from bugsink.api_capabilities import CAPABILITIES, REQUIRED_CAPABILITY_EXTENSION, get_required_capability
 
 
 SENTRY_ENVELOPE_DOCS_URL = "https://develop.sentry.dev/sdk/envelopes/#data-model"
@@ -67,10 +67,10 @@ def _bearer_security():
 
 
 def _capability_extension(view):
-    capabilities = get_required_capabilities(view)
-    if not capabilities:
+    capability = get_required_capability(view)
+    if capability is None:
         raise ValueError("Bearer API operation is missing its required capability annotation.")
-    return {REQUIRED_CAPABILITIES_EXTENSION: list(capabilities)}
+    return {REQUIRED_CAPABILITY_EXTENSION: capability}
 
 
 def _json_request(schema, description=None, content_type="application/json"):
@@ -501,22 +501,19 @@ def add_capability_documentation(result, generator, **kwargs):
             if not isinstance(operation, dict):
                 continue
 
-            capabilities = operation.get(REQUIRED_CAPABILITIES_EXTENSION)
-            if not capabilities:
+            capability = operation.get(REQUIRED_CAPABILITY_EXTENSION)
+            if capability is None:
                 continue
 
-            formatted_capabilities = ", ".join("`%s`" % name for name in capabilities)
-            label = "Required capability" if len(capabilities) == 1 else "Required capabilities"
-            requirement = "%s: %s." % (label, formatted_capabilities)
+            requirement = "Required capability: `%s`." % capability
             description = operation.get("description")
             operation["description"] = description + "\n\n" + requirement if description else requirement
 
-            for capability in capabilities:
-                catalog[capability]["operations"].append({
-                    "method": method.upper(),
-                    "path": path,
-                    "operationId": operation["operationId"],
-                })
+            catalog[capability]["operations"].append({
+                "method": method.upper(),
+                "path": path,
+                "operationId": operation["operationId"],
+            })
 
     result["x-bugsink-capabilities"] = catalog
     return result

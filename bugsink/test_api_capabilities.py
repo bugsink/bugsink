@@ -4,7 +4,7 @@ from collections import Counter
 from django.urls import URLResolver, get_resolver
 from drf_spectacular.generators import SchemaGenerator
 
-from bugsink.api_capabilities import CAPABILITIES, get_required_capabilities
+from bugsink.api_capabilities import CAPABILITIES, get_required_capability
 
 
 # the reviewed contract between capabilities and the operations they protect. (in our codebase, these facts are spread
@@ -163,7 +163,7 @@ class CapabilityContractTests(unittest.TestCase):
                     if method not in callback.cls.http_method_names or method in ("head", "options"):
                         continue
                     registered_api_operations.append(
-                        (pattern.name, method.upper(), get_required_capabilities(getattr(callback.cls, action)))
+                        (pattern.name, method.upper(), get_required_capability(getattr(callback.cls, action)))
                     )
                 continue
 
@@ -173,7 +173,7 @@ class CapabilityContractTests(unittest.TestCase):
                     if method in ("head", "options") or not hasattr(callback.view_class, method):
                         continue
                     registered_api_operations.append(
-                        (pattern.name, method.upper(), get_required_capabilities(callback.view_class))
+                        (pattern.name, method.upper(), get_required_capability(callback.view_class))
                     )
                 continue
 
@@ -185,24 +185,24 @@ class CapabilityContractTests(unittest.TestCase):
                 methods = all_methods
 
             if methods is None:
-                registered_api_operations.append((pattern.name, None, get_required_capabilities(callback)))
+                registered_api_operations.append((pattern.name, None, get_required_capability(callback)))
                 continue
 
             for method in methods:
-                registered_api_operations.append((pattern.name, method, get_required_capabilities(callback)))
+                registered_api_operations.append((pattern.name, method, get_required_capability(callback)))
 
         # Collect the actual operations into the three authentication classes and compare to the reviewed contract
         # above.
-        for name, method, capabilities in registered_api_operations:
+        for name, method, capability in registered_api_operations:
             operation = (name, method)
             if operation in DSN_AUTHENTICATED_OPERATIONS:
-                self.assertFalse(capabilities)
+                self.assertIsNone(capability)
                 actual_dsn_operations.add(operation)
             elif operation in INFRASTRUCTURE_OPERATIONS:
-                self.assertFalse(capabilities)
+                self.assertIsNone(capability)
                 actual_infrastructure_operations.add(operation)
-            elif capabilities:
-                actual_bearer_capabilities.update(capabilities)
+            elif capability is not None:
+                actual_bearer_capabilities[capability] += 1
             else:
                 unclassified_operations.add(operation)
 
@@ -216,11 +216,10 @@ class CapabilityContractTests(unittest.TestCase):
         self.assertEqual(DSN_AUTHENTICATED_OPERATIONS, actual_dsn_operations)
         self.assertEqual(INFRASTRUCTURE_OPERATIONS, actual_infrastructure_operations)
 
-    def test_required_capabilities_are_in_operation_documentation(self):
+    def test_required_capability_is_in_operation_documentation(self):
         # Prove that every bearer endpoint tells human readers which capability it requires (in the OpenAPI schema)
         for details in self.schema["x-bugsink-capabilities"].values():
             for catalog_operation in details["operations"]:
                 operation = self.schema["paths"][catalog_operation["path"]][catalog_operation["method"].lower()]
-                capabilities = operation["x-bugsink-required-capabilities"]
-                for capability in capabilities:
-                    self.assertIn("`%s`" % capability, operation["description"])
+                capability = operation["x-bugsink-required-capability"]
+                self.assertIn("`%s`" % capability, operation["description"])
