@@ -82,8 +82,9 @@ def token_guard(
     guarding_issue=None,
     guarding_event=None,
     guarding_release=None,
+    guarding_team=None,
 ):
-    """Require a capability and inject its guarded project, issue, event, or release into the view."""
+    """Require a capability and inject its guarded project, issue, event, release, or team into the view."""
     if capability_name not in CAPABILITIES:
         raise ValueError("Unknown capability: %s" % capability_name)
 
@@ -94,6 +95,7 @@ def token_guard(
             ("issue", guarding_issue),
             ("event", guarding_event),
             ("release", guarding_release),
+            ("team", guarding_team),
         )
         if object_lookup is not None
     }
@@ -109,16 +111,13 @@ def token_guard(
     guard = TokenGuard(capability_name, object_type, object_lookup)
 
     def decorator(view_method):
-        if object_lookup is None:
-            guarded_view_method = view_method
-        else:
-            @wraps(view_method)
-            def guarded_view_method(view, request, *args, **kwargs):
-                # Lazy import to avoid circular imports while DRF sets up permissions.
-                from bugsink.api_authorization import resolve_token_guard
+        @wraps(view_method)
+        def guarded_view_method(view, request, *args, **kwargs):
+            # Lazy import to avoid circular imports while DRF sets up permissions.
+            from bugsink.api_authorization import resolve_token_guard
 
-                kwargs.update(resolve_token_guard(view, request, guard, kwargs))
-                return view_method(view, request, *args, **kwargs)
+            kwargs.update(resolve_token_guard(view, request, guard, kwargs))
+            return view_method(view, request, *args, **kwargs)
 
         guarded_view_method.token_guard = guard
         return required_capability(capability_name)(guarded_view_method)

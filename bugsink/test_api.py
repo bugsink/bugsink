@@ -11,7 +11,7 @@ from drf_spectacular.generators import SchemaGenerator
 from bugsink.api_capabilities import CAPABILITY_FIELD_NAMES, INSTALLATION_ONLY_CAPABILITIES
 from bsmain.models import AuthToken
 from issues.factories import get_or_create_issue
-from projects.models import Project
+from projects.models import Project, ProjectMembership
 
 
 class BearerAuthRouterTests(TransactionTestCase):
@@ -22,6 +22,7 @@ class BearerAuthRouterTests(TransactionTestCase):
 
     def test_valid_token_binding_combinations_authenticate(self):
         user = get_user_model().objects.create_user(username="valid-token-user")
+        ProjectMembership.objects.create(project=self.project, user=user, accepted=True)
         tokens = [
             AuthToken.objects.create(events_read=True),
             AuthToken.objects.create(is_project_bound=True, project=self.project, events_read=True),

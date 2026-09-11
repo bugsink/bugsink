@@ -1,12 +1,12 @@
 from rest_framework import viewsets
-from rest_framework.generics import get_object_or_404
+from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_pagination import AscDescCursorPagination
-from bugsink.api_capabilities import token_guard
+from bugsink.api_capabilities import lookup, token_guard
 from bugsink.api_mixins import ExpandViewSetMixin, AtomicRequestMixin
 
-from .models import Project
+from .models import Project, projects_visible_to_user
 from .serializers import (
     ProjectListSerializer,
     ProjectDetailSerializer,
@@ -45,17 +45,19 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
 
-    @token_guard("projects:manage")
+    @token_guard("projects:manage", guarding_team=lookup(serializer="team"))
     @extend_schema(
         summary="Create a project",
         description="Create a project. `team` is the team UUID. `visibility` and alert settings are optional.",
         request=ProjectCreateSerializer,
         responses=ProjectCreateSerializer,
     )
-    def create(self, request, *args, **kwargs):
-        return super().create(request, *args, **kwargs)
+    def create(self, request, serializer, team, *args, **kwargs):
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=201, headers=headers)
 
-    @token_guard("projects:read")
+    @token_guard("projects:read", guarding_project=lookup(url="pk"))
     @extend_schema(
         summary="Retrieve a project",
         description="Retrieve a project by integer project ID. Use `expand=team` to include the team object.",
@@ -71,18 +73,21 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
         ],
         responses=ProjectDetailSerializer,
     )
-    def retrieve(self, request, *args, **kwargs):
-        return super().retrieve(request, *args, **kwargs)
+    def retrieve(self, request, project, *args, **kwargs):
+        return Response(self.get_serializer(project).data)
 
-    @token_guard("projects:manage")
+    @token_guard("projects:manage", guarding_project=lookup(url="pk"))
     @extend_schema(
         summary="Update a project",
         description="Partially update a project by integer project ID.",
         request=ProjectUpdateSerializer,
         responses=ProjectUpdateSerializer,
     )
-    def partial_update(self, request, *args, **kwargs):
-        return super().partial_update(request, *args, **kwargs)
+    def partial_update(self, request, project, *args, **kwargs):
+        serializer = self.get_serializer(project, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
 
     def filter_queryset(self, queryset):
         if self.action != "list":
@@ -91,6 +96,8 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
 
         # Hide soft-deleted in lists
         qs = queryset.filter(is_deleted=False)
+        if self.request.auth.is_user_bound:
+            qs = projects_visible_to_user(qs, self.request.auth.user)
 
         # Optional team filter (no hard requirement; avoids guessing UI rules)
         team_id = query_params.get("team")
@@ -98,15 +105,6 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
             qs = qs.filter(team=team_id)
 
         return qs
-
-    def get_object(self):
-        # Pure PK lookup (bypass filter_queryset)
-        # NOTE: alternatively, we just complain hard when a filter is applied to a detail view.
-        queryset = self.get_queryset()
-        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
-        obj = get_object_or_404(queryset, **{self.lookup_field: self.kwargs[lookup_url_kwarg]})
-        self.check_object_permissions(self.request, obj)
-        return obj
 
     def get_serializer_class(self):
         if self.action == "create":
