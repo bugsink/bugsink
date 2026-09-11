@@ -57,6 +57,7 @@ class BearerAuthRouterTests(unittest.TestCase):
         response = self.client.get(reverse("api:event-list"))
 
         self.assertEqual(403, response.status_code)
+        self.assertEqual("This token does not have the required capability: events:read.", response.json()["detail"])
 
     def test_revoked_token_is_rejected(self):
         token = AuthToken.objects.create(events_read=True)
