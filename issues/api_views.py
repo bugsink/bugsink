@@ -151,7 +151,6 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
             raise ValidationError({"detail": "Issue is already muted."})
 
     def _apply_issue_action(self, issue, action):
-        # Bearer-token API auth currently represents a global token, not a user.
         apply_issue_action(IssueStateManager, issue, action, user=None)
         return self._action_response(issue)
 

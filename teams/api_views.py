@@ -1,12 +1,13 @@
 from rest_framework import viewsets
-from rest_framework.generics import get_object_or_404
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
 
 from bugsink.api_pagination import AscDescCursorPagination
-from bugsink.api_capabilities import token_guard
+from bugsink.api_capabilities import lookup, token_guard
 from bugsink.api_mixins import AtomicRequestMixin
 
-from .models import Team
+from .models import Team, teams_visible_to_user, user_can_create_team
 from .serializers import (
     TeamListSerializer,
     TeamDetailSerializer,
@@ -44,35 +45,37 @@ class TeamViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
         responses=TeamCreateUpdateSerializer,
     )
     def create(self, request, *args, **kwargs):
+        if request.auth.is_user_bound and not user_can_create_team(request.auth.user):
+            raise PermissionDenied("This token is not allowed to create a team.")
         return super().create(request, *args, **kwargs)
 
-    @token_guard("teams:read")
+    @token_guard("teams:read", guarding_team=lookup(url="pk"))
     @extend_schema(
         summary="Retrieve a team",
         description="Retrieve a team by UUID.",
         responses=TeamDetailSerializer,
     )
-    def retrieve(self, request, *args, **kwargs):
-        return super().retrieve(request, *args, **kwargs)
+    def retrieve(self, request, team, *args, **kwargs):
+        return Response(self.get_serializer(team).data)
 
-    @token_guard("teams:manage")
+    @token_guard("teams:manage", guarding_team=lookup(url="pk"))
     @extend_schema(
         summary="Update a team",
         description="Partially update a team by UUID.",
         request=TeamCreateUpdateSerializer,
         responses=TeamCreateUpdateSerializer,
     )
-    def partial_update(self, request, *args, **kwargs):
-        return super().partial_update(request, *args, **kwargs)
+    def partial_update(self, request, team, *args, **kwargs):
+        serializer = self.get_serializer(team, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
 
-    def get_object(self):
-        # Pure PK lookup (bypass filter_queryset)
-        # NOTE: alternatively, we just complain hard when a filter is applied to a detail view.
-        queryset = self.get_queryset()
-        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
-        obj = get_object_or_404(queryset, **{self.lookup_field: self.kwargs[lookup_url_kwarg]})
-        self.check_object_permissions(self.request, obj)
-        return obj
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        if self.action == "list" and self.request.auth.is_user_bound:
+            return teams_visible_to_user(queryset, self.request.auth.user)
+        return queryset
 
     def get_serializer_class(self):
         if self.action in ("create", "partial_update"):
