@@ -880,7 +880,7 @@ class ViewTests(TransactionTestCase):
     @patch("events.utils.ecma426.loads")
     def test_sourcemap_uploads_are_project_scoped_when_rendering_events(self, mock_ecma426_loads):
         debug_id = uuid.uuid4()
-        auth_token = AuthToken.objects.create()
+        auth_token = AuthToken.objects.create(debug_files_upload=True)
         other_project = Project.objects.create(name="other")
         ProjectMembership.objects.create(project=other_project, user=self.user, accepted=True)
         other_issue, _ = get_or_create_issue(other_project)
