@@ -151,6 +151,10 @@ class FilesTests(TransactionTestCase):
         allowed_response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers=headers)
 
         self.assertEqual(403, denied_response.status_code)
+        self.assertEqual(
+            {"error": "The user bound to this token does not administer this project."},
+            denied_response.json(),
+        )
         self.assertEqual(200, allowed_response.status_code)
 
     def test_project_bound_token_can_assemble_only_for_its_project(self):
@@ -266,7 +270,7 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(200, own_response.status_code)
         self.assertEqual(403, mixed_response.status_code)
         self.assertEqual(
-            {"error": "This token is not allowed to access this project."},
+            {"error": "The user bound to this token does not administer this project."},
             mixed_response.json(),
         )
         delay.assert_not_called()
@@ -318,6 +322,10 @@ class FilesTests(TransactionTestCase):
             allowed_response = self.client.post(url, "{}", content_type="application/json", headers=headers)
 
         self.assertEqual(403, denied_response.status_code)
+        self.assertEqual(
+            {"error": "The user bound to this token does not administer this project."},
+            denied_response.json(),
+        )
         self.assertEqual(200, allowed_response.status_code)
 
     def test_chunk_upload_settings_use_real_limits(self):

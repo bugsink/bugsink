@@ -411,7 +411,12 @@ class IssueApiTests(TransactionTestCase):
 
         membership.accepted = False
         membership.save(update_fields=["accepted"])
-        self.assertEqual(403, self.client.get(reverse("api:issue-detail", args=[self.issue0.id])).status_code)
+        response = self.client.get(reverse("api:issue-detail", args=[self.issue0.id]))
+        self.assertEqual(403, response.status_code)
+        self.assertEqual(
+            "The user bound to this token is not an accepted member of this project.",
+            response.json()["detail"],
+        )
         self.assertEqual(403, self.client.post(reverse("api:issue-mute", args=[self.issue0.id])).status_code)
         self.issue0.refresh_from_db()
         self.assertFalse(self.issue0.is_muted)

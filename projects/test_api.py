@@ -172,6 +172,10 @@ class ProjectApiTests(TransactionTestCase):
             {row["id"] for row in response.json()["results"]},
         )
         self.assertEqual(403, hidden_detail.status_code)
+        self.assertEqual(
+            "This project is not visible to the user bound to this token.",
+            hidden_detail.json()["detail"],
+        )
 
     def test_personal_team_admin_can_create_and_update_projects(self):
         user = get_user_model().objects.create_user(username="project-team-admin")
@@ -233,7 +237,15 @@ class ProjectApiTests(TransactionTestCase):
         )
 
         self.assertEqual(403, create_response.status_code)
+        self.assertEqual(
+            "The user bound to this token does not administer this team.",
+            create_response.json()["detail"],
+        )
         self.assertEqual(403, update_response.status_code)
+        self.assertEqual(
+            "The user bound to this token does not administer this project.",
+            update_response.json()["detail"],
+        )
         project.refresh_from_db()
         self.assertEqual("Member project", project.name)
 

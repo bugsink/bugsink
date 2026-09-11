@@ -21,17 +21,17 @@ def enforce_user_boundness_for_project(token, capability, project):
 
     if capability in {
             "issues:read", "events:read", "issues:comment", "issues:triage", "issues:delete", "releases:read"}:
-        allowed = user_has_project_membership_access(token.user, project)
+        if not user_has_project_membership_access(token.user, project):
+            raise PermissionDenied("The user bound to this token is not an accepted member of this project.")
     elif capability in {"releases:create", "debug-files:upload", "projects:manage"}:
-        allowed = user_is_project_admin(token.user, project)
+        if not user_is_project_admin(token.user, project):
+            raise PermissionDenied("The user bound to this token does not administer this project.")
     elif capability == "projects:read":
         # projects:read follows project-list visibility, including team membership and discoverable projects
-        allowed = projects_visible_to_user(Project.objects.filter(pk=project.pk), token.user).exists()
+        if not projects_visible_to_user(Project.objects.filter(pk=project.pk), token.user).exists():
+            raise PermissionDenied("This project is not visible to the user bound to this token.")
     else:
         raise NotImplementedError("No project authorization rule for capability: %s." % capability)
-
-    if not allowed:
-        raise PermissionDenied("This token is not allowed to access this project.")
 
 
 def enforce_user_boundness_for_team(token, capability, team):
@@ -40,14 +40,13 @@ def enforce_user_boundness_for_team(token, capability, team):
 
     if capability == "teams:read":
         # teams:read follows team-list visibility including discoverable teams (i.e. broader than team membership)
-        allowed = teams_visible_to_user(Team.objects.filter(pk=team.pk), token.user).exists()
+        if not teams_visible_to_user(Team.objects.filter(pk=team.pk), token.user).exists():
+            raise PermissionDenied("This team is not visible to the user bound to this token.")
     elif capability in {"teams:manage", "projects:manage"}:
-        allowed = user_is_team_admin(token.user, team)
+        if not user_is_team_admin(token.user, team):
+            raise PermissionDenied("The user bound to this token does not administer this team.")
     else:
         raise NotImplementedError("No team authorization rule for capability: %s." % capability)
-
-    if not allowed:
-        raise PermissionDenied("This token is not allowed to access this team.")
 
 
 def _object_from_identifier(object_type, identifier):
