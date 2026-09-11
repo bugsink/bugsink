@@ -1,6 +1,7 @@
 import unittest
 from collections import Counter
 
+from django.test import RequestFactory
 from django.urls import URLResolver, get_resolver
 from drf_spectacular.generators import SchemaGenerator
 
@@ -154,6 +155,8 @@ class CapabilityContractTests(unittest.TestCase):
         # callable that enforcement will use.
         registered_api_operations = []
         all_methods = ("GET", "POST", "PUT", "PATCH", "DELETE", "TRACE")
+        request_factory = RequestFactory()
+
         for route, pattern in registered_api_patterns:
             callback = pattern.callback
 
@@ -177,25 +180,44 @@ class CapabilityContractTests(unittest.TestCase):
                 # i.e. Django/DRF class-based view
                 for method in callback.view_class.http_method_names:
                     if method in ("head", "options") or not hasattr(callback.view_class, method):
-                        continue
-                    registered_api_operations.append(
-                        (pattern.name, method.upper(), get_required_capability(callback.view_class))
+                        continue  # skip unimplemented / uninteresting methods
+
+                    capability = get_required_capability(getattr(callback.view_class, method))
+
+                    # Here we assert that capability is not so-set; the inverse (that each API view has a capability or
+                    # is from a list of known exceptions) is in the below "reviewed contract" tests
+                    self.assertIsNone(
+                        capability,
+                        "Capability enforcement is not implemented for Django/DRF class-based views, "
+                        "so capabilities are disallowed there",
                     )
+
+                    registered_api_operations.append(
+                        (pattern.name, method.upper(), capability)
+                    )
+
+                continue
+
+            # final special case: the catch-all which isn't really that interesting.
+            if pattern.name == "api_catch_all":
+                registered_api_operations.extend((pattern.name, method, None) for method in all_methods)
                 continue
 
             # implied by continues in the above: from now on callback is a plain Django function-based view.
-            # TODO: when capability checks are enforced, also enforce this declared method list at runtime and test
-            # that the declaration and runtime behavior match.
+            capability = get_required_capability(callback)
             methods = getattr(callback, "api_http_methods", None)
-            if methods is None and pattern.name == "api_catch_all":
-                methods = all_methods
+            self.assertIsNotNone(capability, "plain Django view %s must declare a required capability" % callback)
+            self.assertIsNotNone(methods, "plain Django view %s must declare its HTTP methods" % callback)
 
-            if methods is None:
-                registered_api_operations.append((pattern.name, None, get_required_capability(callback)))
-                continue
+            # For plain Django views, we require that the methods attribute is actually enforced (for DRF this is done
+            # by the framework). We do this by calling the view with every HTTP method and checking the response code.
+            # Declared methods reach authentication (401); undeclared methods stop at Django's method check (405).
+            for method in all_methods:
+                response = callback(request_factory.generic(method, "/"))
+                self.assertEqual(401 if method in methods else 405, response.status_code)
 
             for method in methods:
-                registered_api_operations.append((pattern.name, method, get_required_capability(callback)))
+                registered_api_operations.append((pattern.name, method, capability))
 
         # Collect the actual operations into the three authentication classes and compare to the reviewed contract
         # above.
