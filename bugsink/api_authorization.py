@@ -9,6 +9,11 @@ from projects.models import Project
 from releases.models import Release
 
 
+def enforce_project_boundness(token, project):
+    if token.is_project_bound and token.project_id != project.id:
+        raise PermissionDenied("This token is not allowed to access this project.")
+
+
 def _object_from_identifier(object_type, identifier):
     if object_type == "project":
         return get_object_or_404(Project.objects.all(), pk=identifier)
@@ -63,10 +68,8 @@ def resolve_token_guard(view, request, guard, view_kwargs):
     # Preserve DRF's object-permission contract (even though that is presently unused).
     view.check_object_permissions(request, guarded_object)
 
-    token = request.auth
     project = _project_for_object(guard.object_type, guarded_object)
-    if token.is_project_bound and token.project_id != project.id:
-        raise PermissionDenied("This token is not allowed to access this project.")
+    enforce_project_boundness(request.auth, project)
 
     injected_kwargs[guard.object_type] = guarded_object
     return injected_kwargs
