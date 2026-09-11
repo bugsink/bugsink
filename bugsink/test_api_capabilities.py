@@ -1,11 +1,14 @@
 import unittest
 from collections import Counter
 
-from django.test import RequestFactory
+from django.http import JsonResponse
+from django.test import RequestFactory, TransactionTestCase
 from django.urls import URLResolver, get_resolver
 from drf_spectacular.generators import SchemaGenerator
 
 from bugsink.api_capabilities import CAPABILITIES, get_required_capability, get_token_guard
+from bsmain.models import AuthToken
+from files.views import requires_auth_token
 
 
 # the reviewed contract between capabilities and the operations they protect. (in our codebase, these facts are spread
@@ -209,6 +212,11 @@ class CapabilityContractTests(unittest.TestCase):
             self.assertIsNotNone(capability, "plain Django view %s must declare a required capability" % callback)
             self.assertIsNotNone(methods, "plain Django view %s must declare its HTTP methods" % callback)
 
+            # As built, we made it a hard requirement that plain Django API views (which currently map to the
+            # Sentry-compatible API) use @requires_auth_token. It is fine to change that assumption in the
+            # future, but the assertion below ensures that this is done explicitly.
+            self.assertIs(requires_auth_token, getattr(callback, "_required_capability_enforcer", None))
+
             # For plain Django views, we require that the methods attribute is actually enforced (for DRF this is done
             # by the framework). We do this by calling the view with every HTTP method and checking the response code.
             # Declared methods reach authentication (401); undeclared methods stop at Django's method check (405).
@@ -251,3 +259,21 @@ class CapabilityContractTests(unittest.TestCase):
                 operation = self.schema["paths"][catalog_operation["path"]][catalog_operation["method"].lower()]
                 capability = operation["x-bugsink-required-capability"]
                 self.assertIn("`%s`" % capability, operation["description"])
+
+
+class RequiresAuthTokenTests(TransactionTestCase):
+    def test_token_without_required_capability_is_rejected(self):
+        # This decorator requires debug-files:upload; the token has only issues:read.
+        token = AuthToken.objects.create(issues_read=True)
+
+        @requires_auth_token("debug-files:upload", methods=["GET"])
+        def view(request):
+            return JsonResponse({"reached": True})
+
+        response = view(RequestFactory().get("/", HTTP_AUTHORIZATION=f"Bearer {token.token}"))
+
+        self.assertEqual(403, response.status_code)
+        self.assertJSONEqual(
+            response.content,
+            {"error": "This token does not have the required capability: debug-files:upload."},
+        )

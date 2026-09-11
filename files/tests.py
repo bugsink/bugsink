@@ -63,7 +63,7 @@ class FilesTests(TransactionTestCase):
         self.project = Project.objects.create(name="test")
         ProjectMembership.objects.create(project=self.project, user=self.user, accepted=True)
         self.client.force_login(self.user)
-        self.auth_token = AuthToken.objects.create()
+        self.auth_token = AuthToken.objects.create(debug_files_upload=True)
         self.token_headers = {"Authorization": f"Bearer {self.auth_token.token}"}
 
     def test_auth_no_header(self):
@@ -702,7 +702,7 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
 
     def setUp(self):
         super().setUp()
-        auth = AuthToken.objects.create(description="test token")
+        auth = AuthToken.objects.create(description="test token", debug_files_upload=True)
         self.token = auth.token
         self.project = Project.objects.create(name="test")
 
