@@ -31,7 +31,7 @@ from .models import (
     ProjectRole,
     projects_visible_to_user,
     user_can_create_project,
-    user_has_issue_access,
+    user_has_project_membership_access,
     user_is_project_admin,
 )
 from .forms import ProjectMembershipForm, MyProjectMembershipForm, ProjectMemberInviteForm, ProjectForm
@@ -485,7 +485,7 @@ def project_members_accept(request, project_pk):
 def project_sdk_setup(request, project_pk, platform=""):
     project = Project.objects.get(id=project_pk, is_deleted=False)
 
-    if not user_has_issue_access(request.user, project):
+    if not user_has_project_membership_access(request.user, project):
         raise PermissionDenied("You are not a member of this project")
 
     # NOTE about lexers:: I have bugsink/pyments_extensions; but the platforms mentioned there don't necessarily map to

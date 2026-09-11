@@ -280,7 +280,7 @@ def get_issue_accessible_project_ids(user):
             user=user, accepted=True, project__is_deleted=False).values_list("project_id", flat=True))
 
 
-def user_has_issue_access(user, project):
+def user_has_project_membership_access(user, project):
     if user.is_superuser:
         return True
 
