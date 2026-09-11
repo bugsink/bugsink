@@ -68,10 +68,6 @@ def get_required_capability(view):
     return getattr(view, "required_capability", None)
 
 
-def get_view_required_capability(view):
-    return get_required_capability(getattr(view, view.action))
-
-
 def token_guard(
     capability_name,
     *,
