@@ -94,6 +94,131 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(401, response.status_code)
         self.assertEqual({"error": "Invalid token"}, response.json())
 
+    def test_project_bound_token_can_upload_a_projectless_chunk(self):
+        token = AuthToken.objects.create(
+            is_project_bound=True,
+            project=self.project,
+            debug_files_upload=True,
+        )
+        data = b"projectless chunk"
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+        upload = BytesIO(data)
+        upload.name = checksum
+
+        response = self.client.post(
+            "/api/0/organizations/anyorg/chunk-upload/",
+            data={"file": upload},
+            headers={"Authorization": f"Bearer {token.token}"},
+        )
+
+        self.assertEqual(200, response.status_code)
+        self.assertTrue(Chunk.objects.filter(checksum=checksum).exists())
+
+    def test_project_bound_token_can_assemble_only_for_its_project(self):
+        other_project = Project.objects.create(name="Other project")
+        token = AuthToken.objects.create(
+            is_project_bound=True,
+            project=self.project,
+            debug_files_upload=True,
+        )
+        headers = {"Authorization": f"Bearer {token.token}"}
+        checksum = "a" * 40
+        Chunk.objects.create(checksum=checksum, size=0, data=b"")
+
+        with patch("files.views.assemble_artifact_bundle.delay") as delay:
+            own_response = self.client.post(
+                "/api/0/organizations/anyorg/artifactbundle/assemble/",
+                json.dumps({"checksum": checksum, "chunks": [checksum], "projects": [self.project.slug]}),
+                content_type="application/json",
+                headers=headers,
+            )
+            delay.assert_called_once_with(checksum, [checksum], [self.project.id])
+            delay.reset_mock()
+
+            foreign_response = self.client.post(
+                "/api/0/organizations/anyorg/artifactbundle/assemble/",
+                json.dumps({"checksum": checksum, "chunks": [checksum], "projects": [other_project.slug]}),
+                content_type="application/json",
+                headers=headers,
+            )
+            mixed_response = self.client.post(
+                "/api/0/organizations/anyorg/artifactbundle/assemble/",
+                json.dumps({
+                    "checksum": checksum,
+                    "chunks": [checksum],
+                    "projects": [self.project.slug, other_project.slug],
+                }),
+                content_type="application/json",
+                headers=headers,
+            )
+            unknown_response = self.client.post(
+                "/api/0/organizations/anyorg/artifactbundle/assemble/",
+                json.dumps({"checksum": checksum, "chunks": [checksum], "projects": ["missing-project"]}),
+                content_type="application/json",
+                headers=headers,
+            )
+
+        self.assertEqual(200, own_response.status_code)
+        self.assertEqual(403, foreign_response.status_code)
+        self.assertEqual(
+            {"error": "This token is not allowed to access this project."},
+            foreign_response.json(),
+        )
+        self.assertEqual(403, mixed_response.status_code)
+        self.assertEqual(400, unknown_response.status_code)
+        self.assertIn("Unknown project(s): missing-project", unknown_response.json()["error"])
+        delay.assert_not_called()
+
+    def test_installation_token_can_assemble_for_multiple_projects(self):
+        other_project = Project.objects.create(name="Other project")
+        checksum = "a" * 40
+        Chunk.objects.create(checksum=checksum, size=0, data=b"")
+
+        with patch("files.views.assemble_artifact_bundle.delay") as delay:
+            response = self.client.post(
+                "/api/0/organizations/anyorg/artifactbundle/assemble/",
+                json.dumps({
+                    "checksum": checksum,
+                    "chunks": [checksum],
+                    "projects": [self.project.slug, other_project.slug],
+                }),
+                content_type="application/json",
+                headers=self.token_headers,
+            )
+
+        self.assertEqual(200, response.status_code)
+        delay.assert_called_once_with(checksum, [checksum], [self.project.id, other_project.id])
+
+    def test_difs_assemble_rejects_an_existing_foreign_project(self):
+        other_project = Project.objects.create(name="Other project")
+        token = AuthToken.objects.create(
+            is_project_bound=True,
+            project=self.project,
+            debug_files_upload=True,
+        )
+
+        with bugsink_override_settings(FEATURE_MINIDUMPS=True):
+            response = self.client.post(
+                f"/api/0/projects/anyorg/{other_project.slug}/files/difs/assemble/",
+                "{}",
+                content_type="application/json",
+                headers={"Authorization": f"Bearer {token.token}"},
+            )
+            unknown_response = self.client.post(
+                "/api/0/projects/anyorg/missing-project/files/difs/assemble/",
+                "{}",
+                content_type="application/json",
+                headers={"Authorization": f"Bearer {token.token}"},
+            )
+
+        self.assertEqual(403, response.status_code)
+        self.assertEqual(
+            {"error": "This token is not allowed to access this project."},
+            response.json(),
+        )
+        self.assertEqual(404, unknown_response.status_code)
+        self.assertEqual({"detail": "Project not found: missing-project"}, unknown_response.json())
+
     def test_chunk_upload_settings_use_real_limits(self):
         with bugsink_override_settings(MAX_FILE_SIZE=1234):
             response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers=self.token_headers)

@@ -8,11 +8,13 @@ from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import user_passes_test
 from django.http import Http404
+from rest_framework.exceptions import PermissionDenied
 
 from sentry.assemble import ChunkFileState
 
 from bugsink.app_settings import get_settings
 from bugsink.api_capabilities import required_capability
+from bugsink.api_authorization import enforce_project_boundness
 from bugsink.authentication import get_token_for_authentication
 from bugsink.transaction import durable_atomic, immediate_atomic
 from bugsink.streams import handle_request_content_encoding, copy_stream_limited, MaxLengthExceeded
@@ -142,7 +144,10 @@ def requires_auth_token(capability, methods):
                     {"error": "This token does not have the required capability: %s." % capability}, status=403)
 
             request.auth_token = token
-            return view_function(request, *args, **kwargs)
+            try:
+                return view_function(request, *args, **kwargs)
+            except PermissionDenied as error:
+                return JsonResponse({"error": error.detail}, status=403)
 
         first_require_auth_token.__name__ = view_function.__name__
         view = required_capability(capability, methods=methods)(first_require_auth_token)
@@ -173,6 +178,7 @@ def get_artifact_bundle_projects(data):
 @requires_auth_token("debug-files:upload", methods=["GET", "POST"])
 def chunk_upload(request, organization_slug):
     # Bugsink has a single-organization model; we simply ignore organization_slug
+    # Chunks are projectless until assembly, so project boundness is enforced only when a project is supplied there.
     # NOTE: we don't check against chunkSize, maxRequestSize and chunksPerRequest (yet), we expect the CLI to behave.
 
     if request.method == "GET":
@@ -253,6 +259,9 @@ def artifact_bundle_assemble(request, organization_slug):
         logger.warning("Rejected artifact bundle: project slug is missing or does not match an existing project.")
         return JsonResponse({"error": error}, status=400)
 
+    for project in projects:
+        enforce_project_boundness(request.auth_token, project)
+
     # sentry-cli >= 3.x calls this endpoint before uploading chunks (to learn which ones are missing), then uploads
     # only the missing chunks, and then polls this endpoint again. We must return the actual missing chunks; returning
     # an empty list causes sentry-cli 3.x to skip uploading, and the subsequent assembly fails with a KeyError.
@@ -279,6 +288,7 @@ def difs_assemble(request, organization_slug, project_slug):
     project = Project.objects.filter(slug=project_slug, is_deleted=False).first()
     if project is None:
         return JsonResponse({"detail": "Project not found: %s" % project_slug}, status=404)
+    enforce_project_boundness(request.auth_token, project)
 
     # TODO move to tasks.something.delay
     # TODO think about the right transaction around this
