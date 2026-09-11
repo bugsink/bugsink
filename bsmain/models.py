@@ -101,7 +101,7 @@ class AuthToken(models.Model):
 
         forbidden_capabilities = self.capabilities & INSTALLATION_ONLY_CAPABILITIES
         if self.is_project_bound and forbidden_capabilities:
-            errors["is_project_bound"] = "Project-bound tokens cannot have capabilities: %s." % ", ".join(
+            errors["project"] = "Project-bound tokens cannot have capabilities: %s." % ", ".join(
                 sorted(forbidden_capabilities)
             )
 

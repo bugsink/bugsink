@@ -248,14 +248,14 @@ class NavigationLinksTestCase(TransactionTestCase):
         self.assertContains(response, 'Preferences')
         self.assertContains(response, '/api/canonical/0/schema/swagger-ui/')
         self.assertContains(response, 'OpenAPI')
+        self.assertContains(response, '/bsmain/auth_tokens/')
+        self.assertContains(response, 'Tokens')
 
         # Admin only. Not visible
         self.assertNotContains(response, '/admin/')
         self.assertNotContains(response, 'Admin')
         self.assertNotContains(response, '/users/')
         self.assertNotContains(response, 'Users')
-        self.assertNotContains(response, '/bsmain/auth_tokens/')
-        self.assertNotContains(response, 'Tokens')
 
     def test_anonymous_user_sees_no_links(self):
         """Anonymous users should see no links in the navigation."""
