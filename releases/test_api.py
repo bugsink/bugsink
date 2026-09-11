@@ -153,6 +153,10 @@ class ReleaseApiTests(TransactionTestCase):
         response = self._create("member-release")
 
         self.assertEqual(403, response.status_code)
+        self.assertEqual(
+            "The user bound to this token does not administer this project.",
+            response.json()["detail"],
+        )
         self.assertFalse(Release.objects.filter(project=self.project, version="member-release").exists())
 
 

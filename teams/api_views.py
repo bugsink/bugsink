@@ -46,7 +46,7 @@ class TeamViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
     )
     def create(self, request, *args, **kwargs):
         if request.auth.is_user_bound and not user_can_create_team(request.auth.user):
-            raise PermissionDenied("This token is not allowed to create a team.")
+            raise PermissionDenied("The user bound to this token is not allowed to create teams.")
         return super().create(request, *args, **kwargs)
 
     @token_guard("teams:read", guarding_team=lookup(url="pk"))

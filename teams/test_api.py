@@ -88,6 +88,10 @@ class TeamApiTests(TransactionTestCase):
             {row["id"] for row in response.json()["results"]},
         )
         self.assertEqual(403, hidden_detail.status_code)
+        self.assertEqual(
+            "This team is not visible to the user bound to this token.",
+            hidden_detail.json()["detail"],
+        )
 
     def test_personal_token_can_create_a_team_when_members_can_create_teams(self):
         user = get_user_model().objects.create_user(username="team-creator")
@@ -107,6 +111,10 @@ class TeamApiTests(TransactionTestCase):
             response = self.client.post(reverse("api:team-list"), {"name": "Forbidden team"}, format="json")
 
         self.assertEqual(403, response.status_code)
+        self.assertEqual(
+            "The user bound to this token is not allowed to create teams.",
+            response.json()["detail"],
+        )
         self.assertFalse(Team.objects.filter(name="Forbidden team").exists())
 
     def test_personal_team_admin_can_update_the_team(self):
@@ -138,5 +146,9 @@ class TeamApiTests(TransactionTestCase):
         )
 
         self.assertEqual(403, response.status_code)
+        self.assertEqual(
+            "The user bound to this token does not administer this team.",
+            response.json()["detail"],
+        )
         team.refresh_from_db()
         self.assertEqual("Member team", team.name)
