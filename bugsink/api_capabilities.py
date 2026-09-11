@@ -1,6 +1,7 @@
 from collections import namedtuple
 from functools import wraps
 
+from django.views.decorators.http import require_http_methods
 from drf_spectacular.utils import extend_schema
 
 
@@ -51,14 +52,20 @@ def required_capability(capability_name, methods=None):
         raise ValueError("Unknown capability: %s" % capability_name)
 
     def decorator(view):
-        view.required_capability = capability_name
-        if methods is not None:
-            # TODO: enforce this declaration at runtime when the Sentry-compatible bearer capability checks are added.
-            view.api_http_methods = tuple(method.upper() for method in methods)
+        normalized_methods = None if methods is None else tuple(method.upper() for method in methods)
 
+        if normalized_methods is not None:
+            # if methods=... is set (which it is for plain django views); actually restrict the view to those methods
+            allowed_methods = normalized_methods
+            if "GET" in normalized_methods and "HEAD" not in normalized_methods:
+                allowed_methods += ("HEAD",)
+            view = require_http_methods(allowed_methods)(view)
+            view.api_http_methods = normalized_methods
+
+        view.required_capability = capability_name
         return extend_schema(
             extensions={REQUIRED_CAPABILITY_EXTENSION: capability_name},
-            methods=methods,
+            methods=normalized_methods,
         )(view)
 
     return decorator
