@@ -11,7 +11,7 @@ from projects.models import Project
 class ProjectApiTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
-        token = AuthToken.objects.create()
+        token = AuthToken.objects.create(projects_read=True, projects_manage=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
         self.team = Team.objects.create(name="Engineering")
 
@@ -136,6 +136,10 @@ class ProjectApiTests(TransactionTestCase):
         r = self.client.delete(reverse("api:project-detail", args=[p.id]))
         self.assertEqual(r.status_code, 405)
 
+    def test_patch_list_not_allowed(self):
+        r = self.client.patch(reverse("api:project-list"), {"name": "No object"}, format="json")
+        self.assertEqual(r.status_code, 405)
+
 
 class ExpansionTests(TransactionTestCase):
     """
@@ -145,7 +149,7 @@ class ExpansionTests(TransactionTestCase):
 
     def setUp(self):
         self.client = APIClient()
-        token = AuthToken.objects.create()
+        token = AuthToken.objects.create(projects_read=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
         self.team = Team.objects.create(name="T")
         self.project = Project.objects.create(name="P", team=self.team)

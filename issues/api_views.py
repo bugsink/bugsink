@@ -1,4 +1,3 @@
-from django.shortcuts import get_object_or_404
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import CursorPagination
@@ -7,10 +6,9 @@ from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_mixins import AtomicRequestMixin
-from bugsink.api_capabilities import required_capability
-from bugsink.utils import assert_
+from bugsink.api_capabilities import lookup, token_guard
 
-from .models import Issue, IssueStateManager, TurningPoint, apply_issue_action, issue_lookup_kwargs
+from .models import Issue, IssueStateManager, TurningPoint, apply_issue_action
 from .serializers import (
     IssueCommentSerializer,
     IssueMuteForSerializer,
@@ -76,7 +74,8 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return self.queryset
 
-    @required_capability("issues:read")
+    # Require a project until the UI supports cross-project issue listing (#190).
+    @token_guard("issues:read", guarding_project=lookup(query="project"))
     @extend_schema(
         summary="List issues",
         description="List issues for a project.",
@@ -106,25 +105,25 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
             ),
         ]
     )
-    def list(self, request, *args, **kwargs):
+    def list(self, request, project, *args, **kwargs):
+        self.project = project
         return super().list(request, *args, **kwargs)
 
-    @required_capability("issues:read")
+    @token_guard("issues:read", guarding_issue=lookup(url="pk"))
     @extend_schema(
         summary="Retrieve an issue",
         description="Retrieve an issue by issue UUID or friendly ID.",
         responses=IssueSerializer,
     )
-    def retrieve(self, request, *args, **kwargs):
-        return super().retrieve(request, *args, **kwargs)
+    def retrieve(self, request, issue, *args, **kwargs):
+        return Response(self.get_serializer(issue).data)
 
-    @required_capability("issues:delete")
+    @token_guard("issues:delete", guarding_issue=lookup(url="pk"))
     @extend_schema(
         summary="Delete an issue",
         description="Delete an issue.",
     )
-    def destroy(self, request, *args, **kwargs):
-        issue = self.get_object()
+    def destroy(self, request, issue, *args, **kwargs):
         issue.delete_deferred()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -133,31 +132,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         if self.action != "list":
             return queryset
 
-        project = self.request.query_params.get("project")
-        if not project:
-            # the below at least until we have a UI for cross-project Issue listing, i.e. #190
-            raise ValidationError({"project": ["This field is required."]})
-
-        return queryset.filter(project=project)
-
-    def get_object(self):
-        """
-        DRF's get_object(), but bypass filter_queryset for detail.
-        """
-        # NOTE: alternatively, we just complain hard when a filter is applied to a detail view.
-        # TODO: copy/paste from events/api_views.py
-        queryset = self.get_queryset()
-
-        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
-        assert_(
-            lookup_url_kwarg in self.kwargs,
-            'Expected view %s to be called with a URL keyword argument named "%s".'
-            % (self.__class__.__name__, lookup_url_kwarg)
-        )
-
-        obj = get_object_or_404(queryset, **issue_lookup_kwargs(self.kwargs[lookup_url_kwarg]))
-        self.check_object_permissions(self.request, obj)
-        return obj
+        return queryset.filter(project=self.project)
 
     def _action_response(self, issue):
         issue.save()
@@ -180,7 +155,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         apply_issue_action(IssueStateManager, issue, action, user=None)
         return self._action_response(issue)
 
-    @required_capability("issues:triage")
+    @token_guard("issues:triage", guarding_issue=lookup(url="pk"))
     @extend_schema(
         summary="Resolve an issue",
         description="Mark this issue as resolved.",
@@ -188,12 +163,11 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         responses=IssueSerializer,
     )
     @action(detail=True, methods=["post"])
-    def resolve(self, request, pk=None):
-        issue = self.get_object()
+    def resolve(self, request, issue, pk=None):
         self._assert_unresolved(issue)
         return self._apply_issue_action(issue, "resolve")
 
-    @required_capability("issues:triage")
+    @token_guard("issues:triage", guarding_issue=lookup(url="pk"))
     @extend_schema(
         summary="Resolve an issue in the next release",
         description="Mark this issue as resolved by the next release.",
@@ -201,12 +175,11 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         responses=IssueSerializer,
     )
     @action(detail=True, methods=["post"], url_path="resolve-next")
-    def resolve_next(self, request, pk=None):
-        issue = self.get_object()
+    def resolve_next(self, request, issue, pk=None):
         self._assert_unresolved(issue)
         return self._apply_issue_action(issue, "resolved_next")
 
-    @required_capability("issues:triage")
+    @token_guard("issues:triage", guarding_issue=lookup(url="pk"))
     @extend_schema(
         summary="Resolve an issue in the latest release",
         description="Mark this issue as resolved in the latest release.",
@@ -214,8 +187,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         responses=IssueSerializer,
     )
     @action(detail=True, methods=["post"], url_path="resolve-latest")
-    def resolve_latest(self, request, pk=None):
-        issue = self.get_object()
+    def resolve_latest(self, request, issue, pk=None):
         self._assert_unresolved(issue)
         if not issue.project.has_releases:
             raise ValidationError({"detail": "Project has no releases."})
@@ -223,7 +195,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         latest_release = issue.project.get_latest_release()
         return self._apply_issue_action(issue, "resolved_release:" + latest_release.version)
 
-    @required_capability("issues:triage")
+    @token_guard("issues:triage", guarding_issue=lookup(url="pk"))
     @extend_schema(
         summary="Reopen an issue",
         description="Mark this resolved issue as unresolved again.",
@@ -231,12 +203,11 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         responses=IssueSerializer,
     )
     @action(detail=True, methods=["post"])
-    def reopen(self, request, pk=None):
-        issue = self.get_object()
+    def reopen(self, request, issue, pk=None):
         self._assert_resolved(issue)
         return self._apply_issue_action(issue, "reopen")
 
-    @required_capability("issues:triage")
+    @token_guard("issues:triage", guarding_issue=lookup(url="pk"))
     @extend_schema(
         summary="Mute an issue",
         description="Mute this issue.",
@@ -244,13 +215,12 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         responses=IssueSerializer,
     )
     @action(detail=True, methods=["post"])
-    def mute(self, request, pk=None):
-        issue = self.get_object()
+    def mute(self, request, issue, pk=None):
         self._assert_unresolved(issue)
         self._assert_unmuted(issue)
         return self._apply_issue_action(issue, "mute")
 
-    @required_capability("issues:triage")
+    @token_guard("issues:triage", guarding_issue=lookup(url="pk"))
     @extend_schema(
         summary="Mute an issue for a period",
         description="Mute this issue for a relative period, e.g. for 3 days.",
@@ -258,18 +228,17 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         responses=IssueSerializer,
     )
     @action(detail=True, methods=["post"], url_path="mute-for")
-    def mute_for(self, request, pk=None):
+    def mute_for(self, request, issue, pk=None):
         serializer = IssueMuteForSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         period_name = serializer.validated_data["period_name"]
         nr_of_periods = serializer.validated_data["nr_of_periods"]
 
-        issue = self.get_object()
         self._assert_unresolved(issue)
         self._assert_unmuted(issue)
         return self._apply_issue_action(issue, f"mute_for:{period_name},{nr_of_periods},")
 
-    @required_capability("issues:triage")
+    @token_guard("issues:triage", guarding_issue=lookup(url="pk"))
     @extend_schema(
         summary="Mute an issue until a threshold is reached",
         description="Mute this issue until a threshold is reached, e.g. more than 10 events in 1 hour.",
@@ -277,19 +246,18 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         responses=IssueSerializer,
     )
     @action(detail=True, methods=["post"], url_path="mute-until")
-    def mute_until(self, request, pk=None):
+    def mute_until(self, request, issue, pk=None):
         serializer = IssueMuteUntilSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         period_name = serializer.validated_data["period_name"]
         nr_of_periods = serializer.validated_data["nr_of_periods"]
         gte_threshold = serializer.validated_data["gte_threshold"]
 
-        issue = self.get_object()
         self._assert_unresolved(issue)
         self._assert_unmuted(issue)
         return self._apply_issue_action(issue, f"mute_until:{period_name},{nr_of_periods},{gte_threshold}")
 
-    @required_capability("issues:triage")
+    @token_guard("issues:triage", guarding_issue=lookup(url="pk"))
     @extend_schema(
         summary="Unmute an issue",
         description="Unmute this issue.",
@@ -297,8 +265,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         responses=IssueSerializer,
     )
     @action(detail=True, methods=["post"])
-    def unmute(self, request, pk=None):
-        issue = self.get_object()
+    def unmute(self, request, issue, pk=None):
         self._assert_unresolved(issue)
         if not issue.is_muted:
             raise ValidationError({"detail": "Issue is not muted."})
@@ -311,12 +278,14 @@ class IssueCommentViewSet(AtomicRequestMixin, mixins.CreateModelMixin, viewsets.
     serializer_class = IssueCommentSerializer
     http_method_names = ["post", "head", "options"]
 
-    @required_capability("issues:comment")
+    @token_guard("issues:comment", guarding_issue=lookup(serializer="issue"))
     @extend_schema(
         summary="Create an issue comment",
         description="Add a comment to an issue. `issue` accepts an issue UUID or friendly ID.",
         request=IssueCommentSerializer,
         responses=IssueCommentSerializer,
     )
-    def create(self, request, *args, **kwargs):
-        return super().create(request, *args, **kwargs)
+    def create(self, request, serializer, issue, *args, **kwargs):
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)

@@ -4,7 +4,7 @@ from collections import Counter
 from django.urls import URLResolver, get_resolver
 from drf_spectacular.generators import SchemaGenerator
 
-from bugsink.api_capabilities import CAPABILITIES, get_required_capability
+from bugsink.api_capabilities import CAPABILITIES, get_required_capability, get_token_guard
 
 
 # the reviewed contract between capabilities and the operations they protect. (in our codebase, these facts are spread
@@ -148,13 +148,13 @@ class CapabilityContractTests(unittest.TestCase):
                     and "(?P<format>" not in route
                     and "<drf_format_suffix:format>" not in route
                 ):
-                    registered_api_patterns.append(pattern)
+                    registered_api_patterns.append((route, pattern))
 
         # Expand every registered route into its actual HTTP operations and read capability annotations from the
         # callable that enforcement will use.
         registered_api_operations = []
         all_methods = ("GET", "POST", "PUT", "PATCH", "DELETE", "TRACE")
-        for pattern in registered_api_patterns:
+        for route, pattern in registered_api_patterns:
             callback = pattern.callback
 
             if getattr(callback, "actions", None):
@@ -162,8 +162,14 @@ class CapabilityContractTests(unittest.TestCase):
                 for method, action in callback.actions.items():
                     if method not in callback.cls.http_method_names or method in ("head", "options"):
                         continue
+                    view_method = getattr(callback.cls, action)
+                    if route.startswith("api/canonical/"):
+                        # For canonical DRF endpoints, we require that the view method has a token guard, i.e. that it's
+                        # _actually_ enforcing the capability check at runtime, not just documenting it. (for other
+                        # endpoints this is still TODO)
+                        self.assertIsNotNone(get_token_guard(view_method))
                     registered_api_operations.append(
-                        (pattern.name, method.upper(), get_required_capability(getattr(callback.cls, action)))
+                        (pattern.name, method.upper(), get_required_capability(view_method))
                     )
                 continue
 

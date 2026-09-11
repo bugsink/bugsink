@@ -1,9 +1,9 @@
-from rest_framework import viewsets
-from rest_framework.exceptions import ValidationError
+from rest_framework import status, viewsets
+from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_pagination import AscDescCursorPagination
-from bugsink.api_capabilities import required_capability
+from bugsink.api_capabilities import lookup, token_guard
 from bugsink.api_mixins import AtomicRequestMixin
 
 from .models import Release
@@ -25,7 +25,7 @@ class ReleaseViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "head", "options"]
     pagination_class = ReleasePagination
 
-    @required_capability("releases:read")
+    @token_guard("releases:read", guarding_project=lookup(query="project"))
     @extend_schema(
         summary="List releases",
         description=(
@@ -42,10 +42,11 @@ class ReleaseViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
             ),
         ]
     )
-    def list(self, request, *args, **kwargs):
+    def list(self, request, project, *args, **kwargs):
+        self.project = project
         return super().list(request, *args, **kwargs)
 
-    @required_capability("releases:create")
+    @token_guard("releases:create", guarding_project=lookup(serializer="project"))
     @extend_schema(
         summary="Create a release",
         description=(
@@ -62,29 +63,26 @@ class ReleaseViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
             ),
         ],
     )
-    def create(self, request, *args, **kwargs):
-        return super().create(request, *args, **kwargs)
+    def create(self, request, serializer, project, *args, **kwargs):
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
-    @required_capability("releases:read")
+    @token_guard("releases:read", guarding_release=lookup(url="pk"))
     @extend_schema(
         summary="Retrieve a release",
         description="Retrieve a release by release UUID.",
         responses=ReleaseDetailSerializer,
     )
-    def retrieve(self, request, *args, **kwargs):
-        return super().retrieve(request, *args, **kwargs)
+    def retrieve(self, request, release, *args, **kwargs):
+        return Response(self.get_serializer(release).data)
 
     def filter_queryset(self, queryset):
         queryset = super().filter_queryset(queryset)
         if self.action != "list":
             return queryset
 
-        query_params = self.request.query_params
-        project_id = query_params.get("project")
-        if not project_id:
-            raise ValidationError({"project": ["This field is required."]})
-
-        return queryset.filter(project=project_id)
+        return queryset.filter(project=self.project)
 
     def get_serializer_class(self):
         if self.action == "create":

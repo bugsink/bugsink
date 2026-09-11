@@ -14,7 +14,7 @@ from events.factories import create_event_data
 class EventApiTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
-        token = AuthToken.objects.create()
+        token = AuthToken.objects.create(events_read=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
 
         self.project = Project.objects.create(name="Test Project")
@@ -102,11 +102,30 @@ class EventApiTests(TransactionTestCase):
         self.assertEqual(ids[0], str(e0.id))
         self.assertEqual(ids[1], str(e1.id))
 
+    def test_project_bound_token_cannot_read_another_projects_events(self):
+        other_project = Project.objects.create(name="Other event project")
+        other_issue, _ = get_or_create_issue(other_project)
+        other_event = create_event(issue=other_issue)
+        token = AuthToken.objects.create(
+            is_project_bound=True,
+            project=self.project,
+            events_read=True,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        own_detail = self.client.get(reverse("api:event-detail", args=[self.event.id]))
+        foreign_list = self.client.get(reverse("api:event-list"), {"issue": other_issue.id})
+        foreign_detail = self.client.get(reverse("api:event-detail", args=[other_event.id]))
+
+        self.assertEqual(200, own_detail.status_code)
+        self.assertEqual(403, foreign_list.status_code)
+        self.assertEqual(403, foreign_detail.status_code)
+
 
 class EventPaginationTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
-        token = AuthToken.objects.create()
+        token = AuthToken.objects.create(events_read=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
         self.old_size = EventViewSet.pagination_class.page_size
         EventViewSet.pagination_class.page_size = 2

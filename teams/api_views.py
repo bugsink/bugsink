@@ -3,7 +3,7 @@ from rest_framework.generics import get_object_or_404
 from drf_spectacular.utils import extend_schema
 
 from bugsink.api_pagination import AscDescCursorPagination
-from bugsink.api_capabilities import required_capability
+from bugsink.api_capabilities import token_guard
 from bugsink.api_mixins import AtomicRequestMixin
 
 from .models import Team
@@ -27,7 +27,7 @@ class TeamViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "head", "options"]
     pagination_class = TeamPagination
 
-    @required_capability("teams:read")
+    @token_guard("teams:read")
     @extend_schema(
         summary="List teams",
         description="List teams ordered by name.",
@@ -36,7 +36,7 @@ class TeamViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
 
-    @required_capability("teams:manage")
+    @token_guard("teams:manage")
     @extend_schema(
         summary="Create a team",
         description="Create a team. `visibility` is optional and defaults to `discoverable`.",
@@ -46,7 +46,7 @@ class TeamViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
 
-    @required_capability("teams:read")
+    @token_guard("teams:read")
     @extend_schema(
         summary="Retrieve a team",
         description="Retrieve a team by UUID.",
@@ -55,7 +55,7 @@ class TeamViewSet(AtomicRequestMixin, viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         return super().retrieve(request, *args, **kwargs)
 
-    @required_capability("teams:manage")
+    @token_guard("teams:manage")
     @extend_schema(
         summary="Update a team",
         description="Partially update a team by UUID.",
