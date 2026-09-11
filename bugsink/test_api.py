@@ -2,6 +2,7 @@ import unittest
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.test import TransactionTestCase
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -13,7 +14,7 @@ from issues.factories import get_or_create_issue
 from projects.models import Project
 
 
-class BearerAuthRouterTests(unittest.TestCase):
+class BearerAuthRouterTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
         self.project = Project.objects.create(name="Valid token project")
