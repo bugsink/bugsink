@@ -22,7 +22,7 @@ def enforce_user_boundness_for_project(token, capability, project):
     if capability in {
             "issues:read", "events:read", "issues:comment", "issues:triage", "issues:delete", "releases:read"}:
         allowed = user_has_project_membership_access(token.user, project)
-    elif capability in {"releases:create", "projects:manage"}:
+    elif capability in {"releases:create", "debug-files:upload", "projects:manage"}:
         allowed = user_is_project_admin(token.user, project)
     elif capability == "projects:read":
         # projects:read follows project-list visibility, including team membership and discoverable projects
