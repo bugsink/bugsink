@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_spectacular',
     'drf_spectacular_sidecar',  # this brings the swagger-ui
+    'django_prometheus',
 ]
 
 REST_FRAMEWORK = {
@@ -136,6 +137,8 @@ AUTH_USER_MODEL = "users.User"
 TAILWIND_APP_NAME = 'theme'
 
 MIDDLEWARE = [
+    # django-prometheus: must be the first and last middlewares so that its timing metrics cover the whole request.
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     "bugsink.middleware.ContentEncodingCheckMiddleware",
     'bugsink.middleware.SetRemoteAddrMiddleware',
     'bugsink.middleware.DisallowChunkedMiddleware',
@@ -160,6 +163,7 @@ MIDDLEWARE = [
     # middleware are not logged to a visible location; and this feature is undocumented. However, it _could_ prove
     # useful in such contexts too, so I'm not going to put it behind a conditional.
     'bugsink.middleware.PerformanceStatsMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 # Config of verbose_csrf_middleware.CsrfViewMiddleware: For Bugsink, there's never any intentional cross-scheme POSTing

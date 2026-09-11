@@ -99,6 +99,12 @@ urlpatterns = [
     path('bsmain/', include('bsmain.urls')),
 ]
 
+# A prometheus scrape endpoint, gated on BUGSINK['PROMETHEUS_ENABLED'] because it exposes operational (request,
+# template, model-activity) metrics to anyone who can reach the URL.
+if get_settings().PROMETHEUS_ENABLED:
+    from .views import metrics
+    urlpatterns.append(path("metrics/", metrics, name="metrics"))
+
 for urlconf_module in get_settings().EXTRA_URLCONF_MODULES:
     urlpatterns.append(path("", include(urlconf_module)))
 
