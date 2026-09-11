@@ -112,7 +112,6 @@ DEFAULTS = {
 
     # Private/undocumented extension API:
     "EXTRA_URLCONF_MODULES": [],
-    "EXTRA_NAV_LINKS": [],
     "SYSTEM_WARNING_PROVIDERS": [],
 }
 
