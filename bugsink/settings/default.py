@@ -78,7 +78,8 @@ REST_FRAMEWORK = {
         "bugsink.authentication.BearerTokenAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
-        "bugsink.permissions.IsGlobalAuthenticated",
+        "bugsink.permissions.IsAuthTokenAuthenticated",
+        "bugsink.permissions.HasRequiredCapability",
     ],
 
     "DEFAULT_RENDERER_CLASSES": [

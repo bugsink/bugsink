@@ -9,7 +9,7 @@ from teams.models import Team
 class TeamApiTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
-        token = AuthToken.objects.create()
+        token = AuthToken.objects.create(teams_read=True, teams_manage=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
 
     def test_list_ordering_by_name(self):

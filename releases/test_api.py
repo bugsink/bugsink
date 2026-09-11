@@ -12,7 +12,7 @@ from releases.api_views import ReleaseViewSet
 class ReleaseApiTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
-        token = AuthToken.objects.create()
+        token = AuthToken.objects.create(releases_read=True, releases_create=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
         self.project = Project.objects.create(name="RelProj")
 
@@ -80,11 +80,38 @@ class ReleaseApiTests(TransactionTestCase):
         self.assertEqual(patch_response.status_code, 405)
         self.assertEqual(delete_response.status_code, 405)
 
+    def test_project_bound_token_cannot_read_or_create_releases_in_another_project(self):
+        own_release = Release.objects.create(project=self.project, version="own")
+        other_project = Project.objects.create(name="Other release project")
+        other_release = Release.objects.create(project=other_project, version="other")
+        token = AuthToken.objects.create(
+            is_project_bound=True,
+            project=self.project,
+            releases_read=True,
+            releases_create=True,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        own_detail = self.client.get(reverse("api:release-detail", args=[own_release.id]))
+        foreign_list = self.client.get(reverse("api:release-list"), {"project": other_project.id})
+        foreign_detail = self.client.get(reverse("api:release-detail", args=[other_release.id]))
+        foreign_create = self.client.post(
+            reverse("api:release-list"),
+            {"project": other_project.id, "version": "forbidden"},
+            format="json",
+        )
+
+        self.assertEqual(200, own_detail.status_code)
+        self.assertEqual(403, foreign_list.status_code)
+        self.assertEqual(403, foreign_detail.status_code)
+        self.assertEqual(403, foreign_create.status_code)
+        self.assertFalse(Release.objects.filter(project=other_project, version="forbidden").exists())
+
 
 class ReleasePaginationTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
-        token = AuthToken.objects.create()
+        token = AuthToken.objects.create(releases_read=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
         self.old_size = ReleaseViewSet.pagination_class.page_size
         ReleaseViewSet.pagination_class.page_size = 2

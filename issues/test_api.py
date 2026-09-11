@@ -17,7 +17,13 @@ from issues.api_views import IssueViewSet
 class IssueApiTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
-        token = AuthToken.objects.create()
+        token = AuthToken.objects.create(
+            issues_read=True,
+            events_read=True,
+            issues_comment=True,
+            issues_triage=True,
+            issues_delete=True,
+        )
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
 
         self.project = Project.objects.create(name="Test Project")
@@ -344,6 +350,56 @@ class IssueApiTests(TransactionTestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"issue": ["Issue not found."]})
 
+    def test_project_bound_token_cannot_read_or_change_another_projects_issues(self):
+        other_project = Project.objects.create(name="Other project")
+        other_issue, _ = get_or_create_issue(other_project, event_data=create_event_data(exception_type="Other"))
+        token = AuthToken.objects.create(
+            is_project_bound=True,
+            project=self.project,
+            issues_read=True,
+            issues_triage=True,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        own_list = self.client.get(reverse("api:issue-list"), {"project": self.project.id})
+        foreign_list = self.client.get(reverse("api:issue-list"), {"project": other_project.id})
+        foreign_detail = self.client.get(reverse("api:issue-detail", args=[other_issue.id]))
+        foreign_mute = self.client.post(reverse("api:issue-mute", args=[other_issue.id]))
+
+        self.assertEqual(200, own_list.status_code)
+        self.assertNotIn(str(other_issue.id), [row["id"] for row in own_list.json()["results"]])
+        self.assertEqual(403, foreign_list.status_code)
+        self.assertEqual("This token is not allowed to access this project.", foreign_list.json()["detail"])
+        self.assertEqual(403, foreign_detail.status_code)
+        self.assertEqual(403, foreign_mute.status_code)
+        other_issue.refresh_from_db()
+        self.assertFalse(other_issue.is_muted)
+
+    def test_project_bound_token_cannot_comment_on_another_projects_issue(self):
+        other_project = Project.objects.create(name="Other comment project")
+        other_issue, _ = get_or_create_issue(other_project, event_data=create_event_data(exception_type="Other"))
+        token = AuthToken.objects.create(
+            is_project_bound=True,
+            project=self.project,
+            issues_comment=True,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        own_response = self.client.post(
+            reverse("api:issue-comment-list"),
+            {"issue": self.issue0.id, "comment": "Own project"},
+            format="json",
+        )
+        foreign_response = self.client.post(
+            reverse("api:issue-comment-list"),
+            {"issue": other_issue.id, "comment": "Foreign project"},
+            format="json",
+        )
+
+        self.assertEqual(201, own_response.status_code)
+        self.assertEqual(403, foreign_response.status_code)
+        self.assertFalse(TurningPoint.objects.filter(issue=other_issue).exists())
+
 
 class IssuePaginationTests(TransactionTestCase):
     last_seen_deltas = [3, 1, 4, 0, 2]
@@ -351,7 +407,7 @@ class IssuePaginationTests(TransactionTestCase):
 
     def setUp(self):
         self.client = APIClient()
-        token = AuthToken.objects.create()
+        token = AuthToken.objects.create(issues_read=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
         self.old_size = IssueViewSet.pagination_class.page_size
         IssueViewSet.pagination_class.page_size = 2

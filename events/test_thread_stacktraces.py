@@ -58,7 +58,7 @@ class ThreadStacktraceSampleTests(TransactionTestCase):
         ProjectMembership.objects.create(project=self.project, user=self.user, accepted=True)
         self.client.force_login(self.user)
         self.api_client = APIClient()
-        token = AuthToken.objects.create()
+        token = AuthToken.objects.create(events_read=True)
         self.api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
 
     def create_event_from_sample(self, data):
