@@ -23,7 +23,7 @@ from unittest.mock import patch
 from compat.dsn import get_header_value
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.transaction import immediate_atomic
-from projects.models import Project, ProjectMembership
+from projects.models import Project, ProjectMembership, ProjectRole
 from events.models import Event
 from bsmain.models import AuthToken
 from bugsink.moreiterutils import batched
@@ -114,6 +114,45 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(200, response.status_code)
         self.assertTrue(Chunk.objects.filter(checksum=checksum).exists())
 
+    def test_user_bound_installation_token_can_upload_a_projectless_chunk(self):
+        token = AuthToken.objects.create(
+            is_user_bound=True,
+            user=self.user,
+            debug_files_upload=True,
+        )
+        data = b"user-bound projectless chunk"
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+        upload = BytesIO(data)
+        upload.name = checksum
+
+        response = self.client.post(
+            "/api/0/organizations/anyorg/chunk-upload/",
+            data={"file": upload},
+            headers={"Authorization": f"Bearer {token.token}"},
+        )
+
+        self.assertEqual(200, response.status_code)
+        self.assertTrue(Chunk.objects.filter(checksum=checksum).exists())
+
+    def test_user_and_project_bound_token_needs_project_admin_for_chunk_upload(self):
+        token = AuthToken.objects.create(
+            is_user_bound=True,
+            user=self.user,
+            is_project_bound=True,
+            project=self.project,
+            debug_files_upload=True,
+        )
+        headers = {"Authorization": f"Bearer {token.token}"}
+
+        denied_response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers=headers)
+        membership = ProjectMembership.objects.get(project=self.project, user=self.user)
+        membership.role = ProjectRole.ADMIN
+        membership.save(update_fields=["role"])
+        allowed_response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers=headers)
+
+        self.assertEqual(403, denied_response.status_code)
+        self.assertEqual(200, allowed_response.status_code)
+
     def test_project_bound_token_can_assemble_only_for_its_project(self):
         other_project = Project.objects.create(name="Other project")
         token = AuthToken.objects.create(
@@ -189,6 +228,49 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(200, response.status_code)
         delay.assert_called_once_with(checksum, [checksum], [self.project.id, other_project.id])
 
+    def test_user_bound_token_must_administer_every_artifact_project(self):
+        other_project = Project.objects.create(name="Other project")
+        membership = ProjectMembership.objects.get(project=self.project, user=self.user)
+        membership.role = ProjectRole.ADMIN
+        membership.save(update_fields=["role"])
+        token = AuthToken.objects.create(
+            is_user_bound=True,
+            user=self.user,
+            debug_files_upload=True,
+        )
+        headers = {"Authorization": f"Bearer {token.token}"}
+        checksum = "a" * 40
+        Chunk.objects.create(checksum=checksum, size=0, data=b"")
+
+        with patch("files.views.assemble_artifact_bundle.delay") as delay:
+            own_response = self.client.post(
+                "/api/0/organizations/anyorg/artifactbundle/assemble/",
+                json.dumps({"checksum": checksum, "chunks": [checksum], "projects": [self.project.slug]}),
+                content_type="application/json",
+                headers=headers,
+            )
+            delay.assert_called_once_with(checksum, [checksum], [self.project.id])
+            delay.reset_mock()
+
+            mixed_response = self.client.post(
+                "/api/0/organizations/anyorg/artifactbundle/assemble/",
+                json.dumps({
+                    "checksum": checksum,
+                    "chunks": [checksum],
+                    "projects": [self.project.slug, other_project.slug],
+                }),
+                content_type="application/json",
+                headers=headers,
+            )
+
+        self.assertEqual(200, own_response.status_code)
+        self.assertEqual(403, mixed_response.status_code)
+        self.assertEqual(
+            {"error": "This token is not allowed to access this project."},
+            mixed_response.json(),
+        )
+        delay.assert_not_called()
+
     def test_difs_assemble_rejects_an_existing_foreign_project(self):
         other_project = Project.objects.create(name="Other project")
         token = AuthToken.objects.create(
@@ -218,6 +300,25 @@ class FilesTests(TransactionTestCase):
         )
         self.assertEqual(404, unknown_response.status_code)
         self.assertEqual({"detail": "Project not found: missing-project"}, unknown_response.json())
+
+    def test_user_bound_token_needs_project_admin_for_difs_assemble(self):
+        token = AuthToken.objects.create(
+            is_user_bound=True,
+            user=self.user,
+            debug_files_upload=True,
+        )
+        headers = {"Authorization": f"Bearer {token.token}"}
+        url = f"/api/0/projects/anyorg/{self.project.slug}/files/difs/assemble/"
+
+        with bugsink_override_settings(FEATURE_MINIDUMPS=True):
+            denied_response = self.client.post(url, "{}", content_type="application/json", headers=headers)
+            membership = ProjectMembership.objects.get(project=self.project, user=self.user)
+            membership.role = ProjectRole.ADMIN
+            membership.save(update_fields=["role"])
+            allowed_response = self.client.post(url, "{}", content_type="application/json", headers=headers)
+
+        self.assertEqual(403, denied_response.status_code)
+        self.assertEqual(200, allowed_response.status_code)
 
     def test_chunk_upload_settings_use_real_limits(self):
         with bugsink_override_settings(MAX_FILE_SIZE=1234):

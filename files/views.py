@@ -14,7 +14,7 @@ from sentry.assemble import ChunkFileState
 
 from bugsink.app_settings import get_settings
 from bugsink.api_capabilities import required_capability
-from bugsink.api_authorization import enforce_project_boundness
+from bugsink.api_authorization import enforce_project_boundness, enforce_user_boundness_for_project
 from bugsink.authentication import get_token_for_authentication
 from bugsink.transaction import durable_atomic, immediate_atomic
 from bugsink.streams import handle_request_content_encoding, copy_stream_limited, MaxLengthExceeded
@@ -143,6 +143,7 @@ def requires_auth_token(capability, methods):
                 return JsonResponse(
                     {"error": "This token does not have the required capability: %s." % capability}, status=403)
 
+            # Resource-specific user-bound checks are the responsibility of the view, which receives the token here.
             request.auth_token = token
             try:
                 return view_function(request, *args, **kwargs)
@@ -180,6 +181,12 @@ def chunk_upload(request, organization_slug):
     # Bugsink has a single-organization model; we simply ignore organization_slug
     # Chunks are projectless until assembly, so project boundness is enforced only when a project is supplied there.
     # NOTE: we don't check against chunkSize, maxRequestSize and chunksPerRequest (yet), we expect the CLI to behave.
+    if request.auth_token.is_user_bound and request.auth_token.is_project_bound:
+        enforce_user_boundness_for_project(
+            request.auth_token,
+            "debug-files:upload",
+            request.auth_token.project,
+        )
 
     if request.method == "GET":
         # a GET at this endpoint returns a dict of settings that the CLI takes into account when uploading
@@ -261,6 +268,7 @@ def artifact_bundle_assemble(request, organization_slug):
 
     for project in projects:
         enforce_project_boundness(request.auth_token, project)
+        enforce_user_boundness_for_project(request.auth_token, "debug-files:upload", project)
 
     # sentry-cli >= 3.x calls this endpoint before uploading chunks (to learn which ones are missing), then uploads
     # only the missing chunks, and then polls this endpoint again. We must return the actual missing chunks; returning
@@ -289,6 +297,7 @@ def difs_assemble(request, organization_slug, project_slug):
     if project is None:
         return JsonResponse({"detail": "Project not found: %s" % project_slug}, status=404)
     enforce_project_boundness(request.auth_token, project)
+    enforce_user_boundness_for_project(request.auth_token, "debug-files:upload", project)
 
     # TODO move to tasks.something.delay
     # TODO think about the right transaction around this
