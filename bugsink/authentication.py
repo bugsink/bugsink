@@ -1,3 +1,4 @@
+from django.contrib.auth.backends import RemoteUserBackend
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -6,6 +7,11 @@ from rest_framework import exceptions
 from drf_spectacular.extensions import OpenApiAuthenticationExtension
 
 from bsmain.models import AuthToken
+
+
+class EmailRemoteUserBackend(RemoteUserBackend):
+    # No auto-create: the header must match an existing user's username (== email, see users/forms.py).
+    create_unknown_user = False
 
 
 def get_token_for_authentication(raw_token):
