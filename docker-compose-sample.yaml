@@ -35,6 +35,9 @@ services:
       # USE_X_REAL_IP: "false"
       # USE_X_FORWARDED_FOR: "true"
       # X_FORWARDED_FOR_PROXY_COUNT: "1"
+      # Trust a header set by your reverse proxy (Cloudflare Access, Authelia, ...) as the logged-in user's email.
+      # SECURITY: only if Bugsink is unreachable except via that proxy, and the proxy overwrites the header itself.
+      # REMOTE_USER_HEADER: "HTTP_CF_ACCESS_AUTHENTICATED_USER_EMAIL"
       BASE_URL: "http://localhost:8000"
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import requests; requests.get(\"http://localhost:8000/health/ready\").raise_for_status()'"]

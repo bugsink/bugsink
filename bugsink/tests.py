@@ -5,6 +5,7 @@ import brotli
 
 from unittest import TestCase as RegularTestCase
 from unittest.mock import patch
+from django.conf import settings
 from django.test import TestCase as DjangoTestCase
 from django.test import SimpleTestCase
 from django.test import override_settings
@@ -13,6 +14,7 @@ from django.core import mail
 from django.contrib.auth import get_user_model
 from django.test.utils import CaptureQueriesContext
 from django.db import connection
+from django.urls import reverse
 from .wsgi import allowed_hosts_error_message
 
 from .test_utils import TransactionTestCase25251 as TransactionTestCase
@@ -447,6 +449,66 @@ class SetRemoteAddrMiddlewareTestCase(RegularTestCase):
 
         with self.assertRaises(SuspiciousOperation):
             SetRemoteAddrMiddleware.parse_x_forwarded_for("123.123.123.123,1.2.3.4")
+
+
+class EmailRemoteUserBackendTestCase(DjangoTestCase):
+
+    def test_known_user_authenticates(self):
+        from .authentication import EmailRemoteUserBackend
+
+        user = User.objects.create_user(username="proxy@example.com", email="proxy@example.com")
+
+        authenticated = EmailRemoteUserBackend().authenticate(request=None, remote_user="proxy@example.com")
+        self.assertEqual(user, authenticated)
+
+    def test_unknown_user_is_not_created(self):
+        from .authentication import EmailRemoteUserBackend
+
+        user_count = User.objects.count()
+
+        authenticated = EmailRemoteUserBackend().authenticate(request=None, remote_user="unknown@example.com")
+
+        self.assertIsNone(authenticated)
+        self.assertEqual(user_count, User.objects.count())
+
+
+class ConfigurableRemoteUserMiddlewareTestCase(TransactionTestCase):
+    # TransactionTestCase: the home view uses phonehome's durable_atomic, which can't nest in TestCase's transaction.
+
+    def _enabled_settings(self):
+        from .settings.default import wire_remote_user_auth
+
+        middleware = list(settings.MIDDLEWARE)
+        authentication_backends = ["django.contrib.auth.backends.ModelBackend"]
+        wire_remote_user_auth(authentication_backends, middleware)
+
+        return {
+            "REMOTE_USER_HEADER": "HTTP_X_REMOTE_EMAIL",
+            "MIDDLEWARE": middleware,
+            "AUTHENTICATION_BACKENDS": authentication_backends,
+        }
+
+    def test_header_present_matching_user_is_logged_in(self):
+        user = User.objects.create_user(username="proxy@example.com", email="proxy@example.com")
+
+        with override_settings(**self._enabled_settings()):
+            self.client.get("/", headers={"X-Remote-Email": "proxy@example.com"})
+
+        self.assertEqual(str(user.pk), self.client.session["_auth_user_id"])
+
+    def test_header_present_unknown_user_falls_back_to_login(self):
+        with override_settings(**self._enabled_settings()):
+            self.client.get("/", headers={"X-Remote-Email": "unknown@example.com"})
+            login_response = self.client.get(reverse("login"))
+
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertEqual(200, login_response.status_code)
+
+    def test_header_absent_is_unaffected(self):
+        with override_settings(**self._enabled_settings()):
+            self.client.get("/")
+
+        self.assertNotIn("_auth_user_id", self.client.session)
 
 
 class ContentEncodingCheckMiddlewareTestCase(DjangoTestCase):

@@ -23,6 +23,10 @@ USE_X_REAL_IP = True
 # USE_X_FORWARDED_FOR = True
 # X_FORWARDED_FOR_PROXY_COUNT = 1
 
+# Trust a header set by your reverse proxy (Cloudflare Access, Authelia, ...) as the logged-in user's email.
+# SECURITY: only if Bugsink is unreachable except via that proxy, and the proxy overwrites the header itself.
+# REMOTE_USER_HEADER = "HTTP_CF_ACCESS_AUTHENTICATED_USER_EMAIL"
+
 
 # In the singleserver production setup, the database is SQLite. The single (unix) user is named `bugsink` and we put
 # the database in its home directory:
