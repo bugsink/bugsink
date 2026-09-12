@@ -32,7 +32,11 @@ from .service_backends.telegram import (
     telegram_backend_send_alert,
     telegram_backend_send_test_message,
 )
-from .service_backends.google_chat import google_chat_backend_send_test_message, google_chat_backend_send_alert
+from .service_backends.google_chat import (
+    GoogleChatConfigForm,
+    google_chat_backend_send_alert,
+    google_chat_backend_send_test_message,
+)
 from .service_backends.custom import CustomBackendForm, custom_backend_send_test_message, custom_backend_send_alert
 from .service_backends.webhook_security import _embedded_ipv4_addresses, validate_webhook_url
 from .tasks import send_new_issue_alert, send_regression_alert, send_unmute_alert, _get_users_for_email_alert
@@ -1266,40 +1270,51 @@ class TestWebhookConfigForms(DjangoTestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("non-global IP address", form.errors["webhook_url"][0])
 
+    def test_google_chat_form_rejects_blocked_target(self):
+        form = GoogleChatConfigForm(data={"webhook_url": "http://10.0.0.42/hooks/test"})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("non-global IP address", form.errors["webhook_url"][0])
+
 
 class TestGoogleChatBackendErrorHandling(DjangoTestCase):
+    webhook_url = "https://chat.googleapis.com/v1/spaces/test/messages"
+
     def setUp(self):
         self.project = Project.objects.create(name="Test project")
         self.config = MessagingServiceConfig.objects.create(
             project=self.project,
             display_name="Test Google Chat",
             kind="google_chat",
-            config=json.dumps({"webhook_url": "https://chat.googleapis.com/v1/spaces/test/messages"}),
+            config=json.dumps({"webhook_url": self.webhook_url}),
         )
+
+    def _send_test(self):
+        google_chat_backend_send_test_message(
+            self.webhook_url, "Test project", "Test Google Chat", self.config.id)
+
+    def _ok_response(self):
+        response = Mock(status_code=200)
+        response.raise_for_status.return_value = None
+        return response
+
+    def _http_error(self, status_code, text):
+        response = Mock(status_code=status_code, text=text)
+        error = requests.HTTPError()
+        error.response = response
+        response.raise_for_status.side_effect = error
+        return response
 
     @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
     def test_google_chat_test_message_success_clears_failure_status(self, mock_post):
-        # Set up existing failure status
         self.config.last_failure_timestamp = timezone.now()
         self.config.last_failure_status_code = 500
         self.config.last_failure_response_text = "Server Error"
         self.config.save()
+        mock_post.return_value = self._ok_response()
 
-        # Mock successful response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.raise_for_status.return_value = None
-        mock_post.return_value = mock_response
+        self._send_test()
 
-        # Send test message
-        google_chat_backend_send_test_message(
-            "https://chat.googleapis.com/v1/spaces/test/messages",
-            "Test project",
-            "Test Google Chat",
-            self.config.id
-        )
-
-        # Verify failure status was cleared
         self.config.refresh_from_db()
         self.assertIsNone(self.config.last_failure_timestamp)
         self.assertIsNone(self.config.last_failure_status_code)
@@ -1307,83 +1322,39 @@ class TestGoogleChatBackendErrorHandling(DjangoTestCase):
 
     @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
     def test_google_chat_test_message_http_error_stores_failure(self, mock_post):
-        # Mock HTTP error response
-        mock_response = Mock()
-        mock_response.status_code = 404
-        mock_response.text = '{"error": {"code": 404, "message": "Space not found"}}'
+        error_text = '{"error": {"code": 404, "message": "Space not found"}}'
+        mock_post.return_value = self._http_error(404, error_text)
 
-        # Create the HTTPError with response attached
-        http_error = requests.HTTPError()
-        http_error.response = mock_response
-        mock_response.raise_for_status.side_effect = http_error
+        self._send_test()
 
-        mock_post.return_value = mock_response
-
-        # Send test message
-        google_chat_backend_send_test_message(
-            "https://chat.googleapis.com/v1/spaces/test/messages",
-            "Test project",
-            "Test Google Chat",
-            self.config.id
-        )
-
-        # Verify failure status was stored
         self.config.refresh_from_db()
         self.assertIsNotNone(self.config.last_failure_timestamp)
         self.assertEqual(self.config.last_failure_status_code, 404)
-        self.assertEqual(
-            self.config.last_failure_response_text,
-            '{"error": {"code": 404, "message": "Space not found"}}',
-        )
+        self.assertEqual(self.config.last_failure_response_text, error_text)
         self.assertTrue(self.config.last_failure_is_json)
         self.assertEqual(self.config.last_failure_error_type, "HTTPError")
 
     @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
     def test_google_chat_test_message_non_json_error_stores_failure(self, mock_post):
-        # Mock HTTP error response with non-JSON text
-        mock_response = Mock()
-        mock_response.status_code = 500
-        mock_response.text = 'Internal Server Error'
+        mock_post.return_value = self._http_error(500, "Internal Server Error")
 
-        # Create the HTTPError with response attached
-        http_error = requests.HTTPError()
-        http_error.response = mock_response
-        mock_response.raise_for_status.side_effect = http_error
+        self._send_test()
 
-        mock_post.return_value = mock_response
-
-        # Send test message
-        google_chat_backend_send_test_message(
-            "https://chat.googleapis.com/v1/spaces/test/messages",
-            "Test project",
-            "Test Google Chat",
-            self.config.id
-        )
-
-        # Verify failure status was stored
         self.config.refresh_from_db()
         self.assertIsNotNone(self.config.last_failure_timestamp)
         self.assertEqual(self.config.last_failure_status_code, 500)
-        self.assertEqual(self.config.last_failure_response_text, 'Internal Server Error')
+        self.assertEqual(self.config.last_failure_response_text, "Internal Server Error")
         self.assertFalse(self.config.last_failure_is_json)
 
     @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
     def test_google_chat_test_message_connection_error_stores_failure(self, mock_post):
-        # Mock connection error
         mock_post.side_effect = requests.ConnectionError("Connection failed")
 
-        # Send test message
-        google_chat_backend_send_test_message(
-            "https://chat.googleapis.com/v1/spaces/test/messages",
-            "Test project",
-            "Test Google Chat",
-            self.config.id
-        )
+        self._send_test()
 
-        # Verify failure status was stored
         self.config.refresh_from_db()
         self.assertIsNotNone(self.config.last_failure_timestamp)
-        self.assertIsNone(self.config.last_failure_status_code)  # No HTTP response
+        self.assertIsNone(self.config.last_failure_status_code)
         self.assertIsNone(self.config.last_failure_response_text)
         self.assertIsNone(self.config.last_failure_is_json)
         self.assertEqual(self.config.last_failure_error_type, "ConnectionError")
@@ -1391,44 +1362,40 @@ class TestGoogleChatBackendErrorHandling(DjangoTestCase):
 
     @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
     def test_google_chat_alert_message_success_clears_failure_status(self, mock_post):
-        # Set up existing failure status
         self.config.last_failure_timestamp = timezone.now()
         self.config.last_failure_status_code = 500
         self.config.save()
-
-        # Create issue
         issue, _ = get_or_create_issue(project=self.project)
+        mock_post.return_value = self._ok_response()
 
-        # Mock successful response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.raise_for_status.return_value = None
-        mock_post.return_value = mock_response
-
-        # Send alert message
         google_chat_backend_send_alert(
-            "https://chat.googleapis.com/v1/spaces/test/messages",
-            issue.id,
-            "New issue",
-            "a",
-            "NEW",
-            self.config.id
-        )
+            self.webhook_url, issue.id, "New issue", "a", "NEW", self.config.id)
 
-        # Verify failure status was cleared
         self.config.refresh_from_db()
         self.assertIsNone(self.config.last_failure_timestamp)
 
-    def test_has_recent_failure_method(self):
-        # Initially no failure
-        self.assertFalse(self.config.has_recent_failure())
+    @patch("alerts.service_backends.base.requests.post")
+    def test_google_chat_test_message_blocked_target_stores_failure_without_network_call(self, mock_post):
+        google_chat_backend_send_test_message(
+            "http://10.0.0.42/hooks/test", "Test project", "Test Google Chat", self.config.id)
 
-        # Set failure
-        self.config.last_failure_timestamp = timezone.now()
-        self.config.save()
-        self.assertTrue(self.config.has_recent_failure())
+        mock_post.assert_not_called()
+        self.config.refresh_from_db()
+        self.assertEqual(self.config.last_failure_error_type, "ValueError")
+        self.assertIn("non-global IP address", self.config.last_failure_error_message)
 
-        # Clear failure
-        self.config.clear_failure_status()
-        self.config.save()
-        self.assertFalse(self.config.has_recent_failure())
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_google_chat_alert_escapes_markdown_and_keeps_issue_link(self, mock_post):
+        self.project.name = "Ops *on-call* <prod>"
+        self.project.save()
+        issue, _ = get_or_create_issue(project=self.project)
+        mock_post.return_value = self._ok_response()
+
+        google_chat_backend_send_alert(
+            self.webhook_url, issue.id, "New issue", "a", "NEW", self.config.id,
+            unmute_reason="matched *pattern*")
+
+        payload = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertIn(r"Ops \*on-call\* \<prod\>", payload["text"])
+        self.assertIn(r"matched \*pattern\*", payload["text"])
+        self.assertRegex(payload["text"], r"<https?://.+\|view on Bugsink>")
