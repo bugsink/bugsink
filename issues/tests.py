@@ -441,6 +441,7 @@ class ViewTests(TransactionTestCase):
     def test_issue_list_view(self):
         response = self.client.get(f"/issues/{self.project.id}/")
         self.assertContains(response, self.issue.title())
+        self.assertContains(response, self.issue.friendly_id())
 
     def test_issue_list_sorting(self):
         other_issue, _ = get_or_create_issue(
