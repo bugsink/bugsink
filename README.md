@@ -32,4 +32,6 @@ Now, you can [set up your first project](https://www.bugsink.com/docs/quickstart
 
 [Detailed installation instructions](https://www.bugsink.com/docs/installation/) are on the Bugsink website.
 
+You can also deploy Bugsink with one click using the official [Easypanel](https://easypanel.io/) template: https://easypanel.io/templates/bugsink
+
 [More information and documentation](https://www.bugsink.com/)
