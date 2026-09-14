@@ -1,6 +1,13 @@
 # Changes
 
-## 2.5.1 (31 August 2026)
+## Unreleased
+
+### Monitoring
+
+A Prometheus scrape endpoint is now available (`/metrics`). It is disabled by default; enable it with
+`BUGSINK["PROMETHEUS_ENABLED"] = True`. It uses `django-prometheus`: its middleware records http-request, response and
+template metrics, and its model instrumentation records insert/update/delete counters. Note that no database-query
+metrics are exported: doing so would require swapping Bugsink's custom SQLite backend, which we don't want to do.
 
 ### Backwards incompatible changes
 
