@@ -1,13 +1,22 @@
+from contextlib import redirect_stdout
+from datetime import timedelta
+from io import StringIO
+
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.core.checks import run_checks
+from django.core.management import call_command
 from django.db.migrations.loader import MigrationLoader
 from django.db.migrations.operations.base import OperationCategory
 from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
+from bugsink.api_capabilities import CAPABILITIES
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
+from projects.models import Project, ProjectVisibility
 
+from .forms import AuthTokenForm
 from .models import AuthToken
 
 User = get_user_model()
@@ -101,30 +110,68 @@ class SystemChecksTestCase(SimpleTestCase):
         self.assertEqual([], self._warnings())
 
 
-class AuthTokenDescriptionUpdateTestCase(TransactionTestCase):
-    """Editing one token's description must not touch any other token (regression test)."""
-
+class AuthTokenFormTestCase(TransactionTestCase):
     def setUp(self):
         super().setUp()
-        self.client.force_login(
-            User.objects.create_superuser(username="admin", password="admin", email="admin@example.org"))
+        self.user = User.objects.create_user(username="user", password="user", email="user@example.org")
+        self.superuser = User.objects.create_superuser(
+            username="admin", password="admin", email="admin@example.org")
 
-    def test_update_description_targets_only_the_clicked_token(self):
-        token_1 = AuthToken.objects.create(description="first")
-        token_2 = AuthToken.objects.create(description="second")
+    def test_normal_user_can_only_choose_projects_from_the_project_list(self):
+        visible_project = Project.objects.create(name="Visible", visibility=ProjectVisibility.DISCOVERABLE)
+        hidden_project = Project.objects.create(name="Hidden", visibility=ProjectVisibility.TEAM_MEMBERS)
 
-        # A single <form> wraps all rows, so the browser posts every row's description input.
-        response = self.client.post(reverse("auth_token_list"), {
-            "action": f"update_description:{token_1.pk}",
-            f"description-{token_1.pk}": "updated first",
-            f"description-{token_2.pk}": "second",
-        })
-        self.assertEqual(302, response.status_code)
+        form = AuthTokenForm(user=self.user)
 
-        token_1.refresh_from_db()
-        token_2.refresh_from_db()
-        self.assertEqual("updated first", token_1.description)
-        self.assertEqual("second", token_2.description)
+        self.assertTrue(form.fields["is_user_bound"].disabled)
+        self.assertTrue(form.fields["is_user_bound"].initial)
+        self.assertEqual("All my projects", form.fields["project"].empty_label)
+        self.assertEqual([visible_project], list(form.fields["project"].queryset))
+
+        tampered_form = AuthTokenForm({
+            "description": "Hidden project token",
+            "project": hidden_project.pk,
+            "issues_read": True,
+        }, user=self.user)
+        self.assertFalse(tampered_form.is_valid())
+        self.assertIn("Select a valid choice", tampered_form.errors["project"][0])
+
+    def test_token_requires_a_capability(self):
+        form = AuthTokenForm({"description": "Powerless token"}, user=self.superuser)
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(["Select at least one capability."], form.non_field_errors())
+
+    def test_project_token_cannot_manage_projects_or_teams(self):
+        project = Project.objects.create(name="One project")
+        form = AuthTokenForm({
+            "description": "Bad project token",
+            "project": project.pk,
+            "projects_read": True,
+        }, user=self.superuser)
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("Project-bound tokens cannot have capabilities: projects:read.", form.errors["project"])
+
+    def test_personal_tokens_are_tied_to_the_requesting_user(self):
+        normal_user_form = AuthTokenForm({
+            "description": "My token",
+            "issues_read": True,
+        }, user=self.user)
+        superuser_form = AuthTokenForm({
+            "description": "My admin token",
+            "is_user_bound": True,
+            "issues_read": True,
+        }, user=self.superuser)
+
+        self.assertTrue(normal_user_form.is_valid(), normal_user_form.errors)
+        self.assertTrue(superuser_form.is_valid(), superuser_form.errors)
+        normal_user_token = normal_user_form.save()
+        superuser_token = superuser_form.save()
+        self.assertEqual(self.user, normal_user_token.user)
+        self.assertTrue(normal_user_token.is_user_bound)
+        self.assertEqual(self.superuser, superuser_token.user)
+        self.assertTrue(superuser_token.is_user_bound)
 
 
 class AuthTokenListTestCase(TransactionTestCase):
@@ -146,3 +193,74 @@ class AuthTokenListTestCase(TransactionTestCase):
         self.assertContains(response, f'id="token-hidden-{token_2.pk}"')
         self.assertContains(response, f'id="token-revealed-{token_2.pk}" class="hidden font-mono"')
         self.assertContains(response, f'id="token-toggle-{token_2.pk}"')
+
+    def test_superuser_can_create_an_installation_service_token(self):
+        response = self.client.post(reverse("auth_token_create"), {
+            "description": "Deployment token",
+            "issues_read": True,
+        })
+
+        self.assertEqual(302, response.status_code)
+        token = AuthToken.objects.get()
+        self.assertFalse(token.is_user_bound)
+        self.assertFalse(token.is_project_bound)
+        self.assertEqual({"issues:read"}, token.capabilities)
+
+    def test_normal_user_lists_and_revokes_only_their_own_tokens(self):
+        user = User.objects.create_user(username="other-user", password="user")
+        another_user = User.objects.create_user(username="another-user", password="user")
+        own_token = AuthToken.objects.create(
+            description="Own token", is_user_bound=True, user=user, issues_read=True)
+        other_token = AuthToken.objects.create(
+            description="Other token", is_user_bound=True, user=another_user, issues_read=True)
+        service_token = AuthToken.objects.create(description="Service token", issues_read=True)
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("auth_token_list"))
+
+        self.assertContains(response, "Own token")
+        self.assertNotContains(response, "Other token")
+        self.assertNotContains(response, "Service token")
+
+        response = self.client.post(reverse("auth_token_list"), {"action": f"revoke:{other_token.pk}"})
+
+        self.assertEqual(404, response.status_code)
+        response = self.client.post(reverse("auth_token_list"), {"action": f"revoke:{own_token.pk}"})
+        self.assertEqual(302, response.status_code)
+        own_token.refresh_from_db()
+        other_token.refresh_from_db()
+        service_token.refresh_from_db()
+        self.assertLessEqual(own_token.expires_at, timezone.now())
+        self.assertIsNone(other_token.expires_at)
+        self.assertIsNone(service_token.expires_at)
+
+    def test_revoke_expires_the_token_now_and_hides_it_from_the_list(self):
+        token = AuthToken.objects.create(
+            description="Deploy token",
+            expires_at=timezone.now() + timedelta(days=30),
+        )
+
+        response = self.client.get(reverse("auth_token_list"))
+        self.assertContains(response, "Deploy token")
+
+        response = self.client.post(reverse("auth_token_list"), {"action": f"revoke:{token.pk}"})
+
+        self.assertEqual(302, response.status_code)
+        token.refresh_from_db()
+        self.assertLessEqual(token.expires_at, timezone.now())
+        response = self.client.get(reverse("auth_token_list"))
+        self.assertNotContains(response, "Deploy token")
+        self.assertNotContains(response, f'id="token-hidden-{token.pk}"')
+
+
+class CreateAuthTokenCommandTests(TransactionTestCase):
+    def test_command_creates_a_full_access_installation_service_token(self):
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            call_command("create_auth_token")
+
+        token = AuthToken.objects.get()
+        self.assertEqual(token.token, stdout.getvalue().strip())
+        self.assertFalse(token.is_user_bound)
+        self.assertFalse(token.is_project_bound)
+        self.assertEqual(set(CAPABILITIES), token.capabilities)

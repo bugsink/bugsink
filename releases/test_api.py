@@ -1,18 +1,21 @@
+from django.contrib.auth import get_user_model
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from bsmain.models import AuthToken
-from projects.models import Project
+from issues.factories import get_or_create_issue
+from projects.models import Project, ProjectMembership, ProjectRole
 from releases.models import Release
 from releases.api_views import ReleaseViewSet
+from teams.models import Team, TeamMembership, TeamRole
 
 
 class ReleaseApiTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
-        token = AuthToken.objects.create()
+        token = AuthToken.objects.create(releases_read=True, releases_create=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
         self.project = Project.objects.create(name="RelProj")
 
@@ -80,11 +83,87 @@ class ReleaseApiTests(TransactionTestCase):
         self.assertEqual(patch_response.status_code, 405)
         self.assertEqual(delete_response.status_code, 405)
 
+    def test_project_bound_token_cannot_read_or_create_releases_in_another_project(self):
+        own_release = Release.objects.create(project=self.project, version="own")
+        other_project = Project.objects.create(name="Other release project")
+        other_release = Release.objects.create(project=other_project, version="other")
+        token = AuthToken.objects.create(
+            is_project_bound=True,
+            project=self.project,
+            releases_read=True,
+            releases_create=True,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        own_detail = self.client.get(reverse("api:release-detail", args=[own_release.id]))
+        foreign_list = self.client.get(reverse("api:release-list"), {"project": other_project.id})
+        foreign_detail = self.client.get(reverse("api:release-detail", args=[other_release.id]))
+        foreign_create = self.client.post(
+            reverse("api:release-list"),
+            {"project": other_project.id, "version": "forbidden"},
+            format="json",
+        )
+
+        self.assertEqual(200, own_detail.status_code)
+        self.assertEqual(403, foreign_list.status_code)
+        self.assertEqual(403, foreign_detail.status_code)
+        self.assertEqual(403, foreign_create.status_code)
+        self.assertFalse(Release.objects.filter(project=other_project, version="forbidden").exists())
+
+    def test_personal_project_admin_can_create_a_release(self):
+        user = get_user_model().objects.create_user(username="release-project-admin")
+        ProjectMembership.objects.create(
+            project=self.project,
+            user=user,
+            role=ProjectRole.ADMIN,
+            accepted=True,
+        )
+        token = AuthToken.objects.create(is_user_bound=True, user=user, releases_create=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        response = self._create("project-admin-release")
+
+        self.assertEqual(201, response.status_code)
+
+    def test_personal_team_admin_can_create_a_release_without_project_membership(self):
+        team = Team.objects.create(name="Release team")
+        project = Project.objects.create(name="Team project", team=team)
+        user = get_user_model().objects.create_user(username="release-team-admin")
+        TeamMembership.objects.create(team=team, user=user, role=TeamRole.ADMIN, accepted=True)
+        token = AuthToken.objects.create(is_user_bound=True, user=user, releases_create=True, issues_read=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        release_response = self.client.post(
+            reverse("api:release-list"),
+            {"project": project.id, "version": "team-admin-release"},
+            format="json",
+        )
+        issue, _ = get_or_create_issue(project)
+        issue_response = self.client.get(reverse("api:issue-detail", args=[issue.id]))
+
+        self.assertEqual(201, release_response.status_code)
+        self.assertEqual(403, issue_response.status_code)
+
+    def test_personal_project_member_cannot_create_a_release(self):
+        user = get_user_model().objects.create_user(username="release-project-member")
+        ProjectMembership.objects.create(project=self.project, user=user, role=ProjectRole.MEMBER, accepted=True)
+        token = AuthToken.objects.create(is_user_bound=True, user=user, releases_create=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        response = self._create("member-release")
+
+        self.assertEqual(403, response.status_code)
+        self.assertEqual(
+            "The user bound to this token does not administer this project.",
+            response.json()["detail"],
+        )
+        self.assertFalse(Release.objects.filter(project=self.project, version="member-release").exists())
+
 
 class ReleasePaginationTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
-        token = AuthToken.objects.create()
+        token = AuthToken.objects.create(releases_read=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
         self.old_size = ReleaseViewSet.pagination_class.page_size
         ReleaseViewSet.pagination_class.page_size = 2

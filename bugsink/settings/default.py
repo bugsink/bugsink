@@ -78,7 +78,8 @@ REST_FRAMEWORK = {
         "bugsink.authentication.BearerTokenAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
-        "bugsink.permissions.IsGlobalAuthenticated",
+        "bugsink.permissions.IsAuthTokenAuthenticated",
+        "bugsink.permissions.HasRequiredCapability",
     ],
 
     "DEFAULT_RENDERER_CLASSES": [
@@ -106,6 +107,7 @@ SPECTACULAR_SETTINGS = {
     "POSTPROCESSING_HOOKS": [
         "drf_spectacular.hooks.postprocess_schema_enums",
         "bugsink.api_schema.add_sentry_compatible_api",
+        "bugsink.api_schema.add_capability_documentation",
     ],
 }
 

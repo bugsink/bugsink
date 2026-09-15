@@ -1,3 +1,6 @@
+from bugsink.api_capabilities import CAPABILITIES, REQUIRED_CAPABILITY_EXTENSION, get_required_capability
+
+
 SENTRY_ENVELOPE_DOCS_URL = "https://develop.sentry.dev/sdk/envelopes/#data-model"
 BUGSINK_SOURCEMAPS_DOCS_URL = "https://www.bugsink.com/docs/sourcemaps/"
 
@@ -63,6 +66,13 @@ def _bearer_security():
     return [{"BearerAuth": []}]
 
 
+def _capability_extension(view):
+    capability = get_required_capability(view)
+    if capability is None:
+        raise ValueError("Bearer API operation is missing its required capability annotation.")
+    return {REQUIRED_CAPABILITY_EXTENSION: capability}
+
+
 def _json_request(schema, description=None, content_type="application/json"):
     result = {
         "required": True,
@@ -110,6 +120,8 @@ def _organization_parameter():
 
 
 def _compatibility_paths():
+    from files.views import api_root, artifact_bundle_assemble, chunk_upload, difs_assemble
+
     chunk_state_schema = _object_schema(
         properties={
             "state": {"type": "string"},
@@ -128,6 +140,7 @@ def _compatibility_paths():
                 "operationId": "sentry_compatible_api_root_retrieve",
                 "tags": ["Sentry-compatible API"],
                 "security": _bearer_security(),
+                **_capability_extension(api_root),
                 "summary": "Support sentry-cli login checks",
                 "description": (
                     "This endpoint exists because sentry-cli probes Sentry's API root during its login flow. "
@@ -165,6 +178,7 @@ def _compatibility_paths():
                 "operationId": "sentry_compatible_chunk_upload_settings_retrieve",
                 "tags": ["Sentry-compatible API"],
                 "security": _bearer_security(),
+                **_capability_extension(chunk_upload),
                 "summary": "Get sentry-cli chunk upload settings",
                 "description": (
                     "This endpoint exists for sentry-cli sourcemap upload support. "
@@ -211,6 +225,7 @@ def _compatibility_paths():
                 "operationId": "sentry_compatible_chunk_upload_create",
                 "tags": ["Sentry-compatible API"],
                 "security": _bearer_security(),
+                **_capability_extension(chunk_upload),
                 "summary": "Upload sentry-cli file chunks",
                 "description": (
                     "This endpoint exists for sentry-cli sourcemap upload support. "
@@ -238,6 +253,7 @@ def _compatibility_paths():
                 "operationId": "sentry_compatible_artifact_bundle_assemble_create",
                 "tags": ["Sentry-compatible API"],
                 "security": _bearer_security(),
+                **_capability_extension(artifact_bundle_assemble),
                 "summary": "Assemble a sentry-cli artifact bundle",
                 "description": (
                     "This endpoint exists for sentry-cli sourcemap upload support. "
@@ -271,6 +287,7 @@ def _compatibility_paths():
                 "operationId": "sentry_compatible_difs_assemble_create",
                 "tags": ["Sentry-compatible API"],
                 "security": _bearer_security(),
+                **_capability_extension(difs_assemble),
                 "summary": "Assemble sentry-cli debug information files",
                 "description": (
                     "This endpoint exists for Sentry native debug file upload compatibility through sentry-cli. "
@@ -464,4 +481,39 @@ def add_sentry_compatible_api(result, generator, **kwargs):
         "name": "sentry_key",
     })
 
+    return result
+
+
+def add_capability_documentation(result, generator, **kwargs):
+    """Adds the `x-bugsink-capabilities` extension to the OpenAPI schema, which documents the required capabilities for
+    each operation."""
+
+    catalog = {
+        name: {
+            "description": description,
+            "operations": [],
+        }
+        for name, description in CAPABILITIES.items()
+    }
+
+    for path, path_item in result.get("paths", {}).items():
+        for method, operation in path_item.items():
+            if not isinstance(operation, dict):
+                continue
+
+            capability = operation.get(REQUIRED_CAPABILITY_EXTENSION)
+            if capability is None:
+                continue
+
+            requirement = "Required capability: `%s`." % capability
+            description = operation.get("description")
+            operation["description"] = description + "\n\n" + requirement if description else requirement
+
+            catalog[capability]["operations"].append({
+                "method": method.upper(),
+                "path": path,
+                "operationId": operation["operationId"],
+            })
+
+    result["x-bugsink-capabilities"] = catalog
     return result

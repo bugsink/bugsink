@@ -38,9 +38,6 @@ elif os.getenv("DB", "sqlite") == "postgres":
     }
 
 elif os.getenv("DB", "sqlite") == "sqlite":
-    # In development, we just keep the databases inside the root directory of the source-code. In production this is
-    # "not recommended" (very foolish): this path maps to the virualenv's root directory, which is not a good place to
-    # store databases.
     DATABASES["default"]["NAME"] = BASE_DIR / 'db.sqlite3'
     DATABASES["default"]["TEST"]["NAME"] = BASE_DIR / 'test.sqlite3'
     DATABASES["default"]["OPTIONS"]["query_timeout"] = 0.11  # canary config: fail-fast in development.
@@ -55,6 +52,12 @@ else:
 
 # {  postponed, for starters we'll do something like SNAPPEA_ALWAYS_EAGER
 # DATABASES["snappea"]["TEST"]["NAME"] = BASE_DIR / 'test.snappea.sqlite3'
+
+if I_AM_RUNNING == "TEST":
+    # in test runs, we don't want to accidentally use a real database (e.g. if the test suite is run with a different
+    # environment variable than expected). So we override the database name to a non-existent path. This will cause any
+    # accidental usage of the database to fail fast.
+    DATABASES["default"]["NAME"] = "/this/path/does/not/exist/and/should/not/be/used.db"
 
 
 # {PROTOCOL}://{PUBLIC_KEY}:{DEPRECATED_SECRET_KEY}@{HOST}{PATH}/{PROJECT_ID}

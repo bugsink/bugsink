@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% load tailwind_forms %}
+{% load i18n %}
+
+{% block title %}{% translate "New Auth Token" %} · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+<div class="flex items-center justify-center">
+    <div class="m-4 max-w-4xl flex-auto">
+        <form action="." method="post">
+            {% csrf_token %}
+
+            <h1 class="text-4xl my-4 font-bold">{% translate "New Auth Token" %}</h1>
+
+            {% for error in form.non_field_errors %}
+                <div class="mb-4 text-red-500 dark:text-red-400">{{ error }}</div>
+            {% endfor %}
+
+            {% tailwind_formfield form.description %}
+
+            <div class="text-lg mb-6 md:mb-8">
+                <label class="flex items-center gap-3 font-bold text-slate-800 dark:text-slate-100">
+                    {{ form.is_user_bound }}
+                    {{ form.is_user_bound.label }}
+                </label>
+                {% for error in form.is_user_bound.errors %}
+                    <div class="text-red-500 dark:text-red-400 pt-1 px-2 text-sm">{{ error }}</div>
+                {% empty %}
+                    <div class="text-gray-500 dark:text-gray-400 pt-1 px-2 text-sm">
+                        {{ form.is_user_bound.help_text }}
+                    </div>
+                {% endfor %}
+            </div>
+
+            {% tailwind_formfield form.project %}
+
+            <fieldset class="mb-6 md:mb-8">
+                <legend class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">
+                    {% translate "Capabilities" %}
+                </legend>
+                {% for group in form.capability_groups %}
+                    <div class="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-4 border-t border-slate-200 dark:border-slate-700">
+                        <div class="pt-4 text-right">
+                            <code class="font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">{{ group.prefix }}:</code>
+                        </div>
+                        <div>
+                            {% for capability in group.capabilities %}
+                                <label for="{{ capability.field.id_for_label }}" class="flex items-start gap-3 py-3 border-b border-slate-200 dark:border-slate-700">
+                                    <span class="pt-1">{{ capability.field }}</span>
+                                    <span>
+                                        <code class="font-bold text-slate-800 dark:text-slate-100">{{ capability.name }}</code>
+                                        <span class="block text-gray-500 dark:text-gray-400 text-sm">{{ capability.field.help_text }}</span>
+                                        {% for error in capability.field.errors %}
+                                            <span class="block text-red-500 dark:text-red-400 text-sm">{{ error }}</span>
+                                        {% endfor %}
+                                    </span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </fieldset>
+
+            <button class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">
+                {% translate "Create token" %}
+            </button>
+            <a href="{% url "auth_token_list" %}" class="text-cyan-500 dark:text-cyan-300 font-bold ml-2">
+                {% translate "Cancel" %}
+            </a>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

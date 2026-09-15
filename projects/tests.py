@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from bugsink.app_settings import get_settings, override_settings as override_bugsink_settings
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.utils import get_model_topography
+from bsmain.models import AuthToken
 from projects.forms import ProjectForm
 from projects.models import Project, ProjectMembership, ProjectRole, ProjectVisibility
 from teams.models import Team, TeamMembership, TeamRole
@@ -213,6 +214,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
         Release.objects.create(project=self.project, version="1.0.0")
         file = File.objects.create(checksum="a" * 40, filename="test.js.map", size=0)
         FileMetadata.objects.create(project=self.project, file=file)
+        AuthToken.objects.create(is_project_bound=True, project=self.project)
 
         self.event.never_evict = True
         self.event.save()
@@ -236,6 +238,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
                   "projects.ProjectMembership",
                   "releases.Release",
                   "issues.Issue",
+                  "bsmain.AuthToken",
                   "projects.Project",
                   ]]
 
@@ -249,7 +252,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
         # correct for bugsink/transaction.py's select_for_update for non-sqlite databases
         correct_for_select_for_update = 1 if 'sqlite' not in settings.DATABASES['default']['ENGINE'] else 0
 
-        with self.assertNumQueries(33 + correct_for_select_for_update):
+        with self.assertNumQueries(35 + correct_for_select_for_update):
             self.project.delete_deferred()
 
         # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly
@@ -272,6 +275,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
             return results
 
         self.assertEqual(walk(orig, 'projects.Project'), [
+            (apps.get_model('bsmain', 'AuthToken'), 'project'),
             (apps.get_model('projects', 'ProjectMembership'), 'project'),
             (apps.get_model('releases', 'Release'), 'project'),
             (apps.get_model('issues', 'Issue'), 'project'),
@@ -324,6 +328,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
             (apps.get_model('projects', 'ProjectMembership'), 'project'),
             (apps.get_model('releases', 'Release'), 'project'),
             (apps.get_model('issues', 'Issue'), 'project'),
+            (apps.get_model('bsmain', 'AuthToken'), 'project'),
             (apps.get_model('files', 'FileMetadata'), 'project'),
         ])
 
@@ -452,6 +457,48 @@ class ProjectFormTestCase(TransactionTestCase):
         self.assertEqual(BUGSINK_GROUPING_V1, saved.grouping_mechanism)
         self.assertEqual(BUGSINK_GROUPING_V2, saved.previous_grouping_mechanism)
         self.assertEqual(second_changed_at, saved.grouping_mechanism_upgraded_at)
+
+
+class ProjectAccessTestCase(TransactionTestCase):
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(username="project-user", password="test")
+        self.superuser = User.objects.create_user(
+            username="project-superuser",
+            password="test",
+            is_superuser=True,
+        )
+        self.team = Team.objects.create(name="Project access team")
+
+    def test_project_creation_requires_a_team_admin_or_superuser(self):
+        self.client.force_login(self.user)
+        self.assertEqual(403, self.client.get(reverse("project_new")).status_code)
+
+        TeamMembership.objects.create(
+            team=self.team,
+            user=self.user,
+            role=TeamRole.ADMIN,
+            accepted=True,
+        )
+        self.assertEqual(200, self.client.get(reverse("project_new")).status_code)
+
+        self.client.force_login(self.superuser)
+        self.assertEqual(200, self.client.get(reverse("project_new")).status_code)
+
+    def test_only_superusers_see_projects_hidden_from_non_members(self):
+        project = Project.objects.create(
+            team=self.team,
+            name="Hidden project",
+            visibility=ProjectVisibility.TEAM_MEMBERS,
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("project_list_other"))
+        self.assertNotContains(response, project.name)
+
+        self.client.force_login(self.superuser)
+        response = self.client.get(reverse("project_list_other"))
+        self.assertContains(response, project.name)
 
 
 class ProjectListOpenIssueCountTestCase(TransactionTestCase):

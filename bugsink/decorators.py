@@ -3,7 +3,7 @@ from functools import wraps
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import PermissionDenied
 
-from projects.models import Project, user_has_issue_access
+from projects.models import Project, user_has_project_membership_access
 from issues.models import Issue
 from events.models import Event
 
@@ -25,7 +25,7 @@ def project_membership_required(function):
         kwargs["project"] = project
         if request.user.is_superuser:
             return function(request, *args, **kwargs)
-        if user_has_issue_access(request.user, project):
+        if user_has_project_membership_access(request.user, project):
             return function(request, *args, **kwargs)
 
         raise PermissionDenied("You don't have permission to access this project")
@@ -43,7 +43,7 @@ def issue_membership_required(function):
         kwargs["issue"] = issue
         if request.user.is_superuser:
             return function(request, *args, **kwargs)
-        if user_has_issue_access(request.user, issue.project):
+        if user_has_project_membership_access(request.user, issue.project):
             return function(request, *args, **kwargs)
 
         raise PermissionDenied("You don't have permission to access this project")
@@ -61,7 +61,7 @@ def event_membership_required(function):
         kwargs["event"] = event
         if request.user.is_superuser:
             return function(request, *args, **kwargs)
-        if user_has_issue_access(request.user, event.project):
+        if user_has_project_membership_access(request.user, event.project):
             return function(request, *args, **kwargs)
 
         raise PermissionDenied("You don't have permission to access this project")

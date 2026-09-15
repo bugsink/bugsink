@@ -1,17 +1,18 @@
+from django.contrib.auth import get_user_model
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
 from bugsink.app_settings import override_settings
 from bsmain.models import AuthToken
-from teams.models import Team
-from projects.models import Project
+from teams.models import Team, TeamMembership, TeamRole
+from projects.models import Project, ProjectMembership, ProjectRole, ProjectVisibility
 
 
 class ProjectApiTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
-        token = AuthToken.objects.create()
+        token = AuthToken.objects.create(projects_read=True, projects_manage=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
         self.team = Team.objects.create(name="Engineering")
 
@@ -117,10 +118,136 @@ class ProjectApiTests(TransactionTestCase):
         self.assertEqual(r.status_code, 400)
         self.assertIn("non_field_errors", r.json())
 
+    def test_patch_does_not_move_project_to_another_team(self):
+        project = Project.objects.create(team=self.team, name="Backend")
+        other_team = Team.objects.create(name="Operations")
+
+        r = self.client.patch(
+            reverse("api:project-detail", args=[project.id]),
+            {"team": str(other_team.id)},
+            format="json",
+        )
+
+        self.assertEqual(r.status_code, 200)
+        project.refresh_from_db()
+        self.assertEqual(project.team, self.team)
+
     def test_delete_not_allowed(self):
         p = Project.objects.create(team=self.team, name="Temp")
         r = self.client.delete(reverse("api:project-detail", args=[p.id]))
         self.assertEqual(r.status_code, 405)
+
+    def test_patch_list_not_allowed(self):
+        r = self.client.patch(reverse("api:project-list"), {"name": "No object"}, format="json")
+        self.assertEqual(r.status_code, 405)
+
+    def test_personal_token_lists_only_projects_visible_to_its_user(self):
+        user = get_user_model().objects.create_user(username="project-reader")
+        member_project = Project.objects.create(
+            team=self.team,
+            name="Member project",
+            visibility=ProjectVisibility.TEAM_MEMBERS,
+        )
+        ProjectMembership.objects.create(project=member_project, user=user, accepted=True)
+
+        team = Team.objects.create(name="Readers team")
+        TeamMembership.objects.create(team=team, user=user, accepted=True)
+        team_project = Project.objects.create(
+            team=team,
+            name="Team project",
+            visibility=ProjectVisibility.TEAM_MEMBERS,
+        )
+
+        visible_project = Project.objects.create(name="Visible project", visibility=ProjectVisibility.DISCOVERABLE)
+        hidden_project = Project.objects.create(name="Hidden project", visibility=ProjectVisibility.TEAM_MEMBERS)
+        token = AuthToken.objects.create(is_user_bound=True, user=user, projects_read=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        response = self.client.get(reverse("api:project-list"))
+        hidden_detail = self.client.get(reverse("api:project-detail", args=[hidden_project.id]))
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(
+            {member_project.id, team_project.id, visible_project.id},
+            {row["id"] for row in response.json()["results"]},
+        )
+        self.assertEqual(403, hidden_detail.status_code)
+        self.assertEqual(
+            "This project is not visible to the user bound to this token.",
+            hidden_detail.json()["detail"],
+        )
+
+    def test_personal_team_admin_can_create_and_update_projects(self):
+        user = get_user_model().objects.create_user(username="project-team-admin")
+        TeamMembership.objects.create(team=self.team, user=user, role=TeamRole.ADMIN, accepted=True)
+        token = AuthToken.objects.create(is_user_bound=True, user=user, projects_manage=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        create_response = self.client.post(
+            reverse("api:project-list"),
+            {"team": self.team.id, "name": "Created by team admin"},
+            format="json",
+        )
+        project = Project.objects.get(name="Created by team admin")
+        update_response = self.client.patch(
+            reverse("api:project-detail", args=[project.id]),
+            {"name": "Updated by team admin"},
+            format="json",
+        )
+
+        self.assertEqual(201, create_response.status_code)
+        self.assertEqual(200, update_response.status_code)
+
+    def test_personal_project_admin_can_update_a_project(self):
+        project = Project.objects.create(team=self.team, name="Project-admin project")
+        user = get_user_model().objects.create_user(username="project-admin")
+        ProjectMembership.objects.create(
+            project=project,
+            user=user,
+            role=ProjectRole.ADMIN,
+            accepted=True,
+        )
+        token = AuthToken.objects.create(is_user_bound=True, user=user, projects_manage=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        response = self.client.patch(
+            reverse("api:project-detail", args=[project.id]),
+            {"name": "Project-admin update"},
+            format="json",
+        )
+
+        self.assertEqual(200, response.status_code)
+
+    def test_personal_project_member_cannot_create_or_update_projects(self):
+        project = Project.objects.create(team=self.team, name="Member project")
+        user = get_user_model().objects.create_user(username="project-member")
+        ProjectMembership.objects.create(project=project, user=user, role=ProjectRole.MEMBER, accepted=True)
+        token = AuthToken.objects.create(is_user_bound=True, user=user, projects_manage=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        create_response = self.client.post(
+            reverse("api:project-list"),
+            {"team": self.team.id, "name": "Forbidden project"},
+            format="json",
+        )
+        update_response = self.client.patch(
+            reverse("api:project-detail", args=[project.id]),
+            {"name": "Forbidden update"},
+            format="json",
+        )
+
+        self.assertEqual(403, create_response.status_code)
+        self.assertEqual(
+            "The user bound to this token does not administer this team.",
+            create_response.json()["detail"],
+        )
+        self.assertEqual(403, update_response.status_code)
+        self.assertEqual(
+            "The user bound to this token does not administer this project.",
+            update_response.json()["detail"],
+        )
+        project.refresh_from_db()
+        self.assertEqual("Member project", project.name)
 
 
 class ExpansionTests(TransactionTestCase):
@@ -131,7 +258,7 @@ class ExpansionTests(TransactionTestCase):
 
     def setUp(self):
         self.client = APIClient()
-        token = AuthToken.objects.create()
+        token = AuthToken.objects.create(projects_read=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
         self.team = Team.objects.create(name="T")
         self.project = Project.objects.create(name="P", team=self.team)
