@@ -427,7 +427,7 @@ class IssueApiTests(TransactionTestCase):
     def test_personal_superuser_is_still_limited_to_the_bound_project(self):
         other_project = Project.objects.create(name="Other superuser project")
         other_issue, _ = get_or_create_issue(other_project, event_data=create_event_data(exception_type="Other"))
-        user = get_user_model().objects.create_superuser(username="api-superuser", password="password")
+        user = get_user_model().objects.create_superuser(username="api-superuser")
         token = AuthToken.objects.create(
             is_user_bound=True,
             user=user,

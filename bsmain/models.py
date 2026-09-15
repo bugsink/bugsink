@@ -9,9 +9,6 @@ from django.utils import timezone
 from bugsink.api_capabilities import CAPABILITY_FIELD_NAMES, INSTALLATION_ONLY_CAPABILITIES
 
 
-UNNAMED_TOKEN_DESCRIPTION = "Unnamed token"
-
-
 def generate_token():
     # nchars = nbytes * 2
     return secrets.token_hex(nbytes=20)
@@ -21,7 +18,7 @@ class AuthToken(models.Model):
     token = models.CharField(max_length=40, unique=True, default=generate_token, validators=[
         RegexValidator(regex=r'^[a-f0-9]{40}$', message='Token must be a 40-character hexadecimal string.'),
     ])
-    description = models.CharField(max_length=255, default=UNNAMED_TOKEN_DESCRIPTION)
+    description = models.CharField(max_length=255, default="Unnamed token")
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     is_user_bound = models.BooleanField(default=False)
     is_project_bound = models.BooleanField(default=False)
