@@ -13,10 +13,6 @@
 
             <h1 class="text-4xl my-4 font-bold">{% translate "New Auth Token" %}</h1>
 
-            {% for error in form.non_field_errors %}
-                <div class="mb-4 text-red-500 dark:text-red-400">{{ error }}</div>
-            {% endfor %}
-
             {% tailwind_formfield form.description %}
 
             <div class="text-lg mb-6 md:mb-8">
@@ -39,6 +35,9 @@
                 <legend class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">
                     {% translate "Capabilities" %}
                 </legend>
+                {% for error in form.non_field_errors %}
+                    <div class="mb-4 rounded-md bg-red-50 p-4 text-red-700 dark:bg-red-900 dark:text-red-300">{{ error }}</div>
+                {% endfor %}
                 {% for group in form.capability_groups %}
                     <div class="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-4 border-t border-slate-200 dark:border-slate-700">
                         <div class="pt-4 text-right">
