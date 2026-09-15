@@ -162,6 +162,25 @@ MIDDLEWARE = [
     'bugsink.middleware.PerformanceStatsMiddleware',
 ]
 
+AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.ModelBackend"]
+
+
+def wire_remote_user_auth(authentication_backends, middleware):
+    # Factored out so tests can exercise the exact same wiring as REMOTE_USER_HEADER below, instead of duplicating it.
+    authentication_backends.insert(0, "bugsink.authentication.EmailRemoteUserBackend")
+    middleware.insert(
+        middleware.index("django.contrib.auth.middleware.AuthenticationMiddleware") + 1,
+        "bugsink.middleware.ConfigurableRemoteUserMiddleware",
+    )
+
+
+# Trusted-header auth (see docker-compose-sample.yaml for the full explanation). SECURITY: only set this when Bugsink
+# is unreachable except through the trusted proxy.
+REMOTE_USER_HEADER = os.getenv("REMOTE_USER_HEADER", None)
+
+if REMOTE_USER_HEADER:
+    wire_remote_user_auth(AUTHENTICATION_BACKENDS, MIDDLEWARE)
+
 # Config of verbose_csrf_middleware.CsrfViewMiddleware: For Bugsink, there's never any intentional cross-scheme POSTing
 # going on. In that case "wrong scheme" always just means "Django's confused about is_secure", and we want to point
 # people in the right direction (i.e. fix your proxy's X-Forwarded-Proto)

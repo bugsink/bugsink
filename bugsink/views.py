@@ -138,6 +138,7 @@ def settings_view(request):
             "USE_X_REAL_IP",
             "USE_X_FORWARDED_FOR",
             "X_FORWARDED_FOR_PROXY_COUNT",
+            "REMOTE_USER_HEADER",
             "TIME_ZONE",
             "EMAIL_HOST",
             "EMAIL_HOST_USER",
