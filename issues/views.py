@@ -783,19 +783,19 @@ def issue_event_list(request, issue):
     # because we we need _actual events_ for display, and we don't have the regular has_prev/has_next (paginator
     # instead), we don't try to optimize using search_events_optimized in this view (except for counting)
     if "q" in request.GET:
-        event_list = search_events(issue.project, issue, request.GET["q"]).order_by("digest_order")
+        event_list = search_events(issue.project, issue, request.GET["q"]).order_by("-digest_order")
         event_x_qs = search_events_optimized(issue.project, issue, request.GET.get("q", ""))
         # we don't do the `_event_count` optimization here, because we need the correct number for pagination
         paginator = KnownCountPaginator(event_list, 250, count=event_x_qs.count())
     else:
-        event_list = issue.event_set.order_by("digest_order")
+        event_list = issue.event_set.order_by("-digest_order")
         # re 250: in general "big is good" because it allows a lot "at a glance".
         paginator = KnownCountPaginator(event_list, 250, count=issue.stored_event_count)
 
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
-    last_event = event_list.last()
+    last_event = event_list.first()
 
     return render(request, "issues/event_list.html", {
         "tab": "event-list",

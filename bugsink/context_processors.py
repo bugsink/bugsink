@@ -193,7 +193,6 @@ def useful_settings_processor(request):
         'registration_enabled': get_settings().USER_REGISTRATION == CB_ANYBODY,
         'app_settings': get_settings(),
         'system_warnings': get_system_warnings,
-        'extra_nav_links': get_settings().EXTRA_NAV_LINKS,
         'script_prefix': get_script_prefix().rstrip("/"),  # TODO why
     }
 
