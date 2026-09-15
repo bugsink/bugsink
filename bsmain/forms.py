@@ -28,6 +28,7 @@ class AuthTokenForm(forms.ModelForm):
     def __init__(self, *args, user, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
+        self.initial["description"] = ""
 
         self.fields["is_user_bound"].label = "Personal token"
         if user.is_superuser:
