@@ -1,5 +1,39 @@
 # Changes
 
+## 2.6.0 (15 September 2026)
+
+### Scoped API tokens
+
+Users can now create personal API tokens that follow their current permissions, optionally limited to one project.
+Each token has an explicit set of capabilities, such as reading issues, triaging them or uploading debug files.
+Superusers can also create service tokens for integrations that should operate independently of a user account.
+These limits are enforced in both the canonical and Sentry-compatible APIs, and endpoint requirements are included
+in the OpenAPI documentation. See #216.
+
+Existing tokens keep their full installation-wide access after upgrading. Tokens can be revoked from the token list.
+
+### Request-URL search
+
+Issue and event searches can now filter by request URL, for example `url:"https://example.org/checkout"`. URLs are stored
+as tags for newly ingested events, with query strings and fragments removed so equivalent pages share a value.
+See #269.
+
+### Alert destinations
+
+Alerts can now be sent to Google Chat spaces using incoming webhooks. See #326.
+
+### Smaller fixes
+
+* Show newest events first in an issue's event list, including filtered results, see #485.
+* Show friendly issue IDs in project issue lists, see #509.
+* Apply Docker SMTP environment settings when `EMAIL_BACKEND` is explicitly configured, and allow `EMAIL_LOGGING`
+  independently of SMTP configuration. Selecting SMTP without `EMAIL_HOST` now uses localhost with port 587 and TLS
+  by default. See #502.
+* Tell SDKs to stop sending unsupported transaction and span data, reducing unnecessary ingestion traffic, see #500.
+* Parse quoted search terms consistently, including colons in values and escaped quotes, see #501.
+* Prevent project updates through the canonical API from moving a project to another team, see #216.
+* Update Gunicorn to 26.2, Django REST Framework to 3.18 and Pygments to 2.21, see #498, #486 and #489.
+
 ## 2.5.1 (31 August 2026)
 
 ### Backwards incompatible changes
