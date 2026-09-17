@@ -4,7 +4,7 @@ verbose_csrf_middleware==5.2.*
 sentry-sdk==2.*
 django-tailwind==4.2.*
 jsonschema==4.26.*
-semver==3.0.*
+semver==3.1.*
 django-admin-autocomplete-filter==0.7.*
 pygments==2.21.*
 inotify_simple==2.0.*
