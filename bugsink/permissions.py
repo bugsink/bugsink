@@ -23,11 +23,19 @@ class HasRequiredCapability(BasePermission):
         if request.method.lower() not in view.http_method_names:
             return True
 
+        action = view.action
+
+        # We arrive here for OPTIONS requests because for those, DRF sets view.action to "metadata", then clones the
+        # request (with method set to POST/PUT), all such that it can figure out which methods to advertise. In that
+        # case we need to look up the actual action ourselves.
+        if action == "metadata":
+            action = view.action_map.get(request.method.lower())
+
         # DRF sets action to None for methods not mapped on this route; we pass-through so DRF can return 405.
-        if view.action is None:
+        if action is None:
             return True
 
-        required_capability = get_required_capability(getattr(view, view.action))
+        required_capability = get_required_capability(getattr(view, action))
 
         # Canonical API operations have this (test_all_registered_api_operations_have_an_authentication_classification);
         # It is security-sensitive code, so assert it here too.
