@@ -17,6 +17,7 @@ from users.views import (
 from ingest.views import download_envelope
 from files.views import chunk_upload, artifact_bundle_assemble, difs_assemble, api_root, api_catch_all
 from bugsink.decorators import login_exempt
+from bugsink.permissions import IsAuthTokenAuthenticated
 
 from events.api_views import EventViewSet
 from issues.api_views import IssueCommentViewSet, IssueViewSet
@@ -33,7 +34,12 @@ admin.site.site_title = get_settings().SITE_TITLE
 admin.site.index_title = "Admin"  # everyone calls this the "admin" anyway. Let's set the title accordingly.
 
 
+class CanonicalAPIRootView(routers.APIRootView):
+    permission_classes = [IsAuthTokenAuthenticated]
+
+
 api_router = routers.DefaultRouter()
+api_router.APIRootView = CanonicalAPIRootView
 api_router.register(r'events', EventViewSet)
 api_router.register(r'issue-comments', IssueCommentViewSet, basename='issue-comment')
 api_router.register(r'issues', IssueViewSet)

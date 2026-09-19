@@ -20,6 +20,31 @@ class BearerAuthRouterTests(TransactionTestCase):
         self.project = Project.objects.create(name="Valid token project")
         self.issue, _ = get_or_create_issue(self.project)
 
+    def test_api_root_requires_a_token_but_no_capability(self):
+        # To access the API root, a token is required
+        self.assertEqual(401, self.client.get(reverse("api:api-root")).status_code)
+
+        token = AuthToken.objects.create()  # but no capability is required to access the API root
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        response = self.client.get(reverse("api:api-root"))
+        self.assertEqual(200, response.status_code)
+
+    def test_options_token_based_capability_advertising(self):
+        # Regression test because OPTIONS crashed; additionally tests that we "do the DRF thing" and don't advertise
+        # POST on the project list endpoint when the token doesn't have the capability to create projects.
+        token = AuthToken.objects.create(projects_read=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        response = self.client.options(reverse("api:project-list"))
+        self.assertEqual(200, response.status_code)
+        self.assertNotIn("POST", response.json().get("actions", {}))
+
+        token = AuthToken.objects.create(projects_manage=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        response = self.client.options(reverse("api:project-list"))
+        self.assertEqual(200, response.status_code)
+        self.assertIn("POST", response.json().get("actions", {}))
+
     def test_valid_token_binding_combinations_authenticate(self):
         user = get_user_model().objects.create_user(username="valid-token-user")
         ProjectMembership.objects.create(project=self.project, user=user, accepted=True)
