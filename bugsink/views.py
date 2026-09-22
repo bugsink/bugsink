@@ -40,6 +40,8 @@ from bsmain.tasks import count_model
 
 from django_prometheus.exports import ExportToDjangoView
 
+from .metrics import update_metrics
+
 
 AnnotatedCount = namedtuple("AnnotatedCount", ["count", "timestamp"])
 
@@ -301,4 +303,5 @@ def page_not_found(request, exception, template_name=ERROR_404_TEMPLATE_NAME):
 @login_exempt
 @require_GET
 def metrics(request):
+    update_metrics()
     return ExportToDjangoView(request)
