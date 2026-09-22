@@ -28,7 +28,7 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
     http_method_names = ["get", "post", "patch", "head", "options"]
     pagination_class = ProjectPagination
 
-    @token_guard("projects:read")
+    @token_guard("projects:read", scopable_by_bound_project=True)
     @extend_schema(
         summary="List projects",
         description="List projects ordered by name.",
@@ -42,7 +42,8 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
             ),
         ]
     )
-    def list(self, request, *args, **kwargs):
+    def list(self, request, bound_project, *args, **kwargs):
+        self.bound_project = bound_project
         return super().list(request, *args, **kwargs)
 
     @token_guard("projects:manage", guarding_team=lookup(serializer="team"))
@@ -96,6 +97,8 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
 
         # Hide soft-deleted in lists
         qs = queryset.filter(is_deleted=False)
+        if self.bound_project is not None:
+            qs = qs.filter(pk=self.bound_project.pk)
         if self.request.auth.is_user_bound:
             qs = projects_visible_to_user(qs, self.request.auth.user)
 

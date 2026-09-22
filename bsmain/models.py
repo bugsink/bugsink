@@ -6,7 +6,7 @@ from django.db import models
 from django.core.validators import RegexValidator
 from django.utils import timezone
 
-from bugsink.api_capabilities import CAPABILITY_FIELD_NAMES, INSTALLATION_ONLY_CAPABILITIES
+from bugsink.api_capabilities import CAPABILITIES_UNBOUNDABLE_BY_PROJECT, CAPABILITY_FIELD_NAMES
 
 
 def generate_token():
@@ -96,7 +96,7 @@ class AuthToken(models.Model):
             elif self.project.is_deleted:
                 errors["project"] = "Active project-bound tokens require a non-deleted project."
 
-        forbidden_capabilities = self.capabilities & INSTALLATION_ONLY_CAPABILITIES
+        forbidden_capabilities = self.capabilities & CAPABILITIES_UNBOUNDABLE_BY_PROJECT
         if self.is_project_bound and forbidden_capabilities:
             errors["project"] = "Project-bound tokens cannot have capabilities: %s." % ", ".join(
                 sorted(forbidden_capabilities)

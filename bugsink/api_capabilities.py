@@ -27,8 +27,7 @@ CAPABILITY_FIELD_NAMES = {
     for name in CAPABILITIES
 }
 
-INSTALLATION_ONLY_CAPABILITIES = {
-    "projects:read",
+CAPABILITIES_UNBOUNDABLE_BY_PROJECT = {
     "projects:manage",
     "teams:read",
     "teams:manage",
@@ -36,7 +35,7 @@ INSTALLATION_ONLY_CAPABILITIES = {
 
 
 Lookup = namedtuple("Lookup", "using key")
-TokenGuard = namedtuple("TokenGuard", "capability object_type lookup")
+TokenGuard = namedtuple("TokenGuard", "capability object_type lookup scopable_by_bound_project")
 
 
 def lookup(*, url=None, query=None, serializer=None):
@@ -83,8 +82,9 @@ def token_guard(
     guarding_event=None,
     guarding_release=None,
     guarding_team=None,
+    scopable_by_bound_project=False,
 ):
-    """Require a capability and inject its guarded project, issue, event, release, or team into the view."""
+    """Require a capability and inject its guarded resource or bound-project scope into the view."""
     if capability_name not in CAPABILITIES:
         raise ValueError("Unknown capability: %s" % capability_name)
 
@@ -103,12 +103,25 @@ def token_guard(
         raise ValueError("Token operations can guard only one resource.")
 
     object_type, object_lookup = next(iter(guards.items()), (None, None))
-    if object_type is None and capability_name not in INSTALLATION_ONLY_CAPABILITIES:
-        raise ValueError("Capability %s must guard a resource." % capability_name)
-    if object_lookup is not None and not isinstance(object_lookup, Lookup):
-        raise TypeError("Token guard lookups must come from lookup().")
 
-    guard = TokenGuard(capability_name, object_type, object_lookup)
+    if object_type is not None and scopable_by_bound_project:
+        raise ValueError("guarding_* arguments cannot be combined with scopable_by_bound_project=True.")
+
+    if scopable_by_bound_project and capability_name in CAPABILITIES_UNBOUNDABLE_BY_PROJECT:
+        raise ValueError(
+            "scopable_by_bound_project=True cannot be used with a capability in "
+            "CAPABILITIES_UNBOUNDABLE_BY_PROJECT."
+        )
+
+    if (capability_name not in CAPABILITIES_UNBOUNDABLE_BY_PROJECT and
+            object_type is None and not scopable_by_bound_project):
+        raise ValueError("Capability %s must provide a guarding_* lookup or set scopable_by_bound_project=True."
+                         % capability_name)
+
+    if object_lookup is not None and not isinstance(object_lookup, Lookup):
+        raise TypeError("guarding_* arguments should use the lookup() helper")
+
+    guard = TokenGuard(capability_name, object_type, object_lookup, scopable_by_bound_project)
 
     def decorator(view_method):
         @wraps(view_method)

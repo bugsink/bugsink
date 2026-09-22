@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from drf_spectacular.generators import SchemaGenerator
 
-from bugsink.api_capabilities import CAPABILITY_FIELD_NAMES, INSTALLATION_ONLY_CAPABILITIES
+from bugsink.api_capabilities import CAPABILITIES_UNBOUNDABLE_BY_PROJECT, CAPABILITY_FIELD_NAMES
 from bsmain.models import AuthToken
 from issues.factories import get_or_create_issue
 from projects.models import Project, ProjectMembership
@@ -140,7 +140,7 @@ class BearerAuthRouterTests(TransactionTestCase):
                     **{CAPABILITY_FIELD_NAMES[capability]: True},
                 ),
             )
-            for capability in INSTALLATION_ONLY_CAPABILITIES
+            for capability in CAPABILITIES_UNBOUNDABLE_BY_PROJECT
         )
 
         for invalid_reason, token in invalid_tokens:
