@@ -104,9 +104,12 @@ def token_guard(
 
     object_type, object_lookup = next(iter(guards.items()), (None, None))
     if object_type is None and capability_name not in INSTALLATION_ONLY_CAPABILITIES:
-        raise ValueError("Capability %s must guard a resource." % capability_name)
+        raise ValueError(
+            "Capability %s must provide a guarding_* lookup so the affected project or team can be determined."
+            % capability_name
+        )
     if object_lookup is not None and not isinstance(object_lookup, Lookup):
-        raise TypeError("Token guard lookups must come from lookup().")
+        raise TypeError("guarding_* arguments should use the lookup() helper")
 
     guard = TokenGuard(capability_name, object_type, object_lookup)
 
