@@ -38,6 +38,10 @@ from ingest.views import BaseIngestAPIView
 from bsmain.models import CachedModelCount
 from bsmain.tasks import count_model
 
+from django_prometheus.exports import ExportToDjangoView
+
+from .metrics import update_metrics
+
 
 AnnotatedCount = namedtuple("AnnotatedCount", ["count", "timestamp"])
 
@@ -293,3 +297,11 @@ def page_not_found(request, exception, template_name=ERROR_404_TEMPLATE_NAME):
     if request.path.startswith("/api/"):
         template_name = "4xx_5xx_api.txt"
     return django_page_not_found(request, _exception_for_error_page(exception), template_name)
+
+
+# Prometheus metrics endpoint
+@login_exempt
+@require_GET
+def metrics(request):
+    update_metrics()
+    return ExportToDjangoView(request)

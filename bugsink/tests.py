@@ -23,6 +23,11 @@ from .streams import (
     compress_with_zlib, GeneratorReader, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE, MaxDataReader,
     MaxDataWriter, zlib_generator, brotli_generator, BrotliError)
 
+from issues.factories import denormalized_issue_fields
+from issues.models import Issue
+from projects.models import Project
+from teams.models import Team, TeamMembership
+
 User = get_user_model()
 
 
@@ -520,3 +525,52 @@ class TestAtomicTransactions(TransactionTestCase):
         self.assertTrue(User.objects.filter(username="testuser2").exists())
         self.assertEqual([1], [1 for q in queries_context.captured_queries if q['sql'].startswith("BEGIN")])
         self.assertEqual([1], [1 for q in queries_context.captured_queries if q['sql'].startswith("COMMIT")])
+
+
+class MetricsEndpointTestCase(DjangoTestCase):
+
+    def scrape(self):
+        response = self.client.get("/metrics/")
+        self.assertEqual(response.status_code, 200)
+        return response.content.decode()
+
+    def test_business_metrics(self):
+        team_a = Team.objects.create(name="Team A")
+        Team.objects.create(name="Team B")  # no members: exercises the explicit-0 series
+        member = User.objects.create_user(username="member@example.org", password="test")
+        pending = User.objects.create_user(username="pending@example.org", password="test")
+        TeamMembership.objects.create(team=team_a, user=member, accepted=True)
+        TeamMembership.objects.create(team=team_a, user=pending, accepted=False)  # not yet accepted: not counted
+
+        project_a = Project.objects.create(name="Project A", team=team_a)
+        project_b = Project.objects.create(name="Project B", team=team_a)
+        deleted_project = Project.objects.create(name="Deleted Project", is_deleted=True)
+
+        for _ in range(2):
+            Issue.objects.create(project=project_a, **denormalized_issue_fields())
+        Issue.objects.create(project=project_b, **denormalized_issue_fields())
+        Issue.objects.create(project=deleted_project, **denormalized_issue_fields())  # project deleted, issue not
+        deleted_issue = Issue.objects.create(project=project_a, **denormalized_issue_fields())
+        deleted_issue.is_deleted = True
+        deleted_issue.save()
+
+        body = self.scrape()
+        self.assertIn("bugsink_projects_total 2.0", body)
+        # all non-deleted issues, including those of a (soft-)deleted project:
+        self.assertIn("bugsink_issues_total 4.0", body)
+        self.assertIn('bugsink_team_members{team="Team A"} 1.0', body)
+        self.assertIn('bugsink_team_members{team="Team B"} 0.0', body)
+        self.assertIn('bugsink_project_issues{project="project-a"} 2.0', body)
+        self.assertIn('bugsink_project_issues{project="project-b"} 1.0', body)
+        self.assertNotIn('project="deleted-project"', body)  # deleted projects don't emit a series
+
+    def test_labeled_series_do_not_go_stale(self):
+        team = Team.objects.create(name="Team")
+        project = Project.objects.create(name="Project", team=team)
+        Issue.objects.create(project=project, **denormalized_issue_fields())
+
+        self.assertIn('bugsink_project_issues{project="project"} 1.0', self.scrape())
+
+        project.is_deleted = True
+        project.save()
+        self.assertNotIn('project="project"', self.scrape())  # the stale series is dropped on the next scrape
