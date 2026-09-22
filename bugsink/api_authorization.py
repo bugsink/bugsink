@@ -79,6 +79,9 @@ def _project_for_object(object_type, guarded_object):
 
 def resolve_token_guard(view, request, guard, view_kwargs):
     """Resolve a guard's object, authorize the token, and return it for injection into the view."""
+    if guard.scopable_by_bound_project:
+        return {"bound_project": request.auth.project if request.auth.is_project_bound else None}
+
     object_lookup = guard.lookup
     if object_lookup is None:
         # User-bound checks for resource-free operations are the responsibility of the individual view.
