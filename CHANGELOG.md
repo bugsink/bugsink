@@ -1,5 +1,14 @@
 # Changes
 
+## 2.6.1 (25 September 2026)
+
+### Smaller fixes
+
+* Fix Snappea memory growth after source-map uploads by counting database queries without retaining their contents, and
+  avoid loading duplicate uploaded files into memory. See #523.
+* Allow project-bound API tokens with `projects:read` to list and retrieve their bound project. See #520.
+* Fix server errors on the canonical API root and on `OPTIONS` requests made with valid API tokens. See #516.
+
 ## 2.6.0 (15 September 2026)
 
 ### Scoped API tokens
