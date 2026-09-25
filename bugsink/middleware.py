@@ -2,7 +2,6 @@ import logging
 from time import time
 
 from django.contrib.auth.decorators import login_required
-from django.db import connection
 from django.conf import settings
 from django.core.exceptions import SuspiciousOperation
 from django.utils.translation import get_supported_language_variant
@@ -12,6 +11,7 @@ from django.urls import get_script_prefix
 from django.http import HttpResponseBadRequest, Http404
 
 from bugsink.app_settings import get_settings
+from performance.context_managers import count_queries
 
 
 performance_logger = logging.getLogger("bugsink.performance.views")
@@ -129,10 +129,12 @@ class PerformanceStatsMiddleware:
         self.view_name = "<<unknown>>"
 
     def __call__(self, request):
-        t0 = time()
-        result = self.get_response(request)
-        took = (time() - t0) * 1000
-        performance_logger.info(f"{took:6.2f}ms / {len(connection.queries)} queries: '{ self.view_name }'")
+        with count_queries() as query_counter:
+            t0 = time()
+            result = self.get_response(request)
+            took = (time() - t0) * 1000
+
+        performance_logger.info(f"{took:6.2f}ms / {query_counter.count} queries: '{ self.view_name }'")
         return result
 
     def process_view(self, request, view_func, view_args, view_kwargs):
