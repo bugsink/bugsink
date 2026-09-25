@@ -93,7 +93,7 @@ class LoginRequiredMiddleware:
             return None
 
         # we explicitly ignore the admin and accounts paths, and the api; we can always push this to a setting later
-        for path in ["/admin", "/accounts", "/api"]:
+        for path in ["/admin", "/accounts", "/api", "/oauth"]:
             if request.path.startswith(get_script_prefix().rstrip("/") + path):
                 return None
 
