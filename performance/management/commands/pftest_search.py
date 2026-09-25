@@ -6,6 +6,7 @@ from django.urls import resolve
 from django.test import RequestFactory
 from django.contrib.auth import get_user_model
 from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from issues.models import Issue
 
@@ -63,17 +64,18 @@ def _format_query_plan(rows):
 @contextmanager
 def query_debugger(print_all):
     d = {}
-    queries_i = len(connection.queries)
-    yield d
-    queries_j = len(connection.queries)
+    with CaptureQueriesContext(connection) as queries_context:
+        yield d
 
-    print('Queries executed:', len(connection.queries) - queries_i)
-    print('Total query time:', sum(float(query['time']) for query in connection.queries[queries_i:]))
+    queries = queries_context.captured_queries
+
+    print('Queries executed:', len(queries))
+    print('Total query time:', sum(float(query['time']) for query in queries))
 
     if print_all:
-        interesting_queries = connection.queries[queries_i:]
+        interesting_queries = queries
     else:
-        interesting_queries = [query for query in connection.queries[queries_i:] if float(query['time']) > 0.005]
+        interesting_queries = [query for query in queries if float(query['time']) > 0.005]
 
     for query in interesting_queries:
         print()
@@ -85,8 +87,8 @@ def query_debugger(print_all):
             cursor.execute(explain_sql)
             print(_format_query_plan(cursor.fetchall()))
 
-    d['total_time'] = sum(float(query['time']) for query in connection.queries[queries_i:queries_j])
-    d['total_queries'] = queries_j - queries_i
+    d['total_time'] = sum(float(query['time']) for query in queries)
+    d['total_queries'] = len(queries)
 
 
 class Command(BaseCommand):

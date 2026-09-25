@@ -18,7 +18,7 @@ from django.contrib.auth import get_user_model
 from django.test import LiveServerTestCase, override_settings
 from django.core.management.base import CommandError
 from django.core.management import call_command
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from compat.dsn import get_header_value
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
@@ -33,7 +33,7 @@ from bugsink.streams import MaxLengthExceeded
 from .models import Chunk, File, FileMetadata, get_file_metadata_for_debug_ids
 from .minidump import event_threads_for_process_state
 from .storage_registry import override_object_storages
-from .tasks import assemble_file
+from .tasks import assemble_file, create_file_from_local_file
 from .views import CHUNK_UPLOAD_SIZE
 
 
@@ -379,6 +379,18 @@ class FilesTests(TransactionTestCase):
                 self.assertEqual("local", file.storage_backend)
                 self.assertEqual(data, file.get_raw_data())
                 self.assertEqual(data, Path(tempdir, checksum).read_bytes())
+
+    def test_create_file_from_local_file_does_not_read_existing_file(self):
+        checksum = "a" * 40
+        existing_file = File.objects.create(checksum=checksum, filename="existing", size=8, data=b"existing")
+        local_file = Mock()
+
+        file, created = create_file_from_local_file(checksum, "new", 3, local_file)
+
+        self.assertFalse(created)
+        self.assertEqual(existing_file.id, file.id)
+        self.assertIn("data", file.get_deferred_fields())
+        local_file.read.assert_not_called()
 
     def test_open_for_read_works_for_db_and_object_storage(self):
         data = b"hello world"

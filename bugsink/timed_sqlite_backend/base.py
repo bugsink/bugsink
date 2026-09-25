@@ -142,13 +142,6 @@ class DatabaseWrapper(UnpatchedDatabaseWrapper):
 
         super().__init__(settings_dict, alias=alias)
 
-        # This makes the cursor act like a debug cursor (storing queries) even when DEBUG=False. We need this in
-        # PerformanceStatsMiddleware to provide a query-count. We expect the number of such-stored queries to be small
-        # (negligible memory impact) because Bugsink doesn't do many queries generally. But strictly speaking we could
-        # say that this should only be turned on when the result is actually used, i.e. when performance logging is
-        # enabled.
-        self.force_debug_cursor = True
-
     # def get_new_connection(self, conn_params):
     #     result = super().get_new_connection(conn_params)
     #     import threading

@@ -39,11 +39,11 @@ DEBUG_ID_SCAN_TAIL_SIZE = 64 * 1024
 
 def create_file_from_local_file(checksum, filename, size, local_file):
     write_storage = get_write_storage("file")
-    file, created = File.objects.get_or_create(
+    file, created = File.objects.defer("data").get_or_create(
         checksum=checksum,
         defaults={
             "size": size,
-            "data": b"" if write_storage is not None else local_file.read(),
+            "data": b"" if write_storage is not None else local_file.read,
             "filename": filename,
             "storage_backend": None if write_storage is None else write_storage.name,
         })
