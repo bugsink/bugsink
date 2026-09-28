@@ -41,11 +41,11 @@
                 {% for auth_token in auth_tokens %}
                 <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
                 <td class="w-full p-4">
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 js-copy-container">
                         <span id="token-hidden-{{ auth_token.id }}" class="font-mono" aria-hidden="true">
                             ••••••••••••••••••••••••••••••••••••••••
                         </span>
-                        <span id="token-revealed-{{ auth_token.id }}" class="hidden font-mono">
+                        <span id="token-revealed-{{ auth_token.id }}" class="hidden font-mono js-copy-source">
                             {{ auth_token.token }}
                         </span>
                         <button type="button" id="token-toggle-{{ auth_token.id }}"
@@ -55,6 +55,7 @@
                             <span id="token-reveal-label-{{ auth_token.id }}">{% translate "Reveal" %}</span>
                             <span id="token-hide-label-{{ auth_token.id }}" class="hidden">{% translate "Hide" %}</span>
                         </button>
+                        {% include "includes/copy_button_only.html" with secondary=True %}
                     </div>
                     <div class="mt-2 font-bold text-slate-800 dark:text-slate-100">
                         {{ auth_token.description }}
@@ -138,4 +139,8 @@ function toggleAuthToken(id) {
 
 </script>
 
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/copy.js' %}"></script>
 {% endblock %}
