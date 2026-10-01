@@ -41,7 +41,7 @@ from events.models import Event
 from events.retention import evict_for_max_events, should_evict, EvictionCounts
 from events.usage import record_event_counts
 from releases.models import create_release_if_needed
-from alerts.tasks import send_new_issue_alert, send_regression_alert
+from alerts.tasks import send_new_issue_alert, send_regression_alert, send_still_open_alert
 from compat.timestamp import format_timestamp, parse_timestamp
 from tags.models import digest_tags
 from bsmain.utils import b108_makedirs
@@ -84,6 +84,48 @@ QUOTA_THRESHOLDS = {
 
 logger = logging.getLogger("bugsink.ingest")
 performance_logger = logging.getLogger("bugsink.performance.ingest")
+
+
+def _realert_threshold(name):
+    # Parsed once at import. A malformed value (e.g. "7.5" or "100,") disables that trigger with a warning rather
+    # than raising ValueError on every ingest; the feature is off by default anyway (0 = disabled).
+    raw = os.environ.get(name)
+    try:
+        return int(raw) if raw else 0
+    except ValueError:
+        logger.warning("Ignoring invalid %s=%r; expected an integer, re-alerting on this trigger is disabled.",
+                       name, raw)
+        return 0
+
+
+REALERT_AFTER_EVENTS = _realert_threshold("REALERT_AFTER_EVENTS")
+REALERT_AFTER_DAYS = _realert_threshold("REALERT_AFTER_DAYS")
+
+
+def _crossed_bucket(previous_value, current_value, bucket_size):
+    # True when going from previous_value to current_value steps into a new bucket of width bucket_size.
+    return bucket_size > 0 and current_value // bucket_size > previous_value // bucket_size
+
+
+def _should_realert(digested_event_count, first_seen, previous_last_seen, now, after_events, after_days):
+    # "every X events": the per-issue counter just went from N-1 to N.
+    crossed_events = _crossed_bucket(digested_event_count - 1, digested_event_count, after_events)
+    # "every X days": whole-days of age (since first_seen) measured at the previous event and at this one.
+    crossed_days = _crossed_bucket((previous_last_seen - first_seen).days, (now - first_seen).days, after_days)
+    return crossed_events or crossed_days
+
+
+def maybe_realert_still_open(issue, previous_last_seen, now):
+    # Nag about an open issue (not resolved, not muted) once it crosses a re-alert boundary. Thresholds come from
+    # REALERT_AFTER_EVENTS / REALERT_AFTER_DAYS (parsed once above); both default to 0, i.e. feature off.
+    if issue.is_resolved or issue.is_muted:
+        return
+    if not _should_realert(
+            issue.digested_event_count, issue.first_seen, previous_last_seen, now,
+            REALERT_AFTER_EVENTS, REALERT_AFTER_DAYS):
+        return
+    note = f"This issue is still open: {issue.digested_event_count} events since it was first seen."
+    delay_on_commit(send_still_open_alert, str(issue.id), note)
 
 
 def update_issue_counts(per_issue):
@@ -485,6 +527,7 @@ class BaseIngestAPIView(View):
 
             # update the denormalized fields; calculated_type/value track the latest event so the issue title
             # reflects the most recent exception (otherwise it stays frozen to the first event's message).
+            previous_last_seen = issue.last_seen  # captured before overwrite for the "every X days" check
             issue.last_seen = ingested_at
             issue.digested_event_count += 1
             issue.calculated_type = calculated_type
@@ -611,6 +654,11 @@ class BaseIngestAPIView(View):
                 IssueStateManager.unmute(
                     issue, triggering_event=event,
                     unmute_metadata={"mute_for": {"unmute_after": issue.unmute_after}})
+
+            # ponytail: re-alert ("nag") about still-open issues every X events or every X days, from
+            # counters we already keep (no new DB fields/migration). On-ingest only: like unmute_after
+            # above, issues that stop happening stay quiet.
+            maybe_realert_still_open(issue, previous_last_seen, ingested_at)
 
         cls.count_issue_periods_and_act_on_it(issue, event, digested_at)
 

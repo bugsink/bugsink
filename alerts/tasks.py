@@ -67,6 +67,13 @@ def send_unmute_alert(issue_id, unmute_reason):
     _send_alert(issue_id, "Unmuted issue", "an", "UNMUTED", unmute_reason=unmute_reason)
 
 
+@shared_task
+def send_still_open_alert(issue_id, note):
+    # Re-alert ("nag") about an issue that is still open. `note` is passed as `unmute_reason` because the email
+    # templates and the Slack/Mattermost/Discord backends already render that kwarg as an extra line of text.
+    _send_alert(issue_id, "Still-open issue", "a", "STILL-OPEN", unmute_reason=note)
+
+
 def _send_alert(issue_id, state_description, alert_article, alert_reason, **kwargs):
     # NOTE: as it stands, there is a bit of asymmetry here: _send_alert is always called in delayed fashion; it delays
     # some work itself (message backends) though not all (emails). I kept it like this to be able to add functionality
