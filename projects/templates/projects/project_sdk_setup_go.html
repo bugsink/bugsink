@@ -11,6 +11,8 @@
     <div class="m-4 max-w-4xl flex-auto">
         <h1 class="text-4xl font-bold">Connect your Go Application</h1>
 
+        {% include "projects/includes/sdk_setup_event_status.html" %}
+
         <div class="mt-4">
             Connect your Go application to Bugsink to start tracking errors.
             Bugsink is compatible with the <a class="text-cyan-500 dark:text-cyan-300 font-bold" href="https://docs.sentry.io/platforms/go/">Sentry SDK</a>. A basic setup is the following:
@@ -91,4 +93,8 @@ sentry.CaptureMessage("Error created on purpose to send it to Bugsink")
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/sdk_setup_event_status.js' %}"></script>
 {% endblock %}
