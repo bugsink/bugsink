@@ -11,6 +11,8 @@
     <div class="m-4 max-w-4xl flex-auto">
         <h1 class="text-4xl font-bold">Set up your SDK</h1>
 
+        {% include "projects/includes/sdk_setup_event_status.html" %}
+
         <div class="mt-4">
             Connect your PHP application to Bugsink to start tracking errors.
             Bugsink is compatible with the <a class="text-cyan-500 dark:text-cyan-300 font-bold" href="https://docs.sentry.io/platforms/php/">Sentry SDK</a>.
@@ -78,4 +80,8 @@ try {
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/sdk_setup_event_status.js' %}"></script>
 {% endblock %}
