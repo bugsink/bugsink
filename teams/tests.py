@@ -226,3 +226,45 @@ class TeamScopedActionTestCase(TransactionTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(TeamMembership.objects.filter(id=other_membership.id).exists())
+
+
+class TeamLeaveTestCase(TransactionTestCase):
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_user(username="leave-admin", password="test")
+        self.other = User.objects.create_user(username="leave-other", password="test")
+        self.team = Team.objects.create(name="Leave team")
+        self.admin_membership = TeamMembership.objects.create(
+            team=self.team, user=self.admin, role=TeamRole.ADMIN, accepted=True)
+        self.url = reverse("team_list_mine")
+        self.leave = {"action": f"leave:{self.team.id}"}
+
+    def test_member_can_leave(self):
+        TeamMembership.objects.create(team=self.team, user=self.other, role=TeamRole.MEMBER, accepted=True)
+        self.client.force_login(self.other)
+
+        response = self.client.get(self.url)
+        self.assertContains(response, 'data-team-id="%s"' % self.team.id)
+
+        response = self.client.post(self.url, self.leave, follow=True)
+        self.assertContains(response, "You have left the team")
+        self.assertFalse(TeamMembership.objects.filter(team=self.team, user=self.other).exists())
+
+    def test_last_admin_cannot_leave(self):
+        TeamMembership.objects.create(team=self.team, user=self.other, role=TeamRole.MEMBER, accepted=True)
+        self.client.force_login(self.admin)
+
+        response = self.client.post(self.url, self.leave, follow=True)
+        self.assertContains(response, "last admin")
+        self.assertTrue(TeamMembership.objects.filter(id=self.admin_membership.id).exists())
+
+    def test_admin_can_leave_when_another_admin_exists(self):
+        TeamMembership.objects.create(team=self.team, user=self.other, role=TeamRole.ADMIN, accepted=True)
+        self.client.force_login(self.admin)
+
+        self.client.post(self.url, self.leave)
+        self.assertFalse(TeamMembership.objects.filter(id=self.admin_membership.id).exists())
+
+    def test_non_member_cannot_leave(self):
+        self.client.force_login(self.other)
+        self.assertEqual(404, self.client.post(self.url, self.leave).status_code)
