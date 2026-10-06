@@ -77,6 +77,9 @@ class Issue(models.Model):
     unmute_after = models.DateTimeField(blank=True, null=True)
     next_unmute_check = models.PositiveIntegerField(null=False, default=0)
 
+    # last time a "still open" re-alert was sent for this issue; used by the realert sweep to space day-based reminders
+    last_realerted_at = models.DateTimeField(blank=True, null=True)
+
     def save(self, *args, **kwargs):
         if self.digest_order is None:
             # testing-only; in production this should never happen and instead have been done in the ingest view.
@@ -739,6 +742,8 @@ class TurningPointKind(models.IntegerChoices):
     REOPENED = 6, _("Reopened")
 
     NEXT_MATERIALIZED = 10, _("Release info added")
+
+    STILL_OPEN = 11, _("Still open")
 
     # ASSGINED = 10, "Assigned to user"   # perhaps later
     MANUAL_ANNOTATION = 100, _("Manual annotation")

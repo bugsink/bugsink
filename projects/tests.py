@@ -396,6 +396,44 @@ class ProjectFormTestCase(TransactionTestCase):
         self.assertFalse(form.is_valid())
         self.assertEqual(["name"], list(form.errors))
 
+    def _noise_form_data(self, team, **overrides):
+        data = {
+            "team": team.id,
+            "name": "Noisy",
+            "visibility": ProjectVisibility.JOINABLE,
+            "retention_max_event_count": 10000,
+            "grouping_mechanism": BUGSINK_GROUPING_V2,
+        }
+        data.update(overrides)
+        return data
+
+    def test_create_without_noise_fields_uses_defaults(self):
+        # the create template omits the noise-policy fields; the form must still validate and fall back to defaults
+        team = Team.objects.create(name="Team A")
+        form = ProjectForm(data=self._noise_form_data(team), team_qs=Team.objects.all())
+
+        self.assertTrue(form.is_valid(), form.errors)
+        saved = form.save()
+        self.assertFalse(saved.new_issues_start_muted)
+        self.assertEqual(0, saved.unmute_volume)
+        self.assertEqual("day", saved.noise_period)
+
+    def test_mute_volume_must_be_below_unmute_volume(self):
+        team = Team.objects.create(name="Team A")
+        form = ProjectForm(
+            data=self._noise_form_data(team, unmute_volume=5, mute_volume=5), team_qs=Team.objects.all())
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(["mute_volume"], list(form.errors))
+
+    def test_start_muted_requires_unmute_volume_of_at_least_two(self):
+        team = Team.objects.create(name="Team A")
+        form = ProjectForm(
+            data=self._noise_form_data(team, new_issues_start_muted=True, unmute_volume=1), team_qs=Team.objects.all())
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(["unmute_volume"], list(form.errors))
+
     def test_changing_grouping_mechanism_starts_transition_window(self):
         project = Project.objects.create(
             name="Original Name",

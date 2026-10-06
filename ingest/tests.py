@@ -213,6 +213,41 @@ class IngestViewTestCase(TransactionTestCase):
             send_unmute_alert.delay.call_args[0][1], "More than 1 events per 1 day occurred, unmuting the issue.")
 
     @patch("ingest.views.send_new_issue_alert")
+    @patch("issues.realert.send_still_open_alert")
+    @patch("issues.models.send_unmute_alert")
+    def test_ingest_view_new_issue_starts_muted(self, send_unmute_alert, send_still_open_alert, send_new_issue_alert):
+        self.loud_project.new_issues_start_muted = True
+        self.loud_project.unmute_volume = 2  # > 1 so the first event does not immediately unmute again
+        self.loud_project.save()
+
+        request = self.request_factory.post("/api/1/store/")
+        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.loud_project, request))
+
+        issue = Issue.objects.get()
+        self.assertTrue(issue.is_muted)
+        self.assertFalse(send_new_issue_alert.delay.called)  # staying quiet is the whole point
+        self.assertFalse(send_unmute_alert.delay.called)
+        self.assertEqual(
+            {TurningPointKind.FIRST_SEEN, TurningPointKind.MUTED},
+            set(TurningPoint.objects.values_list("kind", flat=True)))
+
+    @patch("ingest.views.send_new_issue_alert")
+    @patch("issues.realert.send_still_open_alert")
+    @patch("issues.models.send_unmute_alert")
+    def test_ingest_view_realert_on_events(self, send_unmute_alert, send_still_open_alert, send_new_issue_alert):
+        event_data = create_event_data()
+        issue, _ = get_or_create_issue(self.loud_project, event_data)
+        self.loud_project.realert_after_events = 1  # every event crosses a bucket boundary
+        self.loud_project.save()
+
+        request = self.request_factory.post("/api/1/store/")
+        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.loud_project, request))
+
+        self.assertTrue(send_still_open_alert.delay.called)
+        self.assertEqual(str(issue.id), send_still_open_alert.delay.call_args[0][0])
+        self.assertTrue(TurningPoint.objects.filter(kind=TurningPointKind.STILL_OPEN).exists())
+
+    @patch("ingest.views.send_new_issue_alert")
     @patch("ingest.views.send_regression_alert")
     @patch("issues.models.send_unmute_alert")
     def test_ingest_view_unmute_alert_after_time(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
