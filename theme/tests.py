@@ -9,8 +9,11 @@ from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 
 from events.utils import IncompleteList, IncompleteDict
 
+from urllib.parse import unquote
+
 from .templatetags.issues import (
     _pygmentize_lines as actual_pygmentize_lines, format_var, pygmentize, timestamp_with_millis)
+from .templatetags.tag_search import _tag_clause, tag_drilldown
 
 User = get_user_model()
 
@@ -210,6 +213,24 @@ class TimestampWithMillisTagTest(RegularTestCase):
             conditional_escape(timestamp_with_millis(ts)))
 
         self.assertFalse(isinstance(timestamp_with_millis(ts), SafeString))
+
+
+class TagDrilldownTest(RegularTestCase):
+    def test_clause_quotes_and_escapes(self):
+        self.assertEqual('browser:"Fire fox"', _tag_clause("browser", "Fire fox"))
+        self.assertEqual(r'k:"a \"b\" \\c"', _tag_clause("k", r'a "b" \c'))
+
+    def test_no_current_query_is_just_the_clause(self):
+        self.assertEqual('browser:"Firefox"', unquote(tag_drilldown("", "browser", "Firefox")))
+
+    def test_appends_to_current_query_for_drilldown(self):
+        self.assertEqual('os:"Linux" browser:"Firefox"', unquote(tag_drilldown('os:"Linux"', "browser", "Firefox")))
+
+    def test_output_is_url_encoded(self):
+        out = tag_drilldown('os:"Linux"', "browser", "Firefox")
+        self.assertNotIn('"', out)
+        self.assertNotIn(' ', out)
+        self.assertIn('%22', out)
 
 
 class NavigationLinksTestCase(TransactionTestCase):
