@@ -90,8 +90,12 @@
     <div class="overflow-hidden"><!-- top, LHS (various texts) -->
         <div class="flex items-start gap-2">
         {% if request.GET.q %}
-        {# ponytail: links back to the project's open list; doesn't restore muted/resolved/all state_filter #}
-        <a href="{% url "issue_list_open" project_pk=issue.project.pk %}{% current_qs %}" aria-label="{% translate 'Back to search results' %}" title="{% translate 'Back to search results' %}" class="flex-none pt-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-8 h-8"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg></a>
+        {% if request.GET.state == "muted" %}{% url "issue_list_muted" project_pk=issue.project_id as back_url %}
+        {% elif request.GET.state == "resolved" %}{% url "issue_list_resolved" project_pk=issue.project_id as back_url %}
+        {% elif request.GET.state == "unresolved" %}{% url "issue_list_unresolved" project_pk=issue.project_id as back_url %}
+        {% elif request.GET.state == "all" %}{% url "issue_list_all" project_pk=issue.project_id as back_url %}
+        {% else %}{% url "issue_list_open" project_pk=issue.project_id as back_url %}{% endif %}
+        <a href="{{ back_url }}{% querystring state=None %}" aria-label="{% translate 'Back to search results' %}" title="{% translate 'Back to search results' %}" class="flex-none pt-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-8 h-8"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg></a>
         {% endif %}
         <div class="overflow-hidden min-w-0">
         {% if issue.is_log_message %}
