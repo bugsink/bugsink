@@ -193,7 +193,7 @@ class AuthTokenListTestCase(TransactionTestCase):
         self.assertContains(response, f'id="token-hidden-{token_2.pk}"')
         self.assertContains(response, f'id="token-revealed-{token_2.pk}" class="hidden font-mono js-copy-source"')
         self.assertContains(response, f'id="token-toggle-{token_2.pk}"')
-        self.assertContains(response, "js-copy-btn", count=2)
+        self.assertContains(response, '<a href="#" aria-label="Copy" title="Copy" class="js-copy-btn', count=2)
 
     def test_superuser_can_create_an_installation_service_token(self):
         response = self.client.post(reverse("auth_token_create"), {

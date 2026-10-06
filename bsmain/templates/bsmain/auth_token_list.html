@@ -55,7 +55,7 @@
                             <span id="token-reveal-label-{{ auth_token.id }}">{% translate "Reveal" %}</span>
                             <span id="token-hide-label-{{ auth_token.id }}" class="hidden">{% translate "Hide" %}</span>
                         </button>
-                        {% include "includes/copy_button_only.html" with secondary=True %}
+                        {% include "includes/copy_button_only.html" with link=True %}
                     </div>
                     <div class="mt-2 font-bold text-slate-800 dark:text-slate-100">
                         {{ auth_token.description }}
