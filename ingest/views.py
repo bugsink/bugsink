@@ -318,7 +318,7 @@ class BaseIngestAPIView(View):
     @classmethod
     def process_minidump(cls, ingested_at, ingestion_id, minidump_bytes, project, request):
         # This is for the "pure" minidump case, i.e. full separate event (however: event data/extra data _can_ be
-        # provided via POST). TSTTCPW: convert the minidump data to an event and then proceed as usual.
+        # provided via POST).
         performance_logger.info("ingested minidump with %s bytes", len(minidump_bytes))
 
         # NOTE: the sentry-native SDK (at least when crashpad-powered) sends a 'guid' request.POST field; we don't use
@@ -331,13 +331,13 @@ class BaseIngestAPIView(View):
         event_data["platform"] = "native"
         event_data["errors"] = []
 
-        merge_minidump_event(event_data, minidump_bytes, project)
-
-        # write the event data to disk:
         filename = get_filename_for_event_id(ingestion_id)
         b108_makedirs(os.path.dirname(filename))
         with open(filename, 'w') as f:
             json.dump(event_data, f)
+
+        with open(get_filename_for_event_id(ingestion_id, filetype="minidump"), "wb") as f:
+            f.write(minidump_bytes)
 
         event_metadata = cls.get_event_meta(event_data["event_id"], ingested_at, ingestion_id, request, project)
         event_metadata["has_minidump"] = True

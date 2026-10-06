@@ -1570,8 +1570,59 @@ class IngestSecurityViewUnitTestCase(RegularTestCase):
         self.assertEqual("123", result["request"]["url"])
 
 
+@tag("samples")
+class MinidumpIngestRegressionTestCase(TransactionTestCase):
+    # These tests use Snappea's TASK_ALWAYS_EAGER test setting. In production the response is returned before digest;
+    # here the request also proves that the queued digest succeeds and cleans up its ingestion files.
+
+    def setUp(self):
+        super().setUp()
+        self.project = Project.objects.create(name="minidump-test")
+        self.sentry_auth_header = get_header_value(
+            f"http://{self.project.sentry_key}@hostisignored/{self.project.id}")
+        self.minidump_filename = os.path.join(
+            os.getenv("SAMPLES_DIR", "../event-samples"), "minidumps", "linux_overflow.dmp")
+
+    def test_direct_minidump_endpoint_ingests_minidump(self):
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            with open(self.minidump_filename, "rb") as minidump:
+                response = self.client.post(
+                    f"/api/{self.project.id}/minidump/",
+                    data={"upload_file_minidump": minidump},
+                    headers={"X-Sentry-Auth": self.sentry_auth_header},
+                )
+
+            self.assertEqual(200, response.status_code, response.content)
+            self.assertEqual(1, Event.objects.count())
+            self.assertEqual([], os.listdir(tempdir))
+
+    def test_minidump_only_envelope_does_not_duplicate_exceptions_regression(self):
+        # Regression test: minidump-only envelopes used to merge the dump before and during digest.
+        with open(self.minidump_filename, "rb") as minidump:
+            minidump_bytes = minidump.read()
+
+        event_id = uuid.uuid4().hex
+        envelope = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "attachment", "attachment_type": "event.minidump", "length": %d}\n'
+            % len(minidump_bytes) +
+            minidump_bytes
+        )
+
+        response = self.client.post(
+            f"/api/{self.project.id}/envelope/",
+            content_type="application/json",
+            headers={"X-Sentry-Auth": self.sentry_auth_header},
+            data=envelope,
+        )
+
+        self.assertEqual(200, response.status_code, response.content)
+        event_data = json.loads(Event.objects.get().get_raw_data())
+        self.assertEqual(1, len(event_data["exception"]["values"]))
+
+
 class MinidumpAPIViewTestCase(TransactionTestCase):
-    # NOTE: no tests for the _actual_ minidump processing just yet.
+    # Actual minidump processing is covered by MinidumpIngestRegressionTestCase; these are unit tests for POST data.
 
     def setUp(self):
         super().setUp()
