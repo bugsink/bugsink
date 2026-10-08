@@ -49,8 +49,6 @@ from .event_counter import check_for_thresholds
 from .header_validators import (
     validate_envelope_headers, validate_item_headers, filter_valid_item_headers, filter_valid_envelope_headers)
 
-from bugsink.exceptions import ViolatedExpectation
-
 
 def _digest_params(event_data, project, request, now=None):
     if now is None:
@@ -725,8 +723,12 @@ class IngestViewTestCase(TransactionTestCase):
             if type_ == "Foo":
                 check()
             else:
-                with self.assertRaises(ViolatedExpectation):
+                with self.assertLogs("bugsink.ingest", level="WARNING") as logs:
                     check()
+                self.assertIn("ValidationError in digest_event", logs.output[0])
+
+        self.assertEqual(1, Issue.objects.filter(project=project).count())
+        self.assertEqual(1, Event.objects.filter(project=project).count())
 
     def test_envelope_endpoint_brotli_bomb(self):
         project = Project.objects.create(name="test")
