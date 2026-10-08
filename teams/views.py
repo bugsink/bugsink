@@ -31,6 +31,18 @@ from .tasks import send_team_invite_email, send_team_invite_email_new_user
 User = get_user_model()
 
 
+def _leave_team(request, membership, team_pk):
+    # a team without admins can't be managed anymore, so the last admin has to promote someone else first
+    other_admins = TeamMembership.objects.filter(
+        team=team_pk, role=TeamRole.ADMIN, accepted=True).exclude(id=membership.id)
+    if membership.is_admin() and not other_admins.exists():
+        messages.warning(
+            request, _("You are the last admin of this team. Promote another member or delete the team first."))
+    else:
+        membership.delete()
+        messages.success(request, _('You have left the team "%s"') % membership.team.name)
+
+
 @atomic_for_request_method
 def team_list(request, ownership_filter=None):
     my_memberships = TeamMembership.objects.filter(user=request.user)
@@ -55,16 +67,7 @@ def team_list(request, ownership_filter=None):
         action, team_pk = full_action_str.split(":", 1)
         if action == "leave":
             membership = get_object_or_404(TeamMembership, team=team_pk, user=request.user, accepted=True)
-
-            # a team without admins can't be managed anymore, so the last admin has to promote someone else first
-            other_admins = TeamMembership.objects.filter(
-                team=team_pk, role=TeamRole.ADMIN, accepted=True).exclude(id=membership.id)
-            if membership.is_admin() and not other_admins.exists():
-                messages.warning(
-                    request, _("You are the last admin of this team. Promote another member or delete the team first."))
-            else:
-                membership.delete()
-                messages.success(request, _('You have left the team "%s"') % membership.team.name)
+            _leave_team(request, membership, team_pk)
             return redirect('team_list_mine')
         elif action == "join":
             team = Team.objects.get(id=team_pk)
