@@ -645,6 +645,20 @@ class ViewTests(TransactionTestCase):
         response = self.client.get(f"/issues/issue/{self.issue.id}/tags/")
         self.assertContains(response, self.issue.title())
 
+    def test_aggregated_tag_values_are_not_filter_links(self):
+        store_tags(self.event, self.issue, {"many-values": "value-0"})
+        for i in range(1, 26):
+            event = create_event(self.project, self.issue, project_digest_order=i + 1)
+            store_tags(event, self.issue, {"many-values": f"value-{i}"})
+
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/")
+        self.assertContains(response, 'title="Filter issues by this tag"', count=3)
+        self.assertNotContains(response, 'title="Filter issues by this tag">...</a>')
+
+        response = self.client.get(f"/issues/issue/{self.issue.id}/tags/")
+        self.assertContains(response, 'title="Filter issues by this tag"', count=24)
+        self.assertNotContains(response, 'title="Filter issues by this tag">Other...</a>')
+
     def test_issue_sidebar_summarizes_long_release_lists(self):
         self.issue.events_at = "\n".join(f"2026.1.{i}.0" for i in range(10)) + "\n"
         self.issue.save()

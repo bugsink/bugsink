@@ -191,6 +191,7 @@ class Issue(models.Model):
                     "value": TagValue(value=other_label),
                     "count": total_seen - seen_till_now,
                     "pct": int((total_seen - seen_till_now) / total_seen * 100),
+                    "is_other": True,
                 })
 
             result.append(issue_tags)
