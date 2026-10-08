@@ -241,7 +241,7 @@
                     <div class="mb-4">
                         <div class="text-sm font-bold text-slate-500 dark:text-slate-300">{{ issuetags.0.key.key }}:</div>
                         <div>
-                        {% for issuetag in issuetags %}<a href="{% url 'issue_list_open' project_pk=issue.project_id %}?q={% tag_drilldown request.GET.q issuetags.0.key.key issuetag.value.value %}" class="hover:text-cyan-500 dark:hover:text-cyan-300" title="Filter issues by this tag">{{ issuetag.value.value }}</a> <span class="text-xs">({{ issuetag.pct }}%)</span>{% if not forloop.last %}, {% endif %}{% endfor %}
+                        {% for issuetag in issuetags %}{% if issuetag.is_other %}{{ issuetag.value.value }}{% else %}<a href="{% url 'issue_list_open' project_pk=issue.project_id %}?q={% tag_drilldown request.GET.q issuetags.0.key.key issuetag.value.value %}" class="hover:text-cyan-500 dark:hover:text-cyan-300" title="Filter issues by this tag">{{ issuetag.value.value }}</a>{% endif %} <span class="text-xs">({{ issuetag.pct }}%)</span>{% if not forloop.last %}, {% endif %}{% endfor %}
                         </div>
                     </div>
                 {% endfor %}

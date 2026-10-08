@@ -13,7 +13,7 @@
             {% for issuetag in issuetags %}
 
                 <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
-                    <div class="w-2/3 flex items-center {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}"><a href="{% url 'issue_list_open' project_pk=issue.project_id %}?q={% tag_drilldown request.GET.q issuetags.0.key.key issuetag.value.value %}" class="break-all hover:text-cyan-500 dark:hover:text-cyan-300" title="Filter issues by this tag">{{ issuetag.value.value }}</a></div>
+                    <div class="w-2/3 flex items-center {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{% if issuetag.is_other %}{{ issuetag.value.value }}{% else %}<a href="{% url 'issue_list_open' project_pk=issue.project_id %}?q={% tag_drilldown request.GET.q issuetags.0.key.key issuetag.value.value %}" class="break-all hover:text-cyan-500 dark:hover:text-cyan-300" title="Filter issues by this tag">{{ issuetag.value.value }}</a>{% endif %}</div>
                     <div class="w-1/6 pr-4 flex items-stretch {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">
                         <div class="bg-slate-200 dark:bg-slate-600" style="width: {{ issuetag.pct }}%;">
                              <span class="absolute pl-1 whitespace-nowrap">
