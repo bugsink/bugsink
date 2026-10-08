@@ -7,7 +7,7 @@ function initializeLeaveModal() {
 
     document.querySelectorAll('.leave-button').forEach(button => {
         button.addEventListener('click', () => {
-            leaveActionInput.value = 'leave:' + button.getAttribute('data-team-id');
+            leaveActionInput.value = button.getAttribute('data-leave-action');
             modal.classList.remove('hidden');
         });
     });

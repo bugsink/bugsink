@@ -244,7 +244,7 @@ class TeamLeaveTestCase(TransactionTestCase):
         self.client.force_login(self.other)
 
         response = self.client.get(self.url)
-        self.assertContains(response, 'data-team-id="%s"' % self.team.id)
+        self.assertContains(response, 'data-leave-action="leave:%s"' % self.team.id)
 
         response = self.client.post(self.url, self.leave, follow=True)
         self.assertContains(response, "You have left the team")
@@ -263,6 +263,32 @@ class TeamLeaveTestCase(TransactionTestCase):
         self.client.force_login(self.admin)
 
         self.client.post(self.url, self.leave)
+        self.assertFalse(TeamMembership.objects.filter(id=self.admin_membership.id).exists())
+
+    def test_last_admin_cannot_leave_from_members_page(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("team_members", kwargs={"team_pk": self.team.id}))
+        self.assertContains(response, 'data-leave-action="remove:%s"' % self.admin.id)
+
+        response = self.client.post(
+            reverse("team_members", kwargs={"team_pk": self.team.id}),
+            {"action": f"remove:{self.admin.id}"},
+            follow=True,
+        )
+        self.assertContains(response, "last admin")
+        self.assertTrue(TeamMembership.objects.filter(id=self.admin_membership.id).exists())
+
+    def test_admin_can_leave_from_members_page_when_another_admin_exists(self):
+        TeamMembership.objects.create(team=self.team, user=self.other, role=TeamRole.ADMIN, accepted=True)
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse("team_members", kwargs={"team_pk": self.team.id}),
+            {"action": f"remove:{self.admin.id}"},
+            follow=True,
+        )
+        self.assertContains(response, "You have left the team")
         self.assertFalse(TeamMembership.objects.filter(id=self.admin_membership.id).exists())
 
     def test_non_member_cannot_leave(self):
