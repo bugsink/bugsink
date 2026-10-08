@@ -36,8 +36,15 @@
 
                 <input type="hidden" name="next" value="{{ next }}">
                 <button class="bg-slate-800 font-medium p-2 md:p-4 text-white uppercase w-full">{% translate "Login" %}</button>
-
             </form>
+
+            {% if oauth_enabled %}
+                <div class="mt-4">
+                    <a class="bg-slate-800 font-medium p-2 md:p-3 text-white uppercase" href="{% url 'social:begin' oauth_provider %}">
+                        Single Sign On ({{ oauth_provider }})
+                    </a>
+                </div>
+            {% endif %}
 
             <div class="mt-4">
                 <a href="{% url 'request_reset_password' %}" class="text-slate-800 dark:text-slate-100">{% translate "Forgot password?" %}</a>
