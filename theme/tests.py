@@ -1,3 +1,4 @@
+from urllib.parse import unquote
 from unittest import TestCase as RegularTestCase
 from unittest.mock import patch
 
@@ -8,8 +9,7 @@ from bugsink.pygments_extensions import choose_lexer_for_pattern, get_all_lexers
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 
 from events.utils import IncompleteList, IncompleteDict
-
-from urllib.parse import unquote
+from tags.search import parse_query
 
 from .templatetags.issues import (
     _pygmentize_lines as actual_pygmentize_lines, format_var, pygmentize, timestamp_with_millis)
@@ -220,6 +220,14 @@ class TagDrilldownTest(RegularTestCase):
         self.assertEqual('browser:"Fire fox"', _tag_clause("browser", "Fire fox"))
         self.assertEqual(r'k:"a \"b\" \\c"', _tag_clause("k", r'a "b" \c'))
 
+    def test_clause_quotes_keys_with_search_syntax(self):
+        self.assertEqual('"bugsink:release":"1.2"', _tag_clause("bugsink:release", "1.2"))
+
+        # This just documents "what is" rather than "what I believe is right": these are not valid Sentry tag keys.
+        self.assertEqual(
+            r'"key with \"quote\" and \\slash":"value"',
+            _tag_clause('key with "quote" and \\slash', "value"))
+
     def test_no_current_query_is_just_the_clause(self):
         self.assertEqual('browser:"Firefox"', unquote(tag_drilldown("", "browser", "Firefox")))
 
@@ -231,6 +239,10 @@ class TagDrilldownTest(RegularTestCase):
         self.assertNotIn('"', out)
         self.assertNotIn(' ', out)
         self.assertIn('%22', out)
+
+    def test_colon_key_roundtrips_through_drilldown_and_parser(self):
+        query = unquote(tag_drilldown("", "bugsink:release", "1.2"))
+        self.assertEqual(({"bugsink:release": "1.2"}, ""), parse_query(query))
 
 
 class NavigationLinksTestCase(TransactionTestCase):

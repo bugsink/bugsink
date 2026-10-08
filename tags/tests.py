@@ -267,6 +267,9 @@ class SearchParserTestCase(RegularTestCase):
     def test_parser_supports_escaped_backslashes(self):
         self.assertEqual(({"key": "a \\ value"}, ""), parse_query(r'key:"a \\ value"'))
 
+    def test_parser_supports_quoted_keys(self):
+        self.assertEqual(({"bugsink:release": "1.2"}, ""), parse_query('"bugsink:release":"1.2"'))
+
     def test_parser_ignores_colons_inside_quotes(self):
         self.assertEqual(({"key": "value"}, '"not:a tag"'), parse_query('"not:a tag" key:value'))
 
