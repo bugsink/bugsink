@@ -32,7 +32,7 @@ updates:
 # This looks like a work-around ("limit: 0") but it's in fact the official way:
 # https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuring-dependabot-version-updates#example-disabling-version-updates-for-some-dependencies
 - package-ecosystem: "npm"
-  directory: "/"
+  directory: "/theme/static_src"
   schedule:
     interval: "weekly"
   open-pull-requests-limit: 0
