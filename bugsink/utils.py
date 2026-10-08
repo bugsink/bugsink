@@ -66,6 +66,18 @@ def send_rendered_email(subject, base_template_name, recipient_list, context=Non
     if not recipient_list:
         return
 
+    refused_recipient_list = [r for r in recipient_list if str(r).strip().lower().endswith("@bugsink.com")]
+    if refused_recipient_list:
+        logger.error(
+            "Refusing to send email with subject '%s' to %s. You are not Bugsink, so configure the user with their "
+            "own email address instead of an @bugsink.com address.",
+            subject,
+            refused_recipient_list,
+        )
+        recipient_list = [r for r in recipient_list if r not in refused_recipient_list]
+        if not recipient_list:
+            return
+
     if sends_email_as_bugsink_but_is_not_hosted_on_bugsink(settings.DEFAULT_FROM_EMAIL, settings.ALLOWED_HOSTS):
         logger.error(
             "Refusing to send email with subject '%s' to %s because DEFAULT_FROM_EMAIL=%r uses bugsink.com while "
