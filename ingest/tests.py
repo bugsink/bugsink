@@ -626,6 +626,35 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertIn("id", response.json())
         uuid.UUID(response.json()["id"])
 
+    def test_issue_level_denormalized_and_tracks_latest_event(self):
+        project = Project.objects.create(name="test")
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        def post_log_message(level):
+            data_bytes = json.dumps({
+                "event_id": uuid.uuid4().hex,
+                "timestamp": time.time(),
+                "platform": "python",
+                "message": "the same log message",  # same message => same grouping => same issue
+                "level": level,
+            }).encode("utf-8")
+            response = self.client.post(
+                f"/api/{ project.id }/store/",
+                content_type="application/json",
+                headers={"X-Sentry-Auth": sentry_auth_header},
+                data=data_bytes,
+            )
+            self.assertEqual(200, response.status_code, response.content)
+
+        post_log_message("warning")
+        issue = Issue.objects.get()
+        self.assertTrue(issue.is_log_message())
+        self.assertEqual("warning", issue.level)
+
+        post_log_message("error")  # latest event's level wins
+        issue.refresh_from_db()
+        self.assertEqual("error", issue.level)
+
     def test_envelope_endpoint_cleans_up_oversized_event_file(self):
         project = Project.objects.create(name="test")
         sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
