@@ -100,7 +100,7 @@ class ThreadStacktraceSampleTests(TransactionTestCase):
                 self.assertContains(response, message)
                 html = response.content.decode()
                 self.assertIn(f">{message}</h1>", html)
-                self.assertIn(f'<span class="font-bold">{data["level"].upper()}</span>', html)
+                self.assertIn(f'>{data["level"].upper()}</span>', html)  # the level badge
                 self.assertNotRegex(html, r"<h1[^>]*>Log Message</h1>")
                 self.assertContains(response, probe_filename)
                 self.assertNotContains(response, "capture point")

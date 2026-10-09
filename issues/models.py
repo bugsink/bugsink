@@ -56,6 +56,7 @@ class Issue(models.Model):
     stored_event_count = models.IntegerField(blank=False, null=False, default=0, editable=False)
     calculated_type = models.CharField(max_length=128, blank=True, null=False, default="")
     calculated_value = models.TextField(max_length=1024, blank=True, null=False, default="")
+    level = models.CharField(max_length=len("warning"), blank=True, null=False, default="")  # latest event's level
     transaction = models.CharField(max_length=200, blank=True, null=False, default="")
     last_frame_filename = models.CharField(max_length=255, blank=True, null=False, default="")
     last_frame_module = models.CharField(max_length=255, blank=True, null=False, default="")

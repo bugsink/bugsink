@@ -38,6 +38,7 @@ from events.usage import record_event_counts
 from .models import (
     Issue, IssueStateManager, TurningPoint, TurningPointKind)
 from .regressions import is_regression, is_regression_2, issue_is_regression
+from .utils import LOG_MESSAGE_TYPE
 from .factories import denormalized_issue_fields
 from .tasks import get_model_topography_with_issue_override
 
@@ -443,6 +444,18 @@ class ViewTests(TransactionTestCase):
         self.assertContains(response, self.issue.title())
         self.assertContains(response, self.issue.friendly_id())
 
+    def test_issue_list_view_shows_log_level_for_log_messages(self):
+        Issue.objects.filter(id=self.issue.id).update(
+            calculated_type=LOG_MESSAGE_TYPE, calculated_value="something happened", level="error")
+        response = self.client.get(f"/issues/{self.project.id}/")
+        self.assertContains(response, ">ERROR</span>")
+        self.assertContains(response, "bg-red-100")  # the error badge color
+
+        # a non-log-message issue (default type) does not get the level badge, even if a level is set
+        Issue.objects.filter(id=self.issue.id).update(calculated_type="ValueError", level="error")
+        response = self.client.get(f"/issues/{self.project.id}/")
+        self.assertNotContains(response, ">ERROR</span>")
+
     def test_issue_list_sorting(self):
         other_issue, _ = get_or_create_issue(
             self.project, create_event_data(exception_type="FrequentError"))
@@ -593,7 +606,8 @@ class ViewTests(TransactionTestCase):
 
         response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/")
 
-        self.assertContains(response, '<span class="font-bold">WARNING</span>')
+        self.assertContains(response, ">WARNING</span>")
+        self.assertContains(response, "bg-orange-100")  # the warning badge color
 
     def test_exception_type_and_value_remain_in_the_issue_page_header(self):
         self.issue.calculated_type = "ValueError"
