@@ -1279,3 +1279,66 @@ class IssueDeletionTestCase(TransactionTestCase):
             (apps.get_model('issues', 'Grouping'), 'issue'),
             (apps.get_model('tags', 'IssueTag'), 'issue'),
         ])
+
+
+class RealertHelperTest(RegularTestCase):
+    def test_crossed_bucket(self):
+        from issues.realert import _crossed_bucket
+        self.assertFalse(_crossed_bucket(0, 1, 0))     # bucket_size 0 disables
+        self.assertTrue(_crossed_bucket(1, 2, 2))      # 2 // 2 = 1 > 1 // 2 = 0
+        self.assertFalse(_crossed_bucket(2, 3, 2))     # 3 // 2 = 1 == 2 // 2 = 1
+        self.assertTrue(_crossed_bucket(3, 4, 2))      # 4 // 2 = 2 > 3 // 2 = 1
+        self.assertFalse(_crossed_bucket(5, 5, 5))     # no movement, no crossing
+
+    def test_still_open_turning_point_detail(self):
+        from issues.markdown_issue import _turning_point_detail
+        tp = TurningPoint(kind=TurningPointKind.STILL_OPEN, metadata=json.dumps({"digested_event_count": 42}))
+        self.assertEqual("42 events so far", _turning_point_detail(tp))
+
+
+class EvaluateOpenIssuesTestCase(TransactionTestCase):
+    @patch("issues.realert.send_still_open_alert")
+    def test_remute_quiet_issue(self, send_still_open_alert):
+        from django.core.management import call_command
+        from issues.markdown_issue import _turning_point_detail
+        project = Project.objects.create(name="noise", mute_volume=5, unmute_volume=10, noise_period="day")
+        issue, _ = get_or_create_issue(project)  # open, with no (recent) events: quiet
+
+        call_command("evaluate_open_issues")
+
+        issue.refresh_from_db()
+        self.assertTrue(issue.is_muted)
+        self.assertFalse(send_still_open_alert.delay.called)  # an issue going quiet is not news
+        # the wake condition is attached so the issue can unmute again, and the history reads cleanly
+        self.assertEqual(
+            [{"period": "day", "nr_of_periods": 1, "volume": 10}],
+            json.loads(issue.unmute_on_volume_based_conditions))
+        tp = TurningPoint.objects.get(issue=issue, kind=TurningPointKind.MUTED)
+        self.assertEqual("muted until >10 events per 1 day", _turning_point_detail(tp))
+
+    def test_busy_issue_is_not_remuted(self):
+        from django.core.management import call_command
+        project = Project.objects.create(name="noise", mute_volume=2, unmute_volume=10, noise_period="day")
+        issue, _ = get_or_create_issue(project)
+        for i in range(3):  # 3 >= mute_volume, within the period: not quiet
+            create_event(project, issue, project_digest_order=i + 1)
+
+        call_command("evaluate_open_issues")
+
+        issue.refresh_from_db()
+        self.assertFalse(issue.is_muted)
+
+    @patch("issues.realert.send_still_open_alert")
+    def test_realert_after_days(self, send_still_open_alert):
+        from django.core.management import call_command
+        project = Project.objects.create(name="nag", realert_after_days=1)
+        issue, _ = get_or_create_issue(project)
+        issue.first_seen = datetime.now(timezone.utc) - timedelta(days=2)
+        issue.save()
+
+        call_command("evaluate_open_issues")
+
+        self.assertTrue(send_still_open_alert.delay.called)
+        issue.refresh_from_db()
+        self.assertTrue(TurningPoint.objects.filter(issue=issue, kind=TurningPointKind.STILL_OPEN).exists())
+        self.assertIsNotNone(issue.last_realerted_at)
