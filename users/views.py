@@ -1,11 +1,14 @@
 from datetime import timedelta
+from urllib.parse import urlencode
 
-from django.contrib.auth import login
+from django.conf import settings
+from django.contrib.auth import login, logout
+from django.contrib.auth import views as auth_views
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm
 from django.shortcuts import render, redirect, reverse
 from django.contrib.auth import get_user_model
-from django.http import Http404
+from django.http import Http404, HttpResponseRedirect
 from django.utils import timezone
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -20,10 +23,40 @@ from bugsink.utils import is_safe_next_url
 from .forms import (
     UserCreationForm, ResendConfirmationForm, RequestPasswordResetForm, SetPasswordForm, PreferencesForm, UserEditForm)
 from .models import EmailVerification
+from .oidc import oidc_logout_url
 from .tasks import send_confirm_email, send_reset_email
 
 
 User = get_user_model()
+
+# with more than one authentication backend configured, Django's login() must be told which one vouched for the user
+PASSWORD_BACKEND = "django.contrib.auth.backends.ModelBackend"
+
+
+def oidc_only():
+    return settings.OIDC_ENABLED and settings.OIDC_ONLY
+
+
+def redirect_to_sso(next_url):
+    query = "?" + urlencode({"next": next_url}) if next_url else ""
+    return HttpResponseRedirect(reverse("oidc_authentication_init") + query)
+
+
+def login_view(request):
+    # "local" is the break-glass escape hatch to the password form, e.g. when the IdP is down
+    if oidc_only() and request.method == "GET" and "local" not in request.GET:
+        return redirect_to_sso(request.GET.get("next"))
+
+    return auth_views.LoginView.as_view(template_name="bugsink/login.html")(request)
+
+
+def logout_view(request):
+    end_session_url = oidc_logout_url(request) if request.method == "POST" else None
+    if end_session_url is None:
+        return auth_views.LogoutView.as_view(template_name="users/logged_out.html")(request)
+
+    logout(request)
+    return HttpResponseRedirect(end_session_url)
 
 
 @atomic_for_request_method
@@ -84,7 +117,7 @@ def user_edit(request, user_pk):
 
 @atomic_for_request_method
 def signup(request):
-    if get_settings().USER_REGISTRATION != CB_ANYBODY:
+    if get_settings().USER_REGISTRATION != CB_ANYBODY or oidc_only():
         raise Http404("User self-registration is not allowed.")
 
     if request.method == 'POST':
@@ -102,7 +135,7 @@ def signup(request):
                 return render(request, "users/confirm_email_sent.html", {"email": user.username})
 
             user = form.save()
-            login(request, user)
+            login(request, user, backend=PASSWORD_BACKEND)
             return redirect('home')
     else:
         form = UserCreationForm()
@@ -134,7 +167,7 @@ def confirm_email(request, token=None):
 
         # this mirrors the approach of what we do in password-resetting; and rightfully so because the in both cases
         # access to email is assumed to be sufficient proof of identity.
-        login(request, verification.user)
+        login(request, verification.user, backend=PASSWORD_BACKEND)
 
         return redirect('home')
 
@@ -165,6 +198,9 @@ def request_reset_password(request):
     # something like this exists in Django too; copy-paste-modify from the other views was more simple than thoroughly
     # understanding the Django implementation and hooking into it.
 
+    if oidc_only():
+        return redirect_to_sso(None)
+
     if request.method == 'POST':
         form = RequestPasswordResetForm(request.POST)
 
@@ -188,6 +224,10 @@ def request_reset_password(request):
 @atomic_for_request_method
 def reset_password(request, token=None):
     # alternative name: set_password (because this one also works for initial setting of a password)
+
+    if oidc_only():
+        # a password would bypass the IdP; invite links also end up here, and SSO activates invited users just the same
+        return redirect_to_sso(request.GET.get("next"))
 
     # clean up expired tokens; doing this on every request is just fine, it saves us from having to run a cron
     # job-like thing
@@ -216,7 +256,7 @@ def reset_password(request, token=None):
 
             verification.delete()
 
-            login(request, verification.user)
+            login(request, verification.user, backend=PASSWORD_BACKEND)
 
             return redirect(next_url)
 
