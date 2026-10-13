@@ -28,7 +28,7 @@ from events.sparklines import get_issue_event_sparkline, get_issue_list_event_sp
 from events.ua_stuff import get_contexts_enriched_with_ua
 
 from projects.models import ProjectMembership, get_issue_accessible_project_ids
-from tags.search import search_issues, search_events, search_events_optimized
+from tags.search import search_issues, search_events, search_events_optimized, SearchError
 from theme.templatetags.issues import timestamp_with_millis
 
 from .models import (
@@ -231,8 +231,13 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
         state_filter,
     ).order_by(*ISSUE_LIST_SORTS[sort])
 
+    search_error = None
     if request.GET.get("q"):
-        issue_list = search_issues(project, issue_list, request.GET["q"])
+        try:
+            issue_list = search_issues(project, issue_list, request.GET["q"])
+        except SearchError as e:
+            search_error = str(e)
+            issue_list = issue_list.none()
 
     paginator = UncountablePaginator(issue_list, 250)
     page_number = request.GET.get("page")
@@ -261,6 +266,7 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
         "disable_mute_buttons": state_filter in ("resolved", "muted"),
         "disable_unmute_buttons": state_filter in ("resolved", "open"),
         "q": request.GET.get("q", ""),
+        "search_error": search_error,
         "sort": sort,
         "page_obj": page_obj,
     })
