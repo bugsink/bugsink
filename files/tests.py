@@ -1,4 +1,5 @@
 from hashlib import sha1
+from datetime import timedelta
 from uuid import UUID, uuid4
 import json
 import gzip
@@ -18,6 +19,7 @@ from django.contrib.auth import get_user_model
 from django.test import LiveServerTestCase, override_settings
 from django.core.management.base import CommandError
 from django.core.management import call_command
+from django.utils import timezone
 from unittest.mock import Mock, patch
 
 from compat.dsn import get_header_value
@@ -215,7 +217,9 @@ class FilesTests(TransactionTestCase):
     def test_installation_token_can_assemble_for_multiple_projects(self):
         other_project = Project.objects.create(name="Other project")
         checksum = "a" * 40
-        Chunk.objects.create(checksum=checksum, size=0, data=b"")
+        chunk = Chunk.objects.create(checksum=checksum, size=0, data=b"")
+        old = timezone.now() - timedelta(days=2)
+        Chunk.objects.filter(id=chunk.id).update(created_at=old)
 
         with patch("files.views.assemble_artifact_bundle.delay") as delay:
             response = self.client.post(
@@ -231,6 +235,8 @@ class FilesTests(TransactionTestCase):
 
         self.assertEqual(200, response.status_code)
         delay.assert_called_once_with(checksum, [checksum], [self.project.id, other_project.id])
+        chunk.refresh_from_db()
+        self.assertGreater(chunk.created_at, old)
 
     def test_user_bound_token_must_administer_every_artifact_project(self):
         other_project = Project.objects.create(name="Other project")
@@ -379,6 +385,7 @@ class FilesTests(TransactionTestCase):
                 self.assertEqual("local", file.storage_backend)
                 self.assertEqual(data, file.get_raw_data())
                 self.assertEqual(data, Path(tempdir, checksum).read_bytes())
+                self.assertTrue(Chunk.objects.filter(checksum=checksum).exists())
 
     def test_create_file_from_local_file_does_not_read_existing_file(self):
         checksum = "a" * 40

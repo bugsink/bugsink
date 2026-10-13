@@ -8,6 +8,7 @@ from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import user_passes_test
 from django.http import Http404
+from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
 from sentry.assemble import ChunkFileState
@@ -175,6 +176,17 @@ def get_artifact_bundle_projects(data):
     return [projects_by_slug[slug] for slug in dict.fromkeys(project_slugs)], None
 
 
+def get_and_renew_available_chunk_checksums(checksums):
+    now = timezone.now()
+
+    with immediate_atomic():
+        chunks = Chunk.objects.filter(checksum__in=checksums)
+        available_checksums = set(chunks.values_list("checksum", flat=True))
+        chunks.update(created_at=now)  # mis-abuse created_at as updated_at to avoid adding a field for little gain
+
+    return available_checksums
+
+
 @csrf_exempt
 @requires_auth_token("debug-files:upload", methods=["GET", "POST"])
 def chunk_upload(request, organization_slug):
@@ -274,9 +286,7 @@ def artifact_bundle_assemble(request, organization_slug):
     # only the missing chunks, and then polls this endpoint again. We must return the actual missing chunks; returning
     # an empty list causes sentry-cli 3.x to skip uploading, and the subsequent assembly fails with a KeyError.
 
-    available_checksums = set(
-        Chunk.objects.filter(checksum__in=chunk_checksums).values_list("checksum", flat=True)
-    )
+    available_checksums = get_and_renew_available_chunk_checksums(chunk_checksums)
     missing_chunks = [c for c in chunk_checksums if c not in available_checksums]
     if missing_chunks:
         return JsonResponse({"state": ChunkFileState.NOT_FOUND, "missingChunks": missing_chunks})
@@ -316,9 +326,7 @@ def difs_assemble(request, organization_slug, project_slug):
         for chunk in file_info.get("chunks", [])
     }
 
-    available_chunks = set(
-        Chunk.objects.filter(checksum__in=all_requested_chunks).values_list("checksum", flat=True)
-    )
+    available_chunks = get_and_renew_available_chunk_checksums(all_requested_chunks)
 
     response = {}
 
