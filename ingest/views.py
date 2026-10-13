@@ -469,6 +469,10 @@ class BaseIngestAPIView(View):
         denormalized_fields["calculated_type"] = calculated_type
         denormalized_fields["calculated_value"] = calculated_value
 
+        # level is kept out of denormalized_fields (spread into both Issue and Event) because Event sets its own level
+        # from the payload; here we only denormalize it onto the Issue, tracking the latest event like the title.
+        level = event_data.get("level") or ""
+
         grouping_path, path_context = get_grouping_path_for_event(project, event_data, digested_at)
 
         if grouping_path in [GroupingPath.FOUND, GroupingPath.ATTACH]:
@@ -488,6 +492,7 @@ class BaseIngestAPIView(View):
             issue.digested_event_count += 1
             issue.calculated_type = calculated_type
             issue.calculated_value = calculated_value
+            issue.level = level
 
         elif grouping_path == GroupingPath.NEW:
             key_with_mechanism, = path_context
@@ -506,6 +511,7 @@ class BaseIngestAPIView(View):
                 last_seen=ingested_at,
                 digested_event_count=1,
                 stored_event_count=0,  # we increment this below
+                level=level,
                 **denormalized_fields,
             )
             issue_created = True

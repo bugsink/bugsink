@@ -138,7 +138,7 @@ TODO
         {% endcomment %}
 
         <td class="w-full p-4 font-mono align-top">
-            {{ event.title }}
+            {{ event.title }}{% if event.is_log_message and event.level %} {% include "issues/_level_badge.html" with level=event.level %}{% endif %}
         </td>
 
         <td class="p-4 font-mono align-top">
