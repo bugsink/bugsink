@@ -117,6 +117,22 @@ if os.getenv("EMAIL_TIMEOUT"):
 
 SERVER_EMAIL = DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Bugsink <bugsink@example.org>")
 
+# OpenID Connect (SSO) login. Register {BASE_URL}/accounts/oidc/callback/ as redirect URI at your identity provider.
+OIDC_ENABLED = os.getenv("OIDC_ENABLED", "False").lower() in ("true", "1", "yes")
+if OIDC_ENABLED:
+    OIDC_RP_CLIENT_ID = os.getenv("OIDC_CLIENT_ID")
+    OIDC_RP_CLIENT_SECRET = os.getenv("OIDC_CLIENT_SECRET")
+    OIDC_OP_DISCOVERY_URL = os.getenv("OIDC_DISCOVERY_URL")
+    OIDC_RP_SIGN_ALGO = os.getenv("OIDC_SIGN_ALGO", "RS256")
+    OIDC_RP_SCOPES = os.getenv("OIDC_SCOPES", "openid email profile")
+    OIDC_CREATE_USER = os.getenv("OIDC_CREATE_USER", "True").lower() in ("true", "1", "yes")
+    OIDC_REQUIRE_VERIFIED_EMAIL = os.getenv("OIDC_REQUIRE_VERIFIED_EMAIL", "True").lower() in ("true", "1", "yes")
+    OIDC_GROUPS_CLAIM = os.getenv("OIDC_GROUPS_CLAIM", "groups")
+    OIDC_REQUIRED_GROUP = os.getenv("OIDC_REQUIRED_GROUP") or None
+    OIDC_ADMIN_GROUP = os.getenv("OIDC_ADMIN_GROUP") or None
+    OIDC_ONLY = os.getenv("OIDC_ONLY", "False").lower() in ("true", "1", "yes")
+    OIDC_LOGIN_BUTTON_TEXT = os.getenv("OIDC_LOGIN_BUTTON_TEXT", "Log in with SSO")
+
 
 # constants for "create by" (user/team/project) settings
 CB_ANYBODY = "CB_ANYBODY"

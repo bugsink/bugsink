@@ -2,7 +2,6 @@ from django.conf import settings
 
 from django.contrib import admin
 from django.urls import include, path
-from django.contrib.auth import views as auth_views
 from django.views.generic import RedirectView, TemplateView
 
 from rest_framework import routers
@@ -13,7 +12,9 @@ from users.views import debug_email as debug_users_email
 from teams.views import debug_email as debug_teams_email
 from bugsink.app_settings import get_settings
 from users.views import (
-    signup, confirm_email, resend_confirmation, request_reset_password, reset_password, preferences, change_password)
+    signup, confirm_email, resend_confirmation, request_reset_password, reset_password, preferences, change_password,
+    login_view, logout_view)
+from users.oidc import oidc_authenticate, oidc_callback
 from ingest.views import download_envelope
 from files.views import chunk_upload, artifact_bundle_assemble, difs_assemble, api_root, api_catch_all
 from bugsink.decorators import login_exempt
@@ -60,8 +61,10 @@ urlpatterns = [
     path("accounts/request-reset-password/", request_reset_password, name="request_reset_password"),
     path("accounts/reset-password/<str:token>/", reset_password, name="reset_password"),
 
-    path("accounts/login/", auth_views.LoginView.as_view(template_name="bugsink/login.html"), name="login"),
-    path("accounts/logout/", auth_views.LogoutView.as_view(template_name="users/logged_out.html"), name="logout"),
+    path("accounts/login/", login_view, name="login"),
+    path("accounts/logout/", logout_view, name="logout"),
+    path("accounts/oidc/authenticate/", oidc_authenticate, name="oidc_authentication_init"),
+    path("accounts/oidc/callback/", oidc_callback, name="oidc_authentication_callback"),
 
     path("accounts/preferences/", preferences, name="preferences"),
     path("accounts/change-password/", change_password, name="change_password"),
