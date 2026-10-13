@@ -59,6 +59,8 @@ def _turning_point_detail(tp):
         d = meta["mute_until"]
         plural_s = "" if d.get("nr_of_periods") == 1 else "s"
         return f"muted until >{d.get('volume')} events per {d.get('nr_of_periods')} {d.get('period_name')}{plural_s}"
+    if "digested_event_count" in meta:
+        return f"{meta['digested_event_count']} events so far"
 
     return ""
 

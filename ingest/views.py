@@ -28,6 +28,7 @@ from issues.grouping_mechanisms import (
     GROUPING_TRANSITION_PERIOD, BUGSINK_GROUPING_V1, MECHANISM_INDEPENDENT_GROUPING)
 from issues.utils import get_type_and_value_for_data, get_key_with_mechanism_for_data, get_denormalized_fields_for_data
 from issues.regressions import issue_is_regression
+from issues.realert import maybe_realert_on_events, mute_with_volume_wake
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.streams import (
@@ -574,7 +575,17 @@ class BaseIngestAPIView(View):
                 kind=TurningPointKind.FIRST_SEEN)
             event.never_evict = True
 
-            if project.alert_on_new_issue:
+            if project.new_issues_start_muted and project.unmute_volume > 1:
+                # The project wants new issues to stay quiet until they get busy enough. Start the issue muted with a
+                # volume-based unmute condition attached; count_issue_periods_and_act_on_it (below) will unmute (and
+                # alert) once it crosses the threshold. No new-issue alert is sent, by design. (unmute_volume 1 would
+                # unmute on this very event, so it is treated as "not muted".)
+                condition, mute_metadata = mute_with_volume_wake(project)
+                IssueStateManager.mute(issue, unmute_on_volume_based_conditions=json.dumps([condition]))
+                TurningPoint.objects.create(
+                    project=project, issue=issue, triggering_event=event, timestamp=ingested_at,
+                    kind=TurningPointKind.MUTED, metadata=json.dumps(mute_metadata))
+            elif project.alert_on_new_issue:
                 delay_on_commit(send_new_issue_alert, str(issue.id))
 
         else:
@@ -608,6 +619,10 @@ class BaseIngestAPIView(View):
                     unmute_metadata={"mute_for": {"unmute_after": issue.unmute_after}})
 
         cls.count_issue_periods_and_act_on_it(issue, event, digested_at)
+
+        if not issue_created:
+            # after all state transitions above have settled, remind about issues that are still open
+            maybe_realert_on_events(issue, project, event, digested_at)
 
         if event.never_evict:
             # as a sort of poor man's django-dirtyfields (which we haven't adopted for simplicity's sake) we simply do

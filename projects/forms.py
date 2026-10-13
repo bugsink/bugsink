@@ -91,6 +91,33 @@ class ProjectForm(forms.ModelForm):
 
         self.fields["retention_max_event_count"].help_text = _("The maximum number of events to store before evicting.")
 
+        self.fields["new_issues_start_muted"].label = _("Start new issues muted")
+        self.fields["new_issues_start_muted"].help_text = _(
+            "New issues stay quiet (no new-issue alert) until they reach the unmute threshold.")
+        self.fields["unmute_volume"].label = _("Unmute at (events per period)")
+        self.fields["unmute_volume"].help_text = _(
+            "Wake a muted issue once it reaches this many events per period. 0 disables.")
+        self.fields["mute_volume"].label = _("Re-mute below (events per period)")
+        self.fields["mute_volume"].help_text = _(
+            "Mute an open issue once it drops below this many events per period. Keep it below the unmute value "
+            "to avoid repeated muting and unmuting. 0 disables. "
+            "Applied periodically, even when no new events arrive.")
+        self.fields["noise_period"].label = _("Period")
+        self.fields["noise_period"].help_text = _("The period both volume thresholds are measured over.")
+        self.fields["realert_after_events"].label = _("Remind every N events")
+        self.fields["realert_after_events"].help_text = _(
+            "Remind about a still-open issue every this many events. 0 disables.")
+        self.fields["realert_after_days"].label = _("Remind every N days")
+        self.fields["realert_after_days"].help_text = _(
+            "Remind about a still-open issue every this many days. 0 disables. Applied periodically, even when no new "
+            "events arrive.")
+
+        # the noise-policy fields are optional and only shown on the edit page; absent/blank falls back to the model
+        # default in clean(), so creating a project (whose template omits them) keeps working.
+        for field in ["new_issues_start_muted", "unmute_volume", "mute_volume", "noise_period",
+                      "realert_after_events", "realert_after_days"]:
+            self.fields[field].required = False
+
         maxes = []
         if get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT is not None:
             maxes.append(get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT)
@@ -158,7 +185,11 @@ class ProjectForm(forms.ModelForm):
     class Meta:
         model = Project
 
-        fields = ["team", "name", "visibility", "retention_max_event_count", "grouping_mechanism"]
+        fields = [
+            "team", "name", "visibility", "retention_max_event_count", "grouping_mechanism",
+            "new_issues_start_muted", "unmute_volume", "mute_volume", "noise_period",
+            "realert_after_events", "realert_after_days",
+        ]
         # slug is shown read-only via an explicit (declared) field for edit; creation auto-generates it on the model.
         # If we ever make slug editable, we'd want JS like django/contrib/admin/static/admin/js/prepopulate.js.
 
@@ -178,6 +209,23 @@ class ProjectForm(forms.ModelForm):
                 others = others.exclude(pk=self.instance.pk)
             if others.exists():
                 self.add_error("name", _("A project with this name already exists in this team."))
+
+        # default any noise-policy fields that were not submitted (the create template omits them)
+        noise_defaults = {
+            "new_issues_start_muted": False, "unmute_volume": 0, "mute_volume": 0,
+            "noise_period": "day", "realert_after_events": 0, "realert_after_days": 0,
+        }
+        for field, default in noise_defaults.items():
+            if cleaned_data.get(field) in (None, ""):
+                cleaned_data[field] = default
+
+        # keep the band ordered (mute below unmute) so issues don't flap around a single threshold, and make sure
+        # "start muted" actually mutes (an unmute threshold of 1 would unmute on the very first event).
+        if cleaned_data["mute_volume"] and cleaned_data["mute_volume"] >= cleaned_data["unmute_volume"]:
+            self.add_error(
+                "mute_volume", _("Must be below the unmute threshold, to avoid repeated muting and unmuting."))
+        if cleaned_data["new_issues_start_muted"] and cleaned_data["unmute_volume"] < 2:
+            self.add_error("unmute_volume", _("Set this to at least 2 to start new issues muted."))
 
         return cleaned_data
 

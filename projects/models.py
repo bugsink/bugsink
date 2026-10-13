@@ -11,6 +11,7 @@ from django.utils.timezone import localtime
 
 from bugsink.app_settings import get_settings
 from bugsink.transaction import delay_on_commit
+from bugsink.period_utils import DATEUTIL_KWARGS_MAP
 
 from compat.dsn import build_dsn
 from issues.grouping_mechanisms import GROUPING_MECHANISM_CHOICES, CURRENT_GROUPING_MECHANISM
@@ -18,6 +19,17 @@ from issues.grouping_mechanisms import GROUPING_MECHANISM_CHOICES, CURRENT_GROUP
 from teams.models import TeamMembership, TeamRole, user_is_team_admin
 
 from .tasks import delete_project_deps
+
+
+# noise_period dropdown: every period the search parser understands (bugsink.period_utils), smallest first.
+_NOISE_PERIOD_LABELS = {
+    "minute": _("Minutes"), "hour": _("Hours"), "day": _("Days"),
+    "week": _("Weeks"), "month": _("Months"), "year": _("Years"),
+}
+NOISE_PERIOD_CHOICES = [
+    (name, _NOISE_PERIOD_LABELS[name])
+    for name in ["minute", "hour", "day", "week", "month", "year"] if name in DATEUTIL_KWARGS_MAP
+]
 
 
 # ## Visibility/Access-design
@@ -112,6 +124,16 @@ class Project(models.Model):
     alert_on_new_issue = models.BooleanField(default=True)
     alert_on_regression = models.BooleanField(default=True)
     alert_on_unmute = models.BooleanField(default=True)
+
+    # issue noise policy; all default to "do nothing" so the behavior is opt-in per project. The two volume thresholds
+    # form a band with hysteresis (mute below, unmute at or above); keeping them apart (mute < unmute) avoids flapping.
+    new_issues_start_muted = models.BooleanField(default=False)
+    unmute_volume = models.PositiveIntegerField(default=0)  # unmute (wake) at >= N events per noise_period; 0 disables
+    mute_volume = models.PositiveIntegerField(default=0)  # re-mute (sleep) below M events per noise_period; 0 disables
+    noise_period = models.CharField(  # period both volume thresholds are measured over
+        max_length=16, default="day", choices=NOISE_PERIOD_CHOICES)
+    realert_after_events = models.PositiveIntegerField(default=0)  # remind every N events an issue stays open; 0 off
+    realert_after_days = models.PositiveIntegerField(default=0)  # remind every N days an issue stays open; 0 off
 
     # visibility
     visibility = models.IntegerField(
