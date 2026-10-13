@@ -106,6 +106,12 @@ class ClaimsTestCase(OIDCTestCase):
             self.assertTrue(backend.verify_claims(
                 {"email": "a@example.org", "email_verified": True, "groups": ["other", "bugsink"]}))
 
+    def test_rejection_reason_is_logged(self):
+        with self.settings(OIDC_REQUIRED_GROUP="bugsink"), self.assertLogs("bugsink.oidc", "WARNING") as logs:
+            OIDCBackend().verify_claims({"email": "a@example.org", "email_verified": True, "groups": ["/bugsink"]})
+
+        self.assertIn("not in OIDC_REQUIRED_GROUP 'bugsink'; claim 'groups' is ['/bugsink']", logs.output[0])
+
     def test_create_user_uses_email_as_username_without_password(self):
         user = OIDCBackend().create_user({"email": "a@example.org", "given_name": "Ada"})
 

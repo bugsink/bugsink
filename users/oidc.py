@@ -67,6 +67,21 @@ def get_groups(claims):
     return [groups] if isinstance(groups, str) else groups
 
 
+def claims_rejection_reason(claims):
+    if not claims.get("email"):
+        return "no 'email' claim; is the 'email' scope requested and released? Received claims: %s" % sorted(claims)
+
+    if settings.OIDC_REQUIRE_VERIFIED_EMAIL and claims.get("email_verified") not in (True, "true"):
+        return "'email_verified' is %r; verify the email at the IdP or set OIDC_REQUIRE_VERIFIED_EMAIL=false" % (
+            claims.get("email_verified"),)
+
+    if settings.OIDC_REQUIRED_GROUP is not None and settings.OIDC_REQUIRED_GROUP not in get_groups(claims):
+        return "not in OIDC_REQUIRED_GROUP %r; claim %r is %r" % (
+            settings.OIDC_REQUIRED_GROUP, settings.OIDC_GROUPS_CLAIM, claims.get(settings.OIDC_GROUPS_CLAIM))
+
+    return None
+
+
 def _lazy_setting(attr, *default):
     return property(lambda self: oidc_setting(attr, *default))
 
@@ -121,13 +136,10 @@ class OIDCBackend(OIDCAuthenticationBackend):
         return {**payload, **super().get_userinfo(access_token, id_token, payload)}
 
     def verify_claims(self, claims):
-        if not claims.get("email"):
-            return False
-
-        if settings.OIDC_REQUIRE_VERIFIED_EMAIL and claims.get("email_verified") not in (True, "true"):
-            return False
-
-        return settings.OIDC_REQUIRED_GROUP is None or settings.OIDC_REQUIRED_GROUP in get_groups(claims)
+        reason = claims_rejection_reason(claims)
+        if reason is not None:
+            logger.warning("OIDC login rejected for %s: %s", claims.get("email", "<no email>"), reason)
+        return reason is None
 
     def filter_users_by_claims(self, claims):
         return self.UserModel.objects.filter(username__iexact=claims["email"])
