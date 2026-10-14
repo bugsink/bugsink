@@ -182,6 +182,18 @@ def _postgres_fix(memoryview_or_bytes):
     return memoryview_or_bytes
 
 
+def get_sources_content(sm_data):
+    # Index maps keep their sources in each section's map, not at the top level.
+    maps = [sm_data] + [section["map"] for section in sm_data.get("sections", [])]
+
+    result = {}
+    for sm in maps:
+        for (source_file_name, source_file) in zip(sm.get("sources", []), sm.get("sourcesContent", [])):
+            if source_file is not None:
+                result[source_file_name] = source_file.splitlines()
+    return result
+
+
 def apply_sourcemaps(event_data, project):
     images = event_data.get("debug_meta", {}).get("images", [])
     if not images:
@@ -212,13 +224,7 @@ def apply_sourcemaps(event_data, project):
     source_for_filename = {}
     for filename, meta in filenames_with_metas:
         sm_data = json.loads(_postgres_fix(meta.file.get_raw_data()))
-
-        sources = sm_data.get("sources", [])
-        sources_content = sm_data.get("sourcesContent", [])
-
-        for (source_file_name, source_file) in zip(sources, sources_content):
-            if source_file is not None:
-                source_for_filename[source_file_name] = source_file.splitlines()
+        source_for_filename.update(get_sources_content(sm_data))
 
     for exception in get_values(event_data.get("exception", {})):
         for frame in exception.get("stacktrace", {}).get("frames", []):
