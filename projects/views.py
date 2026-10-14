@@ -529,6 +529,16 @@ def project_alerts_setup(request, project_pk):
             service_backend.send_test_message()
             messages.success(
                 request, "Test message sent; check the configured service to see if it arrived.")
+        elif action == "disable":
+            updated = MessagingServiceConfig.objects.filter(
+                project=project_pk, id=service_id, is_active=True).update(is_active=False)
+            if updated:
+                messages.success(request, "Messaging service disabled.")
+        elif action == "enable":
+            updated = MessagingServiceConfig.objects.filter(
+                project=project_pk, id=service_id, is_active=False).update(is_active=True)
+            if updated:
+                messages.success(request, "Messaging service enabled.")
 
     return render(request, 'projects/project_alerts_setup.html', {
         'project': project,
