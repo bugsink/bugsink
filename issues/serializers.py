@@ -1,6 +1,8 @@
 import datetime
+import json
 
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from bugsink.api_serializers import UTCModelSerializer
@@ -89,3 +91,31 @@ class IssueCommentSerializer(serializers.Serializer):
             comment=validated_data["comment"],
             timestamp=timezone.now(),
         )
+
+
+class TurningPointSerializer(UTCModelSerializer):
+    kind = serializers.SerializerMethodField()
+    metadata = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TurningPoint
+        fields = [
+            "id",
+            "issue",
+            "project",
+            "triggering_event",
+            "user",
+            "timestamp",
+            "kind",
+            "comment",
+            "metadata",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.ChoiceField(choices=[kind.name.lower() for kind in TurningPointKind]))
+    def get_kind(self, obj):
+        return TurningPointKind(obj.kind).name.lower()
+
+    @extend_schema_field(serializers.JSONField)
+    def get_metadata(self, obj):
+        return json.loads(obj.metadata)
