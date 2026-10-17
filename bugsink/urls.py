@@ -20,7 +20,7 @@ from bugsink.decorators import login_exempt
 from bugsink.permissions import IsAuthTokenAuthenticated
 
 from events.api_views import EventViewSet
-from issues.api_views import IssueCommentViewSet, IssueViewSet
+from issues.api_views import IssueCommentViewSet, IssueHistoryViewSet, IssueViewSet
 from projects.api_views import ProjectViewSet
 from releases.api_views import ReleaseViewSet
 from teams.api_views import TeamViewSet
@@ -42,6 +42,7 @@ api_router = routers.DefaultRouter()
 api_router.APIRootView = CanonicalAPIRootView
 api_router.register(r'events', EventViewSet)
 api_router.register(r'issue-comments', IssueCommentViewSet, basename='issue-comment')
+api_router.register(r'issue-history', IssueHistoryViewSet, basename='issue-history')
 api_router.register(r'issues', IssueViewSet)
 api_router.register(r'projects', ProjectViewSet)
 api_router.register(r'releases', ReleaseViewSet)

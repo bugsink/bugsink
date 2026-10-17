@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -12,7 +14,7 @@ from issues.models import Issue, TurningPoint, TurningPointKind
 from issues.factories import get_or_create_issue
 from events.factories import create_event, create_event_data
 
-from issues.api_views import IssueViewSet
+from issues.api_views import IssueHistoryPagination, IssueViewSet
 
 
 class IssueApiTests(TransactionTestCase):
@@ -350,6 +352,73 @@ class IssueApiTests(TransactionTestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"issue": ["Issue not found."]})
+
+    def _create_history(self):
+        now = timezone.now()
+        return [
+            TurningPoint.objects.create(
+                project=self.project, issue=self.issue0, kind=TurningPointKind.FIRST_SEEN, timestamp=now),
+            TurningPoint.objects.create(
+                project=self.project, issue=self.issue0, kind=TurningPointKind.MUTED,
+                metadata='{"mute_unconditionally": true}', timestamp=now + timezone.timedelta(seconds=1)),
+            TurningPoint.objects.create(
+                project=self.project, issue=self.issue0, kind=TurningPointKind.MANUAL_ANNOTATION,
+                comment="Needs a closer look.", timestamp=now + timezone.timedelta(seconds=2)),
+        ]
+
+    def test_list_history(self):
+        first_seen, muted, comment = self._create_history()
+        TurningPoint.objects.create(
+            project=self.project, issue=self.issue1, kind=TurningPointKind.FIRST_SEEN, timestamp=timezone.now())
+
+        response = self.client.get(reverse("api:issue-history-list"), {"issue": self.issue0.friendly_id()})
+        self.assertEqual(response.status_code, 200)
+
+        results = response.json()["results"]
+        self.assertEqual([comment.id, muted.id, first_seen.id], [row["id"] for row in results])
+        self.assertEqual({
+            "id": muted.id,
+            "issue": str(self.issue0.id),
+            "project": self.project.id,
+            "triggering_event": None,
+            "user": None,
+            "timestamp": results[1]["timestamp"],
+            "kind": "muted",
+            "comment": "",
+            "metadata": {"mute_unconditionally": True},
+        }, results[1])
+        self.assertEqual("manual_annotation", results[0]["kind"])
+        self.assertEqual("Needs a closer look.", results[0]["comment"])
+
+    def test_list_history_order_asc(self):
+        first_seen, muted, comment = self._create_history()
+
+        response = self.client.get(reverse("api:issue-history-list"), {"issue": str(self.issue0.id), "order": "asc"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([first_seen.id, muted.id, comment.id], [row["id"] for row in response.json()["results"]])
+
+    def test_list_history_paginates(self):
+        first_seen, muted, comment = self._create_history()
+
+        with patch.object(IssueHistoryPagination, "page_size", 2):
+            r1 = self.client.get(reverse("api:issue-history-list"), {"issue": str(self.issue0.id)})
+            r2 = self.client.get(r1.json()["next"])
+
+        self.assertEqual([comment.id, muted.id], [row["id"] for row in r1.json()["results"]])
+        self.assertEqual([first_seen.id], [row["id"] for row in r2.json()["results"]])
+        self.assertIsNone(r2.json()["next"])
+
+    def test_list_history_requires_issue(self):
+        response = self.client.get(reverse("api:issue-history-list"))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual({"issue": ["This field is required."]}, response.json())
+
+    def test_list_history_requires_issues_read(self):
+        token = AuthToken.objects.create(issues_comment=True, events_read=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        response = self.client.get(reverse("api:issue-history-list"), {"issue": str(self.issue0.id)})
+        self.assertEqual(response.status_code, 403)
 
     def test_project_bound_token_cannot_read_or_change_another_projects_issues(self):
         other_project = Project.objects.create(name="Other project")
