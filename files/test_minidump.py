@@ -14,6 +14,31 @@ class SourceContextTests(TestCase):
             zf.writestr("src/main.c", source)
         return bundle.getvalue()
 
+    def test_source_context(self):
+        source = b"""#include <stdio.h>
+
+int main(void) {
+    int *value = NULL;
+    int result;
+
+    puts("Reading value");
+    result = *value;
+    printf("Value: %d", result);
+
+    puts("Done");
+    return 0;
+}
+
+// End of program.
+"""
+        bundle = self.source_bundle(source)
+
+        self.assertEqual((
+            ["int main(void) {", "    int *value = NULL;", "    int result;", "", '    puts("Reading value");'],
+            "    result = *value;",
+            ['    printf("Value: %d", result);', "", '    puts("Done");', "    return 0;", "}"],
+        ), extract_source_context(bundle, "main.c", 8))
+
     def test_source_at_size_limit_has_context(self):
         source = b"return 0;\n" * 100
         bundle = self.source_bundle(source)
