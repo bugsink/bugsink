@@ -82,6 +82,9 @@ DEFAULTS = {
     "MAX_STORED_FILE_COUNT": None,  # None means "no max"
     "MAX_STORED_FILE_BYTES": None,  # None means "no max"
 
+    # Max decompressed size of a single source file in a source bundle.
+    "MAX_SOURCE_CONTEXT_FILE_SIZE": 10 * _MEBIBYTE,
+
     # I don't think Sentry specifies this one, but we do: given the spec 8KiB should be enough by an order of magnitude.
     "MAX_HEADER_SIZE": 8 * _KIBIBYTE,
 
