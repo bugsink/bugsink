@@ -443,6 +443,15 @@ class ViewTests(TransactionTestCase):
         self.assertContains(response, self.issue.title())
         self.assertContains(response, self.issue.friendly_id())
 
+    def test_issue_list_search_has_suggestion_datalist(self):
+        response = self.client.get(f"/issues/{self.project.id}/")
+        # browser history suggestions are off; our own datalist drives suggestions
+        self.assertContains(response, 'autocomplete="off"')
+        self.assertContains(response, '<datalist id="search-suggestions">')
+        # the searchable fields are offered as "key:" options
+        self.assertContains(response, '<option value="first_seen:">')
+        self.assertContains(response, '<option value="events:">')
+
     def test_issue_list_sorting(self):
         other_issue, _ = get_or_create_issue(
             self.project, create_event_data(exception_type="FrequentError"))

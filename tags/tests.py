@@ -1,6 +1,9 @@
 from unittest import TestCase as RegularTestCase
+from datetime import date, datetime, timedelta, timezone as dt_timezone
+
 from django.test import TestCase as DjangoTestCase
 from django.conf import settings
+from django.utils import timezone
 
 from bugsink.app_settings import override_settings as override_bugsink_settings
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
@@ -11,7 +14,10 @@ from issues.models import Issue
 
 from .models import store_tags, EventTag, IssueTag, TagValue, digest_tags
 from .utils import deduce_tags
-from .search import search_events, search_issues, parse_query, search_events_optimized
+from .search import (
+    search_events, search_issues, parse_query, search_events_optimized,
+    _split_key_op_value, _parse_temporal, SearchError,
+)
 from .tasks import vacuum_eventless_issuetags
 
 
@@ -469,3 +475,94 @@ class VacuumEventlessIssueTagsTestCase(TransactionTestCase):
 
         vacuum_eventless_issuetags()
         self.assertEqual(TagValue.objects.all().count(), 0)
+
+
+class FieldQueryParserTestCase(RegularTestCase):
+    """Pure parsing/coercion units for the field-filter grammar."""
+
+    def test_split_key_op_value(self):
+        self.assertEqual(("first_seen", ">", "2026-10-11", False), _split_key_op_value("first_seen:>2026-10-11"))
+        self.assertEqual(("first_seen", "", "2026-10-11", False), _split_key_op_value("first_seen:2026-10-11"))
+        self.assertEqual(("events", ">=", "100", False), _split_key_op_value("events:>=100"))
+        self.assertEqual(("is_muted", "", "info", True), _split_key_op_value("!is_muted:info"))
+
+        # a quoted operator is tolerated (quotes would otherwise defeat operator detection)
+        self.assertEqual(("first_seen", ">", "2026-10-11", False), _split_key_op_value('first_seen:">2026-10-11"'))
+
+        # not key:value tokens
+        self.assertIsNone(_split_key_op_value("plainword"))
+        self.assertIsNone(_split_key_op_value("key:"))
+        self.assertIsNone(_split_key_op_value(":value"))
+
+    def test_parse_temporal_absolute_date(self):
+        self.assertEqual(("date", date(2026, 10, 11)), _parse_temporal("2026-10-11", "first_seen"))
+
+    def test_parse_temporal_relative(self):
+        kind, when = _parse_temporal("-7d", "last_seen")
+        self.assertEqual("instant", kind)
+        self.assertAlmostEqual(when, timezone.now() - timedelta(days=7), delta=timedelta(seconds=5))
+
+        kind, when = _parse_temporal("now-1h", "last_seen")
+        self.assertEqual("instant", kind)
+        self.assertAlmostEqual(when, timezone.now() - timedelta(hours=1), delta=timedelta(seconds=5))
+
+    def test_parse_temporal_invalid(self):
+        with self.assertRaises(SearchError):
+            _parse_temporal("bogus", "first_seen")
+
+
+class FieldSearchTestCase(DjangoTestCase):
+    """'Integration'-test for filtering the issue list by model fields (not tags)."""
+
+    def setUp(self):
+        self.project = Project.objects.create(name="Field search")
+        now = timezone.now()
+
+        def mk(ident, **kw):
+            issue, _ = get_or_create_issue(project=self.project, event_data=create_event_data(ident))
+            Issue.objects.filter(id=issue.id).update(**kw)
+            return issue.id
+
+        def on(s):  # a fixed UTC midnight for the given date string
+            return datetime.fromisoformat(s).replace(tzinfo=dt_timezone.utc)
+
+        self.old = mk("old", first_seen=on("2026-10-05"), last_seen=now - timedelta(days=30),
+                      digested_event_count=10, is_muted=False)
+        self.mid = mk("mid", first_seen=on("2026-10-11"), last_seen=now - timedelta(days=2),
+                      digested_event_count=150, is_muted=True)
+        self.new = mk("new", first_seen=on("2026-10-15"), last_seen=now - timedelta(days=1),
+                      digested_event_count=200, is_muted=False)
+
+    def _ids(self, q):
+        qs = search_issues(self.project, Issue.objects.filter(project=self.project), q)
+        return set(qs.values_list("id", flat=True))
+
+    def test_datetime_comparisons(self):
+        self.assertEqual({self.new}, self._ids("first_seen:>2026-10-11"))   # strictly after that whole day
+        self.assertEqual({self.mid, self.new}, self._ids("first_seen:>=2026-10-11"))
+        self.assertEqual({self.mid}, self._ids("first_seen:2026-10-11"))     # the whole day
+        self.assertEqual({self.old}, self._ids("first_seen:<2026-10-11"))
+
+    def test_relative_dates(self):
+        self.assertEqual({self.mid, self.new}, self._ids("last_seen:>-7d"))
+
+    def test_int_comparisons(self):
+        self.assertEqual({self.mid, self.new}, self._ids("events:>=150"))
+        self.assertEqual({self.old}, self._ids("events:<150"))
+
+    def test_bool_and_negation(self):
+        self.assertEqual({self.mid}, self._ids("is_muted:true"))
+        self.assertEqual({self.old, self.new}, self._ids("!is_muted:true"))
+
+    def test_combined_fields(self):
+        self.assertEqual({self.new}, self._ids("events:>=150 is_muted:false"))
+
+    def test_unknown_field_is_treated_as_a_tag(self):
+        # not a whitelisted field, and no such tag exists -> no matches (existing tag-search behavior)
+        self.assertEqual(set(), self._ids("notafield:x"))
+
+    def test_invalid_values_raise(self):
+        with self.assertRaises(SearchError):
+            self._ids("first_seen:>bogus")
+        with self.assertRaises(SearchError):
+            self._ids("events:>abc")

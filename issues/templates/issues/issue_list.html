@@ -74,6 +74,9 @@
         {% include "theme/_search_input.html" with placeholder="Search issues..." %}
         {% endif %}
         </form>
+        {% if search_error %}
+        <div class="mt-2 text-sm text-red-600 dark:text-red-400">{{ search_error }}</div>
+        {% endif %}
     </div>
 </div>
 
