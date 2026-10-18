@@ -4,6 +4,7 @@ import symbolic
 from sentry_sdk_extensions import capture_or_log_exception
 
 from bugsink.utils import assert_
+from bugsink.streams import MaxDataReader, MaxLengthExceeded
 from .models import get_file_metadata_for_debug_id
 
 
@@ -58,7 +59,6 @@ def extract_dif_metadata(dif_bytes):
 
 def extract_source_context(src_bytes, filename, center_line, context=5):
 
-    # TODO the usual worries about zip bombs/memory usage apply here.
     with zipfile.ZipFile(io.BytesIO(src_bytes)) as zf:
         # sourcebundle entries use relative paths like "src/main.c" or so says ChatGPT
         candidates = [n for n in zf.namelist() if n.endswith(filename)]
@@ -67,7 +67,14 @@ def extract_source_context(src_bytes, filename, center_line, context=5):
             return [], None, []
 
         with zf.open(candidates[0]) as f:
-            lines = f.read().decode("utf-8").splitlines()
+            try:
+                source = MaxDataReader("MAX_SOURCE_CONTEXT_FILE_SIZE", f).read()
+            except MaxLengthExceeded:
+                # Omit context rather than fail on oversized sources. The default value of the setting
+                # "should be enough" for typical source files so it's "not expected to happen" but if it does
+                # we want to do it gracefully.
+                return [], None, []
+        lines = source.decode("utf-8").splitlines()
 
         # Clamp line range to valid indices
         start = max(center_line - context - 1, 0)

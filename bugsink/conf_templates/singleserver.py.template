@@ -116,6 +116,7 @@ BUGSINK = {
     # "MAX_EVENT_TAGS": 100,
     # For large MAX_FILE_SIZE values, you may want OBJECT_STORAGES["file"] configured too.
     # "MAX_FILE_SIZE": 2 * _GIBIBYTE,
+    # "MAX_SOURCE_CONTEXT_FILE_SIZE": 10 * _MEBIBYTE,
 
     # "MAX_EMAILS_PER_HOUR": 60,
     # "MAX_EMAILS_PER_MONTH": None,
