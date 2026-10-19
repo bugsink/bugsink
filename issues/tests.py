@@ -893,6 +893,78 @@ class ViewTests(TransactionTestCase):
         self.assertContains(response, "mappedFunction</span> line <span class=\"font-bold\">11:1</span>")
 
     @patch("events.utils.ecma426.loads")
+    def test_use_sourcemap_in_stacktrace_matching_code_file_on_abs_path(self, mock_ecma426_loads):
+        # A debug image's code_file is the absolute path of the file, i.e. the frame's abs_path. Browser SDKs put the
+        # same URL in filename and abs_path, but @sentry/cloudflare (Workers) reports filename "index.js" for abs_path
+        # "/index.js", as do this test's frames.
+        debug_id = uuid.uuid4()
+        missing_debug_id = uuid.uuid4()
+
+        sourcemap = json.dumps({
+            "version": 3,
+            "sources": ["good-source.ts"],
+            "sourcesContent": [
+                "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12"
+            ],
+            "names": [],
+            "mappings": "",
+        }).encode("utf-8")
+
+        sourcemap_file = File.objects.create(
+            checksum=hashlib.sha1(sourcemap).hexdigest(),
+            filename="index.js.map",
+            size=len(sourcemap),
+            data=sourcemap,
+        )
+        FileMetadata.objects.create(file=sourcemap_file, debug_id=debug_id, file_type="source_map", data="{}")
+
+        class FakeMapping:
+            source = "good-source.ts"
+            original_line = 10
+            original_column = 0
+            name = "mappedFunction"
+
+        class GoodSourceMap:
+            def lookup_left(self, line, column):
+                if (line, column) == (5, 11):
+                    return FakeMapping()
+
+        mock_ecma426_loads.return_value = GoodSourceMap()
+
+        event_data = {
+            "event_id": uuid.uuid4().hex,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "platform": "javascript",
+            "exception": {
+                "values": [{
+                    "type": "Error",
+                    "value": "test",
+                    "stacktrace": {
+                        "frames": [
+                            {"filename": "missing.js", "abs_path": "/missing.js", "lineno": 3, "colno": 9,
+                             "in_app": True},
+                            {"filename": "index.js", "abs_path": "/index.js", "lineno": 6, "colno": 12,
+                             "in_app": True},
+                        ]
+                    },
+                }]
+            },
+            "debug_meta": {
+                "images": [
+                    {"type": "sourcemap", "code_file": "/missing.js", "debug_id": str(missing_debug_id)},
+                    {"type": "sourcemap", "code_file": "/index.js", "debug_id": str(debug_id)},
+                ]
+            },
+        }
+        event = create_event(self.project, self.issue, event_data=event_data, project_digest_order=2)
+
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{event.id}/")
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, f"No sourcemaps found for Debug ID {missing_debug_id}")
+        self.assertContains(response, "good-source.ts")
+        self.assertContains(response, "mappedFunction</span> line <span class=\"font-bold\">11:1</span>")
+
+    @patch("events.utils.ecma426.loads")
     def test_sourcemap_uploads_are_project_scoped_when_rendering_events(self, mock_ecma426_loads):
         debug_id = uuid.uuid4()
         auth_token = AuthToken.objects.create(debug_files_upload=True)
