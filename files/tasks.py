@@ -28,6 +28,10 @@ logger = logging.getLogger("bugsink.api")
 # low values: deletion of files might just be expensive.
 VACUUM_FILES_BATCH_SIZE = 500
 
+# At roughly 200-500 bytes per file (reasonable enough for paths), 50 MiB accommodates about 100,000-250,000 files,
+# which "should be enough" for non-pathalogical use-cases.
+MAX_MANIFEST_SIZE = 50 * 1024 * 1024
+
 
 # "In the wild", we have run into non-unique debug IDs (one in code, one in comment-at-bottom). This regex matches a
 # known pattern for "one in code", such that we can at least warn if it's not the same at the actually reported one.
@@ -56,13 +60,13 @@ def create_file_from_local_file(checksum, filename, size, local_file):
     return file, created
 
 
-def read_limited_bytes(input_stream, max_bytes):
+def read_limited_bytes(input_stream, max_bytes, reason):
     with tempfile.SpooledTemporaryFile(max_size=max_bytes + 1) as output_stream:
         bytes_read = copy_stream_limited(
             input_stream,
             output_stream,
             max_bytes=max_bytes,
-            reason=f"MAX_FILE_SIZE: {max_bytes}",
+            reason=reason,
         )
         output_stream.seek(0)
         return output_stream.read(), bytes_read
@@ -122,11 +126,14 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
         bundle_file, _ = assemble_file(bundle_checksum, chunk_checksums, filename=f"{bundle_checksum}.zip")
 
         max_file_size = get_settings().MAX_FILE_SIZE
+        max_manifest_size = min(max_file_size, MAX_MANIFEST_SIZE)
+        manifest_limit_name = "MAX_FILE_SIZE" if max_file_size <= MAX_MANIFEST_SIZE else "MAX_MANIFEST_SIZE"
         with tempfile.TemporaryDirectory() as tempdir:
             with bundle_file.open_for_read() as f:
                 with ZipFile(f) as bundle_zip:
                     with open_zip_entry(bundle_zip, "manifest.json") as manifest_stream:
-                        manifest_bytes, _ = read_limited_bytes(manifest_stream, max_file_size)
+                        manifest_bytes, _ = read_limited_bytes(
+                            manifest_stream, max_manifest_size, reason=f"{manifest_limit_name}: {max_manifest_size}")
                     manifest = json.loads(manifest_bytes.decode("utf-8"))
 
                     for zip_entry_name, manifest_entry in manifest["files"].items():

@@ -446,6 +446,31 @@ class FilesTests(TransactionTestCase):
         with self.assertRaisesMessage(NotImplementedError, "Unsupported ZIP compression method"):
             assemble_artifact_bundle(checksum, [checksum], [self.project.id])
 
+    def test_artifact_bundle_rejects_oversized_manifest(self):
+        bundle = BytesIO()
+        with ZipFile(bundle, "w", compression=ZIP_DEFLATED) as zf:
+            with zf.open("manifest.json", "w") as manifest:
+                manifest.write(b'{"files": {}, "padding": "')
+                for _ in range(100):
+                    manifest.write(b"x" * (1024 * 1024))
+                manifest.write(b'"}')
+
+        data = bundle.getvalue()
+        self.assertLess(len(data), 1024 * 1024)  # A small upload that expands to over 100 MiB of valid JSON.
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+        Chunk.objects.create(checksum=checksum, size=len(data), data=data)
+
+        with self.assertRaisesMessage(MaxLengthExceeded, "MAX_MANIFEST_SIZE: 52428800"):
+            assemble_artifact_bundle(checksum, [checksum], [self.project.id])
+
+        with bugsink_override_settings(MAX_FILE_SIZE=1024 * 1024):
+            with self.assertRaisesMessage(MaxLengthExceeded, "MAX_FILE_SIZE: 1048576"):
+                assemble_artifact_bundle(checksum, [checksum], [self.project.id])
+
+        with bugsink_override_settings(MAX_FILE_SIZE=50 * 1024 * 1024):
+            with self.assertRaisesMessage(MaxLengthExceeded, "MAX_FILE_SIZE: 52428800"):
+                assemble_artifact_bundle(checksum, [checksum], [self.project.id])
+
     def test_artifact_bundle_rejects_extracted_file_larger_than_max_file_size(self):
         bundle = BytesIO()
         with tempfile.TemporaryDirectory() as tempdir:
