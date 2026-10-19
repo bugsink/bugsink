@@ -708,6 +708,60 @@ class ViewTests(TransactionTestCase):
         response = self.client.get(f"/issues/issue/{self.issue.id}/events/")
         self.assertContains(response, self.issue.title())
 
+    def test_use_index_sourcemap_in_stacktrace(self):
+        debug_id = uuid.uuid4()
+        sourcemap = json.dumps({
+            "version": 3,
+            "sections": [{
+                "offset": {"line": 4, "column": 3},
+                "map": {
+                    "version": 3,
+                    "sources": ["section-source.ts"],
+                    "sourcesContent": ["INDEX_MAP_CONTEXT_LINE\nfollowing line"],
+                    "names": ["mappedFunction"],
+                    "mappings": "AAAAA",
+                },
+            }],
+        }).encode("utf-8")
+        sourcemap_file = File.objects.create(
+            checksum=hashlib.sha1(sourcemap).hexdigest(),
+            filename="bundle.js.map",
+            size=len(sourcemap),
+            data=sourcemap,
+        )
+        FileMetadata.objects.create(
+            project=self.project,
+            file=sourcemap_file,
+            debug_id=debug_id,
+            file_type="source_map",
+            data="{}",
+        )
+        event_data = {
+            "event_id": uuid.uuid4().hex,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "platform": "javascript",
+            "exception": {
+                "values": [{
+                    "type": "Error",
+                    "value": "test",
+                    "stacktrace": {
+                        "frames": [{"filename": "bundle.js", "lineno": 5, "colno": 4, "in_app": True}],
+                    },
+                }],
+            },
+            "debug_meta": {
+                "images": [{"type": "sourcemap", "code_file": "bundle.js", "debug_id": str(debug_id)}],
+            },
+        }
+        event = create_event(self.project, self.issue, event_data=event_data, project_digest_order=2)
+
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{event.id}/")
+
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, "section-source.ts")
+        self.assertContains(response, "mappedFunction</span> line <span class=\"font-bold\">1:1</span>.")
+        self.assertContains(response, "INDEX_MAP_CONTEXT_LINE")
+
     @patch("events.utils.ecma426.loads")
     def test_use_sourcemap_in_stacktrace(self, mock_ecma426_loads):
         # Single integration test that covers all three sourcemap outcomes in one stacktrace:

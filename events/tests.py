@@ -23,7 +23,7 @@ from .retention import (
 from .sparklines import (
     get_issue_event_sparkline, get_issue_list_event_sparklines, get_sparkline_range, get_y_labels)
 from .usage import EVENT_COUNTS_PER_HOUR_MAX_AGE, hour_bucket, record_event_counts
-from .utils import annotate_with_meta, annotate_var_with_meta, get_stacktrace_entries
+from .utils import annotate_with_meta, annotate_var_with_meta, get_stacktrace_entries, get_sources_content
 from tags.models import EventTag, store_tags
 from tags.search import search_events
 
@@ -74,6 +74,24 @@ class StacktraceEntriesTestCase(RegularTestCase):
         })
 
         self.assertEqual(thread_stacktrace, entries[0]["stacktrace"])
+
+
+class SourcesContentTestCase(RegularTestCase):
+    def test_regular_map(self):
+        self.assertEqual({"a.ts": ["a1", "a2"]}, get_sources_content({
+            "sources": ["a.ts", "b.ts"],
+            "sourcesContent": ["a1\na2", None],
+        }))
+
+    def test_index_map(self):
+        self.assertEqual({"a.ts": ["a1"], "b.ts": ["b1"]}, get_sources_content({
+            "sources": [],
+            "sections": [
+                {"offset": {"line": 0, "column": 0}, "map": {"sources": ["a.ts"], "sourcesContent": ["a1"]}},
+                {"offset": {"line": 5, "column": 0}, "map": {"sources": ["b.ts"], "sourcesContent": ["b1"]}},
+                {"offset": {"line": 9, "column": 0}, "map": {"sources": ["a.ts"], "sourcesContent": [None]}},
+            ],
+        }))
 
 
 class ViewTests(TransactionTestCase):
