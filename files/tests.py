@@ -12,7 +12,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
-from zipfile import ZipFile, ZIP_DEFLATED
+from zipfile import ZipFile, ZIP_BZIP2, ZIP_DEFLATED
 
 from django.test import tag
 from django.contrib.auth import get_user_model
@@ -35,7 +35,7 @@ from bugsink.streams import MaxLengthExceeded
 from .models import Chunk, File, FileMetadata, get_file_metadata_for_debug_ids
 from .minidump import event_threads_for_process_state
 from .storage_registry import override_object_storages
-from .tasks import assemble_file, create_file_from_local_file
+from .tasks import assemble_artifact_bundle, assemble_file, create_file_from_local_file
 from .views import CHUNK_UPLOAD_SIZE
 
 
@@ -433,6 +433,18 @@ class FilesTests(TransactionTestCase):
                     ],
                     filename="hello.txt",
                 )
+
+    def test_artifact_bundle_rejects_bzip2_manifest(self):
+        bundle = BytesIO()
+        with ZipFile(bundle, "w", compression=ZIP_BZIP2) as zf:
+            zf.writestr("manifest.json", b'{"files": {}}')
+
+        data = bundle.getvalue()
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+        Chunk.objects.create(checksum=checksum, size=len(data), data=data)
+
+        with self.assertRaisesMessage(NotImplementedError, "Unsupported ZIP compression method"):
+            assemble_artifact_bundle(checksum, [checksum], [self.project.id])
 
     def test_artifact_bundle_rejects_extracted_file_larger_than_max_file_size(self):
         bundle = BytesIO()

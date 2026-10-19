@@ -19,6 +19,7 @@ from bugsink.timed_sqlite_backend.base import allow_long_running_queries
 
 from .models import Chunk, File, FileMetadata, write_fileobj_to_storage, _binary_to_bytes
 from .storage_registry import get_write_storage
+from .zip import open_zip_entry
 
 logger = logging.getLogger("bugsink.api")
 
@@ -71,7 +72,7 @@ def extract_zip_entry_to_file(bundle_zip, entry_name, local_file, max_bytes):
     # usedforsecurity=false: sha1 is not used cryptographically, it's part of the protocol, so we use it as is.
     checksum = sha1(usedforsecurity=False)
 
-    with bundle_zip.open(entry_name) as input_stream:
+    with open_zip_entry(bundle_zip, entry_name) as input_stream:
         size = copy_stream_limited(
             input_stream,
             local_file,
@@ -124,7 +125,7 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
         with tempfile.TemporaryDirectory() as tempdir:
             with bundle_file.open_for_read() as f:
                 with ZipFile(f) as bundle_zip:
-                    with bundle_zip.open("manifest.json") as manifest_stream:
+                    with open_zip_entry(bundle_zip, "manifest.json") as manifest_stream:
                         manifest_bytes, _ = read_limited_bytes(manifest_stream, max_file_size)
                     manifest = json.loads(manifest_bytes.decode("utf-8"))
 

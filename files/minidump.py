@@ -6,6 +6,7 @@ from sentry_sdk_extensions import capture_or_log_exception
 from bugsink.utils import assert_
 from bugsink.streams import MaxDataReader, MaxLengthExceeded
 from .models import get_file_metadata_for_debug_id
+from .zip import open_zip_entry
 
 
 def get_single_object(archive):
@@ -66,7 +67,7 @@ def extract_source_context(src_bytes, filename, center_line, context=5):
         if not candidates:
             return [], None, []
 
-        with zf.open(candidates[0]) as f:
+        with open_zip_entry(zf, candidates[0]) as f:
             try:
                 source = MaxDataReader("MAX_SOURCE_CONTEXT_FILE_SIZE", f).read()
             except MaxLengthExceeded:
