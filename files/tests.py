@@ -749,13 +749,13 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(scoped_metadata, result[scoped_debug_id])
         self.assertEqual(legacy_metadata, result[legacy_debug_id])
 
-    @patch("files.views.extract_dif_metadata")
-    def test_difs_assemble_stores_project_scoped_metadata(self, mock_extract_dif_metadata):
+    @patch("files.views.extract_dif_kind")
+    def test_difs_assemble_stores_project_scoped_metadata(self, mock_extract_dif_kind):
         debug_id = uuid4()
         data = b"debug"
         checksum = sha1(data, usedforsecurity=False).hexdigest()
         Chunk.objects.create(checksum=checksum, size=len(data), data=data)
-        mock_extract_dif_metadata.return_value = {"kind": "dbg"}
+        mock_extract_dif_kind.return_value = "dbg"
 
         with bugsink_override_settings(FEATURE_MINIDUMPS=True):
             response = self.client.post(
@@ -775,6 +775,36 @@ class FilesTests(TransactionTestCase):
         metadata = FileMetadata.objects.get(debug_id=debug_id, file_type="dbg")
         self.assertEqual(self.project, metadata.project)
         self.assertEqual("debug-file", metadata.file.filename)
+
+    def test_difs_assemble_source_bundle(self):
+        debug_id = uuid4()
+        bundle = BytesIO()
+        bundle.write(b"SYSB\x02\x00\x00\x00")
+        with ZipFile(bundle, "w", compression=ZIP_DEFLATED) as zf:
+            zf.writestr("manifest.json", json.dumps({
+                "debug_id": str(debug_id),
+                "files": {"files/src/main.c": {"type": "source", "path": "/src/main.c"}},
+            }))
+            zf.writestr("files/src/main.c", b"int main(void) { return 0; }\n")
+
+        data = bundle.getvalue()
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+        Chunk.objects.create(checksum=checksum, size=len(data), data=data)
+
+        with bugsink_override_settings(FEATURE_MINIDUMPS=True):
+            response = self.client.post(
+                f"/api/0/projects/anyorg/{self.project.slug}/files/difs/assemble/",
+                json.dumps({
+                    checksum: {"chunks": [checksum], "debug_id": str(debug_id), "name": "example.src.zip"},
+                }),
+                content_type="application/json",
+                headers=self.token_headers,
+            )
+
+        self.assertEqual(200, response.status_code)
+        metadata = FileMetadata.objects.get(debug_id=debug_id, file_type="src")
+        self.assertEqual(self.project, metadata.project)
+        self.assertEqual(data, metadata.file.get_raw_data())
 
     @patch("files.minidump.extract_source_context")
     @patch("files.minidump.symbolic.debuginfo.Archive.from_bytes")

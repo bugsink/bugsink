@@ -23,7 +23,7 @@ from projects.models import Project
 
 from .models import Chunk, File, FileMetadata
 from .tasks import assemble_artifact_bundle, assemble_file
-from .minidump import extract_dif_metadata
+from .minidump import extract_dif_kind
 
 logger = logging.getLogger("bugsink.api")
 
@@ -355,12 +355,12 @@ def difs_assemble(request, organization_slug, project_slug):
 
             file, _ = assemble_file(file_checksum, file_chunks, filename=file_info["name"])
 
-        symbolic_metadata = extract_dif_metadata(file.get_raw_data())
+        dif_kind = extract_dif_kind(file.get_raw_data())
 
         FileMetadata.objects.get_or_create(
             project=project,
             debug_id=file_info.get("debug_id"),  # TODO : .get implies "no debug_id", but in that case it's useless
-            file_type=symbolic_metadata["kind"],  # NOTE: symbolic's kind goes into file_type...
+            file_type=dif_kind,  # NOTE: symbolic's kind goes into file_type...
             defaults={
                 "file": file,
                 "data": "{}",  # this is the "catch all" field but I don't think we have anything in this case.

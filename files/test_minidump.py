@@ -4,7 +4,20 @@ from zipfile import ZipFile, ZIP_DEFLATED
 
 from bugsink.app_settings import override_settings
 
-from .minidump import extract_source_context
+from .minidump import extract_dif_kind, extract_source_context, parse_debug_object
+
+
+class DifKindTests(TestCase):
+    def test_source_bundle_kind_does_not_require_manifest(self):
+        self.assertEqual("src", extract_dif_kind(b"SYSB\x02\x00\x00\x00"))
+
+    def test_breakpad_debug_file_kind(self):
+        debug_file = b"MODULE Linux x86_64 0123456789ABCDEF0123456789ABCDEF0 example\n"
+        self.assertEqual("dbg", extract_dif_kind(debug_file))
+
+    def test_source_bundle_cannot_be_used_as_debug_file(self):
+        with self.assertRaisesRegex(ValueError, "Expected debug information, got a source bundle"):
+            parse_debug_object(b"SYSB\x02\x00\x00\x00")
 
 
 class SourceContextTests(TestCase):

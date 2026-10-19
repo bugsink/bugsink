@@ -9,7 +9,16 @@ from .models import get_file_metadata_for_debug_id
 from .zip import open_zip_entry
 
 
-def get_single_object(archive):
+def parse_debug_object(dif_bytes):
+    """Parse exactly one native debug object from bytes"""
+
+    if dif_bytes.startswith(b"SYSB"):
+        # we explicitly refuse source bundles here; this is security-critical. The reason is that source bundles can
+        # contain highly compressed manifests that Symbolic decompresses and parses without a size limit, potentially
+        # exhausting memory. Artifact uploads can label source bundles as "dbg", so we cannot trust the stored type.
+        raise ValueError("Expected debug information, got a source bundle")
+
+    archive = symbolic.debuginfo.Archive.from_bytes(dif_bytes)
     # our understanding: sentry-cli uploads single-object archives; we need to get the single object out of it...
     # ...but this does raise the question of why archives exist at all... hence the assert
     objects = list(archive.iter_objects())
@@ -32,9 +41,7 @@ def build_cfi_map_from_minidump_bytes(minidump_bytes, project):
             continue
 
         dif_bytes = file_metadata.file.get_raw_data()
-        archive = symbolic.debuginfo.Archive.from_bytes(dif_bytes)
-
-        debug_object = get_single_object(archive)
+        debug_object = parse_debug_object(dif_bytes)
 
         cfi = symbolic.minidump.CfiCache.from_object(debug_object)
         frame_info_map.add(module.debug_id, cfi)
@@ -42,20 +49,18 @@ def build_cfi_map_from_minidump_bytes(minidump_bytes, project):
     return frame_info_map
 
 
-def extract_dif_metadata(dif_bytes):
+def extract_dif_kind(dif_bytes):
+    if dif_bytes.startswith(b"SYSB"):
+        # Source bundles are valid uploads, but parse_debug_object deliberately rejects them to protect against
+        # unbounded manifest parsing in Symbolic. Classify them here without parsing the manifest.
+        return "src"
+
     try:
-        archive = symbolic.debuginfo.Archive.from_bytes(dif_bytes)
-        debug_object = get_single_object(archive)
-        return {
-            "kind": debug_object.kind,  # "dbg", "lib", "src"
-            "code_id": debug_object.code_id,
-            "debug_id": debug_object.debug_id,
-            # "file_format": debug_object.file_format,  # "elf", "macho", "pe", "sourcebundle"
-        }
+        return parse_debug_object(dif_bytes).kind
     except Exception as e:
         raise  # TODO stabalize what we do later
         capture_or_log_exception(e)
-        return {}
+        return None
 
 
 def extract_source_context(src_bytes, filename, center_line, context=5):
@@ -112,9 +117,7 @@ def event_threads_for_process_state(process_state, project):
                 if file_metadata:
                     dif_bytes = file_metadata.file.get_raw_data()
 
-                    archive = symbolic.debuginfo.Archive.from_bytes(dif_bytes)
-
-                    obj = get_single_object(archive)
+                    obj = parse_debug_object(dif_bytes)
 
                     symcache = obj.make_symcache()
 
