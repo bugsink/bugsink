@@ -68,6 +68,23 @@ class FilesTests(TransactionTestCase):
         self.auth_token = AuthToken.objects.create(debug_files_upload=True)
         self.token_headers = {"Authorization": f"Bearer {self.auth_token.token}"}
 
+    @bugsink_override_settings(API_LOG_UNIMPLEMENTED_CALLS=True)
+    def test_api_catch_all_logs_multipart_upload(self):
+        upload = BytesIO(b"file contents")
+        upload.name = "example.txt"
+        with self.assertLogs("bugsink.api", level="INFO") as logs:
+            response = self.client.post("/api/unimplemented/", {"file": upload, "description": "example"})
+
+        self.assertEqual(404, response.status_code)
+        self.assertIn("POST:   {'description': 'example'}", logs.output[0])
+        self.assertIn("FILES:  ['example.txt']", logs.output[0])
+
+    @bugsink_override_settings(API_LOG_UNIMPLEMENTED_CALLS=True)
+    def test_api_catch_all_rejects_oversized_multipart_upload(self):
+        response = self.client.post("/api/unimplemented/", {"file": BytesIO(b"x" * 1_000_001)})
+
+        self.assertEqual(413, response.status_code)
+
     def test_auth_no_header(self):
         response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers={})
         self.assertEqual(401, response.status_code)

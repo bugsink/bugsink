@@ -422,10 +422,13 @@ def api_catch_all(request, subpath):
 
     content_type = request.META.get("CONTENT_TYPE", "")
     if content_type == "application/x-www-form-urlencoded" or content_type.startswith("multipart/form-data"):
-        if request.POST:
-            lines.append(f"  POST:   {request.POST.dict()}")
-        if request.FILES:
-            lines.append(f"  FILES:  {[f.name for f in request.FILES.values()]}")
+        try:
+            if request.POST:
+                lines.append(f"  POST:   {request.POST.dict()}")
+            if request.FILES:
+                lines.append(f"  FILES:  {[f.name for f in request.FILES.values()]}")
+        except MaxLengthExceeded as e:
+            return JsonResponse({"detail": str(e)}, status=413)
 
     else:
         shown_pretty = False

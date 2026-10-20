@@ -5,6 +5,7 @@ import io
 import uuid
 import time
 import tempfile
+import gzip
 
 import datetime
 from unittest.mock import patch
@@ -14,7 +15,7 @@ from dateutil.relativedelta import relativedelta
 from django.test import tag
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
-from django.test.client import RequestFactory
+from django.test.client import RequestFactory, BOUNDARY, MULTIPART_CONTENT, encode_multipart
 from django.core.exceptions import ValidationError
 from django.db import connection
 
@@ -1657,7 +1658,7 @@ class MinidumpIngestRegressionTestCase(TransactionTestCase):
         self.minidump_filename = os.path.join(
             os.getenv("SAMPLES_DIR", "../event-samples"), "minidumps", "linux_overflow.dmp")
 
-    @override_settings(VALIDATE_ON_DIGEST="strict")
+    @override_settings(VALIDATE_ON_DIGEST="strict", MAX_ATTACHMENT_SIZE=64 * 1024)
     def test_direct_minidump_endpoint_parses_without_transaction(self):
         def merge_without_transaction(*args):
             self.assertFalse(connection.in_atomic_block)
@@ -1676,6 +1677,68 @@ class MinidumpIngestRegressionTestCase(TransactionTestCase):
             merge.assert_called_once()
             self.assertEqual("SIGABRT: Fatal Error: SIGABRT", Event.objects.get().title())
             self.assertEqual([], os.listdir(tempdir))
+
+    @override_settings(MAX_ATTACHMENT_SIZE=64 * 1024)
+    def test_direct_minidump_endpoint_accepts_compressed_upload(self):
+        with open(self.minidump_filename, "rb") as minidump:
+            body = encode_multipart(BOUNDARY, {
+                "upload_file_minidump": minidump,
+                "sentry": json.dumps({"release": "1.2.3"}),
+            })
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            response = self.client.generic(
+                "POST",
+                f"/api/{self.project.id}/minidump/",
+                data=gzip.compress(body),
+                content_type=MULTIPART_CONTENT,
+                headers={"X-Sentry-Auth": self.sentry_auth_header, "Content-Encoding": "gzip"},
+            )
+
+            self.assertEqual(200, response.status_code, response.content)
+            event = Event.objects.get()
+            self.assertEqual("SIGABRT: Fatal Error: SIGABRT", event.title())
+            self.assertEqual("1.2.3", json.loads(event.get_raw_data())["release"])
+            self.assertEqual([], os.listdir(tempdir))
+
+    @override_settings(MAX_ATTACHMENT_SIZE=10 * 1024)
+    @patch("ingest.views.capture_or_log_exception")
+    def test_direct_minidump_endpoint_rejects_oversized_upload(self, capture):
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            with open(self.minidump_filename, "rb") as minidump:
+                response = self.client.post(
+                    f"/api/{self.project.id}/minidump/",
+                    data={"upload_file_minidump": minidump},
+                    headers={"X-Sentry-Auth": self.sentry_auth_header},
+                )
+
+            self.assertEqual(413, response.status_code, response.content)
+            self.assertIn("MAX_ATTACHMENT_SIZE", response.json()["detail"])
+            self.assertEqual(0, Event.objects.count())
+            self.assertEqual([], os.listdir(tempdir))
+            capture.assert_not_called()
+
+    @override_settings(MAX_ATTACHMENT_SIZE=10 * 1024)
+    @patch("ingest.views.capture_or_log_exception")
+    def test_direct_minidump_endpoint_rejects_oversized_compressed_upload(self, capture):
+        with open(self.minidump_filename, "rb") as minidump:
+            body = gzip.compress(encode_multipart(BOUNDARY, {"upload_file_minidump": minidump}))
+        self.assertLess(len(body), 10 * 1024)
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            response = self.client.generic(
+                "POST",
+                f"/api/{self.project.id}/minidump/",
+                data=body,
+                content_type=MULTIPART_CONTENT,
+                headers={"X-Sentry-Auth": self.sentry_auth_header, "Content-Encoding": "gzip"},
+            )
+
+            self.assertEqual(413, response.status_code, response.content)
+            self.assertIn("MAX_ATTACHMENT_SIZE", response.json()["detail"])
+            self.assertEqual(0, Event.objects.count())
+            self.assertEqual([], os.listdir(tempdir))
+            capture.assert_not_called()
 
     @override_settings(VALIDATE_ON_DIGEST="strict")
     def test_invalid_event_is_rejected_before_minidump_parsing(self):

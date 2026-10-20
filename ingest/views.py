@@ -1132,8 +1132,10 @@ class MinidumpAPIView(BaseIngestAPIView):
 
         # not reusing the CORS stuff here; minidump-from-browser doesn't make sense.
 
-        # TODO: actually pick/configure max
-        handle_request_content_encoding(request, 50 * 1024 * 1024)
+        # NOTE for multipart requests this is actually interpreted as the total size of the request body, which
+        # includes other form fields and multipart formatting i.e. we're slightly more strict but the difference is
+        # negligible so we use the simpler solution here.
+        handle_request_content_encoding(request, "MAX_ATTACHMENT_SIZE")
 
         ingested_at = datetime.now(timezone.utc)
         project = self.get_project_for_request(project_pk, request)
@@ -1146,6 +1148,8 @@ class MinidumpAPIView(BaseIngestAPIView):
             event_id = self.process_minidump(ingested_at, uuid.uuid4().hex, minidump_bytes, project, request)
 
             return JsonResponse({"id": event_id})
+        except MaxLengthExceeded as e:
+            return JsonResponse({"detail": str(e)}, status=HTTP_413_CONTENT_TOO_LARGE)
         except Exception as e:
             # we're still figuring out what this endpoint should do; so we log errors to learn from them while saying
             # to the client "400 Bad Request" if we can't handle their stuff.
