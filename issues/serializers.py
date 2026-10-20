@@ -97,7 +97,17 @@ class TurningPointSerializer(UTCModelSerializer):
     user_display_name = serializers.SerializerMethodField(
         help_text="Author's full name or username; null when no user is recorded.")
     kind = serializers.SerializerMethodField()
-    metadata = serializers.SerializerMethodField()
+    metadata = serializers.SerializerMethodField(help_text=(
+        "Details of the state change, depending on `kind`:\n\n"
+        "- `resolved`: `resolved_unconditionally`, `resolve_by_next`, or `resolved_release`.\n"
+        "- `muted`: `mute_unconditionally`, `mute_for` (`period_name`, `nr_of_periods`, `unmute_after`), "
+        "or `mute_until` (`period_name`, `nr_of_periods`, `gte_threshold`).\n"
+        "- `unmuted`: `{}` for manual unmuting; `mute_for` (`unmute_after`) or "
+        "`mute_until` (`period`, `nr_of_periods`, `volume`) for automatic unmuting.\n"
+        "- `next_materialized`: `actual_release` names the release that fulfilled resolve-by-next.\n\n"
+        "Other kinds normally have `{}`. Release values are version strings; "
+        "`unmute_after` is a UTC timestamp. Thresholds may be strings or numbers."
+    ))
 
     class Meta:
         model = TurningPoint
