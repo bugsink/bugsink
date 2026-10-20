@@ -12,9 +12,11 @@ from unittest import TestCase as RegularTestCase
 from dateutil.relativedelta import relativedelta
 
 from django.test import tag
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from django.test.client import RequestFactory
 from django.core.exceptions import ValidationError
+from django.db import connection
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.transaction import immediate_atomic
@@ -46,6 +48,8 @@ from phonehome.models import Installation
 from .views import BaseIngestAPIView, IngestSecurityAPIView, MinidumpAPIView, get_grouping_key_hash
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 from .event_counter import check_for_thresholds
+from .filestore import get_filename_for_event_id
+from .tasks import digest
 from .header_validators import (
     validate_envelope_headers, validate_item_headers, filter_valid_item_headers, filter_valid_envelope_headers)
 
@@ -1356,6 +1360,73 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual("DisplayError", issue.calculated_type)
         self.assertEqual("display value", issue.calculated_value)
         self.assertEqual("GroupingError + grouping value", Grouping.objects.get().grouping_key)  # proves actual use
+
+
+class DigestQuotaTestCase(TransactionTestCase):
+    # LLM-generated; not deeply inspected, but they do seem to cover the main cases we care about.
+
+    def setUp(self):
+        super().setUp()
+        self.project = Project.objects.create(name="test", alert_on_new_issue=False)
+
+    def exceed_quota(self, obj):
+        obj.quota_exceeded_until = timezone.now() + datetime.timedelta(minutes=5)
+        obj.quota_exceeded_reason = json.dumps(["minute", 5, 1])
+        obj.save()
+
+    def write_queued_event(self):
+        data = create_event_data()
+        metadata = {
+            "event_id": data["event_id"],
+            "ingestion_id": str(uuid.uuid4()),
+            "project_id": self.project.id,
+            "ingested_at": format_timestamp(timezone.now()),
+        }
+        with open(get_filename_for_event_id(metadata["ingestion_id"]), "w") as f:
+            json.dump(data, f)
+        return metadata
+
+    @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=1)
+    def test_project_quota_sheds_without_transaction(self):
+        self.exceed_quota(self.project)
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            metadata = self.write_queued_event()
+            with CaptureQueriesContext(connection) as queries:
+                digest(metadata["event_id"], metadata)
+            self.assertEqual([], os.listdir(tempdir))
+
+        self.assertEqual([], [1 for q in queries.captured_queries if q["sql"].startswith("BEGIN")])
+        self.assertEqual(0, Event.objects.count())
+
+    @override_settings(MAX_EVENTS_PER_5_MINUTES=1)
+    def test_installation_quota_sheds_without_transaction(self):
+        self.exceed_quota(Installation.objects.get())
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            metadata = self.write_queued_event()
+            with CaptureQueriesContext(connection) as queries:
+                digest(metadata["event_id"], metadata)
+            self.assertEqual([], os.listdir(tempdir))
+
+        self.assertEqual([], [1 for q in queries.captured_queries if q["sql"].startswith("BEGIN")])
+        self.assertEqual(0, Event.objects.count())
+
+    @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=1)
+    def test_zero_retention_still_schedules_cleanup_when_over_quota(self):
+        create_event(self.project)
+        self.project.stored_event_count = 1
+        self.project.retention_max_event_count = 0
+        self.exceed_quota(self.project)
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            metadata = self.write_queued_event()
+            with patch("events.tasks.delete_by_age_until_under_retention_max.delay") as cleanup_delay:
+                digest(metadata["event_id"], metadata)
+            self.assertEqual([], os.listdir(tempdir))
+
+        cleanup_delay.assert_called_once_with(self.project.id)
+        self.assertEqual(1, Event.objects.count())  # No incoming event was stored; deletion is queued.
 
 
 class IngestSecurityViewTestCase(TransactionTestCase):
