@@ -47,7 +47,6 @@ from bsmain.utils import b108_makedirs
 from phonehome.models import Installation
 
 from sentry_sdk_extensions import capture_or_log_exception
-from sentry.minidump import merge_minidump_event
 
 from .parsers import StreamingEnvelopeParser, ParseError
 from .filestore import get_filename_for_event_id
@@ -360,14 +359,8 @@ class BaseIngestAPIView(View):
 
     @classmethod
     def validate_event_data(cls, data, validation_setting):
-        # rough notes on performance (50k event):
-        # fastjsonschema: load-from-disk (precompiled): ~1ms, validation: ~2ms
-        # jsonschema: 'compile': ~2ms, validation ~15ms
-        #
-        # note that this method raising an exception ("strict") creates additional overhead in the ~100ms range;
-        # presumably because of the transaction rollback. Possible future direction: check pre-transaction. Not
-        # optimizing that yet though, because [1] presumably rare and [2] incorrect data might trigger arbitrary
-        # exceptions, so you'd have that cost-of-rollback anyway.
+        # Rough timings for a 50k event: valid ~1ms, invalid ~100ms.
+        # The invalid-data cost is almost entirely in the jsonschema fallback
 
         def get_schema():
             schema_filename = settings.BASE_DIR / 'api/event.schema.altered.json'
@@ -427,7 +420,7 @@ class BaseIngestAPIView(View):
 
     @classmethod
     @immediate_atomic()
-    def digest_event(cls, event_metadata, event_data, digested_at=None, minidump_bytes=None):
+    def digest_event(cls, event_metadata, event_data, digested_at=None):
         # ingested_at is passed from the point-of-ingestion; digested_at is determined here. Because this happens inside
         # `immediate_atomic`, we know digestions are serialized, and assuming non-decreasing server clocks, not decrea-
         # sing. (no so for ingestion times: clock-watching happens outside the snappe transaction, and threading in the
@@ -460,15 +453,6 @@ class BaseIngestAPIView(View):
                 or not cls.count_project_periods_and_act_on_it(project, digested_at)):
 
             return  # if over-quota: just return (any cleanup is done calling-side)
-
-        if get_settings().VALIDATE_ON_DIGEST in ["warn", "strict"]:
-            cls.validate_event_data(event_data, get_settings().VALIDATE_ON_DIGEST)
-
-        if minidump_bytes is not None:
-            # we merge after validation: validation is about what's provided _externally_, not our own merging.
-            # TODO error handling
-            # TODO should not be inside immediate_atomic if it turns out to be slow
-            merge_minidump_event(event_data, minidump_bytes, project)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this

@@ -44,6 +44,7 @@ from compat.timestamp import format_timestamp
 from compat.dsn import get_header_value
 from bsmain.management.commands.send_json import Command as SendJsonCommand
 from phonehome.models import Installation
+from sentry.minidump import merge_minidump_event
 
 from .views import BaseIngestAPIView, IngestSecurityAPIView, MinidumpAPIView, get_grouping_key_hash
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
@@ -729,7 +730,7 @@ class IngestViewTestCase(TransactionTestCase):
             else:
                 with self.assertLogs("bugsink.ingest", level="WARNING") as logs:
                     check()
-                self.assertIn("ValidationError in digest_event", logs.output[0])
+                self.assertIn("ValidationError in digest", logs.output[0])
 
         self.assertEqual(1, Issue.objects.filter(project=project).count())
         self.assertEqual(1, Event.objects.filter(project=project).count())
@@ -1656,17 +1657,66 @@ class MinidumpIngestRegressionTestCase(TransactionTestCase):
         self.minidump_filename = os.path.join(
             os.getenv("SAMPLES_DIR", "../event-samples"), "minidumps", "linux_overflow.dmp")
 
-    def test_direct_minidump_endpoint_ingests_minidump(self):
+    @override_settings(VALIDATE_ON_DIGEST="strict")
+    def test_direct_minidump_endpoint_parses_without_transaction(self):
+        def merge_without_transaction(*args):
+            self.assertFalse(connection.in_atomic_block)
+            return merge_minidump_event(*args)
+
         with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
-            with open(self.minidump_filename, "rb") as minidump:
+            with patch("ingest.tasks.merge_minidump_event", side_effect=merge_without_transaction) as merge:
+                with open(self.minidump_filename, "rb") as minidump:
+                    response = self.client.post(
+                        f"/api/{self.project.id}/minidump/",
+                        data={"upload_file_minidump": minidump},
+                        headers={"X-Sentry-Auth": self.sentry_auth_header},
+                    )
+
+            self.assertEqual(200, response.status_code, response.content)
+            merge.assert_called_once()
+            self.assertEqual("SIGABRT: Fatal Error: SIGABRT", Event.objects.get().title())
+            self.assertEqual([], os.listdir(tempdir))
+
+    @override_settings(VALIDATE_ON_DIGEST="strict")
+    def test_invalid_event_is_rejected_before_minidump_parsing(self):
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            with patch("ingest.tasks.merge_minidump_event") as merge:
+                with open(self.minidump_filename, "rb") as minidump, self.assertLogs("bugsink.ingest", level="WARNING"):
+                    response = self.client.post(
+                        f"/api/{self.project.id}/minidump/",
+                        data={
+                            "upload_file_minidump": minidump,
+                            "sentry": json.dumps({"level": "not-a-level"}),
+                        },
+                        headers={"X-Sentry-Auth": self.sentry_auth_header},
+                    )
+
+            self.assertEqual(200, response.status_code, response.content)
+            merge.assert_not_called()
+            self.assertEqual(0, Event.objects.count())
+            self.assertEqual([], os.listdir(tempdir))
+
+    @override_settings(VALIDATE_ON_DIGEST="strict")
+    def test_zero_retention_schedules_cleanup_despite_invalid_payload(self):
+        existing_event = create_event(self.project)
+        self.project.stored_event_count = 1
+        self.project.retention_max_event_count = 0
+        self.project.save()
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            with patch("events.tasks.delete_by_age_until_under_retention_max.delay") as cleanup_delay:
                 response = self.client.post(
                     f"/api/{self.project.id}/minidump/",
-                    data={"upload_file_minidump": minidump},
+                    data={
+                        "upload_file_minidump": io.BytesIO(b"not a minidump"),
+                        "sentry": json.dumps({"level": "not-a-level"}),
+                    },
                     headers={"X-Sentry-Auth": self.sentry_auth_header},
                 )
 
             self.assertEqual(200, response.status_code, response.content)
-            self.assertEqual(1, Event.objects.count())
+            cleanup_delay.assert_called_once_with(self.project.id)
+            self.assertEqual(existing_event.pk, Event.objects.get().pk)
             self.assertEqual([], os.listdir(tempdir))
 
     def test_minidump_only_envelope_does_not_duplicate_exceptions_regression(self):

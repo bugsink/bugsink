@@ -5,9 +5,11 @@ import json
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
+from bugsink.app_settings import get_settings
 from snappea.decorators import shared_task
 from phonehome.models import Installation
 from projects.models import Project
+from sentry.minidump import merge_minidump_event
 
 from .filestore import get_filename_for_event_id
 
@@ -47,9 +49,18 @@ def digest(event_id, event_metadata):
                 or BaseIngestAPIView.is_quota_still_exceeded(project, now)):
             return
 
-        BaseIngestAPIView.digest_event(event_metadata, event_data, minidump_bytes=minidump_bytes)
+        if get_settings().VALIDATE_ON_DIGEST in ["warn", "strict"]:
+            BaseIngestAPIView.validate_event_data(event_data, get_settings().VALIDATE_ON_DIGEST)
+
+        if minidump_bytes is not None:
+            # we merge after validation: validation is about what's provided _externally_, not our own merging.
+            # We parse before entering immediate_atomic so this work doesn't hold the database write lock.
+            # TODO error handling
+            merge_minidump_event(event_data, minidump_bytes, project)
+
+        BaseIngestAPIView.digest_event(event_metadata, event_data)
     except ValidationError as e:
-        logger.warning("ValidationError in digest_event", exc_info=e)
+        logger.warning("ValidationError in digest", exc_info=e)
     finally:
         # "Robustly" remove all opened files (don't stop on failure), but still report any errors at the end
         errors = []
