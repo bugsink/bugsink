@@ -14,7 +14,7 @@ from issues.factories import get_or_create_issue
 from events.factories import create_event, create_event_data
 from tags.models import store_tags
 
-from issues.api_views import IssueHistoryViewSet, IssueViewSet
+from issues.api_views import IssueHistoryViewSet, IssueRelatedPagination, IssueViewSet
 
 
 class IssueApiTests(TransactionTestCase):
@@ -181,6 +181,32 @@ class IssueApiTests(TransactionTestCase):
         url = reverse("api:issue-detail", args=[self.issue0.id])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 404)
+        for action in ["tags", "grouping"]:
+            response = self.client.get(reverse("api:issue-" + action, args=[self.issue0.id]))
+            self.assertEqual(response.status_code, 404)
+
+    def test_tag_values_and_counts(self):
+        store_tags(create_event(issue=self.issue0), self.issue0, {"environment": "production", "release": "1.0"})
+        store_tags(create_event(issue=self.issue0), self.issue0, {"environment": "production"})
+        store_tags(create_event(issue=self.issue0), self.issue0, {"environment": "staging"})
+        store_tags(create_event(issue=self.issue1), self.issue1, {"environment": "other"})
+
+        response = self.client.get(reverse("api:issue-tags", args=[self.issue0.friendly_id()]), {"key": "environment"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [("environment", "production", 2), ("environment", "staging", 1)],
+            [(row["key"], row["value"], row["count"]) for row in response.json()["results"]],
+        )
+
+    def test_grouping_keys(self):
+        grouping = self.issue0.grouping_set.get()
+        response = self.client.get(reverse("api:issue-grouping", args=[self.issue0.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([{
+            "id": grouping.id,
+            "grouping_key": grouping.grouping_key,
+            "grouping_mechanism": grouping.grouping_mechanism,
+        }], response.json()["results"])
 
     def test_list_rejects_bad_sort(self):
         r = self.client.get(
@@ -541,6 +567,9 @@ class IssueApiTests(TransactionTestCase):
         self.assertEqual(403, foreign_detail.status_code)
         self.assertEqual(403, foreign_mute.status_code)
         self.assertEqual(403, foreign_history.status_code)
+        for action in ["tags", "grouping"]:
+            self.assertEqual(200, self.client.get(reverse("api:issue-" + action, args=[self.issue0.id])).status_code)
+            self.assertEqual(403, self.client.get(reverse("api:issue-" + action, args=[other_issue.id])).status_code)
         other_issue.refresh_from_db()
         self.assertFalse(other_issue.is_muted)
 
@@ -578,6 +607,8 @@ class IssueApiTests(TransactionTestCase):
         self.assertEqual(200, self.client.get(reverse("api:issue-detail", args=[self.issue0.id])).status_code)
         history_url = reverse("api:issue-history-list")
         self.assertEqual(200, self.client.get(history_url, {"issue": self.issue0.id}).status_code)
+        for action in ["tags", "grouping"]:
+            self.assertEqual(200, self.client.get(reverse("api:issue-" + action, args=[self.issue0.id])).status_code)
 
         membership.accepted = False
         membership.save(update_fields=["accepted"])
@@ -589,6 +620,8 @@ class IssueApiTests(TransactionTestCase):
         )
         self.assertEqual(403, self.client.post(reverse("api:issue-mute", args=[self.issue0.id])).status_code)
         self.assertEqual(403, self.client.get(history_url, {"issue": self.issue0.id}).status_code)
+        for action in ["tags", "grouping"]:
+            self.assertEqual(403, self.client.get(reverse("api:issue-" + action, args=[self.issue0.id])).status_code)
         self.issue0.refresh_from_db()
         self.assertFalse(self.issue0.is_muted)
 
@@ -614,6 +647,30 @@ class IssueApiTests(TransactionTestCase):
 
         self.assertEqual(200, own_response.status_code)
         self.assertEqual(403, foreign_response.status_code)
+
+
+class IssueTagPaginationTests(TransactionTestCase):
+    def setUp(self):
+        self.client = APIClient()
+        token = AuthToken.objects.create(issues_read=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        self.old_size = IssueRelatedPagination.page_size
+        IssueRelatedPagination.page_size = 2
+
+    def tearDown(self):
+        IssueRelatedPagination.page_size = self.old_size
+
+    def test_tag_values_two_pages(self):
+        issue, _ = get_or_create_issue()
+        for value in ["production", "staging", "test"]:
+            store_tags(create_event(issue=issue), issue, {"environment": value})
+        store_tags(create_event(issue=issue), issue, {"release": "1.0"})
+
+        r1 = self.client.get(reverse("api:issue-tags", args=[issue.id]), {"key": "environment"})
+        self.assertEqual(["production", "staging"], [row["value"] for row in r1.json()["results"]])
+        r2 = self.client.get(r1.json()["next"])
+        self.assertEqual(["test"], [row["value"] for row in r2.json()["results"]])
+        self.assertIsNone(r2.json()["next"])
 
 
 class IssueHistoryPaginationTests(TransactionTestCase):

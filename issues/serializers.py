@@ -7,8 +7,9 @@ from rest_framework import serializers
 
 from bugsink.api_serializers import UTCModelSerializer
 from bugsink.period_utils import DATEUTIL_KWARGS_MAP
+from tags.models import IssueTag
 
-from .models import Issue, TurningPoint, TurningPointKind, issue_lookup_kwargs
+from .models import Grouping, Issue, TurningPoint, TurningPointKind, issue_lookup_kwargs
 
 
 class UnmuteVolumeConditionSerializer(serializers.Serializer):
@@ -66,6 +67,23 @@ class IssueSerializer(UTCModelSerializer):
     # def get_grouping_keys(self, obj):
     #     # TODO: prefetch grouping_key in IssueViewSet
     #     return list(obj.grouping_set.values_list("grouping_key", flat=True))
+
+
+class IssueTagSerializer(serializers.ModelSerializer):
+    key = serializers.CharField(source="key.key", read_only=True)
+    value = serializers.CharField(source="value.value", read_only=True)
+
+    class Meta:
+        model = IssueTag
+        fields = ["id", "key", "value", "count"]
+        read_only_fields = fields
+
+
+class GroupingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Grouping
+        fields = ["id", "grouping_key", "grouping_mechanism"]
+        read_only_fields = fields
 
 
 class IssueMuteForSerializer(serializers.Serializer):

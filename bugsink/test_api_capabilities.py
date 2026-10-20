@@ -18,6 +18,8 @@ EXPECTED_CAPABILITY_OPERATIONS = {
         "issues:read": {
             "GET /api/canonical/0/issues/",
             "GET /api/canonical/0/issues/{id}/",
+            "GET /api/canonical/0/issues/{id}/tags/",
+            "GET /api/canonical/0/issues/{id}/grouping/",
             "GET /api/canonical/0/issue-history/",
         },
         "events:read": {

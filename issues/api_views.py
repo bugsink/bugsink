@@ -12,12 +12,19 @@ from tags.search import search_issues
 
 from .models import Issue, IssueStateManager, TurningPoint, apply_issue_action
 from .serializers import (
+    GroupingSerializer,
     IssueCommentSerializer,
     IssueMuteForSerializer,
     IssueMuteUntilSerializer,
     IssueSerializer,
+    IssueTagSerializer,
     TurningPointSerializer,
 )
+
+
+class IssueRelatedPagination(CursorPagination):
+    ordering = "id"
+    page_size = 250
 
 
 class IssuesCursorPagination(CursorPagination):
@@ -131,6 +138,36 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     )
     def retrieve(self, request, issue, *args, **kwargs):
         return Response(self.get_serializer(issue).data)
+
+    @token_guard("issues:read", guarding_issue=lookup(url="pk"))
+    @extend_schema(
+        summary="List issue tag values and counts",
+        description=(
+            "List stored tag values and their occurrence counts, ordered by ID. "
+            "Counts are not reduced when event payloads are evicted. "
+            "Includes values the UI groups under Other or hides as mostly unique."
+        ),
+        parameters=[OpenApiParameter(name="key", type=OpenApiTypes.STR, description="Filter by exact tag key.")],
+        responses=IssueTagSerializer(many=True),
+    )
+    @action(detail=True, methods=["get"], serializer_class=IssueTagSerializer, pagination_class=IssueRelatedPagination)
+    def tags(self, request, issue, pk=None):
+        queryset = issue.tags.select_related("key", "value")
+        if "key" in request.query_params:
+            queryset = queryset.filter(key__key=request.query_params["key"])
+        page = self.paginate_queryset(queryset)
+        return self.get_paginated_response(self.get_serializer(page, many=True).data)
+
+    @token_guard("issues:read", guarding_issue=lookup(url="pk"))
+    @extend_schema(
+        summary="List issue grouping keys",
+        description="List the grouping keys and mechanisms associated with this issue, ordered by ID.",
+        responses=GroupingSerializer(many=True),
+    )
+    @action(detail=True, methods=["get"], serializer_class=GroupingSerializer, pagination_class=IssueRelatedPagination)
+    def grouping(self, request, issue, pk=None):
+        page = self.paginate_queryset(issue.grouping_set.all())
+        return self.get_paginated_response(self.get_serializer(page, many=True).data)
 
     @token_guard("issues:delete", guarding_issue=lookup(url="pk"))
     @extend_schema(
