@@ -337,6 +337,7 @@ class IssueApiTests(TransactionTestCase):
         self.assertEqual(history.status_code, 200)
         self.assertEqual([response.json() | {
             "triggering_event": None,
+            "user_display_name": None,
             "kind": "manual_annotation",
             "metadata": {},
         }], history.json()["results"])
@@ -388,6 +389,7 @@ class IssueApiTests(TransactionTestCase):
             "project": self.project.id,
             "triggering_event": None,
             "user": None,
+            "user_display_name": None,
             "timestamp": results[1]["timestamp"],
             "kind": "muted",
             "comment": "",
@@ -395,6 +397,30 @@ class IssueApiTests(TransactionTestCase):
         }, results[1])
         self.assertEqual("manual_annotation", results[0]["kind"])
         self.assertEqual("Needs a closer look.", results[0]["comment"])
+
+    def test_list_history_authors(self):
+        alice = get_user_model().objects.create_user(username="alice", first_name="Alice", last_name="Example")
+        bob = get_user_model().objects.create_user(username="bob")
+        for user in (alice, bob):
+            TurningPoint.objects.create(
+                project=self.project, issue=self.issue0, kind=TurningPointKind.MANUAL_ANNOTATION,
+                user=user, comment="Looking into this.", timestamp=timezone.now())
+
+        response = self.client.get(reverse("api:issue-history-list"), {"issue": str(self.issue0.id)})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [(bob.id, "bob"), (alice.id, "Alice Example")],
+            [(row["user"], row["user_display_name"]) for row in response.json()["results"]],
+        )
+
+        alice.delete()
+        response = self.client.get(reverse("api:issue-history-list"), {"issue": str(self.issue0.id)})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [(bob.id, "bob"), (None, None)],
+            [(row["user"], row["user_display_name"]) for row in response.json()["results"]],
+        )
+        self.assertEqual("Looking into this.", response.json()["results"][1]["comment"])
 
     def test_list_history_order_asc(self):
         first_seen, muted, comment = self._create_history()

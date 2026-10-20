@@ -94,6 +94,8 @@ class IssueCommentSerializer(serializers.Serializer):
 
 
 class TurningPointSerializer(UTCModelSerializer):
+    user_display_name = serializers.SerializerMethodField(
+        help_text="Author's full name or username; null when no user is recorded.")
     kind = serializers.SerializerMethodField()
     metadata = serializers.SerializerMethodField()
 
@@ -105,12 +107,19 @@ class TurningPointSerializer(UTCModelSerializer):
             "project",
             "triggering_event",
             "user",
+            "user_display_name",
             "timestamp",
             "kind",
             "comment",
             "metadata",
         ]
         read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_user_display_name(self, obj):
+        if obj.user is None:
+            return None
+        return obj.user.get_full_name() or obj.user.username
 
     @extend_schema_field(serializers.ChoiceField(choices=[kind.name.lower() for kind in TurningPointKind]))
     def get_kind(self, obj):

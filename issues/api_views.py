@@ -300,7 +300,7 @@ class IssueHistoryPagination(AscDescCursorPagination):
 
 
 class IssueHistoryViewSet(AtomicRequestMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
-    queryset = TurningPoint.objects.all()  # router requirement for basename inference
+    queryset = TurningPoint.objects.select_related("user")
     serializer_class = TurningPointSerializer
     pagination_class = IssueHistoryPagination
 
