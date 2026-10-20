@@ -11,6 +11,8 @@
     <div class="m-4 max-w-4xl flex-auto">
         <h1 class="text-4xl font-bold">Connect your Python Application</h1>
 
+        {% include "projects/includes/sdk_setup_event_status.html" %}
+
         <div class="mt-4">
             Connect your Python application to Bugsink to start tracking errors.
             Bugsink is compatible with the Sentry SDK. A basic setup is the following:
@@ -80,4 +82,8 @@ raise Exception("Raised Exception on purpose to send it to Bugsink")
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/sdk_setup_event_status.js' %}"></script>
 {% endblock %}

@@ -2,6 +2,7 @@
 {% load static %}
 {% load stricter_templates %}
 {% load humanize %}
+{% load tag_search %}
 
 {% block tab_content %}
 
@@ -67,7 +68,7 @@
         {% for tag in event.get_tags %}
             <div class="flex flex-wrap {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
                 <div class="w-1/4 break-words {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ tag.value.key.key }}</div>
-                <div class="w-3/4 break-words {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ tag.value.value|linebreaks }}</div>
+                <div class="w-3/4 break-words {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono"><a href="{% url 'issue_list_open' project_pk=issue.project_id %}?q={% tag_drilldown request.GET.q tag.value.key.key tag.value.value %}" class="hover:text-cyan-500 dark:hover:text-cyan-300" title="Filter issues by this tag">{{ tag.value.value|linebreaks }}</a></div>
             </div>
         {% endfor %}
     </div>

@@ -1,0 +1,7 @@
+{% load i18n %}
+<div class="relative inline-block{% if search_container_class %} {{ search_container_class }}{% endif %}">
+    <input type="text" name="q" value="{{ q }}" placeholder="{% translate placeholder %}" class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md pr-9"/>
+    {% if q %}
+    <a href="{% querystring q=None page=None %}" aria-label="{% translate 'Clear search' %}" title="{% translate 'Clear search' %}" class="absolute inset-y-0 right-0 flex items-center px-3 text-xl leading-none text-slate-400 hover:text-slate-700 dark:hover:text-slate-300">&times;</a>
+    {% endif %}
+</div>

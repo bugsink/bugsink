@@ -1,3 +1,4 @@
+from urllib.parse import unquote
 from unittest import TestCase as RegularTestCase
 from unittest.mock import patch
 
@@ -8,9 +9,11 @@ from bugsink.pygments_extensions import choose_lexer_for_pattern, get_all_lexers
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 
 from events.utils import IncompleteList, IncompleteDict
+from tags.search import parse_query
 
 from .templatetags.issues import (
     _pygmentize_lines as actual_pygmentize_lines, format_var, pygmentize, timestamp_with_millis)
+from .templatetags.tag_search import _tag_clause, tag_drilldown
 
 User = get_user_model()
 
@@ -210,6 +213,36 @@ class TimestampWithMillisTagTest(RegularTestCase):
             conditional_escape(timestamp_with_millis(ts)))
 
         self.assertFalse(isinstance(timestamp_with_millis(ts), SafeString))
+
+
+class TagDrilldownTest(RegularTestCase):
+    def test_clause_quotes_and_escapes(self):
+        self.assertEqual('browser:"Fire fox"', _tag_clause("browser", "Fire fox"))
+        self.assertEqual(r'k:"a \"b\" \\c"', _tag_clause("k", r'a "b" \c'))
+
+    def test_clause_quotes_keys_with_search_syntax(self):
+        self.assertEqual('"bugsink:release":"1.2"', _tag_clause("bugsink:release", "1.2"))
+
+        # This just documents "what is" rather than "what I believe is right": these are not valid Sentry tag keys.
+        self.assertEqual(
+            r'"key with \"quote\" and \\slash":"value"',
+            _tag_clause('key with "quote" and \\slash', "value"))
+
+    def test_no_current_query_is_just_the_clause(self):
+        self.assertEqual('browser:"Firefox"', unquote(tag_drilldown("", "browser", "Firefox")))
+
+    def test_appends_to_current_query_for_drilldown(self):
+        self.assertEqual('os:"Linux" browser:"Firefox"', unquote(tag_drilldown('os:"Linux"', "browser", "Firefox")))
+
+    def test_output_is_url_encoded(self):
+        out = tag_drilldown('os:"Linux"', "browser", "Firefox")
+        self.assertNotIn('"', out)
+        self.assertNotIn(' ', out)
+        self.assertIn('%22', out)
+
+    def test_colon_key_roundtrips_through_drilldown_and_parser(self):
+        query = unquote(tag_drilldown("", "bugsink:release", "1.2"))
+        self.assertEqual(({"bugsink:release": "1.2"}, ""), parse_query(query))
 
 
 class NavigationLinksTestCase(TransactionTestCase):

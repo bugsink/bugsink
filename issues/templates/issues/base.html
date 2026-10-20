@@ -4,6 +4,7 @@
 {% load humanize %}
 {% load stricter_templates %}
 {% load add_to_qs %}
+{% load tag_search %}
 {% load i18n %}
 
 {% block title %}{{ issue.title }} · {{ block.super }}{% endblock %}
@@ -237,14 +238,12 @@
             </div>
             <div class="p-4">
                 {% for issuetags in issue.tags_summary %}
-                    <a href="{{ script_prefix }}/issues/issue/{{ issue.id }}/tags/{% current_qs %}" class="block mb-4">
+                    <div class="mb-4">
                         <div class="text-sm font-bold text-slate-500 dark:text-slate-300">{{ issuetags.0.key.key }}:</div>
                         <div>
-                        {% for issuetag in issuetags %}
-                            <span>{{ issuetag.value.value }} <span class="text-xs">({{ issuetag.pct }}%)</span>{% if not forloop.last %}</span>,{% endif %}
-                        {% endfor %}
+                        {% for issuetag in issuetags %}{% if issuetag.is_other %}{{ issuetag.value.value }}{% else %}<a href="{% url 'issue_list_open' project_pk=issue.project_id %}?q={% tag_drilldown request.GET.q issuetags.0.key.key issuetag.value.value %}" class="hover:text-cyan-500 dark:hover:text-cyan-300" title="Filter issues by this tag">{{ issuetag.value.value }}</a>{% endif %} <span class="text-xs">({{ issuetag.pct }}%)</span>{% if not forloop.last %}, {% endif %}{% endfor %}
                         </div>
-                    </a>
+                    </div>
                 {% endfor %}
 
                 <div class="text-sm font-bold italic text-slate-500 dark:text-slate-300"><a href="{{ script_prefix }}/issues/issue/{{ issue.id }}/tags/{% current_qs %}">{% translate "All tags..." %}</a></div>

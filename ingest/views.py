@@ -30,7 +30,6 @@ from issues.utils import get_type_and_value_for_data, get_key_with_mechanism_for
 from issues.regressions import issue_is_regression
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
-from bugsink.exceptions import ViolatedExpectation
 from bugsink.streams import (
     content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded,
     handle_request_content_encoding)
@@ -318,7 +317,7 @@ class BaseIngestAPIView(View):
     @classmethod
     def process_minidump(cls, ingested_at, ingestion_id, minidump_bytes, project, request):
         # This is for the "pure" minidump case, i.e. full separate event (however: event data/extra data _can_ be
-        # provided via POST). TSTTCPW: convert the minidump data to an event and then proceed as usual.
+        # provided via POST).
         performance_logger.info("ingested minidump with %s bytes", len(minidump_bytes))
 
         # NOTE: the sentry-native SDK (at least when crashpad-powered) sends a 'guid' request.POST field; we don't use
@@ -331,13 +330,13 @@ class BaseIngestAPIView(View):
         event_data["platform"] = "native"
         event_data["errors"] = []
 
-        merge_minidump_event(event_data, minidump_bytes, project)
-
-        # write the event data to disk:
         filename = get_filename_for_event_id(ingestion_id)
         b108_makedirs(os.path.dirname(filename))
         with open(filename, 'w') as f:
             json.dump(event_data, f)
+
+        with open(get_filename_for_event_id(ingestion_id, filetype="minidump"), "wb") as f:
+            f.write(minidump_bytes)
 
         event_metadata = cls.get_event_meta(event_data["event_id"], ingested_at, ingestion_id, request, project)
         event_metadata["has_minidump"] = True
@@ -552,18 +551,14 @@ class BaseIngestAPIView(View):
             denormalized_fields,
         )
         if not event_created:
-            if issue_created:
-                # this is a weird case that "should not happen" (but can happen in practice). Namely, when some client
-                # sends events with the same event_id (leading to no new event), but different-enough actual data that
-                # they lead to new issue-creation. I've already run into this while debugging (and this may in fact be
-                # the only realistic scenario): manually editing some sample event but not updating the event_id (nor
-                # running send_json with --fresh-id). We raise an exception after cleaning up, to at least avoid getting
-                # into an inconsistent state in the DB.
-                raise ViolatedExpectation("no event created, but issue created")
-
+            # This is a weird case that can happen when a client sends the same event_id with data different enough to
+            # create a new issue. I've run into it while debugging by editing a sample event without updating the ID or
+            # using send_json --fresh-id. Raising ValidationError rolls back the surrounding transaction and handles the
+            # duplicate as invalid client input.
+            #
             # Validating by letting the DB raise an exception, and only after taking some other actions already, is not
             # "by the book" (some book), but it's the most efficient way of doing it when your basic expectation is that
-            # multiple events with the same event_id "don't happen" (i.e. are the result of badly misbehaving clients)
+            # multiple events with the same event_id "don't happen" (i.e. are the result of badly misbehaving clients).
             # Note: given the ordering here this may hit after an eviction; that was not imagined (but will still work,
             # albeit with considerable wasted work in that scenario).
             raise ValidationError("Event already exists", code="event_already_exists")

@@ -6,6 +6,8 @@
 
 {% block content %}
 
+{% include "teams/includes/leave_modal.html" %}
+
 
 
 <div class="m-4 flex flex-row items-end">
@@ -26,6 +28,18 @@
 
 
 <div class="m-4"><!-- main content -->
+
+    {% if messages %}
+    <ul class="mb-4">
+        {% for message in messages %}
+            {% if message.level_tag == "warning" %}
+            <li class="bg-yellow-100 dark:bg-amber-800 border-2 border-yellow-200 dark:border-amber-900 p-4 rounded-lg">{{ message }}</li>
+            {% else %}
+            <li class="bg-cyan-50 dark:bg-cyan-900 border-2 border-cyan-800 dark:border-cyan-400 p-4 rounded-lg">{{ message }}</li>
+            {% endif %}
+        {% endfor %}
+    </ul>
+    {% endif %}
 
 <div class="flex bg-slate-50 dark:bg-slate-800 mt-4 items-end">
     <div class="flex">
@@ -105,7 +119,7 @@
                         </div>
                     {% else %}
                         <div>
-                            <button name="action" value="leave:{{ team.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Leave" %}</button>
+                            <button type="button" data-leave-action="leave:{{ team.id }}" class="leave-button font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Leave" %}</button>
                         </div>
                     {% endif %}
                 {% else %}
@@ -142,4 +156,5 @@
 
 {% block extra_js %}
     <script src="{% static 'js/team_list.js' %}"></script>
+    <script src="{% static 'js/team_leave.js' %}"></script>
 {% endblock %}

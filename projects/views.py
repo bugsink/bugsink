@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from django.shortcuts import get_object_or_404, redirect, render
 from django.db import models
-from django.http import Http404, HttpResponseRedirect
+from django.http import Http404, HttpResponseRedirect, JsonResponse
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth import get_user_model
 from django.contrib import messages
@@ -11,6 +11,7 @@ from django.contrib.auth import logout
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.http import require_GET
 
 from users.models import EmailVerification
 from teams.models import TeamMembership, Team, TeamRole
@@ -499,6 +500,17 @@ def project_sdk_setup(request, project_pk, platform=""):
         "project": project,
         "dsn": project.dsn,
     })
+
+
+@require_GET
+@atomic_for_request_method
+def project_sdk_setup_status(request, project_pk):
+    project = Project.objects.get(id=project_pk, is_deleted=False)
+
+    if not user_has_project_membership_access(request.user, project):
+        raise PermissionDenied("You are not a member of this project")
+
+    return JsonResponse({"digested_event_count": project.digested_event_count})
 
 
 @atomic_for_request_method

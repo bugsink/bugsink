@@ -26,7 +26,9 @@ function copyText(text) {
 }
 
 document.querySelectorAll(".js-copy-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
+  btn.addEventListener("click", (event) => {
+    event.preventDefault();
+
     const container = btn.closest(".js-copy-container");
     const src = container.querySelector(".js-copy-source");
 
@@ -36,14 +38,22 @@ document.querySelectorAll(".js-copy-btn").forEach((btn) => {
     const copyIcon = btn.querySelector(".js-copy-svg");
     const copiedIcon = btn.querySelector(".js-copied-svg");
 
-    label.textContent = "Copied!";
-    copyIcon.classList.add("hidden");
-    copiedIcon.classList.remove("hidden");
+    if (label) {
+      label.textContent = "Copied!";
+    }
+    if (copyIcon) {
+      copyIcon.classList.add("hidden");
+      copiedIcon.classList.remove("hidden");
+    }
 
     setTimeout(() => {
-      label.textContent = "Copy";
-      copyIcon.classList.remove("hidden");
-      copiedIcon.classList.add("hidden");
+      if (label) {
+        label.textContent = "Copy";
+      }
+      if (copyIcon) {
+        copyIcon.classList.remove("hidden");
+        copiedIcon.classList.add("hidden");
+      }
     }, 2500);
   });
 });

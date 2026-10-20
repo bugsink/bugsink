@@ -7,7 +7,7 @@
     "build": "npm run build:clean && npm run build:tailwind",
     "build:clean": "rimraf ../static/css/dist",
     "build:tailwind": "cross-env NODE_ENV=production postcss ./src/styles.css -o ../static/css/dist/styles.css --minify",
-    "dev": "cross-env NODE_ENV=development postcss ./src/styles.css -o ../static/css/dist/styles.css --watch"
+    "dev": "cross-env NODE_ENV=production postcss ./src/styles.css -o ../static/css/dist/styles.css --watch --minify"
   },
   "keywords": [],
   "author": "",
@@ -25,5 +25,10 @@
     "postcss-simple-vars": "^7.0.1",
     "rimraf": "^6.0.1",
     "tailwindcss": "^4.1.11"
+  },
+  "overrides": {
+    "@tailwindcss/typography": {
+      "postcss-selector-parser": "7.1.6"
+    }
   }
 }

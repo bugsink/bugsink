@@ -645,6 +645,20 @@ class ViewTests(TransactionTestCase):
         response = self.client.get(f"/issues/issue/{self.issue.id}/tags/")
         self.assertContains(response, self.issue.title())
 
+    def test_aggregated_tag_values_are_not_filter_links(self):
+        store_tags(self.event, self.issue, {"many-values": "value-0"})
+        for i in range(1, 26):
+            event = create_event(self.project, self.issue, project_digest_order=i + 1)
+            store_tags(event, self.issue, {"many-values": f"value-{i}"})
+
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{self.event.id}/")
+        self.assertContains(response, 'title="Filter issues by this tag"', count=3)
+        self.assertNotContains(response, 'title="Filter issues by this tag">...</a>')
+
+        response = self.client.get(f"/issues/issue/{self.issue.id}/tags/")
+        self.assertContains(response, 'title="Filter issues by this tag"', count=24)
+        self.assertNotContains(response, 'title="Filter issues by this tag">Other...</a>')
+
     def test_issue_sidebar_summarizes_long_release_lists(self):
         self.issue.events_at = "\n".join(f"2026.1.{i}.0" for i in range(10)) + "\n"
         self.issue.save()
@@ -693,6 +707,60 @@ class ViewTests(TransactionTestCase):
     def test_issue_event_list(self):
         response = self.client.get(f"/issues/issue/{self.issue.id}/events/")
         self.assertContains(response, self.issue.title())
+
+    def test_use_index_sourcemap_in_stacktrace(self):
+        debug_id = uuid.uuid4()
+        sourcemap = json.dumps({
+            "version": 3,
+            "sections": [{
+                "offset": {"line": 4, "column": 3},
+                "map": {
+                    "version": 3,
+                    "sources": ["section-source.ts"],
+                    "sourcesContent": ["INDEX_MAP_CONTEXT_LINE\nfollowing line"],
+                    "names": ["mappedFunction"],
+                    "mappings": "AAAAA",
+                },
+            }],
+        }).encode("utf-8")
+        sourcemap_file = File.objects.create(
+            checksum=hashlib.sha1(sourcemap).hexdigest(),
+            filename="bundle.js.map",
+            size=len(sourcemap),
+            data=sourcemap,
+        )
+        FileMetadata.objects.create(
+            project=self.project,
+            file=sourcemap_file,
+            debug_id=debug_id,
+            file_type="source_map",
+            data="{}",
+        )
+        event_data = {
+            "event_id": uuid.uuid4().hex,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "platform": "javascript",
+            "exception": {
+                "values": [{
+                    "type": "Error",
+                    "value": "test",
+                    "stacktrace": {
+                        "frames": [{"filename": "bundle.js", "lineno": 5, "colno": 4, "in_app": True}],
+                    },
+                }],
+            },
+            "debug_meta": {
+                "images": [{"type": "sourcemap", "code_file": "bundle.js", "debug_id": str(debug_id)}],
+            },
+        }
+        event = create_event(self.project, self.issue, event_data=event_data, project_digest_order=2)
+
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{event.id}/")
+
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, "section-source.ts")
+        self.assertContains(response, "mappedFunction</span> line <span class=\"font-bold\">1:1</span>.")
+        self.assertContains(response, "INDEX_MAP_CONTEXT_LINE")
 
     @patch("events.utils.ecma426.loads")
     def test_use_sourcemap_in_stacktrace(self, mock_ecma426_loads):
@@ -875,6 +943,78 @@ class ViewTests(TransactionTestCase):
 
         response = self.client.get(f"/issues/issue/{self.issue.id}/event/{event.id}/")
         self.assertEqual(200, response.status_code)
+        self.assertContains(response, "good-source.ts")
+        self.assertContains(response, "mappedFunction</span> line <span class=\"font-bold\">11:1</span>")
+
+    @patch("events.utils.ecma426.loads")
+    def test_use_sourcemap_in_stacktrace_matching_code_file_on_abs_path(self, mock_ecma426_loads):
+        # A debug image's code_file is the absolute path of the file, i.e. the frame's abs_path. Browser SDKs put the
+        # same URL in filename and abs_path, but @sentry/cloudflare (Workers) reports filename "index.js" for abs_path
+        # "/index.js", as do this test's frames.
+        debug_id = uuid.uuid4()
+        missing_debug_id = uuid.uuid4()
+
+        sourcemap = json.dumps({
+            "version": 3,
+            "sources": ["good-source.ts"],
+            "sourcesContent": [
+                "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12"
+            ],
+            "names": [],
+            "mappings": "",
+        }).encode("utf-8")
+
+        sourcemap_file = File.objects.create(
+            checksum=hashlib.sha1(sourcemap).hexdigest(),
+            filename="index.js.map",
+            size=len(sourcemap),
+            data=sourcemap,
+        )
+        FileMetadata.objects.create(file=sourcemap_file, debug_id=debug_id, file_type="source_map", data="{}")
+
+        class FakeMapping:
+            source = "good-source.ts"
+            original_line = 10
+            original_column = 0
+            name = "mappedFunction"
+
+        class GoodSourceMap:
+            def lookup_left(self, line, column):
+                if (line, column) == (5, 11):
+                    return FakeMapping()
+
+        mock_ecma426_loads.return_value = GoodSourceMap()
+
+        event_data = {
+            "event_id": uuid.uuid4().hex,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "platform": "javascript",
+            "exception": {
+                "values": [{
+                    "type": "Error",
+                    "value": "test",
+                    "stacktrace": {
+                        "frames": [
+                            {"filename": "missing.js", "abs_path": "/missing.js", "lineno": 3, "colno": 9,
+                             "in_app": True},
+                            {"filename": "index.js", "abs_path": "/index.js", "lineno": 6, "colno": 12,
+                             "in_app": True},
+                        ]
+                    },
+                }]
+            },
+            "debug_meta": {
+                "images": [
+                    {"type": "sourcemap", "code_file": "/missing.js", "debug_id": str(missing_debug_id)},
+                    {"type": "sourcemap", "code_file": "/index.js", "debug_id": str(debug_id)},
+                ]
+            },
+        }
+        event = create_event(self.project, self.issue, event_data=event_data, project_digest_order=2)
+
+        response = self.client.get(f"/issues/issue/{self.issue.id}/event/{event.id}/")
+        self.assertEqual(200, response.status_code)
+        self.assertContains(response, f"No sourcemaps found for Debug ID {missing_debug_id}")
         self.assertContains(response, "good-source.ts")
         self.assertContains(response, "mappedFunction</span> line <span class=\"font-bold\">11:1</span>")
 

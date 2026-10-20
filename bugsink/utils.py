@@ -43,15 +43,16 @@ def is_safe_next_url(url, request):
     )
 
 
-def sends_email_as_bugsink_but_is_not_hosted_on_bugsink(from_email, allowed_hosts):
-    if from_email is None:
+def email_uses_bugsink_domain(email):
+    if email is None:
         return False
 
-    normalized_from_email = str(from_email).strip().lower()
-    if not (
-        normalized_from_email.endswith("@bugsink.com") or
-        normalized_from_email.endswith("@bugsink.com>")
-    ):
+    normalized_email = str(email).strip().lower()
+    return normalized_email.endswith("@bugsink.com") or normalized_email.endswith("@bugsink.com>")
+
+
+def sends_email_as_bugsink_but_is_not_hosted_on_bugsink(from_email, allowed_hosts):
+    if not email_uses_bugsink_domain(from_email):
         return False
 
     return not any(str(host).strip().lower().lstrip(".").endswith("bugsink.com") for host in allowed_hosts)
@@ -65,6 +66,18 @@ def send_rendered_email(subject, base_template_name, recipient_list, context=Non
     recipient_list = [r for r in recipient_list if r]
     if not recipient_list:
         return
+
+    refused_recipient_list = [r for r in recipient_list if email_uses_bugsink_domain(r)]
+    if refused_recipient_list:
+        logger.error(
+            "Refusing to send email with subject '%s' to %s. You are not Bugsink, so configure the user with their "
+            "own email address instead of an @bugsink.com address.",
+            subject,
+            refused_recipient_list,
+        )
+        recipient_list = [r for r in recipient_list if r not in refused_recipient_list]
+        if not recipient_list:
+            return
 
     if sends_email_as_bugsink_but_is_not_hosted_on_bugsink(settings.DEFAULT_FROM_EMAIL, settings.ALLOWED_HOSTS):
         logger.error(

@@ -71,7 +71,7 @@
         {% if is_global_issue_list %}
         <!-- Global tag search is intentionally hidden for now. Project-level tag search was tuned around project-scoped tag-value lookups; do not port it to cross-project search without a fresh performance pass. -->
         {% else %}
-        <input type="text" name="q" value="{{ q }}" placeholder="{% translate 'Search issues...' %}" class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md"/>
+        {% include "theme/_search_input.html" with placeholder="Search issues..." %}
         {% endif %}
         </form>
     </div>

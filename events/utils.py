@@ -182,6 +182,18 @@ def _postgres_fix(memoryview_or_bytes):
     return memoryview_or_bytes
 
 
+def get_sources_content(sm_data):
+    # Index maps keep their sources in each section's map, not at the top level.
+    maps = [sm_data] + [section["map"] for section in sm_data.get("sections", [])]
+
+    result = {}
+    for sm in maps:
+        for (source_file_name, source_file) in zip(sm.get("sources", []), sm.get("sourcesContent", [])):
+            if source_file is not None:
+                result[source_file_name] = source_file.splitlines()
+    return result
+
+
 def apply_sourcemaps(event_data, project):
     images = event_data.get("debug_meta", {}).get("images", [])
     if not images:
@@ -212,21 +224,22 @@ def apply_sourcemaps(event_data, project):
     source_for_filename = {}
     for filename, meta in filenames_with_metas:
         sm_data = json.loads(_postgres_fix(meta.file.get_raw_data()))
-
-        sources = sm_data.get("sources", [])
-        sources_content = sm_data.get("sourcesContent", [])
-
-        for (source_file_name, source_file) in zip(sources, sources_content):
-            if source_file is not None:
-                source_for_filename[source_file_name] = source_file.splitlines()
+        source_for_filename.update(get_sources_content(sm_data))
 
     for exception in get_values(event_data.get("exception", {})):
         for frame in exception.get("stacktrace", {}).get("frames", []):
-            if frame.get("filename") in sourcemap_for_filename:
+            # code_file is the absolute path of the file, which is the frame's abs_path; filename is a display path.
+            # Browser SDKs put the same URL in both, but @sentry/cloudflare reports filename "index.js" for abs_path
+            # "/index.js". Match on abs_path first; filename stays as a fallback for events without an abs_path.
+            code_file = next(
+                (path for path in (frame.get("abs_path"), frame.get("filename")) if path in debug_id_for_filename),
+                None)
+
+            if code_file in sourcemap_for_filename:
                 if not frame.get("lineno"):
                     continue
 
-                sm = sourcemap_for_filename[frame["filename"]]
+                sm = sourcemap_for_filename[code_file]
                 generated_line = frame["lineno"] + FROM_DISPLAY
                 generated_column = (frame.get("colno") or 1) + FROM_DISPLAY
                 try:
@@ -234,7 +247,7 @@ def apply_sourcemaps(event_data, project):
                 except (IndexError, KeyError):
                     # Some source maps simply have no mapping for the generated line/column in the frame.
                     # We skip sourcemap enrichment for that frame and leave the original frame data intact.
-                    frame["debug_id"] = str(debug_id_for_filename[frame["filename"]])
+                    frame["debug_id"] = str(debug_id_for_filename[code_file])
                     frame["sourcemap_error"] = (
                         f"Error mapping ({generated_line}, {generated_column}) into sourcemap ({frame['debug_id']})"
                     )
@@ -251,11 +264,11 @@ def apply_sourcemaps(event_data, project):
                     frame['filename'] = mapping.source
                     frame['function'] = mapping.name
 
-            elif frame.get("filename") in debug_id_for_filename:
+            elif code_file is not None:
                 # The event_data reports that a debug_id is available for this filename, but we don't have it; this
                 # could be because the sourcemap was not uploaded. We want to show the debug_id in the stacktrace as
                 # a hint to the user that they should upload the sourcemap.
-                frame["debug_id"] = str(debug_id_for_filename[frame["filename"]])
+                frame["debug_id"] = str(debug_id_for_filename[code_file])
 
 
 def get_sourcemap_images(event_data, project):

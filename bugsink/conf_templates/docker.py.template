@@ -157,6 +157,7 @@ BUGSINK = {
     "MAX_EVENT_TAGS": int(os.getenv("MAX_EVENT_TAGS", 100)),
     # For large MAX_FILE_SIZE values, you may want FILE_OBJECT_STORAGE_PATH configured too.
     "MAX_FILE_SIZE": int(os.getenv("MAX_FILE_SIZE", 2 * _GIBIBYTE)),
+    "MAX_SOURCE_CONTEXT_FILE_SIZE": int(os.getenv("MAX_SOURCE_CONTEXT_FILE_SIZE", 10 * _MEBIBYTE)),
 
     # Bugsink-specific limits:
     # The default values are 1_000, 5_000, 1M respectively; which corresponds to ~6%, ~2.7%, .8% of the total capacity
