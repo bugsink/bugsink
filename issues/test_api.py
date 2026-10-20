@@ -2,6 +2,7 @@ from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from rest_framework.test import APIClient
 
@@ -139,6 +140,18 @@ class IssueApiTests(TransactionTestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], str(self.issue0.id))
+        self.assertEqual(response.json()["fixed_at"], [])
+        self.assertEqual(response.json()["events_at"], [])
+        self.assertIsNone(response.json()["unmute_after"])
+        self.assertEqual(response.json()["unmute_on_volume_based_conditions"], [])
+
+    def test_release_versions_in_list_and_detail(self):
+        Issue.objects.filter(pk=self.issue0.pk).update(events_at="\n1.0.0\n1.1.0\n", fixed_at="1.1.0\n")
+        detail = self.client.get(reverse("api:issue-detail", args=[self.issue0.id])).json()
+        listing = self.client.get(reverse("api:issue-list"), {"project": self.project.id}).json()["results"][0]
+        for result in [detail, listing]:
+            self.assertEqual(result["events_at"], ["", "1.0.0", "1.1.0"])
+            self.assertEqual(result["fixed_at"], ["1.1.0"])
 
     def test_friendly_id_alias(self):
         event = create_event(issue=self.issue0)
@@ -213,6 +226,7 @@ class IssueApiTests(TransactionTestCase):
         self.assertTrue(self.issue0.is_resolved)
         self.assertFalse(self.issue0.is_resolved_unconditionally)
         self.assertEqual(self.issue0.fixed_at, "1.0.0\n")
+        self.assertEqual(response.json()["fixed_at"], ["1.0.0"])
 
     def test_resolve_latest_allows_existing_occurrence(self):
         create_release_if_needed(self.project, "1.0.0", timezone.now())
@@ -275,6 +289,7 @@ class IssueApiTests(TransactionTestCase):
         self.issue0.refresh_from_db()
         self.assertTrue(self.issue0.is_muted)
         self.assertIsNotNone(self.issue0.unmute_after)
+        self.assertEqual(parse_datetime(response.json()["unmute_after"]), self.issue0.unmute_after)
 
     def test_mute_until(self):
         response = self.client.post(
@@ -289,6 +304,10 @@ class IssueApiTests(TransactionTestCase):
         self.assertEqual(
             self.issue0.unmute_on_volume_based_conditions,
             '[{"period": "hour", "nr_of_periods": 1, "volume": 5}]',
+        )
+        self.assertEqual(
+            response.json()["unmute_on_volume_based_conditions"],
+            [{"period": "hour", "nr_of_periods": 1, "volume": 5}],
         )
 
     def test_mute_for_accepts_non_ui_period(self):
