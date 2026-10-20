@@ -1,5 +1,7 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
+from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiParameter, OpenApiTypes, OpenApiResponse
 
@@ -75,8 +77,27 @@ class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     def retrieve(self, request, event, *args, **kwargs):
         return Response(self.get_serializer(event).data)
 
+    @token_guard("events:read", guarding_project=lookup(query="project"))
+    @extend_schema(
+        summary="Look up an event by SDK event ID",
+        description="Retrieve an event by project and SDK-generated `event_id`, including the full `data` payload.",
+        parameters=[
+            OpenApiParameter(name="project", type=OpenApiTypes.INT, required=True),
+            OpenApiParameter(name="event_id", type=OpenApiTypes.UUID, required=True),
+        ],
+        responses=EventDetailSerializer,
+    )
+    @action(detail=False, methods=["get"], url_path="lookup", url_name="lookup")
+    def lookup_by_event_id(self, request, project):
+        event_id = request.query_params.get("event_id")
+        if not event_id:
+            raise ValidationError({"event_id": ["This field is required."]})
+        event = get_object_or_404(
+            self.queryset.filter(issue__is_deleted=False), project=project, event_id=event_id)
+        return Response(self.get_serializer(event).data)
+
     def get_serializer_class(self):
-        return EventDetailSerializer if self.action == "retrieve" else EventListSerializer
+        return EventDetailSerializer if self.action in ("retrieve", "lookup_by_event_id") else EventListSerializer
 
     @token_guard("events:read", guarding_event=lookup(url="pk"))
     @extend_schema(

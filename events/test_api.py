@@ -1,8 +1,9 @@
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from projects.models import Project
+from projects.models import Project, ProjectMembership
 from bsmain.models import AuthToken
 from events.factories import create_event
 from events.api_views import EventViewSet
@@ -92,6 +93,50 @@ class EventApiTests(TransactionTestCase):
         response = self.client.get(reverse("api:event-detail", args=["not-a-uuid"]))
         self.assertEqual(response.status_code, 404)
 
+    def test_lookup_by_sdk_event_id(self):
+        other_project = Project.objects.create(name="Other")
+        other = create_event(project=other_project)
+        other.event_id = self.event.event_id
+        other.save()
+        url = reverse("api:event-lookup")
+
+        for project, event in [(self.project, self.event), (other_project, other)]:
+            response = self.client.get(url, {"project": project.id, "event_id": event.event_id})
+            detail = self.client.get(reverse("api:event-detail", args=[event.id]))
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json(), detail.json())
+
+    def test_lookup_requires_event_id(self):
+        response = self.client.get(reverse("api:event-lookup"), {"project": self.project.id})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual({"event_id": ["This field is required."]}, response.json())
+
+    def test_lookup_not_found(self):
+        for event_id in ["not-a-uuid", "00000000-0000-0000-0000-000000000000"]:
+            response = self.client.get(reverse("api:event-lookup"), {
+                "project": self.project.id, "event_id": event_id})
+            self.assertEqual(response.status_code, 404)
+
+    def test_lookup_hides_deleted_issue(self):
+        self.issue.is_deleted = True
+        self.issue.save()
+        response = self.client.get(reverse("api:event-lookup"), {
+            "project": self.project.id, "event_id": self.event.event_id})
+        self.assertEqual(response.status_code, 404)
+
+    def test_lookup_requires_personal_token_membership(self):
+        user = get_user_model().objects.create_user(username="reader")
+        membership = ProjectMembership.objects.create(project=self.project, user=user, accepted=True)
+        token = AuthToken.objects.create(is_user_bound=True, user=user, events_read=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        params = {"project": self.project.id, "event_id": self.event.event_id}
+
+        response = self.client.get(reverse("api:event-lookup"), params)
+        self.assertEqual(response.status_code, 200)
+        membership.delete()
+        response = self.client.get(reverse("api:event-lookup"), params)
+        self.assertEqual(response.status_code, 403)
+
     def test_stacktrace_malformed_id_is_404(self):
         response = self.client.get(reverse("api:event-stacktrace", args=["not-a-uuid"]))
         self.assertEqual(response.status_code, 404)
@@ -134,10 +179,16 @@ class EventApiTests(TransactionTestCase):
         own_detail = self.client.get(reverse("api:event-detail", args=[self.event.id]))
         foreign_list = self.client.get(reverse("api:event-list"), {"issue": other_issue.id})
         foreign_detail = self.client.get(reverse("api:event-detail", args=[other_event.id]))
+        own_lookup = self.client.get(reverse("api:event-lookup"), {
+            "project": self.project.id, "event_id": self.event.event_id})
+        foreign_lookup = self.client.get(reverse("api:event-lookup"), {
+            "project": other_project.id, "event_id": other_event.event_id})
 
         self.assertEqual(200, own_detail.status_code)
+        self.assertEqual(200, own_lookup.status_code)
         self.assertEqual(403, foreign_list.status_code)
         self.assertEqual(403, foreign_detail.status_code)
+        self.assertEqual(403, foreign_lookup.status_code)
 
 
 class EventPaginationTests(TransactionTestCase):

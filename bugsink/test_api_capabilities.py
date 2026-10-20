@@ -22,6 +22,7 @@ EXPECTED_CAPABILITY_OPERATIONS = {
         },
         "events:read": {
             "GET /api/canonical/0/events/",
+            "GET /api/canonical/0/events/lookup/",
             "GET /api/canonical/0/events/{id}/",
             "GET /api/canonical/0/events/{id}/stacktrace/",
         },
