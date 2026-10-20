@@ -9,6 +9,8 @@ from bugsink.api_mixins import AtomicRequestMixin
 from bugsink.api_capabilities import lookup, token_guard
 from bugsink.api_pagination import AscDescCursorPagination
 from tags.search import search_issues
+from events.api_counts import EventCountRangeSerializer, EventCountsSerializer, event_counts_response
+from events.models import IssueEventCountsPerHour
 
 from .models import Issue, IssueStateManager, TurningPoint, apply_issue_action
 from .serializers import (
@@ -168,6 +170,21 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     def grouping(self, request, issue, pk=None):
         page = self.paginate_queryset(issue.grouping_set.all())
         return self.get_paginated_response(self.get_serializer(page, many=True).data)
+
+    @token_guard("issues:read", guarding_issue=lookup(url="pk"))
+    @extend_schema(
+        summary="Retrieve issue event counts",
+        description=(
+            "Hourly counts by digest time, including evicted events. Empty hours have count zero. "
+            "Defaults to 24 hours, including the incomplete current hour. "
+            "Ranges must use UTC hour boundaries and fall within the last 90 days."
+        ),
+        parameters=[EventCountRangeSerializer],
+        responses=EventCountsSerializer,
+    )
+    @action(detail=True, methods=["get"], url_path="event-counts", pagination_class=None)
+    def event_counts(self, request, issue, pk=None):
+        return event_counts_response(IssueEventCountsPerHour.objects.filter(issue=issue), request.query_params)
 
     @token_guard("issues:delete", guarding_issue=lookup(url="pk"))
     @extend_schema(

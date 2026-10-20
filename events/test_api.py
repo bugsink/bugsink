@@ -1,6 +1,8 @@
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework.test import APIClient
 
 from projects.models import Project, ProjectMembership
@@ -11,6 +13,7 @@ from events.api_views import EventViewSet
 from issues.factories import get_or_create_issue
 from events.factories import create_event_data
 from tags.models import store_tags
+from events.usage import hour_bucket, record_event_counts
 
 
 class EventApiTests(TransactionTestCase):
@@ -189,6 +192,64 @@ class EventApiTests(TransactionTestCase):
         self.assertEqual(403, foreign_list.status_code)
         self.assertEqual(403, foreign_detail.status_code)
         self.assertEqual(403, foreign_lookup.status_code)
+
+
+class EventCountApiTests(TransactionTestCase):
+    def setUp(self):
+        self.client = APIClient()
+        token = AuthToken.objects.create(issues_read=True, projects_read=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        self.project = Project.objects.create(name="Counts")
+        self.issue, _ = get_or_create_issue(self.project)
+
+    def test_issue_and_project_counts(self):
+        end = hour_bucket(timezone.now())
+        start = end - timezone.timedelta(hours=3)
+        record_event_counts(self.project, self.issue, start - timezone.timedelta(hours=1), 1)
+        record_event_counts(self.project, self.issue, start, 2)
+        record_event_counts(self.project, self.issue, start, 3)
+        record_event_counts(self.project, self.issue, start + timezone.timedelta(hours=2), 4)
+        record_event_counts(self.project, self.issue, end, 5)
+        other_issue, _ = get_or_create_issue(self.project, create_event_data(exception_type="Other"))
+        record_event_counts(self.project, other_issue, start, 1)
+        other_project = Project.objects.create(name="Other")
+        foreign_issue, _ = get_or_create_issue(other_project)
+        record_event_counts(other_project, foreign_issue, start, 1)
+
+        for name, pk, expected in [
+            ("api:issue-event-counts", self.issue.id, [2, 0, 1]),
+            ("api:project-event-counts", self.project.id, [3, 0, 1]),
+        ]:
+            response = self.client.get(reverse(name, args=[pk]), {"start": start.isoformat(), "end": end.isoformat()})
+            self.assertEqual(response.status_code, 200)
+            result = response.json()
+            self.assertEqual(parse_datetime(result["start"]), start)
+            self.assertEqual(parse_datetime(result["end"]), end)
+            self.assertEqual(result["interval_seconds"], 3600)
+            self.assertEqual([row["count"] for row in result["buckets"]], expected)
+            self.assertEqual(
+                [parse_datetime(row["timestamp"]) for row in result["buckets"]],
+                [start + timezone.timedelta(hours=i) for i in range(3)],
+            )
+
+    def test_default_range(self):
+        response = self.client.get(reverse("api:issue-event-counts", args=[self.issue.id]))
+        self.assertEqual(response.status_code, 200)
+        result = response.json()
+        self.assertEqual(parse_datetime(result["end"]) - parse_datetime(result["start"]), timezone.timedelta(hours=24))
+        self.assertEqual([row["count"] for row in result["buckets"]], [0] * 24)
+
+    def test_invalid_ranges(self):
+        end = hour_bucket(timezone.now())
+        for start, stop in [
+            (end, end),
+            (end - timezone.timedelta(minutes=30), end),
+            (end - timezone.timedelta(days=91), end),
+            (end - timezone.timedelta(hours=1), end + timezone.timedelta(hours=2)),
+        ]:
+            response = self.client.get(reverse("api:issue-event-counts", args=[self.issue.id]), {
+                "start": start.isoformat(), "end": stop.isoformat()})
+            self.assertEqual(response.status_code, 400)
 
 
 class EventPaginationTests(TransactionTestCase):

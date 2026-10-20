@@ -181,7 +181,7 @@ class IssueApiTests(TransactionTestCase):
         url = reverse("api:issue-detail", args=[self.issue0.id])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 404)
-        for action in ["tags", "grouping"]:
+        for action in ["tags", "grouping", "event-counts"]:
             response = self.client.get(reverse("api:issue-" + action, args=[self.issue0.id]))
             self.assertEqual(response.status_code, 404)
 
@@ -567,7 +567,7 @@ class IssueApiTests(TransactionTestCase):
         self.assertEqual(403, foreign_detail.status_code)
         self.assertEqual(403, foreign_mute.status_code)
         self.assertEqual(403, foreign_history.status_code)
-        for action in ["tags", "grouping"]:
+        for action in ["tags", "grouping", "event-counts"]:
             self.assertEqual(200, self.client.get(reverse("api:issue-" + action, args=[self.issue0.id])).status_code)
             self.assertEqual(403, self.client.get(reverse("api:issue-" + action, args=[other_issue.id])).status_code)
         other_issue.refresh_from_db()
@@ -607,7 +607,7 @@ class IssueApiTests(TransactionTestCase):
         self.assertEqual(200, self.client.get(reverse("api:issue-detail", args=[self.issue0.id])).status_code)
         history_url = reverse("api:issue-history-list")
         self.assertEqual(200, self.client.get(history_url, {"issue": self.issue0.id}).status_code)
-        for action in ["tags", "grouping"]:
+        for action in ["tags", "grouping", "event-counts"]:
             self.assertEqual(200, self.client.get(reverse("api:issue-" + action, args=[self.issue0.id])).status_code)
 
         membership.accepted = False
@@ -620,7 +620,7 @@ class IssueApiTests(TransactionTestCase):
         )
         self.assertEqual(403, self.client.post(reverse("api:issue-mute", args=[self.issue0.id])).status_code)
         self.assertEqual(403, self.client.get(history_url, {"issue": self.issue0.id}).status_code)
-        for action in ["tags", "grouping"]:
+        for action in ["tags", "grouping", "event-counts"]:
             self.assertEqual(403, self.client.get(reverse("api:issue-" + action, args=[self.issue0.id])).status_code)
         self.issue0.refresh_from_db()
         self.assertFalse(self.issue0.is_muted)

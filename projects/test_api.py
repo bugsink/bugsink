@@ -66,6 +66,10 @@ class ProjectApiTests(TransactionTestCase):
 
         self.assertEqual(403, response.status_code)
         self.assertEqual("This token is not allowed to access this project.", response.json()["detail"])
+        response = self.client.get(reverse("api:project-event-counts", args=[bound_project.id]))
+        self.assertEqual(200, response.status_code)
+        response = self.client.get(reverse("api:project-event-counts", args=[other_project.id]))
+        self.assertEqual(403, response.status_code)
 
     def test_create_requires_team_and_name(self):
         r1 = self.client.post(reverse("api:project-list"), {"name": "ProjOnly"}, format="json")
@@ -207,6 +211,11 @@ class ProjectApiTests(TransactionTestCase):
             "This project is not visible to the user bound to this token.",
             hidden_detail.json()["detail"],
         )
+        for project in [member_project, team_project, visible_project]:
+            response = self.client.get(reverse("api:project-event-counts", args=[project.id]))
+            self.assertEqual(200, response.status_code)
+        response = self.client.get(reverse("api:project-event-counts", args=[hidden_project.id]))
+        self.assertEqual(403, response.status_code)
 
     def test_personal_team_admin_can_create_and_update_projects(self):
         user = get_user_model().objects.create_user(username="project-team-admin")

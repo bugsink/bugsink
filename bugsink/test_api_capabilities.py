@@ -20,6 +20,7 @@ EXPECTED_CAPABILITY_OPERATIONS = {
             "GET /api/canonical/0/issues/{id}/",
             "GET /api/canonical/0/issues/{id}/tags/",
             "GET /api/canonical/0/issues/{id}/grouping/",
+            "GET /api/canonical/0/issues/{id}/event-counts/",
             "GET /api/canonical/0/issue-history/",
         },
         "events:read": {
@@ -54,6 +55,7 @@ EXPECTED_CAPABILITY_OPERATIONS = {
         "projects:read": {
             "GET /api/canonical/0/projects/",
             "GET /api/canonical/0/projects/{id}/",
+            "GET /api/canonical/0/projects/{id}/event-counts/",
         },
         "projects:manage": {
             "POST /api/canonical/0/projects/",
