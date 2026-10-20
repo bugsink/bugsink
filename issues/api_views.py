@@ -2,12 +2,15 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import CursorPagination
 from rest_framework.exceptions import ValidationError
+from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_mixins import AtomicRequestMixin
 from bugsink.api_capabilities import lookup, token_guard
 from bugsink.api_pagination import AscDescCursorPagination
+from bugsink.api_authorization import enforce_project_boundness, enforce_user_boundness_for_project
+from projects.models import Project, get_issue_accessible_project_ids
 from tags.search import search_issues
 from events.api_counts import EventCountRangeSerializer, EventCountsSerializer, event_counts_response
 from events.models import IssueEventCountsPerHour
@@ -39,11 +42,9 @@ class IssuesCursorPagination(CursorPagination):
       - sort=digested_event_count → lifetime count     → tie-breakers on last_seen and id
 
     Direction applies to primary *and beyond* (i.e. all fields in the list).
-    The view MUST filter by project; ordering is handled here.
+    digest_order requires a single project; global lists default to last_seen.
     """
-    # Cursor pagination requires an indexed, mostly-stable ordering. Stable mode: sort=digest_order (default). We
-    # require ?project=<uuid> and have a composite (project_id, digest_order) index, so ORDER BY digest_order after
-    # filtering by project is fast and cursor-stable.
+    # With a single project, digest_order uses the (project_id, digest_order) index and is cursor-stable.
 
     # We also offer a "recent" mode: sort=last_seen. This is not stable, as new events can come in mid-cursor, and
     # reshuffle things causing misses or duplicates. However, this is the desired UX for a "recent activity" view.
@@ -57,19 +58,22 @@ class IssuesCursorPagination(CursorPagination):
     VALID_ORDERS = ("asc", "desc")
 
     def get_ordering(self, request, queryset, view):
-        sort = request.query_params.get("sort", self.default_sort)
+        single_project = view.project is not None
+        sort = request.query_params.get("sort", self.default_sort if single_project else "last_seen")
         if sort not in self.VALID_SORTS:
             raise ValidationError({
                 "sort": ["Must be 'digest_order', 'last_seen', or 'digested_event_count'."],
             })
 
-        order = request.query_params.get("order", self.default_direction)
+        order = request.query_params.get("order", self.default_direction if single_project else "desc")
         if order not in self.VALID_ORDERS:
             raise ValidationError({"order": ["Must be 'asc' or 'desc'."]})
 
         desc = (order == "desc")
 
         if sort == "digest_order":
+            if not single_project:
+                raise ValidationError({"sort": ["digest_order requires a single project."]})
             # Unique per project; stable cursor once filtered by project.
             return ["-digest_order" if desc else "digest_order"]
 
@@ -86,18 +90,21 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return self.queryset
 
-    # Require a project until the UI supports cross-project issue listing (#190).
-    @token_guard("issues:read", guarding_project=lookup(query="project"))
+    @token_guard("issues:read", scopable_by_bound_project=True)
     @extend_schema(
         summary="List issues",
-        description="List issues for a project.",
+        description=(
+            "List issues across accessible projects, optionally limited to one project. "
+            "Project-bound tokens stay within their project; personal tokens require accepted project membership "
+            "(superusers can access all projects). Deleted issues and projects are excluded."
+        ),
         parameters=[
             OpenApiParameter(
                 name="project",
                 type=OpenApiTypes.INT,
                 location=OpenApiParameter.QUERY,
-                required=True,
-                description="Filter issues by project id (required).",
+                required=False,
+                description="Filter issues by project ID. Omit to list all projects accessible to the token.",
             ),
             OpenApiParameter(
                 name="q",
@@ -116,7 +123,8 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
                 location=OpenApiParameter.QUERY,
                 required=False,
                 enum=["digest_order", "last_seen", "digested_event_count"],
-                description="Sort mode (default: digest_order).",
+                description="Default: digest_order for a single project, last_seen across projects. "
+                            "digest_order requires a single project.",
             ),
             OpenApiParameter(
                 name="order",
@@ -124,12 +132,19 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
                 location=OpenApiParameter.QUERY,
                 required=False,
                 enum=["asc", "desc"],
-                description="Sort order (default: asc).",
+                description="Default: asc for a single project, desc across projects.",
             ),
         ]
     )
-    def list(self, request, project, *args, **kwargs):
-        self.project = project
+    def list(self, request, bound_project, *args, **kwargs):
+        self.project = bound_project
+        if "project" in request.query_params:
+            self.project = get_object_or_404(
+                Project.objects.filter(is_deleted=False), pk=request.query_params["project"])
+        if self.project is not None:
+            self.check_object_permissions(request, self.project)
+            enforce_project_boundness(request.auth, self.project)
+            enforce_user_boundness_for_project(request.auth, "issues:read", self.project)
         return super().list(request, *args, **kwargs)
 
     @token_guard("issues:read", guarding_issue=lookup(url="pk"))
@@ -211,7 +226,11 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         if state not in state_filters:
             raise ValidationError({"state": ["Must be 'all', 'open', 'unresolved', 'resolved', or 'muted'."]})
 
-        queryset = queryset.filter(project=self.project, **state_filters[state])
+        queryset = queryset.filter(project__is_deleted=False, **state_filters[state])
+        if self.project is not None:
+            queryset = queryset.filter(project=self.project)
+        elif self.request.auth.is_user_bound:
+            queryset = queryset.filter(project_id__in=get_issue_accessible_project_ids(self.request.auth.user))
         return search_issues(self.project, queryset, self.request.query_params.get("q", "").strip())
 
     def _action_response(self, issue):

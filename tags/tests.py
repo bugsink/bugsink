@@ -380,6 +380,9 @@ class SearchTestCase(DjangoTestCase):
     def test_search_issues(self):
         self._test_search(lambda query: search_issues(self.project, Issue.objects.all(), query))
 
+    def test_search_issues_without_project(self):
+        self._test_search(lambda query: search_issues(None, Issue.objects.all(), query))
+
     def test_search_issues_by_url(self):
         issue, _ = get_or_create_issue(project=self.project, event_data=create_event_data("url"))
         event = create_event(self.project, issue=issue)

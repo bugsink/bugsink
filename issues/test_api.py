@@ -7,7 +7,8 @@ from django.utils.dateparse import parse_datetime
 from rest_framework.test import APIClient
 
 from bsmain.models import AuthToken
-from projects.models import Project, ProjectMembership
+from projects.models import Project, ProjectMembership, ProjectVisibility
+from teams.models import Team, TeamMembership
 from releases.models import create_release_if_needed
 from issues.models import Issue, TurningPoint, TurningPointKind
 from issues.factories import get_or_create_issue
@@ -45,10 +46,65 @@ class IssueApiTests(TransactionTestCase):
         self.issue0.refresh_from_db()
         self.issue1.refresh_from_db()
 
-    def test_list_requires_project(self):
+    def test_list_without_project_defaults_to_recent_activity(self):
         response = self.client.get(reverse("api:issue-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [str(self.issue1.id), str(self.issue0.id)], [row["id"] for row in response.json()["results"]])
+
+    def test_global_list_hides_deleted_issues_and_projects(self):
+        other_project = Project.objects.create(name="Other")
+        other, _ = get_or_create_issue(other_project)
+        deleted_project = Project.objects.create(name="Deleted", is_deleted=True)
+        get_or_create_issue(deleted_project)
+        Issue.objects.filter(pk=self.issue1.pk).update(is_deleted=True)
+
+        response = self.client.get(reverse("api:issue-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            {str(self.issue0.id), str(other.id)}, {row["id"] for row in response.json()["results"]})
+
+    def test_global_list_rejects_digest_order(self):
+        response = self.client.get(reverse("api:issue-list"), {"sort": "digest_order"})
         self.assertEqual(response.status_code, 400)
-        self.assertEqual({"project": ["This field is required."]}, response.json())
+        self.assertEqual({"sort": ["digest_order requires a single project."]}, response.json())
+
+    def test_global_search_and_state(self):
+        other_project = Project.objects.create(name="Other")
+        other, _ = get_or_create_issue(other_project)
+        for issue in [self.issue0, self.issue1, other]:
+            Issue.objects.filter(pk=issue.pk).update(calculated_type="TypeError")
+            store_tags(create_event(issue=issue), issue, {"environment": "production"})
+        Issue.objects.filter(pk=self.issue1.pk).update(is_resolved=True)
+
+        response = self.client.get(
+            reverse("api:issue-list"), {"q": "TypeError environment:production", "state": "open"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual({str(self.issue0.id), str(other.id)}, {row["id"] for row in response.json()["results"]})
+
+    def test_personal_global_list_requires_accepted_project_membership(self):
+        user = get_user_model().objects.create_user(username="global-reader")
+        membership = ProjectMembership.objects.create(project=self.project, user=user, accepted=True)
+        team = Team.objects.create(name="Readers")
+        TeamMembership.objects.create(team=team, user=user, accepted=True)
+        team_project = Project.objects.create(name="Team only", team=team)
+        discoverable = Project.objects.create(name="Discoverable", visibility=ProjectVisibility.DISCOVERABLE)
+        pending = Project.objects.create(name="Pending")
+        ProjectMembership.objects.create(project=pending, user=user, accepted=False)
+        for project in [team_project, discoverable, pending]:
+            issue, _ = get_or_create_issue(project)
+            store_tags(create_event(issue=issue), issue, {"environment": "production"})
+        store_tags(create_event(issue=self.issue0), self.issue0, {"environment": "production"})
+        token = AuthToken.objects.create(is_user_bound=True, user=user, issues_read=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        response = self.client.get(reverse("api:issue-list"), {"q": "environment:production"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([str(self.issue0.id)], [row["id"] for row in response.json()["results"]])
+        membership.delete()
+        response = self.client.get(reverse("api:issue-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"], [])
 
     def test_list_by_project_default_asc(self):
         response = self.client.get(reverse("api:issue-list"), {"project": str(self.project.id)})
@@ -567,6 +623,10 @@ class IssueApiTests(TransactionTestCase):
         self.assertEqual(403, foreign_detail.status_code)
         self.assertEqual(403, foreign_mute.status_code)
         self.assertEqual(403, foreign_history.status_code)
+        global_list = self.client.get(reverse("api:issue-list"))
+        self.assertEqual(200, global_list.status_code)
+        self.assertEqual(
+            {str(self.issue0.id), str(self.issue1.id)}, {row["id"] for row in global_list.json()["results"]})
         for action in ["tags", "grouping", "event-counts"]:
             self.assertEqual(200, self.client.get(reverse("api:issue-" + action, args=[self.issue0.id])).status_code)
             self.assertEqual(403, self.client.get(reverse("api:issue-" + action, args=[other_issue.id])).status_code)
@@ -647,6 +707,10 @@ class IssueApiTests(TransactionTestCase):
 
         self.assertEqual(200, own_response.status_code)
         self.assertEqual(403, foreign_response.status_code)
+        global_list = self.client.get(reverse("api:issue-list"))
+        self.assertEqual(200, global_list.status_code)
+        self.assertEqual(
+            {str(self.issue0.id), str(self.issue1.id)}, {row["id"] for row in global_list.json()["results"]})
 
 
 class IssueTagPaginationTests(TransactionTestCase):
@@ -782,6 +846,22 @@ class IssuePaginationTests(TransactionTestCase):
 
         r2 = self.client.get(r1.json()["next"])
         self.assertEqual(self._ids(r2), [str(self._idx_by_digest(issues, 3)), str(self._idx_by_digest(issues, 4))])
+
+    def test_global_last_seen_desc(self):
+        project, issues = self._make_issues()
+        other, _ = get_or_create_issue(Project.objects.create(name="Other"))
+        other.last_seen = max(issue.last_seen for issue in issues) + timezone.timedelta(minutes=1)
+        other.save()
+
+        r1 = self.client.get(reverse("api:issue-list"), {"state": "open"})
+        self.assertEqual(self._ids(r1), [str(other.id), str(self._idx_by_last_seen(issues, 4))])
+        r2 = self.client.get(r1.json()["next"])
+        self.assertEqual(
+            self._ids(r2), [str(self._idx_by_last_seen(issues, 3)), str(self._idx_by_last_seen(issues, 2))])
+        r3 = self.client.get(r2.json()["next"])
+        self.assertEqual(
+            self._ids(r3), [str(self._idx_by_last_seen(issues, 1)), str(self._idx_by_last_seen(issues, 0))])
+        self.assertIsNone(r3.json()["next"])
 
     def test_digest_order_desc(self):
         proj, issues = self._make_issues()
