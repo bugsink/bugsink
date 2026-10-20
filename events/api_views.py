@@ -7,6 +7,7 @@ from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiParamete
 from bugsink.api_capabilities import lookup, token_guard
 from bugsink.api_pagination import AscDescCursorPagination
 from bugsink.api_mixins import AtomicRequestMixin
+from tags.search import search_events
 
 from .models import Event
 from .serializers import EventListSerializer, EventDetailSerializer
@@ -29,7 +30,7 @@ class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     pagination_class = EventPagination
 
     def filter_queryset(self, queryset):
-        return queryset.filter(issue=self.issue)
+        return search_events(self.issue.project, self.issue, self.request.query_params.get("q", "").strip())
 
     @token_guard("events:read", guarding_issue=lookup(query="issue"))
     @extend_schema(
@@ -42,6 +43,11 @@ class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
                 location=OpenApiParameter.QUERY,
                 required=True,
                 description="Filter events by issue UUID or friendly ID (required).",
+            ),
+            OpenApiParameter(
+                name="q",
+                type=OpenApiTypes.STR,
+                description="Search event titles and tags using the UI syntax (e.g. TypeError environment:production).",
             ),
             OpenApiParameter(
                 name="order",

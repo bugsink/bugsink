@@ -8,6 +8,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 from bugsink.api_mixins import AtomicRequestMixin
 from bugsink.api_capabilities import lookup, token_guard
 from bugsink.api_pagination import AscDescCursorPagination
+from tags.search import search_issues
 
 from .models import Issue, IssueStateManager, TurningPoint, apply_issue_action
 from .serializers import (
@@ -90,6 +91,17 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
                 description="Filter issues by project id (required).",
             ),
             OpenApiParameter(
+                name="q",
+                type=OpenApiTypes.STR,
+                description="Search issue titles and tags using the UI syntax (e.g. TypeError environment:production).",
+            ),
+            OpenApiParameter(
+                name="state",
+                type=OpenApiTypes.STR,
+                enum=["all", "open", "unresolved", "resolved", "muted"],
+                description="Filter by issue state (default: all). Open means neither resolved nor muted.",
+            ),
+            OpenApiParameter(
                 name="sort",
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
@@ -134,7 +146,19 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         if self.action != "list":
             return queryset
 
-        return queryset.filter(project=self.project)
+        state = self.request.query_params.get("state", "all")
+        state_filters = {
+            "all": {},
+            "open": {"is_resolved": False, "is_muted": False},
+            "unresolved": {"is_resolved": False},
+            "resolved": {"is_resolved": True, "is_muted": False},
+            "muted": {"is_resolved": False, "is_muted": True},
+        }
+        if state not in state_filters:
+            raise ValidationError({"state": ["Must be 'all', 'open', 'unresolved', 'resolved', or 'muted'."]})
+
+        queryset = queryset.filter(project=self.project, **state_filters[state])
+        return search_issues(self.project, queryset, self.request.query_params.get("q", "").strip())
 
     def _action_response(self, issue):
         issue.save()

@@ -11,6 +11,7 @@ from releases.models import create_release_if_needed
 from issues.models import Issue, TurningPoint, TurningPointKind
 from issues.factories import get_or_create_issue
 from events.factories import create_event, create_event_data
+from tags.models import store_tags
 
 from issues.api_views import IssueHistoryViewSet, IssueViewSet
 
@@ -61,6 +62,53 @@ class IssueApiTests(TransactionTestCase):
         ids = [row["id"] for row in response.json()["results"]]
         self.assertEqual(ids[0], str(self.issue1.id))
         self.assertEqual(ids[1], str(self.issue0.id))
+
+    def test_list_by_state(self):
+        Issue.objects.filter(pk=self.issue1.pk).update(is_resolved=True)
+        muted, _ = get_or_create_issue(self.project, create_event_data(exception_type="Muted"))
+        Issue.objects.filter(pk=muted.pk).update(is_muted=True)
+
+        for state, expected in [
+            ("all", [self.issue0, self.issue1, muted]),
+            ("open", [self.issue0]),
+            ("unresolved", [self.issue0, muted]),
+            ("resolved", [self.issue1]),
+            ("muted", [muted]),
+        ]:
+            response = self.client.get(reverse("api:issue-list"), {"project": self.project.id, "state": state})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual([str(issue.id) for issue in expected], [r["id"] for r in response.json()["results"]])
+
+    def test_list_rejects_bad_state(self):
+        response = self.client.get(reverse("api:issue-list"), {"project": self.project.id, "state": "unknown"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            {"state": ["Must be 'all', 'open', 'unresolved', 'resolved', or 'muted'."]}, response.json())
+
+    def test_list_search(self):
+        Issue.objects.filter(pk=self.issue0.pk).update(calculated_type="E0")
+        Issue.objects.filter(pk=self.issue1.pk).update(calculated_type="E1")
+        store_tags(create_event(issue=self.issue0), self.issue0, {"environment": "production"})
+        store_tags(create_event(issue=self.issue1), self.issue1, {"environment": "production"})
+        other_project = Project.objects.create(name="Other")
+        other, _ = get_or_create_issue(other_project, create_event_data(exception_type="E0"))
+        Issue.objects.filter(pk=other.pk).update(calculated_type="E0")
+        store_tags(create_event(issue=other), other, {"environment": "production"})
+        params = {"project": self.project.id, "q": "E0 environment:production", "state": "open"}
+
+        response = self.client.get(reverse("api:issue-list"), params)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([str(self.issue0.id)], [r["id"] for r in response.json()["results"]])
+
+        Issue.objects.filter(pk=self.issue0.pk).update(is_resolved=True)
+        response = self.client.get(reverse("api:issue-list"), params)
+        self.assertEqual(response.json()["results"], [])
+
+    def test_list_blank_search(self):
+        response = self.client.get(reverse("api:issue-list"), {"project": self.project.id, "q": " \t "})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [str(self.issue0.id), str(self.issue1.id)], [row["id"] for row in response.json()["results"]])
 
     def test_list_by_digested_event_count(self):
         Issue.objects.filter(id=self.issue0.id).update(digested_event_count=10)

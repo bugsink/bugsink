@@ -9,6 +9,7 @@ from events.api_views import EventViewSet
 
 from issues.factories import get_or_create_issue
 from events.factories import create_event_data
+from tags.models import store_tags
 
 
 class EventApiTests(TransactionTestCase):
@@ -64,6 +65,23 @@ class EventApiTests(TransactionTestCase):
         response = self.client.get(reverse("api:event-list"), {"issue": str(self.issue.id)})
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("data", response.json()["results"][0])
+
+    def test_list_search(self):
+        matching = create_event(issue=self.issue, calculated_type="TypeError")
+        other = create_event(issue=self.issue, calculated_type="ValueError")
+        store_tags(matching, self.issue, {"environment": "production"})
+        store_tags(other, self.issue, {"environment": "production"})
+        create_event(issue=self.issue, calculated_type="TypeError")
+
+        response = self.client.get(reverse("api:event-list"), {
+            "issue": self.issue.id, "q": "TypeError environment:production"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([str(matching.id)], [row["id"] for row in response.json()["results"]])
+
+    def test_list_blank_search(self):
+        response = self.client.get(reverse("api:event-list"), {"issue": self.issue.id, "q": " \t "})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([str(self.event.id)], [row["id"] for row in response.json()["results"]])
 
     def test_detail_not_found_is_404(self):
         url = reverse("api:event-detail", args=["00000000-0000-0000-0000-000000000000"])
@@ -167,3 +185,17 @@ class EventPaginationTests(TransactionTestCase):
 
         r2 = self.client.get(r1.json()["next"])
         self.assertEqual(self._ids(r2), [str(events[2].id), str(events[3].id)])
+
+    def test_search_two_pages(self):
+        project = Project.objects.create(name="Search")
+        issue, _ = get_or_create_issue(project)
+        events = []
+        for _ in range(4):
+            events.append(create_event(issue=issue, calculated_type="TypeError"))
+            create_event(issue=issue, calculated_type="ValueError")
+
+        r1 = self.client.get(reverse("api:event-list"), {"issue": issue.id, "q": "TypeError"})
+        self.assertEqual(self._ids(r1), [str(events[3].id), str(events[2].id)])
+        r2 = self.client.get(r1.json()["next"])
+        self.assertEqual(self._ids(r2), [str(events[1].id), str(events[0].id)])
+        self.assertIsNone(r2.json()["next"])
