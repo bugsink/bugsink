@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -14,7 +12,7 @@ from issues.models import Issue, TurningPoint, TurningPointKind
 from issues.factories import get_or_create_issue
 from events.factories import create_event, create_event_data
 
-from issues.api_views import IssueHistoryPagination, IssueViewSet
+from issues.api_views import IssueHistoryViewSet, IssueViewSet
 
 
 class IssueApiTests(TransactionTestCase):
@@ -335,6 +333,14 @@ class IssueApiTests(TransactionTestCase):
         self.assertEqual(response.json()["project"], self.project.id)
         self.assertEqual(response.json()["user"], None)
 
+        history = self.client.get(reverse("api:issue-history-list"), {"issue": self.issue0.friendly_id()})
+        self.assertEqual(history.status_code, 200)
+        self.assertEqual([response.json() | {
+            "triggering_event": None,
+            "kind": "manual_annotation",
+            "metadata": {},
+        }], history.json()["results"])
+
     def test_create_comment_rejects_bad_issue_identifier(self):
         response = self.client.post(
             reverse("api:issue-comment-list"),
@@ -397,17 +403,6 @@ class IssueApiTests(TransactionTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual([first_seen.id, muted.id, comment.id], [row["id"] for row in response.json()["results"]])
 
-    def test_list_history_paginates(self):
-        first_seen, muted, comment = self._create_history()
-
-        with patch.object(IssueHistoryPagination, "page_size", 2):
-            r1 = self.client.get(reverse("api:issue-history-list"), {"issue": str(self.issue0.id)})
-            r2 = self.client.get(r1.json()["next"])
-
-        self.assertEqual([comment.id, muted.id], [row["id"] for row in r1.json()["results"]])
-        self.assertEqual([first_seen.id], [row["id"] for row in r2.json()["results"]])
-        self.assertIsNone(r2.json()["next"])
-
     def test_list_history_requires_issue(self):
         response = self.client.get(reverse("api:issue-history-list"))
         self.assertEqual(response.status_code, 400)
@@ -419,6 +414,13 @@ class IssueApiTests(TransactionTestCase):
 
         response = self.client.get(reverse("api:issue-history-list"), {"issue": str(self.issue0.id)})
         self.assertEqual(response.status_code, 403)
+
+    def test_list_history_hides_deleted_issue(self):
+        self._create_history()
+        Issue.objects.filter(id=self.issue0.id).update(is_deleted=True)
+
+        response = self.client.get(reverse("api:issue-history-list"), {"issue": str(self.issue0.id)})
+        self.assertEqual(response.status_code, 404)
 
     def test_project_bound_token_cannot_read_or_change_another_projects_issues(self):
         other_project = Project.objects.create(name="Other project")
@@ -435,13 +437,17 @@ class IssueApiTests(TransactionTestCase):
         foreign_list = self.client.get(reverse("api:issue-list"), {"project": other_project.id})
         foreign_detail = self.client.get(reverse("api:issue-detail", args=[other_issue.id]))
         foreign_mute = self.client.post(reverse("api:issue-mute", args=[other_issue.id]))
+        own_history = self.client.get(reverse("api:issue-history-list"), {"issue": self.issue0.id})
+        foreign_history = self.client.get(reverse("api:issue-history-list"), {"issue": other_issue.id})
 
         self.assertEqual(200, own_list.status_code)
+        self.assertEqual(200, own_history.status_code)
         self.assertNotIn(str(other_issue.id), [row["id"] for row in own_list.json()["results"]])
         self.assertEqual(403, foreign_list.status_code)
         self.assertEqual("This token is not allowed to access this project.", foreign_list.json()["detail"])
         self.assertEqual(403, foreign_detail.status_code)
         self.assertEqual(403, foreign_mute.status_code)
+        self.assertEqual(403, foreign_history.status_code)
         other_issue.refresh_from_db()
         self.assertFalse(other_issue.is_muted)
 
@@ -477,6 +483,8 @@ class IssueApiTests(TransactionTestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
 
         self.assertEqual(200, self.client.get(reverse("api:issue-detail", args=[self.issue0.id])).status_code)
+        history_url = reverse("api:issue-history-list")
+        self.assertEqual(200, self.client.get(history_url, {"issue": self.issue0.id}).status_code)
 
         membership.accepted = False
         membership.save(update_fields=["accepted"])
@@ -487,11 +495,13 @@ class IssueApiTests(TransactionTestCase):
             response.json()["detail"],
         )
         self.assertEqual(403, self.client.post(reverse("api:issue-mute", args=[self.issue0.id])).status_code)
+        self.assertEqual(403, self.client.get(history_url, {"issue": self.issue0.id}).status_code)
         self.issue0.refresh_from_db()
         self.assertFalse(self.issue0.is_muted)
 
         membership.delete()
         self.assertEqual(403, self.client.get(reverse("api:issue-detail", args=[self.issue0.id])).status_code)
+        self.assertEqual(403, self.client.get(history_url, {"issue": self.issue0.id}).status_code)
 
     def test_personal_superuser_is_still_limited_to_the_bound_project(self):
         other_project = Project.objects.create(name="Other superuser project")
@@ -511,6 +521,65 @@ class IssueApiTests(TransactionTestCase):
 
         self.assertEqual(200, own_response.status_code)
         self.assertEqual(403, foreign_response.status_code)
+
+
+class IssueHistoryPaginationTests(TransactionTestCase):
+    def setUp(self):
+        self.client = APIClient()
+        token = AuthToken.objects.create(issues_read=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        self.old_size = IssueHistoryViewSet.pagination_class.page_size
+        IssueHistoryViewSet.pagination_class.page_size = 2
+
+        project = Project.objects.create(name="P")
+        self.issue, _ = get_or_create_issue(project=project)
+        now = timezone.now()
+        self.history = [
+            TurningPoint.objects.create(
+                project=project, issue=self.issue, kind=kind,
+                timestamp=now + timezone.timedelta(seconds=seconds))
+            for kind, seconds in [
+                (TurningPointKind.FIRST_SEEN, 0),
+                (TurningPointKind.NEXT_MATERIALIZED, 1),
+                (TurningPointKind.REGRESSED, 1),
+                (TurningPointKind.UNMUTED, 1),
+                (TurningPointKind.MANUAL_ANNOTATION, 2),
+            ]
+        ]
+
+    def tearDown(self):
+        IssueHistoryViewSet.pagination_class.page_size = self.old_size
+
+    def _ids(self, response):
+        return [row["id"] for row in response.json()["results"]]
+
+    def test_equal_timestamps_desc(self):
+        r1 = self.client.get(reverse("api:issue-history-list"), {"issue": str(self.issue.id)})
+        self.assertEqual(self._ids(r1), [self.history[4].id, self.history[3].id])
+
+        r2 = self.client.get(r1.json()["next"])
+        self.assertEqual(self._ids(r2), [self.history[2].id, self.history[1].id])
+
+        r3 = self.client.get(r2.json()["next"])
+        self.assertEqual(self._ids(r3), [self.history[0].id])
+        self.assertIsNone(r3.json()["next"])
+
+        previous = self.client.get(r3.json()["previous"])
+        self.assertEqual(self._ids(previous), self._ids(r2))
+
+    def test_equal_timestamps_asc(self):
+        r1 = self.client.get(reverse("api:issue-history-list"), {"issue": str(self.issue.id), "order": "asc"})
+        self.assertEqual(self._ids(r1), [self.history[0].id, self.history[1].id])
+
+        r2 = self.client.get(r1.json()["next"])
+        self.assertEqual(self._ids(r2), [self.history[2].id, self.history[3].id])
+
+        r3 = self.client.get(r2.json()["next"])
+        self.assertEqual(self._ids(r3), [self.history[4].id])
+        self.assertIsNone(r3.json()["next"])
+
+        previous = self.client.get(r3.json()["previous"])
+        self.assertEqual(self._ids(previous), self._ids(r2))
 
 
 class IssuePaginationTests(TransactionTestCase):
