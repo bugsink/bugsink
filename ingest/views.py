@@ -412,6 +412,19 @@ class BaseIngestAPIView(View):
             except ValidationError as e:
                 logger.warning("event data validation failed: %s", e)
 
+    @staticmethod
+    def handle_zero_retention(project):
+        # With zero retention the caller must return (don't digest) before doing any work. Otherwise we'd retain an
+        # event despite the zero limit, because we do evict-before-add which doesn't work for the case of 0.
+        if project.get_retention_max_event_count() != 0:
+            return False
+
+        if project.stored_event_count > 0:
+            from events.tasks import delete_by_age_until_under_retention_max
+            # Since we don't evict in this branch, we just have the simplest hard-coded eviction (delete below max):
+            delay_on_commit(delete_by_age_until_under_retention_max, project.id)
+        return True
+
     @classmethod
     @immediate_atomic()
     def digest_event(cls, event_metadata, event_data, digested_at=None, minidump_bytes=None):
@@ -438,13 +451,8 @@ class BaseIngestAPIView(View):
             # (covers both "deletion in progress (is_deleted=True)" and "fully deleted").
             return
 
-        if project.get_retention_max_event_count() == 0:
-            # special case: return (don't ingest) before doing any work. Reason: otherwise we'd retain an event despite
-            # the zero limit, because in we do evict-before-add which doesn't work for the case of 0.
-            if project.stored_event_count > 0:
-                from events.tasks import delete_by_age_until_under_retention_max
-                # Since we don't evict in this branch, we just have the simplest hard-coded eviction (delete below max):
-                delay_on_commit(delete_by_age_until_under_retention_max, project.id)
+        # Recheck inside the transaction: retention may have changed since the task's early check.
+        if cls.handle_zero_retention(project):
             return
 
         installation = Installation.objects.get()
