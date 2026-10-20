@@ -43,6 +43,10 @@ def digest(event_id, event_metadata):
             return
 
         # Quota-shedding must be done before immediate_atomic is entered such that it can be done in parallel, see #494
+        # NOTE `now` is separate from `digested_at` in digest_event. Does that mean clock-differences lead to shedding
+        # too much? No: if this were so, it would only be so by virtue of the quota expiring b/c our processing was
+        # delayed. Also realise: any event literally arriving (at ingest) _now_ would also not make it.
+        # The reverse case also works (checking early cannot let an event bypass the quota: digest_event checks again)
         now = timezone.now()
         installation = Installation.objects.get()
         if (BaseIngestAPIView.is_quota_still_exceeded(installation, now)
