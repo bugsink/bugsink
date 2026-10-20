@@ -4,8 +4,13 @@ since we have such a prominent role for tags in the actual implementation of sea
 least it means we have all of this together in a separate file this way.
 """
 
-from django.db.models import Q, Subquery, Count
+import re
 from collections import namedtuple
+from datetime import datetime, time, timedelta
+
+from django.db.models import Q, Subquery, Count
+from django.utils import timezone
+from django.utils.dateparse import parse_date
 
 from bugsink.moreiterutils import tuplewise
 from events.models import Event
@@ -14,6 +19,28 @@ from .models import TagValue, IssueTag, EventTag, _or_join
 
 
 ParsedQuery = namedtuple("ParsedQ", ["tags", "plain_text"])
+
+
+class SearchError(ValueError):
+    """Raised for a query that can't be parsed (e.g. a bad date or an unknown level). Surfaced to the user."""
+
+
+# Whitelist of Issue fields that can be filtered directly (as opposed to tags). The whitelist is the trust boundary:
+# only these names ever reach the ORM. "ops" is the set of operators the field accepts ("" means plain equality).
+ISSUE_SEARCH_FIELDS = {
+    "first_seen": {"field": "first_seen", "type": "datetime", "ops": {"", ">", ">=", "<", "<="}},
+    "last_seen": {"field": "last_seen", "type": "datetime", "ops": {"", ">", ">=", "<", "<="}},
+    "events": {"field": "digested_event_count", "type": "int", "ops": {"", ">", ">=", "<", "<="}},
+    "is_muted": {"field": "is_muted", "type": "bool", "ops": {""}},
+    "is_resolved": {"field": "is_resolved", "type": "bool", "ops": {""}},
+}
+
+_LOOKUP = {"": "exact", ">": "gt", ">=": "gte", "<": "lt", "<=": "lte"}
+_OPERATORS = (">=", "<=", ">", "<")  # longest-first, so ">=" is matched before ">"
+_REL_UNITS = {"s": "seconds", "m": "minutes", "h": "hours", "d": "days", "w": "weeks"}
+_REL_RE = re.compile(r"(?:now)?\s*([+-]\d+)([smhdw])", re.IGNORECASE)
+_TRUE = {"true", "1", "yes"}
+_FALSE = {"false", "0", "no"}
 
 
 def _remove_slices(s, slices_to_remove):
@@ -130,13 +157,159 @@ def parse_query(q):
     return ParsedQuery(tags, plain_text_q)
 
 
-def _search(m2m_qs, fk_fieldname, project, obj_list, q):
+def _split_key_op_value(token):
+    """Splits a single token into (key, operator, value, negated), or None if it's not a key:value token."""
+    negated = token.startswith("!")
+    if negated:
+        token = token[1:]
+
+    in_quotes = False
+    i = 0
+    colon = -1
+    while i < len(token):
+        if token[i] == "\\" and i + 1 < len(token) and token[i + 1] in ['"', "\\"]:
+            i += 2
+            continue
+        if token[i] == '"':
+            in_quotes = not in_quotes
+        elif token[i] == ":" and not in_quotes:
+            colon = i
+            break
+        i += 1
+
+    if colon <= 0 or colon == len(token) - 1:
+        return None
+
+    key = _unquote(token[:colon])
+    rest = token[colon + 1:]
+
+    op = ""
+    for cand in _OPERATORS:
+        if rest.startswith(cand):
+            op, rest = cand, rest[len(cand):]
+            break
+
+    value = _unquote(rest)
+
+    # be forgiving about a quoted operator, e.g. first_seen:">2026-10-11"
+    if not op:
+        for cand in _OPERATORS:
+            if value.startswith(cand):
+                op, value = cand, value[len(cand):].strip()
+                break
+
+    if not key or not value:
+        return None
+
+    return key, op, value, negated
+
+
+def _parse_temporal(value, key):
+    """Parses an absolute date (YYYY-MM-DD) or a relative value (-7d, now-1h). Returns ('date', date|'instant', dt)."""
+    v = value.strip()
+    if v.lower() == "now":
+        return "instant", timezone.now()
+
+    m = _REL_RE.fullmatch(v)
+    if m:
+        amount = int(m.group(1))
+        return "instant", timezone.now() + timedelta(**{_REL_UNITS[m.group(2).lower()]: amount})
+
+    d = parse_date(v)
+    if d is not None:
+        return "date", d
+
+    raise SearchError(f"'{key}': '{value}' is not a date (use YYYY-MM-DD or a relative value like -7d)")
+
+
+def _datetime_q(field, op, value, key):
+    kind, when = _parse_temporal(value, key)
+
+    if kind == "instant":
+        if not op:
+            raise SearchError(f"'{key}': a relative time needs an operator, e.g. {key}:>-7d")
+        return Q(**{f"{field}__{_LOOKUP[op]}": when})
+
+    # A bare date on a datetime field expands to a [start, next-day) range using plain comparisons (no __date lookup).
+    # Day boundaries are taken in the active timezone.
+    start = timezone.make_aware(datetime.combine(when, time.min))
+    end = start + timedelta(days=1)
+    return {
+        "": Q(**{f"{field}__gte": start, f"{field}__lt": end}),
+        ">": Q(**{f"{field}__gte": end}),
+        ">=": Q(**{f"{field}__gte": start}),
+        "<": Q(**{f"{field}__lt": start}),
+        "<=": Q(**{f"{field}__lt": end}),
+    }[op]
+
+
+def _build_field_q(key, spec, op, value):
+    if op and op not in spec["ops"]:
+        raise SearchError(f"'{key}' does not support the '{op}' operator")
+
+    ftype = spec["type"]
+    field = spec["field"]
+
+    if ftype == "datetime":
+        return _datetime_q(field, op, value, key)
+
+    if ftype == "int":
+        try:
+            n = int(value)
+        except ValueError:
+            raise SearchError(f"'{key}': '{value}' is not a whole number")
+        return Q(**{f"{field}__{_LOOKUP[op]}": n})
+
+    if ftype == "bool":
+        v = value.lower()
+        if v in _TRUE:
+            return Q(**{field: True})
+        if v in _FALSE:
+            return Q(**{field: False})
+        raise SearchError(f"'{key}': '{value}' is not true/false")
+
+    # enum
+    v = value.lower()
+    if v not in spec["choices"]:
+        raise SearchError(f"'{key}': '{value}' is not one of {', '.join(sorted(spec['choices']))}")
+    return Q(**{field: v})
+
+
+def extract_field_predicates(q, fields):
+    """Pulls whitelisted `field:value` tokens out of q, returning (list of Q, q-without-those-tokens)."""
+    clauses = []
+    slices_to_remove = []
+
+    for start, stop, quotes_closed in _split_on_spaces_respecting_quotes(q):
+        if not quotes_closed:
+            continue
+
+        split = _split_key_op_value(q[start:stop])
+        if split is None:
+            continue
+
+        key, op, value, negated = split
+        if key not in fields:
+            continue  # not a field; leave it for tag / plain-text handling
+
+        clause = _build_field_q(key, fields[key], op, value)
+        clauses.append(~clause if negated else clause)
+        slices_to_remove.append((start, stop))
+
+    return clauses, _remove_slices(q, slices_to_remove)
+
+
+def _search(m2m_qs, fk_fieldname, project, obj_list, q, fields=None):
     if not q:
         return obj_list
 
+    field_clauses = []
+    if fields:
+        field_clauses, q = extract_field_predicates(q, fields)
+
     parsed = parse_query(q)
 
-    clauses = []
+    clauses = list(field_clauses)
     for key, value in parsed.tags.items():
         try:
             # Since we have project as a field on TagValue, we _could_ filter on project directly; with our current set
@@ -167,15 +340,15 @@ def _search(m2m_qs, fk_fieldname, project, obj_list, q):
         clauses.append(
             Q(Q(calculated_type__icontains=parsed.plain_text) | Q(calculated_value__icontains=parsed.plain_text)))
 
-    # if we reach this point, there's always either a plain_text_q or some key/value pair (this is a condition for
-    # _and_join)
-    obj_list = obj_list.filter(_and_join(clauses))
+    if not clauses:
+        # e.g. the query was only whitespace, or only field tokens that stripped away to nothing
+        return obj_list
 
-    return obj_list
+    return obj_list.filter(_and_join(clauses))
 
 
 def search_issues(project, issue_list, q):
-    return _search(IssueTag.objects.all(), "issue_id", project, issue_list, q)
+    return _search(IssueTag.objects.all(), "issue_id", project, issue_list, q, fields=ISSUE_SEARCH_FIELDS)
 
 
 def search_events(project, issue, q):
