@@ -27,6 +27,15 @@ from .serializers import (
 )
 
 
+ISSUE_ID_PARAMETER = OpenApiParameter(
+    name="id",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.PATH,
+    required=True,
+    description="Issue UUID or friendly ID (e.g. PROJECT-123).",
+)
+
+
 class IssueRelatedPagination(CursorPagination):
     ordering = "id"
     page_size = 250
@@ -151,6 +160,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         summary="Retrieve an issue",
         description="Retrieve an issue by issue UUID or friendly ID.",
+        parameters=[ISSUE_ID_PARAMETER],
         responses=IssueSerializer,
     )
     def retrieve(self, request, issue, *args, **kwargs):
@@ -164,7 +174,10 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
             "Counts are not reduced when event payloads are evicted. "
             "Includes values the UI groups under Other or hides as mostly unique."
         ),
-        parameters=[OpenApiParameter(name="key", type=OpenApiTypes.STR, description="Filter by exact tag key.")],
+        parameters=[
+            ISSUE_ID_PARAMETER,
+            OpenApiParameter(name="key", type=OpenApiTypes.STR, description="Filter by exact tag key."),
+        ],
         responses=IssueTagSerializer(many=True),
     )
     @action(detail=True, methods=["get"], serializer_class=IssueTagSerializer, pagination_class=IssueRelatedPagination)
@@ -179,6 +192,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         summary="List issue grouping keys",
         description="List the grouping keys and mechanisms associated with this issue, ordered by ID.",
+        parameters=[ISSUE_ID_PARAMETER],
         responses=GroupingSerializer(many=True),
     )
     @action(detail=True, methods=["get"], serializer_class=GroupingSerializer, pagination_class=IssueRelatedPagination)
@@ -194,7 +208,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
             "Defaults to 24 hours, including the incomplete current hour. "
             "Ranges must use UTC hour boundaries and fall within the last 90 days."
         ),
-        parameters=[EventCountRangeSerializer],
+        parameters=[ISSUE_ID_PARAMETER, EventCountRangeSerializer],
         responses=EventCountsSerializer,
     )
     @action(detail=True, methods=["get"], url_path="event-counts", pagination_class=None)
@@ -205,6 +219,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         summary="Delete an issue",
         description="Delete an issue.",
+        parameters=[ISSUE_ID_PARAMETER],
     )
     def destroy(self, request, issue, *args, **kwargs):
         issue.delete_deferred()
@@ -257,6 +272,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         summary="Resolve an issue",
         description="Mark this issue as resolved.",
+        parameters=[ISSUE_ID_PARAMETER],
         request=OpenApiTypes.NONE,
         responses=IssueSerializer,
     )
@@ -269,6 +285,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         summary="Resolve an issue in the next release",
         description="Mark this issue as resolved by the next release.",
+        parameters=[ISSUE_ID_PARAMETER],
         request=OpenApiTypes.NONE,
         responses=IssueSerializer,
     )
@@ -281,6 +298,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         summary="Resolve an issue in the latest release",
         description="Mark this issue as resolved in the latest release.",
+        parameters=[ISSUE_ID_PARAMETER],
         request=OpenApiTypes.NONE,
         responses=IssueSerializer,
     )
@@ -297,6 +315,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         summary="Reopen an issue",
         description="Mark this resolved issue as unresolved again.",
+        parameters=[ISSUE_ID_PARAMETER],
         request=OpenApiTypes.NONE,
         responses=IssueSerializer,
     )
@@ -309,6 +328,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         summary="Mute an issue",
         description="Mute this issue.",
+        parameters=[ISSUE_ID_PARAMETER],
         request=OpenApiTypes.NONE,
         responses=IssueSerializer,
     )
@@ -322,6 +342,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         summary="Mute an issue for a period",
         description="Mute this issue for a relative period, e.g. for 3 days.",
+        parameters=[ISSUE_ID_PARAMETER],
         request=IssueMuteForSerializer,
         responses=IssueSerializer,
     )
@@ -340,6 +361,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         summary="Mute an issue until a threshold is reached",
         description="Mute this issue until a threshold is reached, e.g. more than 10 events in 1 hour.",
+        parameters=[ISSUE_ID_PARAMETER],
         request=IssueMuteUntilSerializer,
         responses=IssueSerializer,
     )
@@ -359,6 +381,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         summary="Unmute an issue",
         description="Unmute this issue.",
+        parameters=[ISSUE_ID_PARAMETER],
         request=OpenApiTypes.NONE,
         responses=IssueSerializer,
     )
