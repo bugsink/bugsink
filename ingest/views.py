@@ -439,8 +439,11 @@ class BaseIngestAPIView(View):
             return
 
         if project.get_retention_max_event_count() == 0:
+            # special case: return (don't ingest) before doing any work. Reason: otherwise we'd retain an event despite
+            # the zero limit, because in we do evict-before-add which doesn't work for the case of 0.
             if project.stored_event_count > 0:
                 from events.tasks import delete_by_age_until_under_retention_max
+                # Since we don't evict in this branch, we just have the simplest hard-coded eviction (delete below max):
                 delay_on_commit(delete_by_age_until_under_retention_max, project.id)
             return
 

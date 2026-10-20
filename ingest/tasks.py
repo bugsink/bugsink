@@ -3,8 +3,11 @@ import logging
 import json
 
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 from snappea.decorators import shared_task
+from phonehome.models import Installation
+from projects.models import Project
 
 from .filestore import get_filename_for_event_id
 
@@ -31,6 +34,16 @@ def digest(event_id, event_metadata):
         minidump_bytes = None
 
     try:
+        # Quota-shedding must be done before immediate_atomic is entered such that it can be done in parallel, see #494
+        project = Project.objects.filter(pk=event_metadata["project_id"], is_deleted=False).first()
+        if project is not None and project.get_retention_max_event_count() != 0:
+            # count != 0 to skip this optimization such that the special case can be dealt with inside `digest_event`
+            now = timezone.now()
+            installation = Installation.objects.get()
+            if (BaseIngestAPIView.is_quota_still_exceeded(installation, now)
+                    or BaseIngestAPIView.is_quota_still_exceeded(project, now)):
+                return
+
         BaseIngestAPIView.digest_event(event_metadata, event_data, minidump_bytes=minidump_bytes)
     except ValidationError as e:
         logger.warning("ValidationError in digest_event", exc_info=e)
