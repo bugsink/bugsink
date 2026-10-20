@@ -96,17 +96,21 @@ python manage.py test --exclude-tag=samples
 Use the hand written (pre-2026) Bugsink commit style: concrete subjects, plain prose, and the vocabulary of the code or
 UI. Put the words that carry the most meaning early in the subject.
 
-No need for magical phrases in the messages; any tense is fine. Formatting is Linus-style: short summary, blank line,
-more detailed description body (but only if it actually adds something), 72-character line limit.
+Formatting is Linus-style: short summary, blank line, a body only if it adds something, and a 72-character line limit.
 
-Description/body: focus on _why_ things needed to be changed. For bugs this is often a story (in prose, not bullets) of:
+There is no prescribed tense, but each statement must make clear what it refers to: the situation before the commit,
+what this commit changes, or work that remains. The reader should be able to understand that from the message itself,
+without reconstructing it from the diff.
 
-1. "problem/symptom"
-2. cause
-3. design decisions/trade offs
-4. the fix.
+Use the body for context, non-obvious reasons, deliberate limitations, or meaningful roads not taken. Omit routine
+implementation details, routine test results, and facts already obvious from the subject or diff. Use the subject
+alone when no body is needed.
 
-For features, mention paths not taken or snags that were resolved, but only when they explain the final design.
+Include a rejected alternative when the reason for rejecting it is non-obvious and helps explain the final design.
+Leave out detours caused by misunderstandings during the work, including corrections to an agent's bad suggestions.
+
+When using bullets, introduce each list with its purpose and keep all its items of the same kind. Use separate lists
+for different kinds of information, such as changes and caveats.
 
 ### Architectural notes
 
