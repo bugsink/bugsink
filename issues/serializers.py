@@ -1,6 +1,8 @@
 import datetime
+import json
 
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from bugsink.api_serializers import UTCModelSerializer
@@ -89,3 +91,50 @@ class IssueCommentSerializer(serializers.Serializer):
             comment=validated_data["comment"],
             timestamp=timezone.now(),
         )
+
+
+class TurningPointSerializer(UTCModelSerializer):
+    user_display_name = serializers.SerializerMethodField(
+        help_text="Author's full name or username; null when no user is recorded.")
+    kind = serializers.SerializerMethodField()
+    metadata = serializers.SerializerMethodField(help_text=(
+        "Details of the state change, depending on `kind`:\n\n"
+        "- `resolved`: `resolved_unconditionally`, `resolve_by_next`, or `resolved_release`.\n"
+        "- `muted`: `mute_unconditionally`, `mute_for` (`period_name`, `nr_of_periods`, `unmute_after`), "
+        "or `mute_until` (`period_name`, `nr_of_periods`, `gte_threshold`).\n"
+        "- `unmuted`: `{}` for manual unmuting; `mute_for` (`unmute_after`) or "
+        "`mute_until` (`period`, `nr_of_periods`, `volume`) for automatic unmuting.\n"
+        "- `next_materialized`: `actual_release` names the release that fulfilled resolve-by-next.\n\n"
+        "Other kinds normally have `{}`. Release values are version strings; "
+        "`unmute_after` is a UTC timestamp. Thresholds may be strings or numbers."
+    ))
+
+    class Meta:
+        model = TurningPoint
+        fields = [
+            "id",
+            "issue",
+            "project",
+            "triggering_event",
+            "user",
+            "user_display_name",
+            "timestamp",
+            "kind",
+            "comment",
+            "metadata",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_user_display_name(self, obj):
+        if obj.user is None:
+            return None
+        return obj.user.get_full_name() or obj.user.username
+
+    @extend_schema_field(serializers.ChoiceField(choices=[kind.name.lower() for kind in TurningPointKind]))
+    def get_kind(self, obj):
+        return TurningPointKind(obj.kind).name.lower()
+
+    @extend_schema_field(serializers.JSONField)
+    def get_metadata(self, obj):
+        return json.loads(obj.metadata)

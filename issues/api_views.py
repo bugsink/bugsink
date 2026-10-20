@@ -7,6 +7,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_mixins import AtomicRequestMixin
 from bugsink.api_capabilities import lookup, token_guard
+from bugsink.api_pagination import AscDescCursorPagination
 
 from .models import Issue, IssueStateManager, TurningPoint, apply_issue_action
 from .serializers import (
@@ -14,6 +15,7 @@ from .serializers import (
     IssueMuteForSerializer,
     IssueMuteUntilSerializer,
     IssueSerializer,
+    TurningPointSerializer,
 )
 
 
@@ -288,3 +290,45 @@ class IssueCommentViewSet(AtomicRequestMixin, mixins.CreateModelMixin, viewsets.
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class IssueHistoryPagination(AscDescCursorPagination):
+    # Timestamps are not unique (one digest can produce several turning points), so id breaks ties.
+    base_ordering = ("timestamp", "id")
+    page_size = 250
+    default_direction = "desc"  # newest first, aligned with the UI's history tab
+
+
+class IssueHistoryViewSet(AtomicRequestMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
+    queryset = TurningPoint.objects.select_related("user")
+    serializer_class = TurningPointSerializer
+    pagination_class = IssueHistoryPagination
+
+    def filter_queryset(self, queryset):
+        return queryset.filter(issue=self.issue)
+
+    @token_guard("issues:read", guarding_issue=lookup(query="issue"))
+    @extend_schema(
+        summary="List issue history",
+        description="List the turning points (state changes and comments) of an issue.",
+        parameters=[
+            OpenApiParameter(
+                name="issue",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Filter history by issue UUID or friendly ID (required).",
+            ),
+            OpenApiParameter(
+                name="order",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                enum=["asc", "desc"],
+                description="Sort order of timestamp (default: desc).",
+            ),
+        ]
+    )
+    def list(self, request, issue, *args, **kwargs):
+        self.issue = issue
+        return super().list(request, *args, **kwargs)
