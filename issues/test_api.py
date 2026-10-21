@@ -264,6 +264,17 @@ class IssueApiTests(TransactionTestCase):
             "grouping_mechanism": grouping.grouping_mechanism,
         }], response.json()["results"])
 
+    def test_tag_values_and_grouping_require_events_read(self):
+        token = AuthToken.objects.create(issues_read=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        for action in ["tags", "grouping"]:
+            self.assertEqual(403, self.client.get(reverse("api:issue-" + action, args=[self.issue0.id])).status_code)
+
+        token = AuthToken.objects.create(events_read=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        for action in ["tags", "grouping"]:
+            self.assertEqual(200, self.client.get(reverse("api:issue-" + action, args=[self.issue0.id])).status_code)
+
     def test_list_rejects_bad_sort(self):
         r = self.client.get(
             reverse("api:issue-list"),
@@ -604,6 +615,7 @@ class IssueApiTests(TransactionTestCase):
             is_project_bound=True,
             project=self.project,
             issues_read=True,
+            events_read=True,
             issues_triage=True,
         )
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
@@ -661,7 +673,8 @@ class IssueApiTests(TransactionTestCase):
     def test_personal_token_uses_current_project_membership(self):
         user = get_user_model().objects.create_user(username="issue-api-user")
         membership = ProjectMembership.objects.create(project=self.project, user=user, accepted=True)
-        token = AuthToken.objects.create(is_user_bound=True, user=user, issues_read=True, issues_triage=True)
+        token = AuthToken.objects.create(
+            is_user_bound=True, user=user, issues_read=True, events_read=True, issues_triage=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
 
         self.assertEqual(200, self.client.get(reverse("api:issue-detail", args=[self.issue0.id])).status_code)
@@ -716,7 +729,7 @@ class IssueApiTests(TransactionTestCase):
 class IssueTagPaginationTests(TransactionTestCase):
     def setUp(self):
         self.client = APIClient()
-        token = AuthToken.objects.create(issues_read=True)
+        token = AuthToken.objects.create(events_read=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
         self.old_size = IssueRelatedPagination.page_size
         IssueRelatedPagination.page_size = 2

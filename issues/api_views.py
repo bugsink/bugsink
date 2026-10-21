@@ -166,7 +166,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     def retrieve(self, request, issue, *args, **kwargs):
         return Response(self.get_serializer(issue).data)
 
-    @token_guard("issues:read", guarding_issue=lookup(url="pk"))
+    @token_guard("events:read", guarding_issue=lookup(url="pk"))
     @extend_schema(
         summary="List issue tag values and counts",
         description=(
@@ -188,7 +188,7 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         page = self.paginate_queryset(queryset)
         return self.get_paginated_response(self.get_serializer(page, many=True).data)
 
-    @token_guard("issues:read", guarding_issue=lookup(url="pk"))
+    @token_guard("events:read", guarding_issue=lookup(url="pk"))
     @extend_schema(
         summary="List issue grouping keys",
         description="List the grouping keys and mechanisms associated with this issue, ordered by ID.",
