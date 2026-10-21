@@ -118,7 +118,10 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
             OpenApiParameter(
                 name="q",
                 type=OpenApiTypes.STR,
-                description="Search issue titles and tags using the UI syntax (e.g. TypeError environment:production).",
+                description=(
+                    "Search titles as plain text and filter tags with `key:value`; quote values containing spaces. "
+                    "Results must match the text and every tag filter."
+                ),
             ),
             OpenApiParameter(
                 name="state",
