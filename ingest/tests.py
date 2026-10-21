@@ -1701,6 +1701,46 @@ class MinidumpIngestRegressionTestCase(TransactionTestCase):
             self.assertEqual("1.2.3", json.loads(event.get_raw_data())["release"])
             self.assertEqual([], os.listdir(tempdir))
 
+    # These two tests are LLM-generated; not deeply inspected, but they do seem to cover the main cases we care about.
+    @override_settings(MAX_EVENTS_PER_5_MINUTES=1)
+    @patch("ingest.views.digest.delay")
+    def test_direct_minidump_endpoint_rejects_over_installation_quota(self, digest_delay):
+        installation = Installation.objects.get()
+        installation.quota_exceeded_until = timezone.now() + relativedelta(minutes=5)
+        installation.quota_exceeded_reason = json.dumps(["minute", 5, 1])
+        installation.save()
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            with open(self.minidump_filename, "rb") as minidump:
+                response = self.client.post(
+                    f"/api/{self.project.id}/minidump/",
+                    data={"upload_file_minidump": minidump},
+                    headers={"X-Sentry-Auth": self.sentry_auth_header},
+                )
+
+            self.assertEqual(429, response.status_code)
+            self.assertEqual([], os.listdir(tempdir))
+            digest_delay.assert_not_called()
+
+    @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=1)
+    @patch("ingest.views.digest.delay")
+    def test_direct_minidump_endpoint_rejects_over_project_quota(self, digest_delay):
+        self.project.quota_exceeded_until = timezone.now() + relativedelta(minutes=5)
+        self.project.quota_exceeded_reason = json.dumps(["minute", 5, 1])
+        self.project.save()
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            with open(self.minidump_filename, "rb") as minidump:
+                response = self.client.post(
+                    f"/api/{self.project.id}/minidump/",
+                    data={"upload_file_minidump": minidump},
+                    headers={"X-Sentry-Auth": self.sentry_auth_header},
+                )
+
+            self.assertEqual(429, response.status_code)
+            self.assertEqual([], os.listdir(tempdir))
+            digest_delay.assert_not_called()
+
     @override_settings(MAX_ATTACHMENT_SIZE=10 * 1024)
     @patch("ingest.views.capture_or_log_exception")
     def test_direct_minidump_endpoint_rejects_oversized_upload(self, capture):

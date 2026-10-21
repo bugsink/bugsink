@@ -1138,7 +1138,14 @@ class MinidumpAPIView(BaseIngestAPIView):
         handle_request_content_encoding(request, "MAX_ATTACHMENT_SIZE")
 
         ingested_at = datetime.now(timezone.utc)
+
+        installation = Installation.objects.get()
+        if self.is_quota_still_exceeded(installation, ingested_at):
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
+
         project = self.get_project_for_request(project_pk, request)
+        if self.is_quota_still_exceeded(project, ingested_at):
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         try:
             if "upload_file_minidump" not in request.FILES:
