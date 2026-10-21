@@ -11,13 +11,16 @@ from django.db.models import Count, Sum
 
 from compat.timestamp import parse_timestamp
 from snappea.decorators import shared_task
+from sentry.assemble import ChunkFileState
+from sentry_sdk_extensions import capture_or_log_exception
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.app_settings import get_settings
 from bugsink.streams import copy_stream_limited
 from bugsink.timed_sqlite_backend.base import allow_long_running_queries
 
-from .models import Chunk, File, FileMetadata, write_fileobj_to_storage, _binary_to_bytes
+from .models import Chunk, DifAssembly, File, FileMetadata, write_fileobj_to_storage, _binary_to_bytes
+from .minidump import extract_dif_kind
 from .storage_registry import get_write_storage
 from .zip import open_zip_entry
 
@@ -43,21 +46,60 @@ DEBUG_ID_SCAN_TAIL_SIZE = 64 * 1024
 
 
 def create_file_from_local_file(checksum, filename, size, local_file):
-    write_storage = get_write_storage("file")
-    file, created = File.objects.defer("data").get_or_create(
-        checksum=checksum,
-        defaults={
-            "size": size,
-            "data": b"" if write_storage is not None else local_file.read,
-            "filename": filename,
-            "storage_backend": None if write_storage is None else write_storage.name,
-        })
+    with immediate_atomic(only_if_needed=True):
+        write_storage = get_write_storage("file")
+        file, created = File.objects.defer("data").get_or_create(
+            checksum=checksum,
+            defaults={
+                "size": size,
+                "data": b"" if write_storage is not None else local_file.read,
+                "filename": filename,
+                "storage_backend": None if write_storage is None else write_storage.name,
+            })
 
-    if created and write_storage is not None:
-        local_file.seek(0)
-        write_fileobj_to_storage("file", checksum, local_file)
+        if created and write_storage is not None:
+            # Keep write_fileobj_to_storage inside immediate_atomic so other requests cannot see the File row
+            # until all its contents have been written.
+            local_file.seek(0)
+            write_fileobj_to_storage("file", checksum, local_file)
 
     return file, created
+
+
+@shared_task
+def assemble_dif(assembly_id, chunk_checksums, filename):
+    assemblies = DifAssembly.objects.filter(
+        pk=assembly_id, state=ChunkFileState.ASSEMBLING, project__is_deleted=False)
+    assembly = assemblies.first()
+    if assembly is None:
+        return  # The upload has been cleaned up, or its project has been deleted.
+
+    try:
+        # These calls sit outside the immediate_atomic block below so joining chunks and parsing debug
+        # information don't hold the write lock. assemble_file uses its own transaction to store the result.
+        file, _ = assemble_file(assembly.checksum, chunk_checksums, filename)
+        dif_kind = extract_dif_kind(file.get_raw_data())
+
+        with immediate_atomic():
+            if not assemblies.exists():
+                return
+            FileMetadata.objects.get_or_create(
+                project_id=assembly.project_id,
+                debug_id=assembly.debug_id,
+                file_type=dif_kind,  # NOTE: symbolic's kind goes into file_type...
+                defaults={
+                    "file": file,
+                    "data": "{}",  # this is the "catch all" field but I don't think we have anything in this case.
+                },
+            )
+            assemblies.update(state=ChunkFileState.OK, file=file)
+    except Exception as e:
+        with immediate_atomic():
+            assemblies.update(
+                state=ChunkFileState.ERROR,
+                detail="Could not assemble this debug file. Check the server logs for details.",
+            )
+        capture_or_log_exception(e, logger)
 
 
 def read_limited_bytes(input_stream, max_bytes, reason):
@@ -309,7 +351,7 @@ def vacuum_files_sync(chunk_max_days=1, file_max_days=90, max_file_count=None, m
             max_file_count=max_file_count,
             max_file_bytes=max_file_bytes,
         )
-        log_progress(f"  Deleted {num_deleted} chunks/files.")
+        log_progress(f"  Deleted {num_deleted} chunks/files/upload statuses.")
 
         if not has_more_work:
             return
@@ -322,6 +364,14 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
         num_deleted = 0
         chunk_cutoff = now - timedelta(days=chunk_max_days)
         file_cutoff = now - timedelta(days=file_max_days)
+
+        # Keep upload statuses for as long as chunks are kept. Otherwise a failed or interrupted task could make every
+        # later upload attempt return "error" or "assembling". Deleting the status allows another attempt;
+        # it does not delete a successfully stored File.
+        assembly_ids = list(DifAssembly.objects.filter(created_at__lt=chunk_cutoff)
+                            .values_list("id", flat=True)[:VACUUM_FILES_BATCH_SIZE])
+        DifAssembly.objects.filter(id__in=assembly_ids).delete()
+        num_deleted += len(assembly_ids)
 
         while num_deleted < VACUUM_FILES_BATCH_SIZE:
             ids = list(
@@ -384,6 +434,7 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
             ]
 
             if db_backed_ids:
+                DifAssembly.objects.filter(file_id__in=db_backed_ids)._raw_delete(DifAssembly.objects.db)
                 FileMetadata.objects.filter(file_id__in=db_backed_ids)._raw_delete(FileMetadata.objects.db)
                 File.objects.filter(id__in=db_backed_ids)._raw_delete(File.objects.db)
 

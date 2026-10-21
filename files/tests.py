@@ -766,7 +766,7 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(scoped_metadata, result[scoped_debug_id])
         self.assertEqual(legacy_metadata, result[legacy_debug_id])
 
-    @patch("files.views.extract_dif_kind")
+    @patch("files.tasks.extract_dif_kind")
     def test_difs_assemble_stores_project_scoped_metadata(self, mock_extract_dif_kind):
         debug_id = uuid4()
         data = b"debug"
