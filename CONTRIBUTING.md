@@ -98,13 +98,17 @@ UI. Put the words that carry the most meaning early in the subject.
 
 Formatting is Linus-style: short summary, blank line, a body only if it adds something, and a 72-character line limit.
 
+Write the body as you would explain the change in conversation. Keep the explanation short by leaving out
+unnecessary points, not by squeezing the remaining points into terse phrases. The short subject and 72-character
+wrapping do not require a terse body.
+
 There is no prescribed tense, but each statement must make clear what it refers to: the situation before the commit,
 what this commit changes, or work that remains. The reader should be able to understand that from the message itself,
 without reconstructing it from the diff.
 
 Use the body for context, non-obvious reasons, deliberate limitations, or meaningful roads not taken. Omit routine
-implementation details, routine test results, and facts already obvious from the subject or diff. Use the subject
-alone when no body is needed.
+implementation details and routine test results. Don't narrate the diff, but include enough of what changed for the
+explanation to make sense on its own. Use the subject alone when no body is needed.
 
 Include a rejected alternative when the reason for rejecting it is non-obvious and helps explain the final design.
 Leave out detours caused by misunderstandings during the work, including corrections to an agent's bad suggestions.
