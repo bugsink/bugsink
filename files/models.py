@@ -175,7 +175,7 @@ class FileMetadata(models.Model):
         ]
 
 
-def get_file_metadata_for_debug_ids(project, debug_ids, file_type):
+def get_file_metadata_for_debug_ids(project, debug_ids, file_type, *, defer_file_data=False):
     """Return {debug_id: FileMetadata} for debug files visible to project."""
     # TODO: this function is called in the loop, i.e. once i.e. once per minidump module/frame; this is inefficient and
     # potentially a target for DOS attacks (since the length of the loop is under attacker control).
@@ -184,13 +184,17 @@ def get_file_metadata_for_debug_ids(project, debug_ids, file_type):
     if not debug_ids:
         return {}
 
+    queryset = FileMetadata.objects.select_related("file")
+    if defer_file_data:
+        queryset = queryset.defer("file__data")
+
     result = {
         metadata.debug_id: metadata
-        for metadata in FileMetadata.objects.filter(
+        for metadata in queryset.filter(
             project=project,
             debug_id__in=debug_ids,
             file_type=file_type,
-        ).select_related("file")
+        )
     }
 
     missing_debug_ids = debug_ids - set(result)
@@ -199,11 +203,11 @@ def get_file_metadata_for_debug_ids(project, debug_ids, file_type):
         # installs working for now, but should be removed after a long transition period, e.g. May 2027.
         result.update({
             metadata.debug_id: metadata
-            for metadata in FileMetadata.objects.filter(
+            for metadata in queryset.filter(
                 project__isnull=True,
                 debug_id__in=missing_debug_ids,
                 file_type=file_type,
-            ).select_related("file")
+            )
         })
 
     return result
