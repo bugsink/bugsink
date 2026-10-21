@@ -835,7 +835,10 @@ class FilesTests(TransactionTestCase):
         debug_id = uuid4()
         other_project = Project.objects.create(name="other")
         dbg_file = File.objects.create(checksum="d" * 40, filename="debug-file", size=0, data=b"debug")
-        src_file = File.objects.create(checksum="e" * 40, filename="source-bundle", size=0, data=b"source")
+        bundle = BytesIO()
+        with ZipFile(bundle, "w") as zf:
+            zf.writestr("other.c", "source")
+        src_file = File.objects.create(checksum="e" * 40, filename="source-bundle", size=0, data=bundle.getvalue())
 
         FileMetadata.objects.create(project=other_project, debug_id=debug_id, file_type="dbg", file=dbg_file)
         FileMetadata.objects.create(project=other_project, debug_id=debug_id, file_type="src", file=src_file)

@@ -3,6 +3,7 @@ from io import BytesIO
 import os
 from types import SimpleNamespace
 from unittest import TestCase
+from unittest.mock import patch
 from zipfile import ZipFile, ZIP_DEFLATED
 
 import symbolic
@@ -14,9 +15,10 @@ from projects.models import Project
 
 from .minidump import (
     build_cfi_map_from_minidump_bytes, event_threads_for_process_state, extract_dif_kind, extract_source_context,
-    parse_debug_object,
+    parse_debug_object, read_source_lines,
 )
 from .models import File, FileMetadata
+from .zip import open_zip_entry
 
 
 class DifKindTests(TestCase):
@@ -57,25 +59,31 @@ int main(void) {
 // End of program.
 """
         bundle = self.source_bundle(source)
+        with ZipFile(BytesIO(bundle)) as zf:
+            lines = read_source_lines(zf, "main.c")
 
         self.assertEqual((
             ["int main(void) {", "    int *value = NULL;", "    int result;", "", '    puts("Reading value");'],
             "    result = *value;",
             ['    printf("Value: %d", result);', "", '    puts("Done");', "    return 0;", "}"],
-        ), extract_source_context(bundle, "main.c", 8))
+        ), extract_source_context(lines, 8))
 
     def test_source_at_size_limit_has_context(self):
         source = b"return 0;\n" * 100
         bundle = self.source_bundle(source)
         with override_settings(MAX_SOURCE_CONTEXT_FILE_SIZE=len(source)):
-            self.assertEqual(([], "return 0;", []), extract_source_context(bundle, "main.c", 1, context=0))
+            with ZipFile(BytesIO(bundle)) as zf:
+                lines = read_source_lines(zf, "main.c")
+            self.assertEqual(([], "return 0;", []), extract_source_context(lines, 1, context=0))
 
     def test_oversized_source_has_no_context(self):
         source = b"return 0;\n" * 100
         bundle = self.source_bundle(source)
         self.assertLess(len(bundle), len(source) - 1)
         with override_settings(MAX_SOURCE_CONTEXT_FILE_SIZE=len(source) - 1):
-            self.assertEqual(([], None, []), extract_source_context(bundle, "main.c", 1, context=0))
+            with ZipFile(BytesIO(bundle)) as zf:
+                lines = read_source_lines(zf, "main.c")
+            self.assertEqual(([], None, []), extract_source_context(lines, 1, context=0))
 
 
 class MinidumpSymbolicationTests(TransactionTestCase):
@@ -200,6 +208,55 @@ int main(void) {
             {"instruction_addr": "0x1020", "function": "helper", "filename": "main.c", "lineno": 2},
             {"instruction_addr": "0x1010", "function": "main", "filename": "main.c", "lineno": 6},
         ], threads[0]["stacktrace"]["frames"])
+
+    def test_debug_file_is_parsed_once_for_frames_at_different_load_addresses(self):
+        modules = list(self.process_state.modules())
+        modules.append(SimpleNamespace(addr=0x4000, size=0x100, debug_id=self.main_debug_id))
+        self.process_state.modules = lambda: modules
+        self.process_state.threads = lambda: [SimpleNamespace(thread_id=101, frames=lambda: [
+            SimpleNamespace(instruction=0x1010), SimpleNamespace(instruction=0x4020),
+        ] * 100)]
+
+        with patch("files.minidump.parse_debug_object", wraps=parse_debug_object) as parse:
+            threads = event_threads_for_process_state(self.process_state, self.project)
+
+        self.assertEqual(1, parse.call_count)
+        self.assertEqual(["main", "helper"] * 100, [
+            frame["function"] for frame in threads[0]["stacktrace"]["frames"]])
+
+    def test_source_files_are_read_once_for_repeated_frames(self):
+        with patch("files.minidump.open_zip_entry", wraps=open_zip_entry) as read_source:
+            threads = event_threads_for_process_state(self.process_state, self.project)
+
+        self.assertEqual(2, read_source.call_count)  # main.c and worker.c, regardless of the number of frames.
+        self.assertEqual("    return helper();", threads[1]["stacktrace"]["frames"][0]["context_line"])
+
+    def test_missing_debug_files_are_looked_up_together(self):
+        FileMetadata.objects.all().delete()
+        self.process_state.threads = lambda: [SimpleNamespace(thread_id=101, frames=lambda: [
+            SimpleNamespace(instruction=0x1010), SimpleNamespace(instruction=0x2010),
+        ] * 100)]
+
+        # First look for debug files belonging to this project. For missing files, also look among older uploads
+        # that have no project recorded, so those uploads keep working. These are two queries for all 200 frames
+        # together; we must not repeat the searches for each frame.
+        with self.assertNumQueries(2):
+            threads = event_threads_for_process_state(self.process_state, self.project)
+
+        self.assertEqual(
+            [{"instruction_addr": "0x1010"}, {"instruction_addr": "0x2010"}] * 100,
+            threads[0]["stacktrace"]["frames"])
+
+    def test_cfi_is_prepared_once_for_repeated_modules(self):
+        modules = list(self.process_state.modules()) * 100
+        self.process_state.modules = lambda: modules
+
+        with patch("files.minidump.symbolic.minidump.ProcessState.from_minidump_buffer",
+                   return_value=self.process_state):
+            with patch("files.minidump.parse_debug_object", wraps=parse_debug_object) as parse:
+                build_cfi_map_from_minidump_bytes(b"", self.project)
+
+        self.assertEqual(2, parse.call_count)
 
     @tag("samples")
     def test_debug_file_provides_unwind_information(self):
