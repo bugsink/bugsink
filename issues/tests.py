@@ -27,7 +27,7 @@ from bsmain.management.commands.send_json import Command as SendJsonCommand
 from compat.dsn import get_header_value
 from events.models import Event
 from bsmain.models import AuthToken
-from ingest.views import BaseIngestAPIView
+from ingest.digestion import count_issue_periods_and_act_on_it
 from issues.factories import get_or_create_issue
 from tags.models import store_tags
 from tags.tasks import vacuum_tagvalues
@@ -348,7 +348,7 @@ class RegressionIssueTestCase(DjangoTestCase):
 class MuteUnmuteTestCase(TransactionTestCase):
     """
     Somewhat of an integration test. The unit-under-test here is the whole of
-    * BaseIngestAPIView.count_issue_periods_and_act_on_it
+    * count_issue_periods_and_act_on_it
     * threshold-counting
     * IssueStateManager.unmute
     """
@@ -395,7 +395,7 @@ class MuteUnmuteTestCase(TransactionTestCase):
         issue.save()
 
         event = create_event(project, issue, project_digest_order=1)
-        BaseIngestAPIView.count_issue_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
+        count_issue_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
         issue.save()
 
         self.assertFalse(Issue.objects.get(id=issue.id).is_muted)
@@ -417,7 +417,7 @@ class MuteUnmuteTestCase(TransactionTestCase):
         issue.save()
 
         event = create_event(project, issue, project_digest_order=1)
-        BaseIngestAPIView.count_issue_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
+        count_issue_periods_and_act_on_it(issue, event, datetime.now(timezone.utc))
         issue.save()
 
         self.assertFalse(Issue.objects.get(id=issue.id).is_muted)

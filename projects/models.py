@@ -200,8 +200,8 @@ class Project(models.Model):
 
     def get_warnings(self):
         now = datetime.now(timezone.utc)
-        from ingest.views import BaseIngestAPIView
-        if BaseIngestAPIView.is_quota_still_exceeded(self, now):
+        from ingest.digestion import is_quota_still_exceeded
+        if is_quota_still_exceeded(self, now):
             period_name, nr_of_periods, gte_threshold = json.loads(self.quota_exceeded_reason)
             # TODO i18n
             per_fmt = "%s %ss" % (nr_of_periods, period_name) if nr_of_periods != 1 else period_name

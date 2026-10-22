@@ -210,7 +210,7 @@ class Event(models.Model):
     def from_ingested(cls, event_metadata, digested_at, digest_order, project_digest_order, stored_event_count, issue,
                       grouping, parsed_data, denormalized_fields):
 
-        # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in the views.
+        # 'from_ingested' may be a bit of a misnomer... the full 'from_ingested' is done in 'digest_event' in tasks.
         # below at least puts the parsed_data in the right place, and does some of the basic object set up (FKs to other
         # objects etc).
 
