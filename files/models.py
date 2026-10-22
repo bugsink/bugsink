@@ -62,6 +62,24 @@ class DifAssembly(models.Model):
         ]
 
 
+class ArtifactBundleAssembly(models.Model):
+    # Artifact metadata is project-scoped, so the status must include the project too: the same bundle may still need
+    # to be registered for another project.
+    project = models.ForeignKey("projects.Project", on_delete=models.DO_NOTHING)
+    checksum = models.CharField(max_length=40)
+    state = models.CharField(max_length=16, default=ChunkFileState.CREATED)
+    detail = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "checksum"],
+                name="artifactbundleassembly_project_checksum",
+            ),
+        ]
+
+
 def get_storage_todo_for_instance(instance):
     object_kind = get_object_kind_for_model(instance.__class__)
     key = get_object_storage_key(instance, object_kind)

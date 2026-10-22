@@ -16,10 +16,18 @@ from sentry_sdk_extensions import capture_or_log_exception
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.app_settings import get_settings
-from bugsink.streams import copy_stream_limited
+from bugsink.streams import copy_stream_limited, MaxLengthExceeded
 from bugsink.timed_sqlite_backend.base import allow_long_running_queries
 
-from .models import Chunk, DifAssembly, File, FileMetadata, write_fileobj_to_storage, _binary_to_bytes
+from .models import (
+    ArtifactBundleAssembly,
+    Chunk,
+    DifAssembly,
+    File,
+    FileMetadata,
+    write_fileobj_to_storage,
+    _binary_to_bytes,
+)
 from .minidump import extract_dif_kind
 from .storage_registry import get_write_storage
 from .zip import open_zip_entry
@@ -155,8 +163,7 @@ def find_in_code_debug_ids(local_file):
     return matches
 
 
-@shared_task
-def assemble_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
+def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
     # arguably, you could just wrap-around each operation, "around everything" guarantees a fully consistent update on
     # the data and we don't do this that often that it's assumed to matter.
     with immediate_atomic():
@@ -235,6 +242,44 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
             bundle_file.delete()
 
 
+@shared_task
+def assemble_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
+    assemblies_to_start = ArtifactBundleAssembly.objects.filter(
+        checksum=bundle_checksum,
+        project_id__in=project_ids,
+        state=ChunkFileState.CREATED,
+        project__is_deleted=False,
+    )
+    assembly_ids_and_project_ids = list(assemblies_to_start.values_list("id", "project_id"))
+    if not assembly_ids_and_project_ids:
+        return  # The upload has been processed or cleaned up, or all its projects have been deleted.
+
+    assembly_ids, active_project_ids = zip(*assembly_ids_and_project_ids)
+    assemblies = ArtifactBundleAssembly.objects.filter(id__in=assembly_ids)
+    with immediate_atomic():
+        assemblies.update(state=ChunkFileState.ASSEMBLING)
+
+    try:
+        process_artifact_bundle(bundle_checksum, chunk_checksums, active_project_ids)
+    except (AssembledFileTooLarge, MaxLengthExceeded) as e:
+        with immediate_atomic():
+            assemblies.update(state=ChunkFileState.ERROR, detail=str(e))
+    except Exception as e:
+        with immediate_atomic():
+            assemblies.update(
+                state=ChunkFileState.ERROR,
+                detail="Could not assemble this artifact bundle. Check the server logs for details.",
+            )
+        capture_or_log_exception(e, logger)
+    else:
+        with immediate_atomic():
+            assemblies.update(state=ChunkFileState.OK)
+
+
+class AssembledFileTooLarge(ValueError):
+    pass
+
+
 def assemble_file(checksum, chunk_checksums, filename):
     """Assembles a file from chunks"""
 
@@ -255,7 +300,7 @@ def assemble_file(checksum, chunk_checksums, filename):
     # a renewal to avoid vacuuming. i.e. it only happens if our worker is late by 24h.
     # Sum over the requested list so repeated chunks count each time they appear in the assembled file.
     if sum(chunk_sizes[checksum] for checksum in chunk_checksums) > max_file_size:
-        raise ValueError("Assembled file exceeds MAX_FILE_SIZE")
+        raise AssembledFileTooLarge("Assembled file exceeds MAX_FILE_SIZE")
 
     chunks_dicts = {chunk.checksum: chunk for chunk in chunks}
     chunks_in_order = [chunks_dicts[checksum] for checksum in chunk_checksums]
@@ -271,7 +316,7 @@ def assemble_file(checksum, chunk_checksums, filename):
                 chunk_data = _binary_to_bytes(chunk.data)
                 next_size = size + len(chunk_data)
                 if next_size > max_file_size:
-                    raise ValueError("Assembled file exceeds MAX_FILE_SIZE")
+                    raise AssembledFileTooLarge("Assembled file exceeds MAX_FILE_SIZE")
 
                 local_file.write(chunk_data)
                 checksum_state.update(chunk_data)
@@ -373,10 +418,16 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
         # Keep upload statuses for as long as chunks are kept. Otherwise a failed or interrupted task could make every
         # later upload attempt return "error" or "assembling". Deleting the status allows another attempt;
         # it does not delete a successfully stored File.
-        assembly_ids = list(DifAssembly.objects.filter(created_at__lt=chunk_cutoff)
-                            .values_list("id", flat=True)[:VACUUM_FILES_BATCH_SIZE])
-        DifAssembly.objects.filter(id__in=assembly_ids).delete()
-        num_deleted += len(assembly_ids)
+        for assembly_model in (DifAssembly, ArtifactBundleAssembly):
+            assembly_ids = list(
+                assembly_model.objects.filter(created_at__lt=chunk_cutoff)
+                .values_list("id", flat=True)[:VACUUM_FILES_BATCH_SIZE - num_deleted]
+            )
+            assembly_model.objects.filter(id__in=assembly_ids).delete()
+            num_deleted += len(assembly_ids)
+
+            if num_deleted == VACUUM_FILES_BATCH_SIZE:
+                return True, num_deleted
 
         while num_deleted < VACUUM_FILES_BATCH_SIZE:
             ids = list(

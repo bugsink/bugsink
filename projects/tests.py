@@ -21,7 +21,7 @@ from tags.models import store_tags
 from issues.models import TurningPoint, TurningPointKind, Issue
 from alerts.models import MessagingServiceConfig
 from releases.models import Release
-from files.models import DifAssembly, File, FileMetadata
+from files.models import ArtifactBundleAssembly, DifAssembly, File, FileMetadata
 from events.usage import record_event_counts
 
 from .tasks import get_model_topography_with_project_override
@@ -215,6 +215,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
         file = File.objects.create(checksum="a" * 40, filename="test.js.map", size=0)
         FileMetadata.objects.create(project=self.project, file=file)
         DifAssembly.objects.create(project=self.project, checksum=file.checksum, state="ok", file=file)
+        ArtifactBundleAssembly.objects.create(project=self.project, checksum=file.checksum, state="ok")
         AuthToken.objects.create(is_project_bound=True, project=self.project)
 
         self.event.never_evict = True
@@ -236,6 +237,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
                   "issues.Grouping",
                   "files.FileMetadata",
                   "files.DifAssembly",
+                  "files.ArtifactBundleAssembly",
                   "alerts.MessagingServiceConfig",
                   "projects.ProjectMembership",
                   "releases.Release",
@@ -254,7 +256,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
         # correct for bugsink/transaction.py's select_for_update for non-sqlite databases
         correct_for_select_for_update = 1 if 'sqlite' not in settings.DATABASES['default']['ENGINE'] else 0
 
-        with self.assertNumQueries(37 + correct_for_select_for_update):
+        with self.assertNumQueries(39 + correct_for_select_for_update):
             self.project.delete_deferred()
 
         # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly
@@ -298,6 +300,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
             (apps.get_model('tags', 'EventTag'), 'event'),
             (apps.get_model('issues', 'TurningPoint'), 'project'),
             (apps.get_model('files', 'DifAssembly'), 'project'),
+            (apps.get_model('files', 'ArtifactBundleAssembly'), 'project'),
             (apps.get_model('files', 'FileMetadata'), 'project'),
             (apps.get_model('events', 'Event'), 'project'),
             (apps.get_model('issues', 'TurningPoint'), 'triggering_event'),
@@ -333,6 +336,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
             (apps.get_model('issues', 'Issue'), 'project'),
             (apps.get_model('bsmain', 'AuthToken'), 'project'),
             (apps.get_model('files', 'DifAssembly'), 'project'),
+            (apps.get_model('files', 'ArtifactBundleAssembly'), 'project'),
             (apps.get_model('files', 'FileMetadata'), 'project'),
         ])
 

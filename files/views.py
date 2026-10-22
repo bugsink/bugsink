@@ -22,7 +22,7 @@ from bugsink.transaction import durable_atomic, immediate_atomic, delay_on_commi
 from bugsink.streams import handle_request_content_encoding, copy_stream_limited, MaxLengthExceeded
 from projects.models import Project
 
-from .models import Chunk, DifAssembly, File
+from .models import ArtifactBundleAssembly, Chunk, DifAssembly, File
 from .tasks import assemble_artifact_bundle, assemble_dif
 
 logger = logging.getLogger("bugsink.api")
@@ -291,10 +291,34 @@ def artifact_bundle_assemble(request, organization_slug):
     if missing_chunks:
         return JsonResponse({"state": ChunkFileState.NOT_FOUND, "missingChunks": missing_chunks})
 
-    assemble_artifact_bundle.delay(checksum, chunk_checksums, [project.id for project in projects])
-    # In the ALWAYS_EAGER setup, we process the bundle inline, so arguably we could return "OK" here too; "CREATED" is
-    # what sentry returns though, so for faithful mimicking it's the safest bet.
-    return JsonResponse({"state": ChunkFileState.CREATED, "missingChunks": []})
+    with immediate_atomic():
+        assemblies = []
+        new_project_ids = []
+        for project in projects:
+            assembly, created = ArtifactBundleAssembly.objects.get_or_create(
+                project=project,
+                checksum=checksum,
+            )
+            assemblies.append(assembly)
+            if created:
+                new_project_ids.append(project.id)
+
+        if new_project_ids:
+            delay_on_commit(assemble_artifact_bundle, checksum, chunk_checksums, new_project_ids)
+
+    if any(assembly.state == ChunkFileState.ERROR for assembly in assemblies):
+        assembly = next(assembly for assembly in assemblies if assembly.state == ChunkFileState.ERROR)
+    elif any(assembly.state == ChunkFileState.CREATED for assembly in assemblies):
+        assembly = next(assembly for assembly in assemblies if assembly.state == ChunkFileState.CREATED)
+    elif any(assembly.state == ChunkFileState.ASSEMBLING for assembly in assemblies):
+        assembly = next(assembly for assembly in assemblies if assembly.state == ChunkFileState.ASSEMBLING)
+    else:
+        assembly = assemblies[0]
+
+    response = {"state": assembly.state, "missingChunks": []}
+    if assembly.detail:
+        response["detail"] = assembly.detail
+    return JsonResponse(response)
 
 
 @csrf_exempt  # we're in API context here; this could potentially be pulled up to a higher level though
