@@ -313,20 +313,19 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
         envelope_headers = parser.get_envelope_headers()
 
-        # Getting the installation & project is the only DB-touching (a read) we do before we (only in IMMEDIATE/EAGER
-        # modes), start start read/writing in digest_event. Notes on transactions:
+        # Getting the installation & project is the only DB-touching (a read) we do before we start reading/writing in
+        # digest_event in TASK_ALWAYS_EAGER mode. Notes on transactions:
         #
         # * we could add `durable_atomic` here for explicitness / if we ever do more than one read (for consistent
         #   snapshots. As it stands, not needed. (I believe this is implicit due to Django or even sqlite itself)
-        # * For the IMMEDIATE/EAGER cases we don't suffer from locks b/c sqlite upgrades read to write; I've tested this
-        #   by adding sleep statements between the read/writes. I believe this is b/c of our immediate_atomic on
+        # * In TASK_ALWAYS_EAGER mode we don't suffer from locks b/c sqlite upgrades read to write; I've tested this by
+        #   adding sleep statements between the read/writes. I believe this is b/c of our immediate_atomic on
         #   digest_event. When removing that, and wrapping all of the present method in `durable_atomic`, read-write
         #   upgrades indeed fail.
         # * digest_event gets its own `project`, so there's no cross-transaction "pollution".
-        # * Road not taken: pulling `immediate_atomic` up to the present level, but only for IMMEDIATE/EAGER modes (the
-        #   only modes where this would make sense). This allows for passing of project between the 2 methods, but the
-        #   added complexity (conditional transactions both here and in digest_event) is not worth it for modes that are
-        #   non-production anyway.
+        # * Road not taken: pulling `immediate_atomic` up to the present level in TASK_ALWAYS_EAGER mode. This allows
+        #   for passing of project between the 2 methods, but the added complexity (conditional transactions both here
+        #   and in digest_event) is not worth it for a mode that is non-production anyway.
         installation = Installation.objects.get()
         if is_quota_still_exceeded(installation, ingested_at):
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
