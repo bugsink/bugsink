@@ -8,6 +8,7 @@ from django.db.models import Q
 from functools import partial
 
 from bugsink.streams import copy_stream_limited
+from sentry.assemble import ChunkFileState
 
 from .storage_registry import get_write_storage, get_storage
 from .object_kinds import (
@@ -32,6 +33,33 @@ class Chunk(models.Model):
 
     def __str__(self):
         return self.checksum
+
+
+class DifAssembly(models.Model):
+    # Upload status belongs here, not in Snappea: a task disappears from the queue before it starts running.
+    project = models.ForeignKey("projects.Project", on_delete=models.DO_NOTHING)
+    checksum = models.CharField(max_length=40)
+    debug_id = models.UUIDField(null=True, blank=True)
+    state = models.CharField(max_length=16, default=ChunkFileState.ASSEMBLING)
+    detail = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
+    # null=True because we set file only after successful assembly and registration.
+    # CASCADE: the simply correct solution, assumed to be performant enough
+    file = models.ForeignKey("File", null=True, blank=True, on_delete=models.CASCADE)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "checksum", "debug_id"],
+                condition=Q(debug_id__isnull=False),
+                name="difassembly_project_checksum_debug",
+            ),
+            models.UniqueConstraint(
+                fields=["project", "checksum"],
+                condition=Q(debug_id__isnull=True),
+                name="difassembly_without_debug_id",
+            ),
+        ]
 
 
 def get_storage_todo_for_instance(instance):
@@ -136,6 +164,7 @@ def _cleanup_objects_on_storage(todos):
 
 
 class FileMetadata(models.Model):
+    # CASCADE: the simply correct solution, assumed to be performant enough
     file = models.ForeignKey(File, null=False, on_delete=models.CASCADE, related_name="metadatas")
 
     # FileMetadata as provided by the client (e.g. in a manifest); security-wise any facts noted here are not guaranteed
@@ -175,22 +204,23 @@ class FileMetadata(models.Model):
         ]
 
 
-def get_file_metadata_for_debug_ids(project, debug_ids, file_type):
+def get_file_metadata_for_debug_ids(project, debug_ids, file_type, *, defer_file_data=False):
     """Return {debug_id: FileMetadata} for debug files visible to project."""
-    # TODO: this function is called in the loop, i.e. once i.e. once per minidump module/frame; this is inefficient and
-    # potentially a target for DOS attacks (since the length of the loop is under attacker control).
-
     debug_ids = set(debug_ids)
     if not debug_ids:
         return {}
 
+    queryset = FileMetadata.objects.select_related("file")
+    if defer_file_data:
+        queryset = queryset.defer("file__data")
+
     result = {
         metadata.debug_id: metadata
-        for metadata in FileMetadata.objects.filter(
+        for metadata in queryset.filter(
             project=project,
             debug_id__in=debug_ids,
             file_type=file_type,
-        ).select_related("file")
+        )
     }
 
     missing_debug_ids = debug_ids - set(result)
@@ -199,11 +229,11 @@ def get_file_metadata_for_debug_ids(project, debug_ids, file_type):
         # installs working for now, but should be removed after a long transition period, e.g. May 2027.
         result.update({
             metadata.debug_id: metadata
-            for metadata in FileMetadata.objects.filter(
+            for metadata in queryset.filter(
                 project__isnull=True,
                 debug_id__in=missing_debug_ids,
                 file_type=file_type,
-            ).select_related("file")
+            )
         })
 
     return result

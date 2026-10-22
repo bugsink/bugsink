@@ -47,7 +47,6 @@ from bsmain.utils import b108_makedirs
 from phonehome.models import Installation
 
 from sentry_sdk_extensions import capture_or_log_exception
-from sentry.minidump import merge_minidump_event
 
 from .parsers import StreamingEnvelopeParser, ParseError
 from .filestore import get_filename_for_event_id
@@ -360,14 +359,8 @@ class BaseIngestAPIView(View):
 
     @classmethod
     def validate_event_data(cls, data, validation_setting):
-        # rough notes on performance (50k event):
-        # fastjsonschema: load-from-disk (precompiled): ~1ms, validation: ~2ms
-        # jsonschema: 'compile': ~2ms, validation ~15ms
-        #
-        # note that this method raising an exception ("strict") creates additional overhead in the ~100ms range;
-        # presumably because of the transaction rollback. Possible future direction: check pre-transaction. Not
-        # optimizing that yet though, because [1] presumably rare and [2] incorrect data might trigger arbitrary
-        # exceptions, so you'd have that cost-of-rollback anyway.
+        # Rough timings for a 50k event: valid ~1ms, invalid ~100ms.
+        # The invalid-data cost is almost entirely in the jsonschema fallback
 
         def get_schema():
             schema_filename = settings.BASE_DIR / 'api/event.schema.altered.json'
@@ -412,9 +405,22 @@ class BaseIngestAPIView(View):
             except ValidationError as e:
                 logger.warning("event data validation failed: %s", e)
 
+    @staticmethod
+    def handle_zero_retention(project):
+        # With zero retention the caller must return (don't digest) before doing any work. Otherwise we'd retain an
+        # event despite the zero limit, because we do evict-before-add which doesn't work for the case of 0.
+        if project.get_retention_max_event_count() != 0:
+            return False
+
+        if project.stored_event_count > 0:
+            from events.tasks import delete_by_age_until_under_retention_max
+            # Since we don't evict in this branch, we just have the simplest hard-coded eviction (delete below max):
+            delay_on_commit(delete_by_age_until_under_retention_max, project.id)
+        return True
+
     @classmethod
     @immediate_atomic()
-    def digest_event(cls, event_metadata, event_data, digested_at=None, minidump_bytes=None):
+    def digest_event(cls, event_metadata, event_data, digested_at=None):
         # ingested_at is passed from the point-of-ingestion; digested_at is determined here. Because this happens inside
         # `immediate_atomic`, we know digestions are serialized, and assuming non-decreasing server clocks, not decrea-
         # sing. (no so for ingestion times: clock-watching happens outside the snappe transaction, and threading in the
@@ -438,13 +444,8 @@ class BaseIngestAPIView(View):
             # (covers both "deletion in progress (is_deleted=True)" and "fully deleted").
             return
 
-        if project.get_retention_max_event_count() == 0:
-            # special case: return (don't ingest) before doing any work. Reason: otherwise we'd retain an event despite
-            # the zero limit, because in we do evict-before-add which doesn't work for the case of 0.
-            if project.stored_event_count > 0:
-                from events.tasks import delete_by_age_until_under_retention_max
-                # Since we don't evict in this branch, we just have the simplest hard-coded eviction (delete below max):
-                delay_on_commit(delete_by_age_until_under_retention_max, project.id)
+        # Recheck inside the transaction: retention may have changed since the task's early check.
+        if cls.handle_zero_retention(project):
             return
 
         installation = Installation.objects.get()
@@ -452,15 +453,6 @@ class BaseIngestAPIView(View):
                 or not cls.count_project_periods_and_act_on_it(project, digested_at)):
 
             return  # if over-quota: just return (any cleanup is done calling-side)
-
-        if get_settings().VALIDATE_ON_DIGEST in ["warn", "strict"]:
-            cls.validate_event_data(event_data, get_settings().VALIDATE_ON_DIGEST)
-
-        if minidump_bytes is not None:
-            # we merge after validation: validation is about what's provided _externally_, not our own merging.
-            # TODO error handling
-            # TODO should not be inside immediate_atomic if it turns out to be slow
-            merge_minidump_event(event_data, minidump_bytes, project)
 
         # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
         # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
@@ -1140,11 +1132,20 @@ class MinidumpAPIView(BaseIngestAPIView):
 
         # not reusing the CORS stuff here; minidump-from-browser doesn't make sense.
 
-        # TODO: actually pick/configure max
-        handle_request_content_encoding(request, 50 * 1024 * 1024)
+        # NOTE for multipart requests this is actually interpreted as the total size of the request body, which
+        # includes other form fields and multipart formatting i.e. we're slightly more strict but the difference is
+        # negligible so we use the simpler solution here.
+        handle_request_content_encoding(request, "MAX_ATTACHMENT_SIZE")
 
         ingested_at = datetime.now(timezone.utc)
+
+        installation = Installation.objects.get()
+        if self.is_quota_still_exceeded(installation, ingested_at):
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
+
         project = self.get_project_for_request(project_pk, request)
+        if self.is_quota_still_exceeded(project, ingested_at):
+            return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         try:
             if "upload_file_minidump" not in request.FILES:
@@ -1154,6 +1155,8 @@ class MinidumpAPIView(BaseIngestAPIView):
             event_id = self.process_minidump(ingested_at, uuid.uuid4().hex, minidump_bytes, project, request)
 
             return JsonResponse({"id": event_id})
+        except MaxLengthExceeded as e:
+            return JsonResponse({"detail": str(e)}, status=HTTP_413_CONTENT_TOO_LARGE)
         except Exception as e:
             # we're still figuring out what this endpoint should do; so we log errors to learn from them while saying
             # to the client "400 Bad Request" if we can't handle their stuff.

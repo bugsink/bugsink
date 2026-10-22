@@ -11,14 +11,18 @@ from django.db.models import Count, Sum
 
 from compat.timestamp import parse_timestamp
 from snappea.decorators import shared_task
+from sentry.assemble import ChunkFileState
+from sentry_sdk_extensions import capture_or_log_exception
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.app_settings import get_settings
 from bugsink.streams import copy_stream_limited
 from bugsink.timed_sqlite_backend.base import allow_long_running_queries
 
-from .models import Chunk, File, FileMetadata, write_fileobj_to_storage, _binary_to_bytes
+from .models import Chunk, DifAssembly, File, FileMetadata, write_fileobj_to_storage, _binary_to_bytes
+from .minidump import extract_dif_kind
 from .storage_registry import get_write_storage
+from .zip import open_zip_entry
 
 logger = logging.getLogger("bugsink.api")
 
@@ -26,6 +30,10 @@ logger = logging.getLogger("bugsink.api")
 # budget is not yet tuned; reasons for high values: we're dealing with "leaves in the model-dep-tree here"; reasons for
 # low values: deletion of files might just be expensive.
 VACUUM_FILES_BATCH_SIZE = 500
+
+# At roughly 200-500 bytes per file (reasonable enough for paths), 50 MiB accommodates about 100,000-250,000 files,
+# which "should be enough" for non-pathalogical use-cases.
+MAX_MANIFEST_SIZE = 50 * 1024 * 1024
 
 
 # "In the wild", we have run into non-unique debug IDs (one in code, one in comment-at-bottom). This regex matches a
@@ -38,30 +46,69 @@ DEBUG_ID_SCAN_TAIL_SIZE = 64 * 1024
 
 
 def create_file_from_local_file(checksum, filename, size, local_file):
-    write_storage = get_write_storage("file")
-    file, created = File.objects.defer("data").get_or_create(
-        checksum=checksum,
-        defaults={
-            "size": size,
-            "data": b"" if write_storage is not None else local_file.read,
-            "filename": filename,
-            "storage_backend": None if write_storage is None else write_storage.name,
-        })
+    with immediate_atomic(only_if_needed=True):
+        write_storage = get_write_storage("file")
+        file, created = File.objects.defer("data").get_or_create(
+            checksum=checksum,
+            defaults={
+                "size": size,
+                "data": b"" if write_storage is not None else local_file.read,
+                "filename": filename,
+                "storage_backend": None if write_storage is None else write_storage.name,
+            })
 
-    if created and write_storage is not None:
-        local_file.seek(0)
-        write_fileobj_to_storage("file", checksum, local_file)
+        if created and write_storage is not None:
+            # Keep write_fileobj_to_storage inside immediate_atomic so other requests cannot see the File row
+            # until all its contents have been written.
+            local_file.seek(0)
+            write_fileobj_to_storage("file", checksum, local_file)
 
     return file, created
 
 
-def read_limited_bytes(input_stream, max_bytes):
+@shared_task
+def assemble_dif(assembly_id, chunk_checksums, filename):
+    assemblies = DifAssembly.objects.filter(
+        pk=assembly_id, state=ChunkFileState.ASSEMBLING, project__is_deleted=False)
+    assembly = assemblies.first()
+    if assembly is None:
+        return  # The upload has been cleaned up, or its project has been deleted.
+
+    try:
+        # These calls sit outside the immediate_atomic block below so joining chunks and parsing debug
+        # information don't hold the write lock. assemble_file uses its own transaction to store the result.
+        file, _ = assemble_file(assembly.checksum, chunk_checksums, filename)
+        dif_kind = extract_dif_kind(file.get_raw_data())
+
+        with immediate_atomic():
+            if not assemblies.exists():
+                return
+            FileMetadata.objects.get_or_create(
+                project_id=assembly.project_id,
+                debug_id=assembly.debug_id,
+                file_type=dif_kind,  # NOTE: symbolic's kind goes into file_type...
+                defaults={
+                    "file": file,
+                    "data": "{}",  # this is the "catch all" field but I don't think we have anything in this case.
+                },
+            )
+            assemblies.update(state=ChunkFileState.OK, file=file)
+    except Exception as e:
+        with immediate_atomic():
+            assemblies.update(
+                state=ChunkFileState.ERROR,
+                detail="Could not assemble this debug file. Check the server logs for details.",
+            )
+        capture_or_log_exception(e, logger)
+
+
+def read_limited_bytes(input_stream, max_bytes, reason):
     with tempfile.SpooledTemporaryFile(max_size=max_bytes + 1) as output_stream:
         bytes_read = copy_stream_limited(
             input_stream,
             output_stream,
             max_bytes=max_bytes,
-            reason=f"MAX_FILE_SIZE: {max_bytes}",
+            reason=reason,
         )
         output_stream.seek(0)
         return output_stream.read(), bytes_read
@@ -71,7 +118,7 @@ def extract_zip_entry_to_file(bundle_zip, entry_name, local_file, max_bytes):
     # usedforsecurity=false: sha1 is not used cryptographically, it's part of the protocol, so we use it as is.
     checksum = sha1(usedforsecurity=False)
 
-    with bundle_zip.open(entry_name) as input_stream:
+    with open_zip_entry(bundle_zip, entry_name) as input_stream:
         size = copy_stream_limited(
             input_stream,
             local_file,
@@ -121,11 +168,14 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
         bundle_file, _ = assemble_file(bundle_checksum, chunk_checksums, filename=f"{bundle_checksum}.zip")
 
         max_file_size = get_settings().MAX_FILE_SIZE
+        max_manifest_size = min(max_file_size, MAX_MANIFEST_SIZE)
+        manifest_limit_name = "MAX_FILE_SIZE" if max_file_size <= MAX_MANIFEST_SIZE else "MAX_MANIFEST_SIZE"
         with tempfile.TemporaryDirectory() as tempdir:
             with bundle_file.open_for_read() as f:
                 with ZipFile(f) as bundle_zip:
-                    with bundle_zip.open("manifest.json") as manifest_stream:
-                        manifest_bytes, _ = read_limited_bytes(manifest_stream, max_file_size)
+                    with open_zip_entry(bundle_zip, "manifest.json") as manifest_stream:
+                        manifest_bytes, _ = read_limited_bytes(
+                            manifest_stream, max_manifest_size, reason=f"{manifest_limit_name}: {max_manifest_size}")
                     manifest = json.loads(manifest_bytes.decode("utf-8"))
 
                     for zip_entry_name, manifest_entry in manifest["files"].items():
@@ -189,7 +239,6 @@ def assemble_file(checksum, chunk_checksums, filename):
     """Assembles a file from chunks"""
 
     # NOTE: unimplemented checks/tricks
-    # * total file-size v.s. some max
     # * explicit check chunk availability
 
     try:
@@ -198,12 +247,18 @@ def assemble_file(checksum, chunk_checksums, filename):
         pass  # i.e. continue below
 
     chunks = Chunk.objects.filter(checksum__in=chunk_checksums)
-    chunks_dicts = {chunk.checksum: chunk for chunk in chunks}
+    max_file_size = get_settings().MAX_FILE_SIZE
+    # Read only sizes before checking the limit, so even an oversized request cannot load all its chunk data.
+    chunk_sizes = dict(chunks.values_list("checksum", "size"))
 
     # The below fails when any chunk is missing but this "can't happen" because our endpoints does the check and also
     # a renewal to avoid vacuuming. i.e. it only happens if our worker is late by 24h.
+    # Sum over the requested list so repeated chunks count each time they appear in the assembled file.
+    if sum(chunk_sizes[checksum] for checksum in chunk_checksums) > max_file_size:
+        raise ValueError("Assembled file exceeds MAX_FILE_SIZE")
+
+    chunks_dicts = {chunk.checksum: chunk for chunk in chunks}
     chunks_in_order = [chunks_dicts[checksum] for checksum in chunk_checksums]
-    max_file_size = get_settings().MAX_FILE_SIZE
 
     with tempfile.TemporaryDirectory() as tempdir:
         with tempfile.TemporaryFile(dir=tempdir) as local_file:
@@ -301,7 +356,7 @@ def vacuum_files_sync(chunk_max_days=1, file_max_days=90, max_file_count=None, m
             max_file_count=max_file_count,
             max_file_bytes=max_file_bytes,
         )
-        log_progress(f"  Deleted {num_deleted} chunks/files.")
+        log_progress(f"  Deleted {num_deleted} chunks/files/upload statuses.")
 
         if not has_more_work:
             return
@@ -314,6 +369,14 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
         num_deleted = 0
         chunk_cutoff = now - timedelta(days=chunk_max_days)
         file_cutoff = now - timedelta(days=file_max_days)
+
+        # Keep upload statuses for as long as chunks are kept. Otherwise a failed or interrupted task could make every
+        # later upload attempt return "error" or "assembling". Deleting the status allows another attempt;
+        # it does not delete a successfully stored File.
+        assembly_ids = list(DifAssembly.objects.filter(created_at__lt=chunk_cutoff)
+                            .values_list("id", flat=True)[:VACUUM_FILES_BATCH_SIZE])
+        DifAssembly.objects.filter(id__in=assembly_ids).delete()
+        num_deleted += len(assembly_ids)
 
         while num_deleted < VACUUM_FILES_BATCH_SIZE:
             ids = list(
@@ -376,6 +439,7 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
             ]
 
             if db_backed_ids:
+                DifAssembly.objects.filter(file_id__in=db_backed_ids)._raw_delete(DifAssembly.objects.db)
                 FileMetadata.objects.filter(file_id__in=db_backed_ids)._raw_delete(FileMetadata.objects.db)
                 File.objects.filter(id__in=db_backed_ids)._raw_delete(File.objects.db)
 

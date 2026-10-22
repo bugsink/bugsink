@@ -1,5 +1,96 @@
 # Changes
 
+## 2.6.2 (22 October 2026)
+
+### Security
+
+#### Artifact assembly loads chunks before checking their combined size
+
+Fix: reject oversized artifact uploads before loading their chunks into memory.
+
+An API token with `debug-files:upload` access could previously cause excessive memory use during source-map uploads.
+The assembled-file size check ran after loading the chunks. This fix also applies when experimental minidump support is
+disabled.
+
+See [the security advisory](https://github.com/bugsink/bugsink/security/advisories/GHSA-f8c4-h8vr-rh5v).
+
+#### Artifact bundle ZIP parsing can exhaust memory
+
+Fix: limit decompressed artifact-bundle manifests to 50 MiB (or `MAX_FILE_SIZE`, if lower).
+
+Manifests previously used the much larger general file-size limit, allowing an authorized uploader to cause excessive
+memory use with a highly compressed manifest.
+
+Artifact-bundle ZIP entries must now use Stored or DEFLATE compression. Rejecting BZIP2 and LZMA avoids decompressor
+memory-exhaustion bugs on affected Python versions, even when Bugsink limits how many decompressed bytes it reads.
+
+See [the security advisory](https://github.com/bugsink/bugsink/security/advisories/GHSA-mcpx-frgv-p228).
+
+#### Docker certificate trust stores affected by the eMudhra CA incident
+
+Fix: update certificate trust stores following the eMudhra/emSign CA incident.
+
+Bugsink now requires `certifi>=2026.10.19`. Docker builds also install pip 26.2.2 from a hash-verified wheel before
+downloading packages and refresh the system CA bundle. Recreate running containers from the updated image to apply
+these changes. See #559 and the [Python Packaging incident guidance](https://discuss.python.org/t/109576).
+
+See [the security advisory](https://github.com/bugsink/bugsink/security/advisories/GHSA-2r4m-8qhq-j364).
+
+### Backwards incompatible changes
+
+Python 3.10 is no longer supported. Bugsink now requires Python 3.11 or newer. Docker users do not need to change their
+host's Python installation. See #199.
+
+### Canonical API
+
+* Search issues and events using the same query syntax as the UI, and filter issues by state. See #558.
+* List issues across accessible projects in one request, and look up an event by its SDK event ID and project. See #558.
+* Retrieve issue history, including state changes, comments and author names, with cursor pagination. See #554.
+* Retrieve an issue's tag counts and grouping keys, and hourly event counts for issues and projects. See #558.
+* Include release information and mute conditions in issue responses and custom webhook payloads. See #558.
+* Document search syntax and friendly issue IDs in the API schema. See #558.
+
+### Experimental minidumps
+
+Minidump support remains experimental and requires `FEATURE_MINIDUMPS`.
+It got the following improvements in this release:
+
+* Apply `MAX_ATTACHMENT_SIZE` to direct minidump uploads, whether compressed or uncompressed, and reject oversized
+  requests with HTTP 413. The limit covers the whole decompressed multipart request, including fields and overhead.
+  `MAX_ATTACHMENT_SIZE` is now also configurable through the Docker environment.
+* Check installation and project quotas before accepting direct minidump uploads.
+* Limit decompressed source-context files to 10 MiB by default, configurable with `MAX_SOURCE_CONTEXT_FILE_SIZE`.
+  Omit source context when a file exceeds the limit. See #555.
+* Avoid unnecessary source-bundle manifest parsing by Symbolic, and only read Stored or DEFLATE ZIP entries when
+  extracting source context.
+* Parse minidumps before entering the database write transaction. Reuse debug files across matching stack frames and
+  release their contents after use, reducing repeated reads, parsing and memory use.
+* Assemble debug files in background tasks, with upload status available to `sentry-cli` while it polls for completion.
+* Fix direct minidump ingestion and avoid processing minidump-only envelopes twice. See #532.
+
+### Smaller fixes
+
+* Support source context in sectioned source maps, and match source-map debug images using a frame's `abs_path` before
+  falling back to `filename`. This fixes matching for Cloudflare Workers events. See #550 and #553.
+* Keep uploaded chunks available for other files that share them, instead of deleting them after the first assembly.
+  Chunks are removed by age-based cleanup. See #546.
+* Shed already-queued, over-quota events before entering the database write transaction, and move event schema
+  validation outside that transaction. See #494 and #557.
+* Handle multipart uploads with Chunked Transfer-Encoding under Gunicorn, rather than treating their files as absent.
+* Enforce the 1,000,000-byte body-size limit for uncompressed multipart requests when `API_LOG_UNIMPLEMENTED_CALLS` is
+  enabled. Oversized requests now receive HTTP 413. This debug logging option is disabled by default.
+* Make tag values clickable filters that narrow the current search, and add clear buttons to search fields. See #527
+  and #538.
+* Show whether events are arriving on SDK setup pages. See #531.
+* Add copy buttons next to auth tokens. See #525.
+* Ask for confirmation before leaving a team, and prevent its last accepted admin from leaving. See #534.
+* Refuse email delivery to `@bugsink.com` recipients, avoiding accidental notifications to the Bugsink maintainers.
+  See #536.
+* Reject conflicting reuse of event IDs without raising an unhandled exception, and tolerate malformed stacktrace
+  frame containers. See #537 and #533.
+* Keep Tailwind's development watcher output consistent with production builds and update development-only npm
+  dependencies. See #539, #541, #547 and #556.
+
 ## 2.6.1 (25 September 2026)
 
 ### Smaller fixes

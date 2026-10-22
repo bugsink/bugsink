@@ -3,6 +3,7 @@ from hashlib import sha1
 from gzip import GzipFile
 from io import BytesIO
 import logging
+from uuid import UUID
 
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -17,13 +18,12 @@ from bugsink.app_settings import get_settings
 from bugsink.api_capabilities import required_capability
 from bugsink.api_authorization import enforce_project_boundness, enforce_user_boundness_for_project
 from bugsink.authentication import get_token_for_authentication
-from bugsink.transaction import durable_atomic, immediate_atomic
+from bugsink.transaction import durable_atomic, immediate_atomic, delay_on_commit
 from bugsink.streams import handle_request_content_encoding, copy_stream_limited, MaxLengthExceeded
 from projects.models import Project
 
-from .models import Chunk, File, FileMetadata
-from .tasks import assemble_artifact_bundle, assemble_file
-from .minidump import extract_dif_metadata
+from .models import Chunk, DifAssembly, File
+from .tasks import assemble_artifact_bundle, assemble_dif
 
 logger = logging.getLogger("bugsink.api")
 
@@ -309,15 +309,23 @@ def difs_assemble(request, organization_slug, project_slug):
     enforce_project_boundness(request.auth_token, project)
     enforce_user_boundness_for_project(request.auth_token, "debug-files:upload", project)
 
-    # TODO move to tasks.something.delay
-    # TODO think about the right transaction around this
     data = json.loads(request.body)
+    try:
+        # TODO : .get implies "no debug_id", but in that case it's useless
+        debug_ids = {
+            checksum: UUID(info["debug_id"]) if info.get("debug_id") is not None else None
+            for checksum, info in data.items()
+        }
+    except (ValueError, TypeError, AttributeError):
+        return JsonResponse({"detail": "Invalid debug ID"}, status=400)
 
     file_checksums = set(data.keys())
 
-    existing_files = {
-        file.checksum: file
-        for file in File.objects.filter(checksum__in=file_checksums)
+    # Use values_list("checksum") so this existence check doesn't load File.data into memory.
+    existing_files = set(File.objects.filter(checksum__in=file_checksums).values_list("checksum", flat=True))
+    assemblies = {
+        (assembly.checksum, assembly.debug_id): assembly
+        for assembly in DifAssembly.objects.filter(project=project, checksum__in=file_checksums)
     }
 
     all_requested_chunks = {
@@ -331,10 +339,11 @@ def difs_assemble(request, organization_slug, project_slug):
     response = {}
 
     for file_checksum, file_info in data.items():
-        if file_checksum in existing_files:
-            file = existing_files[file_checksum]
-        else:
-            file_chunks = file_info.get("chunks", [])
+        debug_id = debug_ids[file_checksum]
+        assembly = assemblies.get((file_checksum, debug_id))
+        file_chunks = file_info.get("chunks", [])
+
+        if assembly is None and file_checksum not in existing_files:
 
             # the sentry-cli sends an empty "chunks" list when just polling for file existence; since we already handled
             # the case of existing files above, we can simply return NOT_FOUND here.
@@ -353,24 +362,19 @@ def difs_assemble(request, organization_slug, project_slug):
                 }
                 continue
 
-            file, _ = assemble_file(file_checksum, file_chunks, filename=file_info["name"])
-
-        symbolic_metadata = extract_dif_metadata(file.get_raw_data())
-
-        FileMetadata.objects.get_or_create(
-            project=project,
-            debug_id=file_info.get("debug_id"),  # TODO : .get implies "no debug_id", but in that case it's useless
-            file_type=symbolic_metadata["kind"],  # NOTE: symbolic's kind goes into file_type...
-            defaults={
-                "file": file,
-                "data": "{}",  # this is the "catch all" field but I don't think we have anything in this case.
-            }
-        )
+        if assembly is None:
+            with immediate_atomic():
+                assembly, created = DifAssembly.objects.get_or_create(
+                    project=project, checksum=file_checksum, debug_id=debug_id)
+                if created:
+                    delay_on_commit(assemble_dif, assembly.pk, file_chunks, file_info["name"])
 
         response[file_checksum] = {
-            "state": ChunkFileState.OK,
+            "state": assembly.state,
             "missingChunks": [],
         }
+        if assembly.detail:
+            response[file_checksum]["detail"] = assembly.detail
 
     return JsonResponse(response)
 
@@ -422,10 +426,13 @@ def api_catch_all(request, subpath):
 
     content_type = request.META.get("CONTENT_TYPE", "")
     if content_type == "application/x-www-form-urlencoded" or content_type.startswith("multipart/form-data"):
-        if request.POST:
-            lines.append(f"  POST:   {request.POST.dict()}")
-        if request.FILES:
-            lines.append(f"  FILES:  {[f.name for f in request.FILES.values()]}")
+        try:
+            if request.POST:
+                lines.append(f"  POST:   {request.POST.dict()}")
+            if request.FILES:
+                lines.append(f"  FILES:  {[f.name for f in request.FILES.values()]}")
+        except MaxLengthExceeded as e:
+            return JsonResponse({"detail": str(e)}, status=413)
 
     else:
         shown_pretty = False

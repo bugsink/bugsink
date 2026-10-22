@@ -87,6 +87,18 @@ class CustomWSGIRequest(WSGIRequest):
         if "CONTENT_LENGTH" not in environ and "HTTP_TRANSFER_ENCODING" in environ:
             self._stream = NoopClose(self.environ["wsgi.input"])
 
+    def parse_file_upload(self, META, post_data):
+        # The stream fix above is not enough for FILES: Django's multipart parser also treats a missing Content-Length
+        # as an empty body. This affects Chunked Transfer-Encoding; see https://code.djangoproject.com/ticket/35289.
+        if "CONTENT_LENGTH" not in META and META.get("HTTP_TRANSFER_ENCODING", "").lower() == "chunked":
+            # Supply a length so Django parses the body. Using a large placeholder means even small uploads go to disk.
+            # that's an acceptable tradeoff for a rare case (Chunked TE) for us. Copy META to give the parser its
+            # workaround without putting a fake header into the request itself.
+            META = META.copy()
+            META["CONTENT_LENGTH"] = str(pow(2, 32) - 1)
+
+        return super().parse_file_upload(META, post_data)
+
     def get_host(self):
         """
         We override this method to provide a more informative error message when the host is disallowed, i.e. we include
