@@ -37,7 +37,7 @@ from bugsink.streams import MaxLengthExceeded
 from .models import Chunk, File, FileMetadata, get_file_metadata_for_debug_ids
 from .minidump import event_threads_for_process_state
 from .storage_registry import override_object_storages
-from .tasks import assemble_artifact_bundle, assemble_file, create_file_from_local_file
+from .tasks import assemble_file, create_file_from_local_file, process_artifact_bundle
 from .views import CHUNK_UPLOAD_SIZE
 
 
@@ -471,7 +471,7 @@ class FilesTests(TransactionTestCase):
         Chunk.objects.create(checksum=checksum, size=len(data), data=data)
 
         with self.assertRaisesMessage(NotImplementedError, "Unsupported ZIP compression method"):
-            assemble_artifact_bundle(checksum, [checksum], [self.project.id])
+            process_artifact_bundle(checksum, [checksum], [self.project.id])
 
     def test_artifact_bundle_rejects_oversized_manifest(self):
         bundle = BytesIO()
@@ -488,15 +488,15 @@ class FilesTests(TransactionTestCase):
         Chunk.objects.create(checksum=checksum, size=len(data), data=data)
 
         with self.assertRaisesMessage(MaxLengthExceeded, "MAX_MANIFEST_SIZE: 52428800"):
-            assemble_artifact_bundle(checksum, [checksum], [self.project.id])
+            process_artifact_bundle(checksum, [checksum], [self.project.id])
 
         with bugsink_override_settings(MAX_FILE_SIZE=1024 * 1024):
             with self.assertRaisesMessage(MaxLengthExceeded, "MAX_FILE_SIZE: 1048576"):
-                assemble_artifact_bundle(checksum, [checksum], [self.project.id])
+                process_artifact_bundle(checksum, [checksum], [self.project.id])
 
         with bugsink_override_settings(MAX_FILE_SIZE=50 * 1024 * 1024):
             with self.assertRaisesMessage(MaxLengthExceeded, "MAX_FILE_SIZE: 52428800"):
-                assemble_artifact_bundle(checksum, [checksum], [self.project.id])
+                process_artifact_bundle(checksum, [checksum], [self.project.id])
 
     def test_artifact_bundle_rejects_extracted_file_larger_than_max_file_size(self):
         bundle = BytesIO()
@@ -530,13 +530,22 @@ class FilesTests(TransactionTestCase):
                     )
                     self.assertEqual(200, response.status_code)
 
-                    with self.assertRaises(MaxLengthExceeded):
-                        self.client.post(
-                            "/api/0/organizations/anyorg/artifactbundle/assemble/",
-                            json.dumps({"checksum": checksum, "chunks": [checksum], "projects": [self.project.slug]}),
-                            content_type="application/json",
-                            headers=self.token_headers,
-                        )
+                    response = self.client.post(
+                        "/api/0/organizations/anyorg/artifactbundle/assemble/",
+                        json.dumps({"checksum": checksum, "chunks": [checksum], "projects": [self.project.slug]}),
+                        content_type="application/json",
+                        headers=self.token_headers,
+                    )
+                    self.assertEqual(200, response.status_code)
+
+                    response = self.client.post(
+                        "/api/0/organizations/anyorg/artifactbundle/assemble/",
+                        json.dumps({"checksum": checksum, "chunks": [checksum], "projects": [self.project.slug]}),
+                        content_type="application/json",
+                        headers=self.token_headers,
+                    )
+                    self.assertEqual("error", response.json()["state"])
+                    self.assertIn("MAX_FILE_SIZE", response.json()["detail"])
 
     def test_artifact_bundle_assemble_does_not_use_checksum_as_temp_filename(self):
         data = b"hello world"
