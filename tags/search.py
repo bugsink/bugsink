@@ -138,6 +138,10 @@ def _search(m2m_qs, fk_fieldname, project, obj_list, q):
 
     clauses = []
     for key, value in parsed.tags.items():
+        if project is None:
+            matching_tags = m2m_qs.filter(value__key__key=key, value__value=value)
+            clauses.append(Q(id__in=Subquery(matching_tags.values_list(fk_fieldname, flat=True))))
+            continue
         try:
             # Since we have project as a field on TagValue, we _could_ filter on project directly; with our current set
             # of indexes the below formulation is a nice way to reuse the index on TagKey (project, key) though.
@@ -175,6 +179,7 @@ def _search(m2m_qs, fk_fieldname, project, obj_list, q):
 
 
 def search_issues(project, issue_list, q):
+    # With project=None, search across projects within the supplied issue queryset.
     return _search(IssueTag.objects.all(), "issue_id", project, issue_list, q)
 
 

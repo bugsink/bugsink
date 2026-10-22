@@ -2,17 +2,20 @@ from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from rest_framework.test import APIClient
 
 from bsmain.models import AuthToken
-from projects.models import Project, ProjectMembership
+from projects.models import Project, ProjectMembership, ProjectVisibility
+from teams.models import Team, TeamMembership
 from releases.models import create_release_if_needed
 from issues.models import Issue, TurningPoint, TurningPointKind
 from issues.factories import get_or_create_issue
 from events.factories import create_event, create_event_data
+from tags.models import store_tags
 
-from issues.api_views import IssueHistoryViewSet, IssueViewSet
+from issues.api_views import IssueHistoryViewSet, IssueRelatedPagination, IssueViewSet
 
 
 class IssueApiTests(TransactionTestCase):
@@ -43,10 +46,65 @@ class IssueApiTests(TransactionTestCase):
         self.issue0.refresh_from_db()
         self.issue1.refresh_from_db()
 
-    def test_list_requires_project(self):
+    def test_list_without_project_defaults_to_recent_activity(self):
         response = self.client.get(reverse("api:issue-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [str(self.issue1.id), str(self.issue0.id)], [row["id"] for row in response.json()["results"]])
+
+    def test_global_list_hides_deleted_issues_and_projects(self):
+        other_project = Project.objects.create(name="Other")
+        other, _ = get_or_create_issue(other_project)
+        deleted_project = Project.objects.create(name="Deleted", is_deleted=True)
+        get_or_create_issue(deleted_project)
+        Issue.objects.filter(pk=self.issue1.pk).update(is_deleted=True)
+
+        response = self.client.get(reverse("api:issue-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            {str(self.issue0.id), str(other.id)}, {row["id"] for row in response.json()["results"]})
+
+    def test_global_list_rejects_digest_order(self):
+        response = self.client.get(reverse("api:issue-list"), {"sort": "digest_order"})
         self.assertEqual(response.status_code, 400)
-        self.assertEqual({"project": ["This field is required."]}, response.json())
+        self.assertEqual({"sort": ["digest_order requires a single project."]}, response.json())
+
+    def test_global_search_and_state(self):
+        other_project = Project.objects.create(name="Other")
+        other, _ = get_or_create_issue(other_project)
+        for issue in [self.issue0, self.issue1, other]:
+            Issue.objects.filter(pk=issue.pk).update(calculated_type="TypeError")
+            store_tags(create_event(issue=issue), issue, {"environment": "production"})
+        Issue.objects.filter(pk=self.issue1.pk).update(is_resolved=True)
+
+        response = self.client.get(
+            reverse("api:issue-list"), {"q": "TypeError environment:production", "state": "open"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual({str(self.issue0.id), str(other.id)}, {row["id"] for row in response.json()["results"]})
+
+    def test_personal_global_list_requires_accepted_project_membership(self):
+        user = get_user_model().objects.create_user(username="global-reader")
+        membership = ProjectMembership.objects.create(project=self.project, user=user, accepted=True)
+        team = Team.objects.create(name="Readers")
+        TeamMembership.objects.create(team=team, user=user, accepted=True)
+        team_project = Project.objects.create(name="Team only", team=team)
+        discoverable = Project.objects.create(name="Discoverable", visibility=ProjectVisibility.DISCOVERABLE)
+        pending = Project.objects.create(name="Pending")
+        ProjectMembership.objects.create(project=pending, user=user, accepted=False)
+        for project in [team_project, discoverable, pending]:
+            issue, _ = get_or_create_issue(project)
+            store_tags(create_event(issue=issue), issue, {"environment": "production"})
+        store_tags(create_event(issue=self.issue0), self.issue0, {"environment": "production"})
+        token = AuthToken.objects.create(is_user_bound=True, user=user, issues_read=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        response = self.client.get(reverse("api:issue-list"), {"q": "environment:production"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([str(self.issue0.id)], [row["id"] for row in response.json()["results"]])
+        membership.delete()
+        response = self.client.get(reverse("api:issue-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"], [])
 
     def test_list_by_project_default_asc(self):
         response = self.client.get(reverse("api:issue-list"), {"project": str(self.project.id)})
@@ -61,6 +119,53 @@ class IssueApiTests(TransactionTestCase):
         ids = [row["id"] for row in response.json()["results"]]
         self.assertEqual(ids[0], str(self.issue1.id))
         self.assertEqual(ids[1], str(self.issue0.id))
+
+    def test_list_by_state(self):
+        Issue.objects.filter(pk=self.issue1.pk).update(is_resolved=True)
+        muted, _ = get_or_create_issue(self.project, create_event_data(exception_type="Muted"))
+        Issue.objects.filter(pk=muted.pk).update(is_muted=True)
+
+        for state, expected in [
+            ("all", [self.issue0, self.issue1, muted]),
+            ("open", [self.issue0]),
+            ("unresolved", [self.issue0, muted]),
+            ("resolved", [self.issue1]),
+            ("muted", [muted]),
+        ]:
+            response = self.client.get(reverse("api:issue-list"), {"project": self.project.id, "state": state})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual([str(issue.id) for issue in expected], [r["id"] for r in response.json()["results"]])
+
+    def test_list_rejects_bad_state(self):
+        response = self.client.get(reverse("api:issue-list"), {"project": self.project.id, "state": "unknown"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            {"state": ["Must be 'all', 'open', 'unresolved', 'resolved', or 'muted'."]}, response.json())
+
+    def test_list_search(self):
+        Issue.objects.filter(pk=self.issue0.pk).update(calculated_type="E0")
+        Issue.objects.filter(pk=self.issue1.pk).update(calculated_type="E1")
+        store_tags(create_event(issue=self.issue0), self.issue0, {"environment": "production"})
+        store_tags(create_event(issue=self.issue1), self.issue1, {"environment": "production"})
+        other_project = Project.objects.create(name="Other")
+        other, _ = get_or_create_issue(other_project, create_event_data(exception_type="E0"))
+        Issue.objects.filter(pk=other.pk).update(calculated_type="E0")
+        store_tags(create_event(issue=other), other, {"environment": "production"})
+        params = {"project": self.project.id, "q": "E0 environment:production", "state": "open"}
+
+        response = self.client.get(reverse("api:issue-list"), params)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([str(self.issue0.id)], [r["id"] for r in response.json()["results"]])
+
+        Issue.objects.filter(pk=self.issue0.pk).update(is_resolved=True)
+        response = self.client.get(reverse("api:issue-list"), params)
+        self.assertEqual(response.json()["results"], [])
+
+    def test_list_blank_search(self):
+        response = self.client.get(reverse("api:issue-list"), {"project": self.project.id, "q": " \t "})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [str(self.issue0.id), str(self.issue1.id)], [row["id"] for row in response.json()["results"]])
 
     def test_list_by_digested_event_count(self):
         Issue.objects.filter(id=self.issue0.id).update(digested_event_count=10)
@@ -91,6 +196,18 @@ class IssueApiTests(TransactionTestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], str(self.issue0.id))
+        self.assertEqual(response.json()["fixed_at"], [])
+        self.assertEqual(response.json()["events_at"], [])
+        self.assertIsNone(response.json()["unmute_after"])
+        self.assertEqual(response.json()["unmute_on_volume_based_conditions"], [])
+
+    def test_release_versions_in_list_and_detail(self):
+        Issue.objects.filter(pk=self.issue0.pk).update(events_at="\n1.0.0\n1.1.0\n", fixed_at="1.1.0\n")
+        detail = self.client.get(reverse("api:issue-detail", args=[self.issue0.id])).json()
+        listing = self.client.get(reverse("api:issue-list"), {"project": self.project.id}).json()["results"][0]
+        for result in [detail, listing]:
+            self.assertEqual(result["events_at"], ["", "1.0.0", "1.1.0"])
+            self.assertEqual(result["fixed_at"], ["1.1.0"])
 
     def test_friendly_id_alias(self):
         event = create_event(issue=self.issue0)
@@ -120,6 +237,43 @@ class IssueApiTests(TransactionTestCase):
         url = reverse("api:issue-detail", args=[self.issue0.id])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 404)
+        for action in ["tags", "grouping", "event-counts"]:
+            response = self.client.get(reverse("api:issue-" + action, args=[self.issue0.id]))
+            self.assertEqual(response.status_code, 404)
+
+    def test_tag_values_and_counts(self):
+        store_tags(create_event(issue=self.issue0), self.issue0, {"environment": "production", "release": "1.0"})
+        store_tags(create_event(issue=self.issue0), self.issue0, {"environment": "production"})
+        store_tags(create_event(issue=self.issue0), self.issue0, {"environment": "staging"})
+        store_tags(create_event(issue=self.issue1), self.issue1, {"environment": "other"})
+
+        response = self.client.get(reverse("api:issue-tags", args=[self.issue0.friendly_id()]), {"key": "environment"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [("environment", "production", 2), ("environment", "staging", 1)],
+            [(row["key"], row["value"], row["count"]) for row in response.json()["results"]],
+        )
+
+    def test_grouping_keys(self):
+        grouping = self.issue0.grouping_set.get()
+        response = self.client.get(reverse("api:issue-grouping", args=[self.issue0.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([{
+            "id": grouping.id,
+            "grouping_key": grouping.grouping_key,
+            "grouping_mechanism": grouping.grouping_mechanism,
+        }], response.json()["results"])
+
+    def test_tag_values_and_grouping_require_events_read(self):
+        token = AuthToken.objects.create(issues_read=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        for action in ["tags", "grouping"]:
+            self.assertEqual(403, self.client.get(reverse("api:issue-" + action, args=[self.issue0.id])).status_code)
+
+        token = AuthToken.objects.create(events_read=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        for action in ["tags", "grouping"]:
+            self.assertEqual(200, self.client.get(reverse("api:issue-" + action, args=[self.issue0.id])).status_code)
 
     def test_list_rejects_bad_sort(self):
         r = self.client.get(
@@ -165,6 +319,7 @@ class IssueApiTests(TransactionTestCase):
         self.assertTrue(self.issue0.is_resolved)
         self.assertFalse(self.issue0.is_resolved_unconditionally)
         self.assertEqual(self.issue0.fixed_at, "1.0.0\n")
+        self.assertEqual(response.json()["fixed_at"], ["1.0.0"])
 
     def test_resolve_latest_allows_existing_occurrence(self):
         create_release_if_needed(self.project, "1.0.0", timezone.now())
@@ -227,6 +382,7 @@ class IssueApiTests(TransactionTestCase):
         self.issue0.refresh_from_db()
         self.assertTrue(self.issue0.is_muted)
         self.assertIsNotNone(self.issue0.unmute_after)
+        self.assertEqual(parse_datetime(response.json()["unmute_after"]), self.issue0.unmute_after)
 
     def test_mute_until(self):
         response = self.client.post(
@@ -241,6 +397,10 @@ class IssueApiTests(TransactionTestCase):
         self.assertEqual(
             self.issue0.unmute_on_volume_based_conditions,
             '[{"period": "hour", "nr_of_periods": 1, "volume": 5}]',
+        )
+        self.assertEqual(
+            response.json()["unmute_on_volume_based_conditions"],
+            [{"period": "hour", "nr_of_periods": 1, "volume": 5}],
         )
 
     def test_mute_for_accepts_non_ui_period(self):
@@ -455,6 +615,7 @@ class IssueApiTests(TransactionTestCase):
             is_project_bound=True,
             project=self.project,
             issues_read=True,
+            events_read=True,
             issues_triage=True,
         )
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
@@ -474,6 +635,13 @@ class IssueApiTests(TransactionTestCase):
         self.assertEqual(403, foreign_detail.status_code)
         self.assertEqual(403, foreign_mute.status_code)
         self.assertEqual(403, foreign_history.status_code)
+        global_list = self.client.get(reverse("api:issue-list"))
+        self.assertEqual(200, global_list.status_code)
+        self.assertEqual(
+            {str(self.issue0.id), str(self.issue1.id)}, {row["id"] for row in global_list.json()["results"]})
+        for action in ["tags", "grouping", "event-counts"]:
+            self.assertEqual(200, self.client.get(reverse("api:issue-" + action, args=[self.issue0.id])).status_code)
+            self.assertEqual(403, self.client.get(reverse("api:issue-" + action, args=[other_issue.id])).status_code)
         other_issue.refresh_from_db()
         self.assertFalse(other_issue.is_muted)
 
@@ -505,12 +673,15 @@ class IssueApiTests(TransactionTestCase):
     def test_personal_token_uses_current_project_membership(self):
         user = get_user_model().objects.create_user(username="issue-api-user")
         membership = ProjectMembership.objects.create(project=self.project, user=user, accepted=True)
-        token = AuthToken.objects.create(is_user_bound=True, user=user, issues_read=True, issues_triage=True)
+        token = AuthToken.objects.create(
+            is_user_bound=True, user=user, issues_read=True, events_read=True, issues_triage=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
 
         self.assertEqual(200, self.client.get(reverse("api:issue-detail", args=[self.issue0.id])).status_code)
         history_url = reverse("api:issue-history-list")
         self.assertEqual(200, self.client.get(history_url, {"issue": self.issue0.id}).status_code)
+        for action in ["tags", "grouping", "event-counts"]:
+            self.assertEqual(200, self.client.get(reverse("api:issue-" + action, args=[self.issue0.id])).status_code)
 
         membership.accepted = False
         membership.save(update_fields=["accepted"])
@@ -522,6 +693,8 @@ class IssueApiTests(TransactionTestCase):
         )
         self.assertEqual(403, self.client.post(reverse("api:issue-mute", args=[self.issue0.id])).status_code)
         self.assertEqual(403, self.client.get(history_url, {"issue": self.issue0.id}).status_code)
+        for action in ["tags", "grouping", "event-counts"]:
+            self.assertEqual(403, self.client.get(reverse("api:issue-" + action, args=[self.issue0.id])).status_code)
         self.issue0.refresh_from_db()
         self.assertFalse(self.issue0.is_muted)
 
@@ -547,6 +720,34 @@ class IssueApiTests(TransactionTestCase):
 
         self.assertEqual(200, own_response.status_code)
         self.assertEqual(403, foreign_response.status_code)
+        global_list = self.client.get(reverse("api:issue-list"))
+        self.assertEqual(200, global_list.status_code)
+        self.assertEqual(
+            {str(self.issue0.id), str(self.issue1.id)}, {row["id"] for row in global_list.json()["results"]})
+
+
+class IssueTagPaginationTests(TransactionTestCase):
+    def setUp(self):
+        self.client = APIClient()
+        token = AuthToken.objects.create(events_read=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        self.old_size = IssueRelatedPagination.page_size
+        IssueRelatedPagination.page_size = 2
+
+    def tearDown(self):
+        IssueRelatedPagination.page_size = self.old_size
+
+    def test_tag_values_two_pages(self):
+        issue, _ = get_or_create_issue()
+        for value in ["production", "staging", "test"]:
+            store_tags(create_event(issue=issue), issue, {"environment": value})
+        store_tags(create_event(issue=issue), issue, {"release": "1.0"})
+
+        r1 = self.client.get(reverse("api:issue-tags", args=[issue.id]), {"key": "environment"})
+        self.assertEqual(["production", "staging"], [row["value"] for row in r1.json()["results"]])
+        r2 = self.client.get(r1.json()["next"])
+        self.assertEqual(["test"], [row["value"] for row in r2.json()["results"]])
+        self.assertIsNone(r2.json()["next"])
 
 
 class IssueHistoryPaginationTests(TransactionTestCase):
@@ -658,6 +859,22 @@ class IssuePaginationTests(TransactionTestCase):
 
         r2 = self.client.get(r1.json()["next"])
         self.assertEqual(self._ids(r2), [str(self._idx_by_digest(issues, 3)), str(self._idx_by_digest(issues, 4))])
+
+    def test_global_last_seen_desc(self):
+        project, issues = self._make_issues()
+        other, _ = get_or_create_issue(Project.objects.create(name="Other"))
+        other.last_seen = max(issue.last_seen for issue in issues) + timezone.timedelta(minutes=1)
+        other.save()
+
+        r1 = self.client.get(reverse("api:issue-list"), {"state": "open"})
+        self.assertEqual(self._ids(r1), [str(other.id), str(self._idx_by_last_seen(issues, 4))])
+        r2 = self.client.get(r1.json()["next"])
+        self.assertEqual(
+            self._ids(r2), [str(self._idx_by_last_seen(issues, 3)), str(self._idx_by_last_seen(issues, 2))])
+        r3 = self.client.get(r2.json()["next"])
+        self.assertEqual(
+            self._ids(r3), [str(self._idx_by_last_seen(issues, 1)), str(self._idx_by_last_seen(issues, 0))])
+        self.assertIsNone(r3.json()["next"])
 
     def test_digest_order_desc(self):
         proj, issues = self._make_issues()

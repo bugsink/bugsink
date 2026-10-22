@@ -101,6 +101,8 @@ SPECTACULAR_SETTINGS = {
         {"bearerAuth": []}
     ],
     "ENUM_NAME_OVERRIDES": {
+        "GroupingKeyMechanismEnum": "issues.grouping_mechanisms.GROUPING_CHOICES",
+        "GroupingMechanismEnum": "issues.grouping_mechanisms.GROUPING_MECHANISM_CHOICES",
         "TeamVisibilityEnum": ["joinable", "discoverable", "hidden"],
         "ProjectVisibilityEnum": ["joinable", "discoverable", "team_members"],
     },

@@ -7,13 +7,29 @@ from rest_framework import serializers
 
 from bugsink.api_serializers import UTCModelSerializer
 from bugsink.period_utils import DATEUTIL_KWARGS_MAP
+from tags.models import IssueTag
 
-from .models import Issue, TurningPoint, TurningPointKind, issue_lookup_kwargs
+from .models import Grouping, Issue, TurningPoint, TurningPointKind, issue_lookup_kwargs
+
+
+class UnmuteVolumeConditionSerializer(serializers.Serializer):
+    period = serializers.CharField(help_text="Period unit, e.g. hour or day.")
+    nr_of_periods = serializers.IntegerField()
+    volume = serializers.IntegerField()
 
 
 class IssueSerializer(UTCModelSerializer):
     # grouping_keys = serializers.SerializerMethodField()  # read-only list of strings
     friendly_id = serializers.CharField(read_only=True)
+    fixed_at = serializers.ListField(
+        child=serializers.CharField(allow_blank=True), source="get_fixed_at", read_only=True,
+        help_text="Release versions at which this issue was marked fixed.")
+    events_at = serializers.ListField(
+        child=serializers.CharField(allow_blank=True), source="get_events_at", read_only=True,
+        help_text="Release versions in which events were seen. An empty string means no release was supplied.")
+    unmute_on_volume_based_conditions = UnmuteVolumeConditionSerializer(
+        source="get_unmute_on_volume_based_conditions", many=True, read_only=True,
+        help_text="Unmute when any condition is met: at least volume events within nr_of_periods of period.")
 
     class Meta:
         model = Issue
@@ -40,16 +56,34 @@ class IssueSerializer(UTCModelSerializer):
             "is_resolved",
             "is_resolved_unconditionally",
             "is_resolved_by_next_release",
-            # "fixed_at",  too "raw"? i.e. too implementation-tied?
-            # "events_at",  too "raw"? i.e. too implementation-tied?
+            "fixed_at",
+            "events_at",
             "is_muted",
-            # "unmute_on_volume_based_conditions",  too "raw"? i.e. too implementation-tied?
+            "unmute_after",
+            "unmute_on_volume_based_conditions",
             # "grouping_keys",  TODO (likely) once we have the "expand" idea implemented
         ]
 
     # def get_grouping_keys(self, obj):
     #     # TODO: prefetch grouping_key in IssueViewSet
     #     return list(obj.grouping_set.values_list("grouping_key", flat=True))
+
+
+class IssueTagSerializer(serializers.ModelSerializer):
+    key = serializers.CharField(source="key.key", read_only=True)
+    value = serializers.CharField(source="value.value", read_only=True)
+
+    class Meta:
+        model = IssueTag
+        fields = ["id", "key", "value", "count"]
+        read_only_fields = fields
+
+
+class GroupingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Grouping
+        fields = ["id", "grouping_key", "grouping_mechanism"]
+        read_only_fields = fields
 
 
 class IssueMuteForSerializer(serializers.Serializer):

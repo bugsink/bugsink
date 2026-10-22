@@ -1,10 +1,13 @@
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_pagination import AscDescCursorPagination
 from bugsink.api_capabilities import lookup, token_guard
 from bugsink.api_mixins import ExpandViewSetMixin, AtomicRequestMixin
+from events.api_counts import EventCountRangeSerializer, EventCountsSerializer, event_counts_response
+from events.models import ProjectEventCountsPerHour
 
 from .models import Project, projects_visible_to_user
 from .serializers import (
@@ -76,6 +79,21 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
     )
     def retrieve(self, request, project, *args, **kwargs):
         return Response(self.get_serializer(project).data)
+
+    @token_guard("projects:read", guarding_project=lookup(url="pk"))
+    @extend_schema(
+        summary="Retrieve project event counts",
+        description=(
+            "Hourly counts by digest time, including evicted events. Empty hours have count zero. "
+            "Defaults to 24 hours, including the incomplete current hour. "
+            "Ranges must use UTC hour boundaries and fall within the last 90 days."
+        ),
+        parameters=[EventCountRangeSerializer],
+        responses=EventCountsSerializer,
+    )
+    @action(detail=True, methods=["get"], url_path="event-counts", pagination_class=None)
+    def event_counts(self, request, project, pk=None):
+        return event_counts_response(ProjectEventCountsPerHour.objects.filter(project=project), request.query_params)
 
     @token_guard("projects:manage", guarding_project=lookup(url="pk"))
     @extend_schema(

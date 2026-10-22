@@ -18,12 +18,16 @@ EXPECTED_CAPABILITY_OPERATIONS = {
         "issues:read": {
             "GET /api/canonical/0/issues/",
             "GET /api/canonical/0/issues/{id}/",
+            "GET /api/canonical/0/issues/{id}/event-counts/",
             "GET /api/canonical/0/issue-history/",
         },
         "events:read": {
             "GET /api/canonical/0/events/",
+            "GET /api/canonical/0/events/lookup/",
             "GET /api/canonical/0/events/{id}/",
             "GET /api/canonical/0/events/{id}/stacktrace/",
+            "GET /api/canonical/0/issues/{id}/tags/",
+            "GET /api/canonical/0/issues/{id}/grouping/",
         },
         "issues:comment": {
             "POST /api/canonical/0/issue-comments/",
@@ -51,6 +55,7 @@ EXPECTED_CAPABILITY_OPERATIONS = {
         "projects:read": {
             "GET /api/canonical/0/projects/",
             "GET /api/canonical/0/projects/{id}/",
+            "GET /api/canonical/0/projects/{id}/event-counts/",
         },
         "projects:manage": {
             "POST /api/canonical/0/projects/",
