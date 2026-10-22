@@ -16,7 +16,7 @@ Code contributions are welcome! We use the GitHub PR process to review and merge
 
 #### Prerequisites
 
-* Python 3.10 or higher (3.10, 3.11, 3.12, 3.13, or 3.14)
+* Python 3.11, 3.12, 3.13, or 3.14
 * Git
 * Optional: MySQL or PostgreSQL (SQLite works for local development)
 
