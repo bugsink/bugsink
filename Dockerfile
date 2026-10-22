@@ -10,6 +10,8 @@ ARG PYTHON_VERSION=3.12
 # Build image: non-slim, in particular to build the mysqlclient wheel
 FROM python:${PYTHON_VERSION} AS build
 
+RUN python -m pip install "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+
 # mysqlclient is not available as a .whl on PyPI, so we need to build it from
 # source and store the .whl. This is both the most expensive part of the build
 # and the one that is least likely to change, so we do it first.
@@ -19,6 +21,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Actual image (based on slim)
 FROM python:${PYTHON_VERSION}-slim
 
+RUN python -m pip install "pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70"
+
 ENV PYTHONUNBUFFERED=1
 
 ENV PORT=8000
@@ -26,7 +30,7 @@ ENV PORT=8000
 WORKDIR /app
 
 # Runtime shared library the mysqlclient wheel links against.
-RUN apt update && apt install libmariadb3 -y \
+RUN apt update && apt install libmariadb3 ca-certificates -y \
  && rm -rf /var/lib/apt/lists/*
 
 # Install all deps and strip native extensions in a single layer, so only the
