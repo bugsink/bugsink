@@ -8,6 +8,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 
 import symbolic
 from django.test import tag
+from django.utils._os import safe_join
 
 from bugsink.app_settings import override_settings
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
@@ -149,7 +150,9 @@ int main(void) {
         )
 
     def store_file(self, debug_id, file_type, data):
-        file = File.objects.create(checksum=sha1(data).hexdigest(), filename=file_type, size=len(data), data=data)
+        # usedforsecurity=False: SHA-1 matches the upload protocol; here it only identifies test files.
+        file = File.objects.create(
+            checksum=sha1(data, usedforsecurity=False).hexdigest(), filename=file_type, size=len(data), data=data)
         FileMetadata.objects.create(
             project=self.project, debug_id=symbolic.debuginfo.id_from_breakpad(debug_id),
             file_type=file_type, file=file)
@@ -265,7 +268,7 @@ int main(void) {
         self.store_file(debug_id, "dbg", b"""MODULE Linux x86_64 7B7D1968FF0D47AE4366E9C3A7E1B6750 null_read_av
 STACK CFI INIT 2170 8 .cfa: $rsp 8 + .ra: .cfa -8 + ^
 """)
-        filename = os.path.join(os.getenv("SAMPLES_DIR", "../event-samples"), "minidumps", "linux_null_read_av.dmp")
+        filename = safe_join(os.getenv("SAMPLES_DIR", "../event-samples"), "minidumps", "linux_null_read_av.dmp")
         with open(filename, "rb") as f:
             minidump_bytes = f.read()
 
