@@ -12,6 +12,7 @@ Brotli==1.2.*
 python-dateutil==2.9.*
 whitenoise==6.12.*
 requests==2.34.*
+certifi>=2026.10.19
 monofy==1.2.*
 user-agents==2.2.*
 fastjsonschema==2.22.*
