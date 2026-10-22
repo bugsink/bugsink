@@ -1,17 +1,11 @@
 from collections import defaultdict
-from enum import Enum
 import uuid
-import hashlib
 import os
 import logging
 from datetime import datetime, timezone
 import json
-import jsonschema
-import fastjsonschema
 
-from django.conf import settings
 from django.shortcuts import get_object_or_404
-from django.db.models import Max, F, Sum
 from django.views import View
 from django.core.exceptions import ValidationError, PermissionDenied
 from django.http import HttpResponse, JsonResponse
@@ -23,26 +17,13 @@ from compat.auth import parse_auth_header_value
 from compat.dsn import get_sentry_key, build_dsn
 
 from projects.models import Project
-from issues.models import Issue, IssueStateManager, Grouping, TurningPoint, TurningPointKind
-from issues.grouping_mechanisms import (
-    GROUPING_TRANSITION_PERIOD, BUGSINK_GROUPING_V1, MECHANISM_INDEPENDENT_GROUPING)
-from issues.utils import get_type_and_value_for_data, get_key_with_mechanism_for_data, get_denormalized_fields_for_data
-from issues.regressions import issue_is_regression
-
-from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.streams import (
     content_encoding_reader, MaxDataReader, MaxDataWriter, NullWriter, MaxLengthExceeded,
     handle_request_content_encoding)
 from bugsink.app_settings import get_settings
 from bugsink.utils import set_path
 
-from events.models import Event
-from events.retention import evict_for_max_events, should_evict, EvictionCounts
-from events.usage import record_event_counts
-from releases.models import create_release_if_needed
-from alerts.tasks import send_new_issue_alert, send_regression_alert
-from compat.timestamp import format_timestamp, parse_timestamp
-from tags.models import digest_tags
+from compat.timestamp import format_timestamp
 from bsmain.utils import b108_makedirs
 from phonehome.models import Installation
 
@@ -51,7 +32,7 @@ from sentry_sdk_extensions import capture_or_log_exception
 from .parsers import StreamingEnvelopeParser, ParseError
 from .filestore import get_filename_for_event_id
 from .tasks import digest
-from .event_counter import check_for_thresholds, count_for_thresholds, filter_for_periods, state_for_threshold
+from .digestion import is_quota_still_exceeded
 from .models import StoreEnvelope, DontStoreEnvelope, Envelope
 
 
@@ -61,131 +42,8 @@ HTTP_404_NOT_FOUND = 404
 HTTP_413_CONTENT_TOO_LARGE = 413
 HTTP_501_NOT_IMPLEMENTED = 501
 
-class GroupingPath(Enum):
-    FOUND = "found"
-    NEW = "new"
-    ATTACH = "attach"
-
-
-QUOTA_THRESHOLDS = {
-    "Installation": [
-        ("minute", 5, "MAX_EVENTS_PER_5_MINUTES"),
-        ("hour", 1, "MAX_EVENTS_PER_HOUR",),
-        ("month", 1, "MAX_EVENTS_PER_MONTH"),
-    ],
-    "Project": [
-        ("minute", 5, "MAX_EVENTS_PER_PROJECT_PER_5_MINUTES"),
-        ("hour", 1, "MAX_EVENTS_PER_PROJECT_PER_HOUR",),
-        ("month", 1, "MAX_EVENTS_PER_PROJECT_PER_MONTH"),
-    ],
-}
-
 logger = logging.getLogger("bugsink.ingest")
 performance_logger = logging.getLogger("bugsink.performance.ingest")
-
-
-def update_issue_counts(per_issue):
-    # we minimize the number of queries by grouping them by count; in the worst case we'll need 32 queries for 500
-    # event evictions (because 1 + 2 + ... + 31 + 32 > 500)
-    by_count = {}
-    for issue_id, count in per_issue.items():
-        by_count.setdefault(count, []).append(issue_id)
-
-    for count, issue_ids in by_count.items():
-        Issue.objects.filter(id__in=issue_ids).update(stored_event_count=F("stored_event_count") - count)
-
-
-def get_grouping_key_hash(grouping_key):
-    return hashlib.sha256(grouping_key.encode()).hexdigest()
-
-
-def get_existing_grouping(project_id, key_with_mechanism):
-    # helper to get the existing grouping for a given key/mechanism pair, if it exists.
-    return Grouping.objects.filter(
-        project_id=project_id,
-        grouping_key=key_with_mechanism.key,
-        grouping_key_hash=get_grouping_key_hash(key_with_mechanism.key),
-        grouping_mechanism=key_with_mechanism.mechanism,
-    ).first()
-
-
-def get_legacy_grouping_for_mechanism_independent_key(project_id, key_with_mechanism):
-    return Grouping.objects.filter(
-        project_id=project_id,
-        grouping_key=key_with_mechanism.key,
-        grouping_key_hash=get_grouping_key_hash(key_with_mechanism.key),
-        grouping_mechanism=BUGSINK_GROUPING_V1,
-    ).first()
-
-
-def create_grouping(project_id, key_with_mechanism, issue):
-    return Grouping.objects.create(
-        project_id=project_id,
-        grouping_key=key_with_mechanism.key,
-        grouping_key_hash=get_grouping_key_hash(key_with_mechanism.key),
-        grouping_mechanism=key_with_mechanism.mechanism,
-        issue=issue,
-    )
-
-
-def grouping_transition_is_active(project, digested_at):
-    if project.previous_grouping_mechanism is None or project.grouping_mechanism_upgraded_at is None:
-        return False
-
-    return digested_at <= project.grouping_mechanism_upgraded_at + GROUPING_TRANSITION_PERIOD
-
-
-def get_grouping_path_for_event(project, event_data, digested_at):
-    # First try the project's current mechanism.
-    current_key_with_mechanism = get_key_with_mechanism_for_data(
-        event_data, grouping_mechanism=project.grouping_mechanism)
-    if (current_grouping := get_existing_grouping(project.id, current_key_with_mechanism)) is not None:
-        return GroupingPath.FOUND, (current_grouping,)
-
-    if current_key_with_mechanism.mechanism == MECHANISM_INDEPENDENT_GROUPING:
-        # special case for imprecisely migrated data, i.e. this is "another piece of legacy-handling code in the digest
-        # path" as mentioned in the migration file: because we may not have correctly identified all mechanismless
-        # groupings we allow matching with v1 here.
-        #
-        # this is really the 10%/1% correctness for avoiding some unnecesary splits so it can be removed "quite soon",
-        # e.g. in October 2026.
-        legacy_grouping = get_legacy_grouping_for_mechanism_independent_key(project.id, current_key_with_mechanism)
-        if legacy_grouping is not None:
-            return GroupingPath.ATTACH, (current_key_with_mechanism, legacy_grouping)
-        return GroupingPath.NEW, (current_key_with_mechanism,)
-
-    # Current mechanism not found, no special-case, and we're not in the transition window: this is a new grouping.
-    if not grouping_transition_is_active(project, digested_at):
-        return GroupingPath.NEW, (current_key_with_mechanism,)
-
-    # During the transition window, retry the previous mechanism.
-    previous_key_with_mechanism = get_key_with_mechanism_for_data(
-        event_data, grouping_mechanism=project.previous_grouping_mechanism)
-    if (previous_grouping := get_existing_grouping(project.id, previous_key_with_mechanism)) is not None:
-        return GroupingPath.ATTACH, (current_key_with_mechanism, previous_grouping)
-
-    # No grouping found for either mechanism, so this is a new grouping.
-    return GroupingPath.NEW, (current_key_with_mechanism,)
-
-
-def check_for_thresholds_on_installation(qs, now, thresholds, add_for_current=0):
-    # project_digest_order is only monotonic per project, so installation-wide counting sums project-local results
-    # rather than trying to pretend there is a single installation-wide order.
-    project_ids = list(qs.order_by().values_list("project_id", flat=True).distinct())
-    total_events_in_periods = [add_for_current] * len(thresholds)
-
-    for project_id in project_ids:
-        project_counts = count_for_thresholds(qs.filter(project_id=project_id), now, thresholds)
-        for i, (project_total_events_in_period, _) in enumerate(project_counts):
-            total_events_in_periods[i] += project_total_events_in_period
-
-    states = []
-    for i, threshold in enumerate(thresholds):
-        period_name, nr_of_periods, _ = threshold
-        qs_for_period = filter_for_periods(qs, period_name, nr_of_periods, now)
-        states.append(state_for_threshold(qs_for_period, now, total_events_in_periods[i], threshold))
-
-    return states
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -357,406 +215,6 @@ class BaseIngestAPIView(View):
             "remote_addr": remote_addr,
         }
 
-    @classmethod
-    def validate_event_data(cls, data, validation_setting):
-        # Rough timings for a 50k event: valid ~1ms, invalid ~100ms.
-        # The invalid-data cost is almost entirely in the jsonschema fallback
-
-        def get_schema():
-            schema_filename = settings.BASE_DIR / 'api/event.schema.altered.json'
-            with open(schema_filename, 'r') as f:
-                return json.loads(f.read())
-
-        def validate():
-            # helper function that wraps the idea of "validate quickly, but fail meaningfully"
-            try:
-                cls._event_validator(data_to_validate)
-            except fastjsonschema.exceptions.JsonSchemaValueException as fastjsonschema_e:
-                # fastjsonchema's exceptions provide almost no information (in the case of many anyOfs), so we just fall
-                # back to jsonschema for that. Slow (and double cost), but failing is the rare case, so we don't care.
-                # https://github.com/horejsek/python-fastjsonschema/issues/72 and 37 for some context
-                try:
-                    jsonschema.validate(data_to_validate, get_schema())
-                except jsonschema.ValidationError as inner_e:
-                    best = jsonschema.exceptions.best_match([inner_e])
-                    # we raise 'from best' here; this does lose some information w.r.t. 'from inner_e', but it's my
-                    # belief that it's not useful info we're losing. similarly, but more so for 'fastjsonschema_e'.
-                    raise ValidationError(best.json_path + ": " + best.message, code="invalid_event_data") from best
-
-                # in the (presumably not-happening) case that our fallback validation succeeds, fail w/o useful message
-                raise ValidationError(fastjsonschema_e.message, code="invalid_event_data") from fastjsonschema_e
-
-        # the schema is loaded once and cached on the class (it's in the 1-2ms range, but my measurements varied a lot
-        # so I'm not sure and I'd rather cache (and not always load) a file in the 2.5MB range than to just assume it's
-        # fast)
-        if not hasattr(cls, "_event_validator"):
-            from bugsink.event_schema import validate as validate_schema
-            cls._event_validator = validate_schema
-
-        # known fields that are not part of the schema (and that we don't want to validate)
-        data_to_validate = {k: v for k, v in data.items() if k != "_meta"}
-
-        if validation_setting == "strict":
-            validate()
-
-        else:  # i.e. "warn" - we never reach this function for "none"
-            try:
-                validate()
-            except ValidationError as e:
-                logger.warning("event data validation failed: %s", e)
-
-    @staticmethod
-    def handle_zero_retention(project):
-        # With zero retention the caller must return (don't digest) before doing any work. Otherwise we'd retain an
-        # event despite the zero limit, because we do evict-before-add which doesn't work for the case of 0.
-        if project.get_retention_max_event_count() != 0:
-            return False
-
-        if project.stored_event_count > 0:
-            from events.tasks import delete_by_age_until_under_retention_max
-            # Since we don't evict in this branch, we just have the simplest hard-coded eviction (delete below max):
-            delay_on_commit(delete_by_age_until_under_retention_max, project.id)
-        return True
-
-    @classmethod
-    @immediate_atomic()
-    def digest_event(cls, event_metadata, event_data, digested_at=None):
-        # ingested_at is passed from the point-of-ingestion; digested_at is determined here. Because this happens inside
-        # `immediate_atomic`, we know digestions are serialized, and assuming non-decreasing server clocks, not decrea-
-        # sing. (no so for ingestion times: clock-watching happens outside the snappe transaction, and threading in the
-        # foreman is another source of shuffling).
-        #
-        # Because of this property we use digested_at for eviction and quota, and, because quota is a VBC-based and so
-        # is unmuting, in all ummuting-related checks. This saves us from having to precisely reason about edge-cases
-        # for non-increasing time, and the drawbacks are minimal, because the differences in time between ingest and
-        # digest are assumed to be relatively small, and as a user you don't really care (to the second) which
-        # timestamps trigger the quota/eviction.
-        #
-        # For other user-facing elements in the UI we prefer ingested_at though, because that's closer to the time
-        # something actually happened, and that's usually what you care for while debugging.
-        ingested_at = parse_timestamp(event_metadata["ingested_at"])
-        digested_at = datetime.now(timezone.utc) if digested_at is None else digested_at  # explicit passing: test only
-
-        try:
-            project = Project.objects.get(pk=event_metadata["project_id"], is_deleted=False)
-        except Project.DoesNotExist:
-            # we may get here if the project was deleted after the event was ingested, but before it was digested
-            # (covers both "deletion in progress (is_deleted=True)" and "fully deleted").
-            return
-
-        # Recheck inside the transaction: retention may have changed since the task's early check.
-        if cls.handle_zero_retention(project):
-            return
-
-        installation = Installation.objects.get()
-        if (not cls.count_installation_periods_and_act_on_it(installation, digested_at)
-                or not cls.count_project_periods_and_act_on_it(project, digested_at)):
-
-            return  # if over-quota: just return (any cleanup is done calling-side)
-
-        # I resisted the temptation to put `get_denormalized_fields_for_data` in an if-statement: you basically "always"
-        # need this info... except when duplicate event-ids are sent. But the latter is the exception, and putting this
-        # in an if-statement would require more rework (and possibly extra queries) than it's worth.
-        denormalized_fields = get_denormalized_fields_for_data(event_data)
-
-        # the 3 lines below are suggestive of a further inlining of the get_type_and_value_for_data function
-        calculated_type, calculated_value = get_type_and_value_for_data(event_data)
-        denormalized_fields["calculated_type"] = calculated_type
-        denormalized_fields["calculated_value"] = calculated_value
-
-        grouping_path, path_context = get_grouping_path_for_event(project, event_data, digested_at)
-
-        if grouping_path in [GroupingPath.FOUND, GroupingPath.ATTACH]:
-            if grouping_path == GroupingPath.FOUND:
-                grouping, = path_context
-            else:
-                key_with_mechanism, grouping_to_attach_to = path_context
-                grouping = create_grouping(
-                    event_metadata["project_id"], key_with_mechanism, grouping_to_attach_to.issue)
-
-            issue = grouping.issue
-            issue_created = False
-
-            # update the denormalized fields; calculated_type/value track the latest event so the issue title
-            # reflects the most recent exception (otherwise it stays frozen to the first event's message).
-            issue.last_seen = ingested_at
-            issue.digested_event_count += 1
-            issue.calculated_type = calculated_type
-            issue.calculated_value = calculated_value
-
-        elif grouping_path == GroupingPath.NEW:
-            key_with_mechanism, = path_context
-
-            # we don't have Project.issue_count here ('premature optimization') so we just do an aggregate instead.
-            max_current = Issue.objects.filter(project_id=event_metadata["project_id"]).aggregate(
-                Max("digest_order"))["digest_order__max"]
-            issue_digest_order = max_current + 1 if max_current is not None else 1
-
-            # at this point in the code, "new grouper" implies "new issue", because manual information ("this grouper is
-            # actually part of some other issue") can by definition not yet have been specified.
-            issue = Issue.objects.create(
-                digest_order=issue_digest_order,
-                project_id=event_metadata["project_id"],
-                first_seen=ingested_at,
-                last_seen=ingested_at,
-                digested_event_count=1,
-                stored_event_count=0,  # we increment this below
-                **denormalized_fields,
-            )
-            issue_created = True
-
-            grouping = create_grouping(event_metadata["project_id"], key_with_mechanism, issue)
-
-        # +1 because we're about to add one event.
-        project_stored_event_count = project.stored_event_count + 1
-
-        if should_evict(project, digested_at, project_stored_event_count):
-            # Note: I considered pushing this into some async process, but it makes reasoning much harder, and it's
-            # doubtful whether it would help, because in the end there's just a single pipeline of ingested-related
-            # stuff todo, might as well do the work straight away. Similar thoughts about pushing this into something
-            # cron-like. (not exactly the same, because for cron-like time savings are possible if the cron-likeness
-            # causes the work to be outside of the 'rush hour' -- OTOH this also introduces a lot of complexity about
-            # "what is a limit anyway, if you can go either over it, or work is done before the limit is reached")
-            evicted = evict_for_max_events(project, digested_at, project_stored_event_count)
-
-            # digest_event() is responsible for this update because we have "issue" open (i.e. to "save a query" /
-            # "avoid updating stale objects")
-            update_issue_counts({k: cnt for (k, cnt) in evicted.per_issue.items() if k != issue.id})
-        else:
-            evicted = EvictionCounts(0, {})
-
-        # +1 because we're about to add one event
-        issue.stored_event_count = issue.stored_event_count + 1 - evicted.per_issue.get(issue.id, 0)
-        project.stored_event_count = project_stored_event_count - evicted.total
-        if issue_created:
-            project.issue_count += 1
-            project.save(update_fields=["stored_event_count", "issue_count"])
-        else:
-            project.save(update_fields=["stored_event_count"])
-
-        event, event_created = Event.from_ingested(
-            event_metadata,
-            digested_at,
-            issue.digested_event_count,
-            project.digested_event_count,
-            issue.stored_event_count,
-            issue,
-            grouping,
-            event_data,
-            denormalized_fields,
-        )
-        if not event_created:
-            # This is a weird case that can happen when a client sends the same event_id with data different enough to
-            # create a new issue. I've run into it while debugging by editing a sample event without updating the ID or
-            # using send_json --fresh-id. Raising ValidationError rolls back the surrounding transaction and handles the
-            # duplicate as invalid client input.
-            #
-            # Validating by letting the DB raise an exception, and only after taking some other actions already, is not
-            # "by the book" (some book), but it's the most efficient way of doing it when your basic expectation is that
-            # multiple events with the same event_id "don't happen" (i.e. are the result of badly misbehaving clients).
-            # Note: given the ordering here this may hit after an eviction; that was not imagined (but will still work,
-            # albeit with considerable wasted work in that scenario).
-            raise ValidationError("Event already exists", code="event_already_exists")
-
-        record_event_counts(project, issue, digested_at, event.digest_order)
-
-        release, _ = create_release_if_needed(project, event.release, event.ingested_at, issue)
-
-        if issue_created:
-            TurningPoint.objects.create(
-                project=project,
-                issue=issue, triggering_event=event, timestamp=ingested_at,
-                kind=TurningPointKind.FIRST_SEEN)
-            event.never_evict = True
-
-            if project.alert_on_new_issue:
-                delay_on_commit(send_new_issue_alert, str(issue.id))
-
-        else:
-            # new issues cannot be regressions by definition, hence this is in the 'else' branch
-            if issue_is_regression(issue, event.release):
-                TurningPoint.objects.create(
-                    project=project,
-                    issue=issue, triggering_event=event, timestamp=ingested_at,
-                    kind=TurningPointKind.REGRESSED)
-                event.never_evict = True
-
-                if project.alert_on_regression:
-                    delay_on_commit(send_regression_alert, str(issue.id))
-
-                IssueStateManager.reopen(issue)
-
-            # note that while digesting we _only_ care about .is_muted to determine whether unmuting (and alerting about
-            # unmuting) should happen, whether as a result of a VBC or 'after time'. Somewhat counter-intuitively, a
-            # 'muted' issue is thus not treated as something to more deeply ignore than an unresolved issue (and in
-            # fact, conversely, it may be more loud when the for/until condition runs out). This is in fact analogous to
-            # "resolved" issues which are _also_ treated with more "suspicion" than their unresolved counterparts.
-            if issue.is_muted and issue.unmute_after is not None and digested_at > issue.unmute_after:
-                # note that unmuting on-ingest implies that issues that no longer occur stay muted. I'd say this is what
-                # you want: things that no longer happen should _not_ draw your attention, and if you've nicely moved
-                # some issue away from the "Open" tab it should not reappear there if a certain amount of time passes.
-                # Thus, unmute_after should more completely be called unmute_until_events_happen_after but that's a bit
-                # long. Phrased slightly differently: you basically click the button saying "I suppose this issue will
-                # self-resolve in x time; notify me if this is not the case"
-                IssueStateManager.unmute(
-                    issue, triggering_event=event,
-                    unmute_metadata={"mute_for": {"unmute_after": issue.unmute_after}})
-
-        cls.count_issue_periods_and_act_on_it(issue, event, digested_at)
-
-        if event.never_evict:
-            # as a sort of poor man's django-dirtyfields (which we haven't adopted for simplicity's sake) we simply do
-            # this manually for a single field; we know that if never_evict has been set, it's always been set after the
-            # .create call, i.e. its results still need to be saved. We accept the cost of the extra .save call, since
-            # TurningPoints are relatively rare (and hence so is this setting of `never_evict` and the associated save
-            # call)
-            event.save()
-
-        if release.version + "\n" not in issue.events_at:
-            issue.events_at += release.version + "\n"
-
-        issue.save()
-
-        # intentionally at the end: possible future optimization is to push this out of the transaction (or even use
-        # a separate DB for this)
-        digest_tags(event_data, event, issue)
-
-    @classmethod
-    def count_installation_periods_and_act_on_it(cls, installation, now):
-        # Copy/pasted from count_project_periods_and_act_on_it and adapted. Explaining comments from over there were not
-        # kept; the comments below are specific to the adapations.
-        thresholds = [(p, n, get_settings()[key]) for (p, n, key) in QUOTA_THRESHOLDS["Installation"]]
-        min_threshold = min([gte_threshold for (_, _, gte_threshold) in thresholds])
-
-        if cls.is_quota_still_exceeded(installation, now):
-            return False
-
-        # We don't do per-event-digest bookkeeping on the installation because doing so would tie us in further into
-        # "global locking"; the assumption is that a group by over (a few) projects is still quite cheap. The per-exceed
-        # bookkeeping _is_ done on the installation level (moments of exceeding are quite rare; cost is amortized).
-        # +1 because about-to-add and the installation-wide call precedes the per-project bookkeeping.
-        digested_event_count = (Project.objects.aggregate(total=Sum("digested_event_count"))["total"] or 0) + 1
-
-        if ((digested_event_count >= installation.next_quota_check) or
-                (installation.next_quota_check - digested_event_count > min_threshold)):
-
-            states = check_for_thresholds_on_installation(Event.objects.all(), now, thresholds, 1)
-
-            until, threshold_info = max(
-                [(below_from, ti) for (is_exceeded, below_from, _, ti) in states if is_exceeded],
-                default=(None, None))
-
-            check_again_after = max(1, min([check_after for (_, _, check_after, _) in states], default=1))
-
-            installation.quota_exceeded_until = until  # note: never reset to None, but the `now <` will still just work
-            installation.quota_exceeded_reason = json.dumps(threshold_info)
-            installation.next_quota_check = digested_event_count + check_again_after
-            installation.save()  # conditional in the if-statement because no per-digest bookkeeping on the installation
-
-        return True
-
-    @classmethod
-    def is_quota_still_exceeded(cls, obj, now):
-        if obj.quota_exceeded_until is None or now >= obj.quota_exceeded_until:
-            return False
-
-        # check if the setting has not been made more lax since the quota was tripped (an alternative would be: always
-        # reset these on snappea/server start)
-        period_name, nr_of_periods, gte_threshold = json.loads(obj.quota_exceeded_reason)
-        relevant_setting = [
-            k for (p, n, k) in QUOTA_THRESHOLDS[type(obj).__name__]
-            if p == period_name and n == nr_of_periods
-        ][0]
-        current_gte_threshold = get_settings()[relevant_setting]
-        if current_gte_threshold > gte_threshold:
-            return False
-
-        return True
-
-    @classmethod
-    def count_project_periods_and_act_on_it(cls, project, now):
-        # returns: True if any further processing should be done.
-        thresholds = [(p, n, get_settings()[key]) for (p, n, key) in QUOTA_THRESHOLDS["Project"]]
-        min_threshold = min([gte_threshold for (_, _, gte_threshold) in thresholds])
-
-        if cls.is_quota_still_exceeded(project, now):
-            # This is the same check that we do on-ingest. Naively, one might think that it is superfluous. However,
-            # because by design there is the potential for a digestion backlog to exist, it is possible that the update
-            # of `project.quota_exceeded_until` happens only after any number of events have already passed through
-            # ingestion and have entered the pipeline. Hence we double-check on-digest.
-
-            # nothing to check (otherwise) or update on project in this case, also abort further event-processing
-            return False
-
-        project.digested_event_count += 1
-
-        if ((project.digested_event_count >= project.next_quota_check) or
-                (project.next_quota_check - project.digested_event_count > min_threshold)):
-
-            # diff > min_threshold guards against shrunken thresholds (changed settings): if this condition holds, we've
-            # been able to detect the setting-change and trigger a recheck. (in the case it's not detectable, we may at
-            # worst get a "fresh quotum batch" of the new quotom size which is fine too).
-
-            # check_for_thresholds is relatively expensive (SQL group by); we do it as little as possible
-
-            # Notes on off-by-one:
-            # * check_for_thresholds tests for "gte"; this means it will trigger once the quota is reached (not
-            #   exceeded). We act accordingly by accepting this final event (returning True, count += 1) and closing the
-            #   door (setting quota_exceeded_until).
-            # * add_for_current=1 because we're called before the event is digested (it's not in Event.objects.filter),
-            #   and because of the previous bullet we know that it will always be digested.
-            states = check_for_thresholds(Event.objects.filter(project=project), now, thresholds, 1)
-
-            until = max([below_from for (is_exceeded, below_from, _, _) in states if is_exceeded], default=None)
-            until, threshold_info = max(
-                [(below_from, ti) for (is_exceeded, below_from, _, ti) in states if is_exceeded],
-                default=(None, None))
-
-            check_again_after = min([check_after for (_, _, check_after, _) in states], default=1)
-
-            project.quota_exceeded_until = until
-            project.quota_exceeded_reason = json.dumps(threshold_info)
-
-            # note on correction of `digested_event_count += 1`: as long as we don't do that between the check on
-            # next_quota_check (the if-statement) and the setting (the statement below) we're good.
-            project.next_quota_check = project.digested_event_count + check_again_after
-
-        project.save()
-        return True
-
-    @classmethod
-    def count_issue_periods_and_act_on_it(cls, issue, event, timestamp):
-        # See the project-version for various off-by-one notes (not reproduced here).
-        #
-        # We just have "unmute" as a purpose here, not "quota". I thought I'd have per-issue quota earlier (which would
-        # ensure some kind of fairness within a project) but:
-        #
-        # * that doesn't quite work, because to determine the issue, you'd have to incur almost all of the digest cost.
-        # * quota are expected to be set "high enough" anyway, i.e. only as a last line of defense against run-away
-        #     clients
-        # * "even if" you'd get this to work there'd be scenarios where it's useless, e.g. misbehaving groupers.
-        thresholds = IssueStateManager.get_unmute_thresholds(issue)
-
-        if thresholds and issue.digested_event_count >= issue.next_unmute_check:
-            states = check_for_thresholds(Event.objects.filter(issue=issue), timestamp, thresholds)
-
-            check_again_after = max(1, min([check_after for (_, _, check_after, _) in states], default=1))
-
-            issue.next_unmute_check = issue.digested_event_count + check_again_after
-
-            for (is_exceeded, until, _, (period_name, nr_of_periods, gte_threshold)) in states:
-                if not is_exceeded:
-                    continue
-
-                IssueStateManager.unmute(issue, triggering_event=event, unmute_metadata={"mute_until": {
-                    "period": period_name, "nr_of_periods": nr_of_periods, "volume": gte_threshold}})
-
-                # In the (in the current UI impossible, and generally unlikely) case that multiple unmute conditions are
-                # met simultaneously, we arbitrarily break after the first. (this makes it so that a single TurningPoint
-                # is created and that the detail that there was also another reason to unmute doesn't show us, but
-                # that's perfectly fine); it also matches what we do elsewhere (i.e. `IssueStateManager.unmute` where we
-                # have `if is_muted`)
-                break
 
 
 class IngestEventAPIView(BaseIngestAPIView):
@@ -772,11 +230,11 @@ class IngestEventAPIView(BaseIngestAPIView):
         ingestion_id = str(uuid.uuid4())
 
         installation = Installation.objects.get()
-        if self.is_quota_still_exceeded(installation, ingested_at):
+        if is_quota_still_exceeded(installation, ingested_at):
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         project = self.get_project_for_request(project_pk, request)
-        if self.is_quota_still_exceeded(project, ingested_at):
+        if is_quota_still_exceeded(project, ingested_at):
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         event_data_bytes = MaxDataReader(
@@ -855,22 +313,21 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
 
         envelope_headers = parser.get_envelope_headers()
 
-        # Getting the installation & project is the only DB-touching (a read) we do before we (only in IMMEDIATE/EAGER
-        # modes), start start read/writing in digest_event. Notes on transactions:
+        # Getting the installation & project is the only DB-touching (a read) we do before we start reading/writing in
+        # digest_event in TASK_ALWAYS_EAGER mode. Notes on transactions:
         #
         # * we could add `durable_atomic` here for explicitness / if we ever do more than one read (for consistent
         #   snapshots. As it stands, not needed. (I believe this is implicit due to Django or even sqlite itself)
-        # * For the IMMEDIATE/EAGER cases we don't suffer from locks b/c sqlite upgrades read to write; I've tested this
-        #   by adding sleep statements between the read/writes. I believe this is b/c of our immediate_atomic on
+        # * In TASK_ALWAYS_EAGER mode we don't suffer from locks b/c sqlite upgrades read to write; I've tested this by
+        #   adding sleep statements between the read/writes. I believe this is b/c of our immediate_atomic on
         #   digest_event. When removing that, and wrapping all of the present method in `durable_atomic`, read-write
         #   upgrades indeed fail.
         # * digest_event gets its own `project`, so there's no cross-transaction "pollution".
-        # * Road not taken: pulling `immediate_atomic` up to the present level, but only for IMMEDIATE/EAGER modes (the
-        #   only modes where this would make sense). This allows for passing of project between the 2 methods, but the
-        #   added complexity (conditional transactions both here and in digest_event) is not worth it for modes that are
-        #   non-production anyway.
+        # * Road not taken: pulling `immediate_atomic` up to the present level in TASK_ALWAYS_EAGER mode. This allows
+        #   for passing of project between the 2 methods, but the added complexity (conditional transactions both here
+        #   and in digest_event) is not worth it for a mode that is non-production anyway.
         installation = Installation.objects.get()
-        if self.is_quota_still_exceeded(installation, ingested_at):
+        if is_quota_still_exceeded(installation, ingested_at):
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         if "dsn" in envelope_headers:
@@ -880,7 +337,7 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
         else:
             project = self.get_project_for_request(project_pk, request)
 
-        if self.is_quota_still_exceeded(project, ingested_at):
+        if is_quota_still_exceeded(project, ingested_at):
             # Sentry has x-sentry-rate-limits, but for now 429 is just fine. Client-side this is implemented as a 60s
             # backoff.
             #
@@ -1030,11 +487,11 @@ class IngestSecurityAPIView(BaseIngestAPIView):
         ingestion_id = str(uuid.uuid4())
 
         installation = Installation.objects.get()
-        if self.is_quota_still_exceeded(installation, ingested_at):
+        if is_quota_still_exceeded(installation, ingested_at):
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         project = self.get_project_for_request(project_pk, request)
-        if self.is_quota_still_exceeded(project, ingested_at):
+        if is_quota_still_exceeded(project, ingested_at):
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         # CSP reports are small by spec; the cap is a defense against abuse, not a real-world ceiling. Oversized bodies
@@ -1140,11 +597,11 @@ class MinidumpAPIView(BaseIngestAPIView):
         ingested_at = datetime.now(timezone.utc)
 
         installation = Installation.objects.get()
-        if self.is_quota_still_exceeded(installation, ingested_at):
+        if is_quota_still_exceeded(installation, ingested_at):
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         project = self.get_project_for_request(project_pk, request)
-        if self.is_quota_still_exceeded(project, ingested_at):
+        if is_quota_still_exceeded(project, ingested_at):
             return HttpResponse(status=HTTP_429_TOO_MANY_REQUESTS)
 
         try:

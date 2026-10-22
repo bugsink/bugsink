@@ -173,8 +173,8 @@ def useful_settings_processor(request):
         system_warnings.extend(get_email_quota_warnings(installation, now))
         system_warnings.extend(get_email_failure_warnings(installation, now))
 
-        from ingest.views import BaseIngestAPIView
-        if BaseIngestAPIView.is_quota_still_exceeded(installation, now):
+        from ingest.digestion import is_quota_still_exceeded
+        if is_quota_still_exceeded(installation, now):
             period_name, nr_of_periods, gte_threshold = json.loads(installation.quota_exceeded_reason)
             # TODO i18n
             per_fmt = "%s %ss" % (nr_of_periods, period_name) if nr_of_periods != 1 else period_name

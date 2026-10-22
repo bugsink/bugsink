@@ -143,8 +143,8 @@ def _delete_events(project, pks_to_delete):
     # section lifted from events/retention.py
     from events.retention import cleanup_events_on_storage, EvictionCounts
 
-    # based on ingest/views.py
-    from ingest.views import update_issue_counts
+    # based on ingest/digestion.py
+    from ingest.digestion import update_issue_counts
 
     # we assume "include_never_evict" here; we'll just take the blunt approach for this task/command
     TurningPoint.objects.filter(triggering_event_id__in=pks_to_delete).update(triggering_event=None)
