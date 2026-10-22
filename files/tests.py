@@ -15,8 +15,10 @@ from types import SimpleNamespace
 from zipfile import ZipFile, ZIP_BZIP2, ZIP_DEFLATED
 
 from django.test import tag
+from django.test.utils import CaptureQueriesContext
 from django.contrib.auth import get_user_model
 from django.test import LiveServerTestCase, override_settings
+from django.db import connection
 from django.core.management.base import CommandError
 from django.core.management import call_command
 from django.utils import timezone
@@ -392,7 +394,7 @@ class FilesTests(TransactionTestCase):
         data = b"hello world"
         checksum = sha1(data, usedforsecurity=False).hexdigest()
 
-        with tempfile.TemporaryDirectory() as tempdir:
+        with tempfile.TemporaryDirectory() as tempdir, bugsink_override_settings(MAX_FILE_SIZE=len(data)):
             with override_object_storages(get_test_object_storages(tempdir, use_for_write=True)):
                 Chunk.objects.create(checksum=checksum, size=len(data), data=data)
 
@@ -432,24 +434,32 @@ class FilesTests(TransactionTestCase):
                 with file.open_for_read() as f:
                     self.assertEqual(data, f.read())
 
-    def test_assemble_file_enforces_max_file_size(self):
+    def test_assemble_file_rejects_oversized_file_before_loading_chunks(self):
+        # LLM-generated; not deeply inspected, but it does seem to cover the main case we care about.
         chunk_a = b"hello "
         chunk_b = b"world"
-        checksum = sha1(chunk_a + chunk_b, usedforsecurity=False).hexdigest()
+        checksum = sha1(chunk_a + chunk_b + chunk_a, usedforsecurity=False).hexdigest()
 
         Chunk.objects.create(checksum=sha1(chunk_a, usedforsecurity=False).hexdigest(), size=len(chunk_a), data=chunk_a)
         Chunk.objects.create(checksum=sha1(chunk_b, usedforsecurity=False).hexdigest(), size=len(chunk_b), data=chunk_b)
 
-        with bugsink_override_settings(MAX_FILE_SIZE=len(chunk_a + chunk_b) - 1):
-            with self.assertRaisesMessage(ValueError, "MAX_FILE_SIZE"):
-                assemble_file(
-                    checksum,
-                    [
-                        sha1(chunk_a, usedforsecurity=False).hexdigest(),
-                        sha1(chunk_b, usedforsecurity=False).hexdigest(),
-                    ],
-                    filename="hello.txt",
-                )
+        with bugsink_override_settings(MAX_FILE_SIZE=len(chunk_a + chunk_b + chunk_a) - 1):
+            with CaptureQueriesContext(connection) as queries:
+                with self.assertRaisesMessage(ValueError, "MAX_FILE_SIZE"):
+                    assemble_file(
+                        checksum,
+                        [
+                            sha1(chunk_a, usedforsecurity=False).hexdigest(),
+                            sha1(chunk_b, usedforsecurity=False).hexdigest(),
+                            sha1(chunk_a, usedforsecurity=False).hexdigest(),
+                        ],
+                        filename="hello.txt",
+                    )
+
+        # Reject based on stored sizes; selecting the chunk contents would already allocate too much memory.
+        data_column = f'{connection.ops.quote_name("files_chunk")}.{connection.ops.quote_name("data")}'
+        for query in queries:
+            self.assertNotIn(data_column, query["sql"])
 
     def test_artifact_bundle_rejects_bzip2_manifest(self):
         bundle = BytesIO()

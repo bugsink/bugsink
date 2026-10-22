@@ -239,7 +239,6 @@ def assemble_file(checksum, chunk_checksums, filename):
     """Assembles a file from chunks"""
 
     # NOTE: unimplemented checks/tricks
-    # * total file-size v.s. some max
     # * explicit check chunk availability
 
     try:
@@ -248,12 +247,18 @@ def assemble_file(checksum, chunk_checksums, filename):
         pass  # i.e. continue below
 
     chunks = Chunk.objects.filter(checksum__in=chunk_checksums)
-    chunks_dicts = {chunk.checksum: chunk for chunk in chunks}
+    max_file_size = get_settings().MAX_FILE_SIZE
+    # Read only sizes before checking the limit, so even an oversized request cannot load all its chunk data.
+    chunk_sizes = dict(chunks.values_list("checksum", "size"))
 
     # The below fails when any chunk is missing but this "can't happen" because our endpoints does the check and also
     # a renewal to avoid vacuuming. i.e. it only happens if our worker is late by 24h.
+    # Sum over the requested list so repeated chunks count each time they appear in the assembled file.
+    if sum(chunk_sizes[checksum] for checksum in chunk_checksums) > max_file_size:
+        raise ValueError("Assembled file exceeds MAX_FILE_SIZE")
+
+    chunks_dicts = {chunk.checksum: chunk for chunk in chunks}
     chunks_in_order = [chunks_dicts[checksum] for checksum in chunk_checksums]
-    max_file_size = get_settings().MAX_FILE_SIZE
 
     with tempfile.TemporaryDirectory() as tempdir:
         with tempfile.TemporaryFile(dir=tempdir) as local_file:
