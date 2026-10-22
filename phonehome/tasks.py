@@ -2,6 +2,9 @@ import platform
 import logging
 import requests
 import json
+from datetime import datetime
+from urllib.parse import urlsplit
+from semver import Version
 
 from django.conf import settings
 from django.utils import timezone
@@ -18,7 +21,7 @@ from snappea.settings import get_settings as get_snappea_settings
 from projects.models import Project
 from teams.models import Team
 
-from .models import Installation, OutboundMessage
+from .models import Installation, OutboundMessage, RemoteMessage, RemoteMessagePart
 
 
 logger = logging.getLogger("bugsink.phonehome")
@@ -52,11 +55,41 @@ def send_if_due():
             message=json.dumps(_make_message_body()),
         )
 
-    if not _send_message(message):
+    response = _send_message(message)
+    if response is None:
         return
+
+    try:
+        remote_messages = _validate_remote_messages(response.json())
+    except (KeyError, TypeError, ValueError) as e:
+        logger.exception("Invalid phonehome response: %s", e)
+        remote_messages = None
 
     with immediate_atomic():
         # a fresh transaction avoids hogging the DB while doing network I/O
+        if remote_messages is not None:
+            RemoteMessage.objects.update(active=False)
+            for position, remote_message in enumerate(remote_messages):
+                stored_message, _ = RemoteMessage.objects.update_or_create(
+                    key=remote_message["id"],
+                    defaults={
+                        "applies_until_version": remote_message["applies_until_version"],
+                        "position": position,
+                        "expires_at": datetime.fromisoformat(remote_message["expires_at"]),
+                        "active": True,
+                    },
+                )
+                stored_message.parts.all().delete()
+                RemoteMessagePart.objects.bulk_create([
+                    RemoteMessagePart(
+                        message=stored_message,
+                        position=part_position,
+                        text=part["text"],
+                        url=part.get("url", ""),
+                    )
+                    for part_position, part in enumerate(remote_message["parts"])
+                ])
+
         message.sent_at = timezone.now()
         message.save()
 
@@ -114,6 +147,7 @@ def _send_message(message):
     def post(timeout):
         response = requests.post(url, json=json.loads(message.message), timeout=timeout)
         response.raise_for_status()
+        return response
 
     if get_snappea_settings().TASK_ALWAYS_EAGER:
         # Doing a switch on "am I running this in snappea or not" so deep in the code somehow feels wrong, but "if it
@@ -123,13 +157,31 @@ def _send_message(message):
 
         try:
             # 1s max wait time each hour is deemed "OK"; (counterpoint: also would be on your _first_ visit)
-            post(timeout=1)
+            return post(timeout=1)
         except requests.RequestException as e:
             # This is a "soft" failure; we don't want to raise an exception, but we do want to log it.
             logger.exception("Failed to send phonehome message: %s", e)
-            return False
+            return None
 
     else:
-        post(timeout=5)
+        return post(timeout=5)
 
-    return True
+
+def _validate_remote_messages(response):
+    remote_messages = response["messages"]
+    for message in remote_messages:
+        message["id"]
+        if message["applies_until_version"]:
+            Version.parse(message["applies_until_version"])
+        if datetime.fromisoformat(message["expires_at"]).tzinfo is None:
+            raise ValueError("Invalid phonehome message expiry")
+
+        for part in message["parts"]:
+            part["text"]
+            if "url" in part:
+                url = part["url"]
+                parsed_url = urlsplit(url) if isinstance(url, str) else None
+                if parsed_url is None or parsed_url.scheme != "https" or not parsed_url.netloc:
+                    raise ValueError("Invalid phonehome message URL")
+
+    return remote_messages

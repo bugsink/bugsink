@@ -32,7 +32,7 @@ from bugsink.timed_sqlite_backend.base import different_runtime_limit
 from bugsink.utils import is_safe_next_url
 
 from phonehome.utils import phone_home
-from phonehome.models import Installation
+from phonehome.models import Installation, RemoteMessage
 
 from ingest.views import BaseIngestAPIView
 from bsmain.models import CachedModelCount
@@ -223,6 +223,18 @@ def silence_email_system_warning(request):
     installation = Installation.objects.get()
     installation.silence_email_system_warning = True
     installation.save()
+
+    next_url = request.POST.get("next", "/")
+    if not is_safe_next_url(next_url, request):
+        next_url = "/"
+    return HttpResponseRedirect(next_url)
+
+
+@user_passes_test(lambda u: u.is_superuser)
+@require_POST
+@atomic_for_request_method
+def silence_remote_message(request, message_id):
+    RemoteMessage.objects.filter(key=message_id).update(silenced=True)
 
     next_url = request.POST.get("next", "/")
     if not is_safe_next_url(next_url, request):

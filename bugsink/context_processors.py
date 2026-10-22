@@ -1,6 +1,7 @@
 import json
 from datetime import timedelta, datetime, timezone as dt_timezone
 from collections import namedtuple
+from semver import Version
 
 from django.utils import timezone
 from django.conf import settings
@@ -17,13 +18,15 @@ from django.utils.module_loading import import_string
 from bugsink.app_settings import get_settings, CB_ANYBODY
 from bugsink.transaction import durable_atomic
 from bugsink.timed_sqlite_backend.base import different_runtime_limit
+from bugsink.version import version_tuple
 
 from snappea.settings import get_settings as get_snappea_settings
 from snappea.models import Task, Stat
 
-from phonehome.models import Installation
+from phonehome.models import Installation, RemoteMessage
 
 SystemWarning = namedtuple('SystemWarning', ['message', 'ignore_url'])
+RemoteWarning = namedtuple('RemoteWarning', ['parts', 'ignore_url'])
 
 
 # no_bandit_expl: literally a constant string so safe by defenition
@@ -74,6 +77,28 @@ def get_email_quota_warnings(installation, now):
                 "No more emails will be sent until the 1st of next month.", None))
 
     return warnings
+
+
+def get_remote_warnings(request, now):
+    if not getattr(request, "user", AnonymousUser()).is_superuser:
+        return []
+
+    current_version = Version(
+        *version_tuple[:3],
+        prerelease=version_tuple[3] if len(version_tuple) > 3 else None,
+    )
+    return [
+        RemoteWarning(
+            list(message.parts.all()),
+            reverse("silence_remote_message", kwargs={"message_id": message.key}),
+        )
+        for message in RemoteMessage.objects.filter(
+            active=True,
+            silenced=False,
+            expires_at__gt=now,
+        ).prefetch_related("parts")
+        if not message.applies_until_version or current_version < Version.parse(message.applies_until_version)
+    ]
 
 
 def get_snappea_warnings():
@@ -149,7 +174,7 @@ def useful_settings_processor(request):
         # at most once per request (at the top of the template)
         installation = Installation.objects.get()
 
-        system_warnings = []
+        system_warnings = get_remote_warnings(request, datetime.now(dt_timezone.utc))
 
         # This list does not include e.g. the dummy.EmailBackend; intentional, because setting _that_ is always an
         # indication of intentional "shut up I don't want to send emails" (and we don't want to warn about that). (as
