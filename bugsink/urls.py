@@ -26,6 +26,7 @@ from releases.api_views import ReleaseViewSet
 from teams.api_views import TeamViewSet
 
 from .views import home, trigger_error, favicon, settings_view, silence_email_system_warning, counts, health_check_ready
+from .views import silence_remote_message
 from .debug_views import csrf_debug
 
 
@@ -113,6 +114,11 @@ urlpatterns += [
     path('admin/', admin.site.urls),
 
     path('silence-email-system-warning/', silence_email_system_warning, name='silence_email_system_warning'),
+    path(
+        'silence-remote-message/<slug:message_id>/',
+        silence_remote_message,
+        name='silence_remote_message',
+    ),
     path('settings/', settings_view, name='settings'),
     path('counts/', counts, name='counts'),
     path('debug/csrf/', csrf_debug, name='csrf_debug'),

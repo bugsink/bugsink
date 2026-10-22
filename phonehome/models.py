@@ -91,3 +91,24 @@ class OutboundMessage(models.Model):
 
     def __str__(self):
         return f"OutboundMessage(attempted_at={self.attempted_at}, sent_at={self.sent_at})"
+
+
+class RemoteMessage(models.Model):
+    key = models.SlugField(unique=True)
+    applies_until_version = models.CharField(max_length=255, blank=True)
+    position = models.PositiveSmallIntegerField(default=0)
+    active = models.BooleanField(default=True)
+    silenced = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["position", "id"]
+
+
+class RemoteMessagePart(models.Model):
+    message = models.ForeignKey(RemoteMessage, on_delete=models.CASCADE, related_name="parts")
+    position = models.PositiveSmallIntegerField(default=0)
+    text = models.TextField()
+    url = models.URLField(blank=True)
+
+    class Meta:
+        ordering = ["position", "id"]
