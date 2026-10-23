@@ -15,6 +15,10 @@
 
         <div class="p-12 md:pt-24 md:pl-24 md:pr-24 md:pb-16">
 
+            {% for message in messages %}
+                <div class="mb-8 text-red-500 dark:text-red-400">{{ message }}</div>
+            {% endfor %}
+
             {% if form.errors %}
                 {% for error in form.non_field_errors %}
                     <div class="mb-8 text-red-500 dark:text-red-400">{{ error }}</div>
@@ -26,6 +30,11 @@
                 {% else %}
                 <div class="mb-8">{% translate "Please login to see this page." %}</div>
                 {% endif %}
+            {% endif %}
+
+            {% if oidc_enabled %}
+                <a href="{% url 'oidc_authentication_init' %}{% if next %}?next={{ next|urlencode }}{% endif %}" class="block text-center bg-slate-800 font-medium p-2 md:p-4 text-white uppercase w-full">{{ oidc_login_button_text }}</a>
+                <div class="my-4 text-center text-slate-500 dark:text-slate-400">{% translate "or" %}</div>
             {% endif %}
 
             <form method="post" action="{% url 'login' %}">
@@ -40,7 +49,7 @@
             </form>
 
             <div class="mt-4">
-                <a href="{% url 'request_reset_password' %}" class="text-slate-800 dark:text-slate-100">{% translate "Forgot password?" %}</a>
+                {% if not oidc_only %}<a href="{% url 'request_reset_password' %}" class="text-slate-800 dark:text-slate-100">{% translate "Forgot password?" %}</a>{% endif %}
                 {% if registration_enabled %}<a href="{% url 'signup' %}" class="float-right text-slate-800 dark:text-slate-100">{% translate "Create an account" %}</a>{% endif %}
             </div>
         </div>
