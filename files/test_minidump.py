@@ -158,7 +158,9 @@ int main(void) {
             file_type=file_type, file=file)
 
     def test_symbolication_with_source_context(self):
-        threads = event_threads_for_process_state(self.process_state, self.project)
+        used_metadata_ids = set()
+        threads = event_threads_for_process_state(
+            self.process_state, self.project, used_metadata_ids=used_metadata_ids)
 
         self.assertEqual([
             {"id": 101, "crashed": True, "stacktrace": {"frames": [
@@ -186,6 +188,7 @@ int main(void) {
                 {"instruction_addr": "0x3000"},
             ]}},
         ], threads)
+        self.assertEqual(set(FileMetadata.objects.values_list("id", flat=True)), used_metadata_ids)
 
     def test_symbolication_without_debug_files(self):
         FileMetadata.objects.filter(file_type="dbg").delete()
@@ -253,13 +256,18 @@ int main(void) {
     def test_cfi_is_prepared_once_for_repeated_modules(self):
         modules = list(self.process_state.modules()) * 100
         self.process_state.modules = lambda: modules
+        used_metadata_ids = set()
 
         with patch("files.minidump.symbolic.minidump.ProcessState.from_minidump_buffer",
                    return_value=self.process_state):
             with patch("files.minidump.parse_debug_object", wraps=parse_debug_object) as parse:
-                build_cfi_map_from_minidump_bytes(b"", self.project)
+                build_cfi_map_from_minidump_bytes(b"", self.project, used_metadata_ids=used_metadata_ids)
 
         self.assertEqual(2, parse.call_count)
+        self.assertEqual(
+            set(FileMetadata.objects.filter(file_type="dbg").values_list("id", flat=True)),
+            used_metadata_ids,
+        )
 
     @tag("samples")
     def test_debug_file_provides_unwind_information(self):

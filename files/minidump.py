@@ -27,7 +27,7 @@ def parse_debug_object(dif_bytes):
     return objects[0]
 
 
-def build_cfi_map_from_minidump_bytes(minidump_bytes, project):
+def build_cfi_map_from_minidump_bytes(minidump_bytes, project, *, used_metadata_ids=None):
     process_state = symbolic.minidump.ProcessState.from_minidump_buffer(minidump_bytes)
 
     module_ids_by_debug_id = defaultdict(set)
@@ -41,6 +41,9 @@ def build_cfi_map_from_minidump_bytes(minidump_bytes, project):
     for debug_id, module_ids in module_ids_by_debug_id.items():
         if debug_id not in metadata:
             continue
+
+        if used_metadata_ids is not None:
+            used_metadata_ids.add(metadata[debug_id].id)
 
         # Memory-critical: reading a deferred file caches its contents on the model. Pop it here so those contents
         # can be released when the helper returns, rather than keeping every debug file loaded.
@@ -108,7 +111,7 @@ def _find_module_for_address(modules, abs_addr: int):
     return None
 
 
-def event_threads_for_process_state(process_state, project):
+def event_threads_for_process_state(process_state, project, *, used_metadata_ids=None):
     modules = list(process_state.modules())
     debug_ids = {}
     frames_by_debug_id = defaultdict(list)
@@ -141,6 +144,9 @@ def event_threads_for_process_state(process_state, project):
         if debug_id not in metadata:
             continue
 
+        if used_metadata_ids is not None:
+            used_metadata_ids.add(metadata[debug_id].id)
+
         # Memory-critical: reading a deferred file caches its contents on the model. Pop it here so those contents
         # can be released when the helper returns, rather than keeping every debug file loaded.
         frames_by_filename = _symbolicate_frames(metadata.pop(debug_id).file, frames)
@@ -151,6 +157,9 @@ def event_threads_for_process_state(process_state, project):
     for debug_id, frames_by_filename in source_frames_by_debug_id.items():
         if debug_id not in metadata:
             continue
+
+        if used_metadata_ids is not None:
+            used_metadata_ids.add(metadata[debug_id].id)
 
         # Drop this model too, so the full source bundle isn't retained after the helper returns.
         _add_source_context(metadata.pop(debug_id).file, frames_by_filename)

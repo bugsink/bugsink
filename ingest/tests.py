@@ -7,8 +7,10 @@ import time
 import tempfile
 import gzip
 import brotli_rs as brotli
+from hashlib import sha1
 
 import datetime
+import symbolic
 from unittest.mock import patch
 from unittest import TestCase as RegularTestCase
 from dateutil.relativedelta import relativedelta
@@ -46,6 +48,7 @@ from compat.timestamp import format_timestamp
 from compat.dsn import get_header_value
 from bsmain.management.commands.send_json import Command as SendJsonCommand
 from phonehome.models import Installation
+from files.models import File, FileMetadata
 from sentry.minidump import merge_minidump_event
 
 from .views import IngestSecurityAPIView, MinidumpAPIView
@@ -1702,6 +1705,34 @@ class MinidumpIngestRegressionTestCase(TransactionTestCase):
             merge.assert_called_once()
             self.assertEqual("SIGABRT: Fatal Error: SIGABRT", Event.objects.get().title())
             self.assertEqual([], os.listdir(tempdir))
+
+    @override_settings(MAX_ATTACHMENT_SIZE=64 * 1024)
+    def test_direct_minidump_endpoint_records_debug_file_access(self):
+        debug_id = "B0E1FC01EF48E39CAF5C881D2DF0C3840"
+        data = b"MODULE Linux x86_64 B0E1FC01EF48E39CAF5C881D2DF0C3840 overflow\n"
+        file = File.objects.create(
+            checksum=sha1(data, usedforsecurity=False).hexdigest(), filename="overflow.sym", size=len(data), data=data)
+        FileMetadata.objects.create(
+            project=self.project,
+            debug_id=symbolic.debuginfo.id_from_breakpad(debug_id),
+            file_type="dbg",
+            file=file,
+            data="{}",
+        )
+        old_accessed_at = timezone.now() - datetime.timedelta(days=91)
+        File.objects.filter(id=file.id).update(accessed_at=old_accessed_at)
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            with open(self.minidump_filename, "rb") as minidump:
+                response = self.client.post(
+                    f"/api/{self.project.id}/minidump/",
+                    data={"upload_file_minidump": minidump},
+                    headers={"X-Sentry-Auth": self.sentry_auth_header},
+                )
+
+        self.assertEqual(200, response.status_code, response.content)
+        file.refresh_from_db()
+        self.assertGreater(file.accessed_at, old_accessed_at)
 
     @override_settings(MAX_ATTACHMENT_SIZE=64 * 1024)
     def test_direct_minidump_endpoint_accepts_compressed_upload(self):

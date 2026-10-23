@@ -21,7 +21,8 @@ from events.retention import evict_for_max_events, should_evict, EvictionCounts
 from events.usage import record_event_counts
 from releases.models import create_release_if_needed
 from alerts.tasks import send_new_issue_alert, send_regression_alert
-from compat.timestamp import parse_timestamp
+from compat.timestamp import format_timestamp, parse_timestamp
+from files.tasks import record_file_accesses
 from tags.models import digest_tags
 
 from .digestion import (
@@ -83,7 +84,13 @@ def digest(event_id, event_metadata):
             # we merge after validation: validation is about what's provided _externally_, not our own merging.
             # We parse before entering immediate_atomic so this work doesn't hold the database write lock.
             # TODO error handling
-            merge_minidump_event(event_data, minidump_bytes, project)
+            used_metadata_ids = merge_minidump_event(event_data, minidump_bytes, project)
+            if used_metadata_ids:
+                delay_on_commit(
+                    record_file_accesses,
+                    sorted(used_metadata_ids),
+                    format_timestamp(datetime.now(timezone.utc)),
+                )
 
         digest_event(event_metadata, event_data)
     except ValidationError as e:
