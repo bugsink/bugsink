@@ -43,9 +43,20 @@ def zlib_generator(input_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
         if not compressed_chunk:
             break
 
-        yield z.decompress(compressed_chunk)
+        while compressed_chunk and not z.eof:
+            data = z.decompress(compressed_chunk, max_length=chunk_size)
+            compressed_chunk = z.unconsumed_tail
+            if data:
+                yield data
 
-    yield z.flush()
+    while True:
+        data = z.decompress(b"", max_length=chunk_size)
+        if not data:
+            break
+        yield data
+
+    if not z.eof:
+        raise zlib.error("Incomplete compressed stream")
 
 
 def brotli_generator(input_stream, chunk_size=DEFAULT_CHUNK_SIZE):

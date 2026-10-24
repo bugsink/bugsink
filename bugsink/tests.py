@@ -1,6 +1,7 @@
 import io
 import pprint
 import re
+import zlib
 import brotli
 
 from unittest import TestCase as RegularTestCase
@@ -107,6 +108,40 @@ class StreamsTestCase(RegularTestCase):
         reader = GeneratorReader(zlib_generator(compressed_stream, WBITS_PARAM_FOR_DEFLATE))
 
         self.assertEqual(myself_times_ten, reader.read())
+
+    def test_decompress_deflate_with_one_byte_chunks(self):
+        # An empty zlib result is not EOF, and output buffered until later must still be returned.
+        data = b"\x00" * 31
+        compressed = compress_with_zlib(io.BytesIO(data), WBITS_PARAM_FOR_DEFLATE)
+        reader = GeneratorReader(zlib_generator(io.BytesIO(compressed), WBITS_PARAM_FOR_DEFLATE, chunk_size=1))
+
+        self.assertEqual(data[:1], reader.read(1))
+        self.assertEqual(data[1:], reader.read())
+
+    def test_decompress_zlib_limits_output_allocation(self):
+        # Implementation-level comparison of zlib_generator before and after it started passing max_length.
+        plain_size = 10_000_000
+        chunk_size = 1_000
+
+        for wbits in [WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE]:
+            compressed = compress_with_zlib(io.BytesIO(b"\x00" * plain_size), wbits)
+
+            # Before: zlib_generator called decompress() without max_length. We do not do this anymore.
+            output_without_max_length = zlib.decompressobj(wbits=wbits).decompress(compressed[:chunk_size])
+            # Failure: a 1 kB compressed chunk allocates >1 MB before MaxDataReader can enforce its limit.
+            self.assertGreater(len(output_without_max_length), 1_000_000)
+
+            # After: zlib_generator passes max_length and bounds the returned bytes object.
+            output_with_max_length = next(zlib_generator(io.BytesIO(compressed), wbits, chunk_size=chunk_size))
+            self.assertLessEqual(len(output_with_max_length), chunk_size)
+
+    def test_decompress_zlib_requires_complete_stream(self):
+        # Proves truncated compressed bodies are not accepted as complete decoded bodies.
+        for wbits in [WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE]:
+            compressed = compress_with_zlib(io.BytesIO(b"hello" * 100), wbits)
+
+            with self.assertRaises(zlib.error):
+                list(zlib_generator(io.BytesIO(compressed[:-1]), wbits))
 
     def test_compress_decompress_brotli(self):
         with open(__file__, 'rb') as f:
