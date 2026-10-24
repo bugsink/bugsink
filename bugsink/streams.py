@@ -55,6 +55,9 @@ def zlib_generator(input_stream, wbits, chunk_size=DEFAULT_CHUNK_SIZE):
             break
         yield data
 
+    if not z.eof:
+        raise zlib.error("Incomplete compressed stream")
+
 
 def brotli_generator(input_stream, chunk_size=DEFAULT_CHUNK_SIZE):
     # implementation notes: in principle chunk_size for input and output could be different, we keep them the same here.

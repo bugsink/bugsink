@@ -135,6 +135,14 @@ class StreamsTestCase(RegularTestCase):
             output_with_max_length = next(zlib_generator(io.BytesIO(compressed), wbits, chunk_size=chunk_size))
             self.assertLessEqual(len(output_with_max_length), chunk_size)
 
+    def test_decompress_zlib_requires_complete_stream(self):
+        # Proves truncated compressed bodies are not accepted as complete decoded bodies.
+        for wbits in [WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE]:
+            compressed = compress_with_zlib(io.BytesIO(b"hello" * 100), wbits)
+
+            with self.assertRaises(zlib.error):
+                list(zlib_generator(io.BytesIO(compressed[:-1]), wbits))
+
     def test_compress_decompress_brotli(self):
         with open(__file__, 'rb') as f:
             myself_times_ten = f.read() * 10
