@@ -180,6 +180,9 @@ def content_encoding_reader(request):
         )
 
     if encoding == "br":
+        if not get_settings().FEATURE_BROTLI:
+            raise BadRequest("Brotli content encoding is disabled")
+
         return GeneratorReader(
             brotli_generator(request._stream),
             bad_request_exceptions=(brotli.error, BrotliError)

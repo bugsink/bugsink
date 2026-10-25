@@ -206,6 +206,7 @@ BUGSINK = {
         os.getenv("ALERTS_WEBHOOK_DENY_NON_GLOBAL", "true").lower() in ("true", "1", "yes"),
 
     # Feature flags
+    "FEATURE_BROTLI": os.getenv("FEATURE_BROTLI", "true").lower() in ("true", "1", "yes"),
     "FEATURE_MINIDUMPS": os.getenv("FEATURE_MINIDUMPS", "false").lower() in ("true", "1", "yes"),
 }
 
