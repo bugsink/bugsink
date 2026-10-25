@@ -111,6 +111,7 @@ DEFAULTS = {
     "ALERTS_WEBHOOK_DENY_NON_GLOBAL": True,
 
     # Feature flags:
+    "FEATURE_BROTLI": True,
     "FEATURE_MINIDUMPS": False,  # minidumps are experimental/early-stage and likely a DOS-magnet; disabled by default
 
     # Private/undocumented extension API:

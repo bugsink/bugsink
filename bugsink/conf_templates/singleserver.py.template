@@ -121,6 +121,9 @@ BUGSINK = {
     # "MAX_EMAILS_PER_HOUR": 60,
     # "MAX_EMAILS_PER_MONTH": None,
 
+    # Feature flags:
+    # "FEATURE_BROTLI": True,
+
     "INGEST_STORE_BASE_DIR": "{{ base_dir }}/ingestion",
 
     # Optionally, you can set the following to True to further minimize information exposure in the UI. (The default is

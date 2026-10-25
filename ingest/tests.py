@@ -6,6 +6,7 @@ import uuid
 import time
 import tempfile
 import gzip
+import brotli
 
 import datetime
 from unittest.mock import patch
@@ -765,6 +766,25 @@ class IngestViewTestCase(TransactionTestCase):
 
         self.assertTrue(b"Max length" in response.content, response.content)
         self.assertTrue(b"exceeded" in response.content, response.content)
+
+    @override_settings(FEATURE_BROTLI=False)
+    def test_envelope_endpoint_brotli_disabled(self):
+        project = Project.objects.create(name="test")
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        response = self.client.post(
+            f"/api/{ project.id }/envelope/",
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+                "Content-Encoding": "br",
+            },
+            data=brotli.compress(b"{}"),
+        )
+
+        self.assertEqual(400, response.status_code)
+        self.assertTrue(b"Brotli content encoding is disabled" in response.content, response.content)
+        self.assertEqual(0, Event.objects.count())
 
     @tag("samples")
     def test_filestore(self):

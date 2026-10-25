@@ -87,6 +87,9 @@ BUGSINK = {
     # "MAX_EMAILS_PER_HOUR": 60,
     # "MAX_EMAILS_PER_MONTH": None,
 
+    # Feature flags:
+    # "FEATURE_BROTLI": True,
+
     # Webhook outbound security:
     # "ALERTS_WEBHOOK_OUTBOUND_MODE": "open",  # or "allowlist_only"
     # For Telegram alerts in allowlist_only mode, allow api.telegram.org.
