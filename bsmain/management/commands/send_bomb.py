@@ -2,7 +2,7 @@ import io
 import zlib
 import os
 import uuid
-import brotli
+import brotli_rs as brotli
 
 import requests
 

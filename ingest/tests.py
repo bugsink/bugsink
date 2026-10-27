@@ -6,7 +6,7 @@ import uuid
 import time
 import tempfile
 import gzip
-import brotli
+import brotli_rs as brotli
 
 import datetime
 from unittest.mock import patch

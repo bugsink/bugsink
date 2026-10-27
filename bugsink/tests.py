@@ -2,7 +2,7 @@ import io
 import pprint
 import re
 import zlib
-import brotli
+import brotli_rs as brotli
 
 from unittest import TestCase as RegularTestCase
 from unittest.mock import patch
@@ -25,6 +25,21 @@ from .streams import (
     MaxDataWriter, zlib_generator, brotli_generator, BrotliError)
 
 User = get_user_model()
+
+
+class CompressionDependencyTestCase(RegularTestCase):
+    def test_brotli_bindings_are_not_installed(self):
+        """Keep automatic Brotli support out of dependencies that discover it.
+
+        This test prevents accidental inclusion of Brotli bindings in the dependency tree.
+        See https://www.bugsink.com/blog/bye-bye-brotli/. requests, urllib3, sentry-sdk (and possibly future deps) would
+        pick up Brotli support automatically if it were installed, which we don't want.
+        """
+        with self.assertRaises(ImportError):
+            import brotli  # noqa: F401
+
+        with self.assertRaises(ImportError):
+            import brotlicffi  # noqa: F401
 
 
 def apply_n(f, n, v):
