@@ -30,6 +30,17 @@ are `admin`.
 
 Now, you can [set up your first project](https://www.bugsink.com/docs/quickstart/) and start tracking errors.
 
+To script that setup, create the first project with:
+
+```
+docker exec <container> bugsink-manage create_project \
+  --team Backend \
+  --project API \
+  --admin-user admin@example.org \
+  --project-id 42 \
+  --dsn-key 12345678123456781234567812345678
+```
+
 [Detailed installation instructions](https://www.bugsink.com/docs/installation/) are on the Bugsink website.
 
 [More information and documentation](https://www.bugsink.com/)
