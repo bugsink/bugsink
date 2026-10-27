@@ -287,7 +287,7 @@ class MaxDataReader:
         return result
 
     def __getattr__(self, attr):
-        if attr in {"readable", "writable", "seekable", "close", "closed"}:
+        if attr in {"META", "_stream", "readable", "writable", "seekable", "close", "closed"}:
             return getattr(self.stream, attr)
         raise AttributeError(attr)
 
