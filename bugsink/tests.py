@@ -216,6 +216,12 @@ class StreamsTestCase(RegularTestCase):
 
         self.assertEqual("Max length (250) exceeded", str(e.exception))
 
+    def test_max_data_reader_rejects_unaccounted_methods(self):
+        reader = MaxDataReader(250, io.BytesIO(b"hello"))
+
+        with self.assertRaises(AttributeError):
+            reader.readinto(bytearray(5))
+
     def test_max_data_writer(self):
         stream = io.BytesIO()
         writer = MaxDataWriter(250, stream)
