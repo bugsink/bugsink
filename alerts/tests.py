@@ -102,6 +102,41 @@ class TestAlertSending(DjangoTestCase):
 
         self.assertEqual(len(mail.outbox), 1)
 
+    @patch("alerts.service_backends.slack.slack_backend_send_alert.delay")
+    def test_inactive_messaging_service_is_skipped(self, delay):
+        project = Project.objects.create(name="Test project")
+        user = User.objects.create_user(username="inactive-service", email="inactive-service@example.org")
+        ProjectMembership.objects.create(project=project, user=user, send_email_alerts=True, accepted=True)
+        MessagingServiceConfig.objects.create(
+            project=project,
+            display_name="Slack",
+            kind="slack",
+            config=json.dumps({"webhook_url": "https://hooks.slack.com/test"}),
+            is_active=False,
+        )
+        issue, _ = get_or_create_issue(project=project)
+        create_event(project=project, issue=issue)
+
+        send_new_issue_alert(issue.id)
+
+        delay.assert_not_called()
+        self.assertEqual(len(mail.outbox), 1)
+
+    @patch("alerts.service_backends.slack.slack_backend_send_alert.delay")
+    def test_active_messaging_service_is_alerted(self, delay):
+        project = Project.objects.create(name="Test project")
+        MessagingServiceConfig.objects.create(
+            project=project,
+            display_name="Slack",
+            kind="slack",
+            config=json.dumps({"webhook_url": "https://hooks.slack.com/test"}),
+        )
+        issue, _ = get_or_create_issue(project=project)
+
+        send_new_issue_alert(issue.id)
+
+        delay.assert_called_once()
+
     def test_txt_and_html_have_relevant_variables_defined(self):
         example_context = DEBUG_CONTEXTS["issue_alert"]
         html_template = get_template("mails/issue_alert.html")

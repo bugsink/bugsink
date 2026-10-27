@@ -5,6 +5,6 @@ from .models import MessagingServiceConfig
 
 @admin.register(MessagingServiceConfig)
 class MessagingServiceConfigAdmin(admin.ModelAdmin):
-    list_display = ('project', 'display_name', 'kind', 'last_failure_timestamp')
+    list_display = ('project', 'display_name', 'kind', 'is_active', 'last_failure_timestamp')
     search_fields = ('name', 'service_type')
     list_filter = ('kind',)
