@@ -9,7 +9,7 @@ django-admin-autocomplete-filter==0.7.*
 pygments==2.21.*
 inotify_simple==2.0.*
 python-dateutil==3.0.*
-brotli-rs==9.0.*
+brotli-rs==9.1.*
 whitenoise==6.12.*
 requests==2.34.*
 certifi>=2026.10.23
