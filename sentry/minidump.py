@@ -7,7 +7,9 @@ from files.minidump import build_cfi_map_from_minidump_bytes, event_threads_for_
 
 
 def merge_minidump_event(data, minidump_bytes, project):
-    frame_info_map = build_cfi_map_from_minidump_bytes(minidump_bytes, project)
+    used_metadata_ids = set()
+    frame_info_map = build_cfi_map_from_minidump_bytes(
+        minidump_bytes, project, used_metadata_ids=used_metadata_ids)
     process_state = symbolic.ProcessState.from_minidump_buffer(minidump_bytes, frame_infos=frame_info_map)
 
     data['level'] = 'fatal' if process_state.crashed else 'info'
@@ -26,7 +28,7 @@ def merge_minidump_event(data, minidump_bytes, project):
     os['version'] = info.os_version
     device['arch'] = info.cpu_family
 
-    threads = event_threads_for_process_state(process_state, project)
+    threads = event_threads_for_process_state(process_state, project, used_metadata_ids=used_metadata_ids)
     data.setdefault("threads", {})["values"] = threads
 
     if process_state.requesting_thread > -1:
@@ -70,3 +72,5 @@ def merge_minidump_event(data, minidump_bytes, project):
     } for module in process_state.modules()]
 
     data.setdefault('debug_meta', {})['images'] = images
+
+    return used_metadata_ids
