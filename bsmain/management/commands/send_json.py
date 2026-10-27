@@ -1,7 +1,7 @@
 import os
 import io
 import uuid
-import brotli
+import brotli_rs as brotli
 
 import time
 import json

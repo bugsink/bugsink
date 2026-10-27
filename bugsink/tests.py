@@ -2,7 +2,7 @@ import io
 import pprint
 import re
 import zlib
-import brotli
+import brotli_rs as brotli
 
 from unittest import TestCase as RegularTestCase
 from unittest.mock import patch

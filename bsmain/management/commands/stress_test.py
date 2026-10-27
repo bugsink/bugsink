@@ -1,6 +1,6 @@
 import io
 import uuid
-import brotli
+import brotli_rs as brotli
 import threading
 import signal
 
