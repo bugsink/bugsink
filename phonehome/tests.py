@@ -1,14 +1,20 @@
 import json
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
+from django.contrib.auth import get_user_model
+from django.urls import reverse
 from bugsink.app_settings import override_settings as override_bugsink_settings
 from bugsink.context_processors import get_email_failure_warnings, get_email_quota_warnings
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 
-from .models import Installation
-from .tasks import _make_message_body
+from .models import Installation, OutboundMessage, RemoteMessage, RemoteMessagePart
+from .tasks import _make_message_body, _validate_remote_messages, send_if_due
+
+
+User = get_user_model()
 
 
 class PhoneHomeTests(TestCase):
@@ -17,6 +23,136 @@ class PhoneHomeTests(TestCase):
         # simple "does not crash" test (at least tests the various database getter code paths don't crash)
         _make_message_body()
 
+    def test_validate_remote_messages(self):
+        self.assertEqual(_validate_remote_messages({
+            "messages": [{
+                "id": "security-2026-001",
+                "applies_until_version": "9999.0.0",
+                "parts": [
+                    {"text": "Upgrade Bugsink."},
+                    {"text": "Read the advisory", "url": "https://www.bugsink.com/security/2026-001/"},
+                ],
+            }],
+        }), [{
+            "id": "security-2026-001",
+            "applies_until_version": "9999.0.0",
+            "parts": [
+                {"text": "Upgrade Bugsink."},
+                {"text": "Read the advisory", "url": "https://www.bugsink.com/security/2026-001/"},
+            ],
+        }])
+
+    def test_validate_remote_messages_rejects_non_https_links(self):
+        with self.assertRaisesMessage(ValueError, "Invalid phonehome message URL"):
+            _validate_remote_messages({
+                "messages": [{
+                    "id": "security-2026-001",
+                    "applies_until_version": "9999.0.0",
+                    "parts": [{"text": "Not an innocent link", "url": "javascript:alert(1)"}],
+                }],
+            })
+
+
+class RemoteMessagesTestCase(TransactionTestCase):
+    def setUp(self):
+        super().setUp()
+        self.remote_message = RemoteMessage.objects.create(
+            key="security-2026-001",
+            applies_until_version="9999.0.0",
+        )
+        RemoteMessagePart.objects.create(
+            message=self.remote_message,
+            position=0,
+            text="<strong>Upgrade Bugsink</strong>.",
+        )
+        RemoteMessagePart.objects.create(
+            message=self.remote_message,
+            position=1,
+            text="Read the advisory",
+            url="https://www.bugsink.com/security/2026-001/",
+        )
+
+    @override_bugsink_settings(PHONEHOME=True)
+    @patch("phonehome.tasks.requests.post")
+    def test_successful_phonehome_updates_remote_messages(self, post):
+        remote_messages = [{
+            "id": "security-2026-001",
+            "applies_until_version": "9999.0.0",
+            "parts": [{"text": "Upgrade again."}],
+        }]
+        post.return_value.json.return_value = {"messages": remote_messages}
+        self.remote_message.silenced = True
+        self.remote_message.save(update_fields=["silenced"])
+        old_message = RemoteMessage.objects.create(
+            key="old-message",
+            applies_until_version="9999.0.0",
+        )
+
+        send_if_due()
+
+        self.remote_message.refresh_from_db()
+        old_message.refresh_from_db()
+        self.assertEqual(self.remote_message.applies_until_version, "9999.0.0")
+        self.assertEqual(self.remote_message.parts.get().text, "Upgrade again.")
+        self.assertTrue(self.remote_message.active)
+        self.assertTrue(self.remote_message.silenced)
+        self.assertFalse(old_message.active)
+        self.assertIsNotNone(OutboundMessage.objects.get().sent_at)
+
+    @override_bugsink_settings(PHONEHOME=True)
+    @patch("phonehome.tasks.requests.post")
+    def test_invalid_remote_messages_leave_previous_messages_in_place(self, post):
+        post.return_value.json.return_value = {
+            "messages": [{
+                "id": "security-2026-002",
+                "applies_until_version": "9999.0.0",
+                "parts": [{"text": "Not an innocent link", "url": "javascript:alert(1)"}],
+            }],
+        }
+
+        send_if_due()
+
+        self.remote_message.refresh_from_db()
+        self.assertTrue(self.remote_message.active)
+        self.assertEqual(self.remote_message.parts.first().text, "<strong>Upgrade Bugsink</strong>.")
+        self.assertIsNotNone(OutboundMessage.objects.get().sent_at)
+
+    def test_remote_message_is_escaped_and_only_shown_to_superusers(self):
+        user = User.objects.create_user(username="user", password="user")
+        self.client.force_login(user)
+        response = self.client.get("/", follow=True)
+        self.assertNotContains(response, "Upgrade Bugsink")
+
+        superuser = User.objects.create_superuser(username="admin", password="admin")
+        self.client.force_login(superuser)
+        response = self.client.get("/", follow=True)
+        self.assertContains(response, "&lt;strong&gt;Upgrade Bugsink&lt;/strong&gt;", html=False)
+        self.assertNotContains(response, "<strong>Upgrade Bugsink</strong>", html=False)
+        self.assertContains(response, 'href="https://www.bugsink.com/security/2026-001/"')
+        self.assertContains(response, "&#32;", html=False)
+
+    def test_superuser_can_silence_a_remote_message(self):
+        superuser = User.objects.create_superuser(username="admin", password="admin")
+        self.client.force_login(superuser)
+
+        response = self.client.post(
+            reverse("silence_remote_message", kwargs={"message_id": "security-2026-001"}),
+            {"next": "/"},
+        )
+
+        self.assertRedirects(response, "/", fetch_redirect_response=False)
+        self.remote_message.refresh_from_db()
+        self.assertTrue(self.remote_message.silenced)
+
+    def test_remote_message_is_not_shown_after_its_last_applicable_version(self):
+        self.remote_message.applies_until_version = "0.0.1"
+        self.remote_message.save(update_fields=["applies_until_version"])
+
+        superuser = User.objects.create_superuser(username="admin", password="admin")
+        self.client.force_login(superuser)
+        response = self.client.get("/", follow=True)
+
+        self.assertNotContains(response, "Upgrade Bugsink")
 
 class EmailSendingDiagnosticsTestCase(TransactionTestCase):
 
