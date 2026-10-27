@@ -136,25 +136,28 @@ class GeneratorReader:
         return result
 
     def readline(self, size=-1):
-        newline_index = self.buffer.find(b"\n")
-        while newline_index == -1:
-            chunk = self.read(DEFAULT_CHUNK_SIZE)
-            if not chunk:
-                break
-            self.buffer.extend(chunk)
+        try:
             newline_index = self.buffer.find(b"\n")
+            while newline_index == -1:
+                chunk = next(self.generator)
+                if not chunk:
+                    break
+                self.buffer.extend(chunk)
+                newline_index = self.buffer.find(b"\n")
 
-        if newline_index != -1:
-            end = newline_index + 1
-        else:
-            end = len(self.buffer)
+            if newline_index != -1:
+                end = newline_index + 1
+            else:
+                end = len(self.buffer)
 
-        if size >= 0:
-            end = min(end, size)
+            if size >= 0:
+                end = min(end, size)
 
-        result = bytes(self.buffer[:end])
-        del self.buffer[:end]
-        return result
+            result = bytes(self.buffer[:end])
+            del self.buffer[:end]
+            return result
+        except self.bad_request_exceptions as e:
+            raise BadRequest(str(e)) from e
 
     def flush(self):
         pass  # no-op for interface compatibility
