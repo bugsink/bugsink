@@ -21,7 +21,8 @@ from .transaction import immediate_atomic
 from .volume_based_condition import VolumeBasedCondition
 from .utils import email_backend_delivers_mail, send_rendered_email
 from .streams import (
-    compress_with_zlib, GeneratorReader, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE, MaxDataReader,
+    compress_with_zlib, GeneratorReader, DEFAULT_CHUNK_SIZE, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE,
+    MaxDataReader,
     MaxDataWriter, zlib_generator, brotli_generator, BrotliError)
 
 User = get_user_model()
@@ -239,6 +240,12 @@ class StreamsTestCase(RegularTestCase):
         self.assertEqual(b"I a", reader.read(3))
         self.assertEqual(b"m a", reader.read(3))
         self.assertEqual(b" generator", reader.read(None))
+
+    def test_generator_reader_readline_preserves_large_chunks(self):
+        line = b"P" * DEFAULT_CHUNK_SIZE + b"S" * 1808 + b"\n"
+        reader = GeneratorReader(iter([line]))
+
+        self.assertEqual(line, reader.readline())
 
     def test_generator_reader_performance(self):
         # at least one test directly for GeneratorReader; doubles as a regression test for performance issue that showed
