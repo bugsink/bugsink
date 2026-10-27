@@ -22,7 +22,7 @@ from .volume_based_condition import VolumeBasedCondition
 from .utils import email_backend_delivers_mail, send_rendered_email
 from .streams import (
     compress_with_zlib, GeneratorReader, DEFAULT_CHUNK_SIZE, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE,
-    MaxDataReader,
+    MaxDataReader, MaxLengthExceeded,
     MaxDataWriter, zlib_generator, brotli_generator, BrotliError)
 
 User = get_user_model()
@@ -215,6 +215,12 @@ class StreamsTestCase(RegularTestCase):
             reader.read(None)
 
         self.assertEqual("Max length (250) exceeded", str(e.exception))
+
+    def test_max_data_reader_readline_is_limited(self):
+        reader = MaxDataReader(5, io.BytesIO(b"hello\n"))
+
+        with self.assertRaises(MaxLengthExceeded):
+            reader.readline()
 
     def test_max_data_reader_rejects_unaccounted_methods(self):
         reader = MaxDataReader(250, io.BytesIO(b"hello"))
