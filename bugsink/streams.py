@@ -272,6 +272,20 @@ class MaxDataReader:
 
         return result
 
+    def readline(self, size=-1):
+        if size == -1 or size is None:
+            size = self.max_length - self.bytes_read + 1  # +1 to trigger the max length check
+        else:
+            size = min(size, self.max_length - self.bytes_read + 1)
+
+        result = self.stream.readline(size)
+        self.bytes_read += len(result)
+
+        if self.bytes_read > self.max_length:
+            raise MaxLengthExceeded("Max length (%s) exceeded" % self.reason)
+
+        return result
+
     def __getattr__(self, attr):
         if attr in {"readable", "writable", "seekable", "close", "closed"}:
             return getattr(self.stream, attr)
