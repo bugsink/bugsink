@@ -107,6 +107,7 @@ BUGSINK = {
     #     },
     # },
     #
+    # NOTE: basepath and get_basepath must provide separate directories for different object kinds.
     # "OBJECT_STORAGES": {
     #     "file": {
     #         "local_files": {

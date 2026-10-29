@@ -227,6 +227,7 @@ if os.getenv("FILE_EVENT_STORAGE_PATH"):
         },
     }
 
+# NOTE: basepath and get_basepath must provide separate directories for different object kinds.
 if os.getenv("FILE_OBJECT_STORAGE_PATH"):
     BUGSINK["OBJECT_STORAGES"] = {
         "file": {
