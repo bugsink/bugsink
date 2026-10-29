@@ -37,7 +37,7 @@ logger = logging.getLogger("bugsink.api")
 
 # budget is not yet tuned; reasons for high values: we're dealing with "leaves in the model-dep-tree here"; reasons for
 # low values: deletion of files might just be expensive.
-VACUUM_FILES_BATCH_SIZE = 500
+VACUUM_FILES_BATCH_SIZE = 50
 
 # At roughly 200-500 bytes per file (reasonable enough for paths), 50 MiB accommodates about 100,000-250,000 files,
 # which "should be enough" for non-pathalogical use-cases.
