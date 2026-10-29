@@ -53,6 +53,20 @@ IN_CODE_DEBUG_ID_REGEX = re.compile(
 DEBUG_ID_SCAN_TAIL_SIZE = 64 * 1024
 
 
+def create_chunk(checksum, data):
+    # a snug fit around the only DB-writing thing we do here to ensure minimal blocking
+    with immediate_atomic():
+        chunk, created = Chunk.objects.get_or_create(
+            checksum=checksum,
+            defaults={
+                "size": len(data),
+                # NOTE: further possible optimization: don't even read the file when already existing
+                "data": data,
+            })
+
+    return chunk, created
+
+
 def create_file_from_local_file(checksum, filename, size, local_file):
     with immediate_atomic(only_if_needed=True):
         write_storage = get_write_storage("file")
