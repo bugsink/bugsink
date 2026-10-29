@@ -6,11 +6,23 @@ from django.utils import timezone
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 
-from files.models import File, FileMetadata
-from files.tasks import vacuum_files_batch
+from files.models import Chunk, File, FileMetadata
+from files.tasks import vacuum_files_batch, vacuum_files_sync
 
 
 class VacuumFilesBatchTestCase(TransactionTestCase):
+    @patch("files.tasks.VACUUM_FILES_BATCH_SIZE", 1)
+    def test_chunk_cleanup_expires_old_chunks_and_keeps_recent_chunks(self):
+        for checksum in ("a" * 40, "b" * 40):
+            chunk = Chunk.objects.create(checksum=checksum, size=3, data=b"old")
+            Chunk.objects.filter(id=chunk.id).update(created_at=timezone.now() - timedelta(days=2))
+        recent = Chunk.objects.create(checksum="c" * 40, size=6, data=b"recent")
+
+        vacuum_files_sync()
+
+        self.assertEqual([recent.id], list(Chunk.objects.values_list("id", flat=True)))
+        self.assertEqual(b"recent", Chunk.objects.get(id=recent.id).data)
+
     def _create_file(self, checksum, filename, size, accessed_at):
         file = File.objects.create(checksum=checksum, filename=filename, size=size, data=b"x" * size)
         FileMetadata.objects.create(file=file, debug_id=uuid4(), file_type="source_map", data="{}")
