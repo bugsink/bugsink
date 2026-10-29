@@ -2,6 +2,12 @@ from django.apps import apps
 
 
 OBJECT_KIND_SPECS = {
+    "chunk": {
+        "model": "files.Chunk",
+        "key_field": "checksum",
+        "raw_data_getter": "get_raw_data",
+        "data_field": "data",
+    },
     "file": {
         "model": "files.File",
         "key_field": "checksum",

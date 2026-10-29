@@ -7,9 +7,9 @@ from .models import Chunk, File, FileMetadata
 
 @admin.register(Chunk)
 class ChunkAdmin(admin.ModelAdmin):
-    list_display = ('checksum', 'size', 'created_at')
+    list_display = ('checksum', 'storage_backend', 'size', 'created_at')
     search_fields = ('checksum',)
-    readonly_fields = ('data',)
+    readonly_fields = ('data', 'storage_backend')
 
 
 @admin.register(File)

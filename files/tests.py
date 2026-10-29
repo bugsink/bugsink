@@ -37,16 +37,16 @@ from bugsink.streams import MaxLengthExceeded
 from .models import Chunk, File, FileMetadata, get_file_metadata_for_debug_ids
 from .minidump import event_threads_for_process_state
 from .storage_registry import override_object_storages
-from .tasks import assemble_file, create_file_from_local_file, process_artifact_bundle
+from .tasks import assemble_file, create_chunk, create_file_from_local_file, process_artifact_bundle, vacuum_files_sync
 from .views import CHUNK_UPLOAD_SIZE
 
 
 User = get_user_model()
 
 
-def get_test_object_storages(basepath, use_for_write):
+def get_test_object_storages(basepath, use_for_write, object_kind="file"):
     return {
-        "file": {
+        object_kind: {
             "local": {
                 "STORAGE": "files.storage.ObjectFileStorage",
                 "OPTIONS": {
@@ -1041,6 +1041,115 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(
             200, response.status_code, "Error in %s: %s" % (
                 filename, response.content if response.status_code != 302 else response.url))
+
+
+class ChunkStorageTests(TransactionTestCase):
+    def setUp(self):
+        super().setUp()
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.chunk_path = Path(self.tempdir.name, "chunks")
+        self.chunk_path.mkdir()
+        storages = get_test_object_storages(self.chunk_path, True, object_kind="chunk")
+        storages.update(get_test_object_storages(Path(self.tempdir.name, "files"), True))
+        self.storage_override = override_object_storages(storages)
+        self.storage_override.__enter__()
+
+    def tearDown(self):
+        self.storage_override.__exit__(None, None, None)
+        self.tempdir.cleanup()
+        super().tearDown()
+
+    def test_chunk_upload_to_object_storage(self):
+        token = AuthToken.objects.create(debug_files_upload=True)
+        for field in ("file", "file_gzip"):
+            with self.subTest(field=field):
+                data = field.encode() + b" chunk contents"
+                checksum = sha1(data, usedforsecurity=False).hexdigest()
+                for _ in range(2):
+                    upload = BytesIO(gzip.compress(data) if field == "file_gzip" else data)
+                    upload.name = checksum
+                    response = self.client.post(
+                        "/api/0/organizations/anyorg/chunk-upload/",
+                        data={field: upload},
+                        headers={"Authorization": f"Bearer {token.token}"},
+                    )
+                    self.assertEqual(200, response.status_code)
+
+                chunk = Chunk.objects.get(checksum=checksum)
+                self.assertEqual("local", chunk.storage_backend)
+                self.assertEqual(b"", chunk.data)
+                self.assertEqual(len(data), chunk.size)
+                self.assertEqual(data, chunk.get_raw_data())
+                self.assertEqual(data, (self.chunk_path / checksum).read_bytes())
+
+    def test_assemble_file_from_db_and_object_storage_chunks(self):
+        old_data, new_data = b"old chunk", b"new chunk"
+        old_checksum = sha1(old_data, usedforsecurity=False).hexdigest()
+        new_checksum = sha1(new_data, usedforsecurity=False).hexdigest()
+        Chunk.objects.create(checksum=old_checksum, size=len(old_data), data=old_data)
+        data = new_data + old_data + new_data
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+
+        create_chunk(new_checksum, new_data)
+        file, created = assemble_file(
+            checksum, [new_checksum, old_checksum, new_checksum], filename="mixed.txt")
+
+        self.assertTrue(created)
+        self.assertEqual("local", file.storage_backend)
+        self.assertEqual(data, file.get_raw_data())
+        self.assertEqual(2, Chunk.objects.count())
+
+    def test_create_chunk_does_not_rewrite_existing_db_chunk(self):
+        data = b"existing"
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+        existing = Chunk.objects.create(checksum=checksum, size=len(data), data=data)
+
+        chunk, created = create_chunk(checksum, data)
+
+        self.assertFalse(created)
+        self.assertEqual(existing.id, chunk.id)
+        self.assertIsNone(chunk.storage_backend)
+        self.assertEqual(data, chunk.get_raw_data())
+        self.assertEqual([], list(self.chunk_path.iterdir()))
+
+    def test_failed_chunk_storage_write_rolls_back_chunk(self):
+        with patch("files.tasks.write_to_storage", side_effect=OSError("write failed")):
+            with self.assertRaisesMessage(OSError, "write failed"):
+                create_chunk("a" * 40, b"chunk")
+
+        self.assertFalse(Chunk.objects.exists())
+
+    def test_external_chunk_cleanup_expires_old_chunks_and_keeps_recent_chunks(self):
+        old, _ = create_chunk("a" * 40, b"old")
+        recent, _ = create_chunk("b" * 40, b"recent")
+        Chunk.objects.filter(id=old.id).update(created_at=timezone.now() - timedelta(days=2))
+
+        vacuum_files_sync()
+
+        self.assertFalse(Chunk.objects.filter(id=old.id).exists())
+        self.assertFalse((self.chunk_path / old.checksum).exists())
+        self.assertEqual(b"recent", recent.get_raw_data())
+
+    def test_external_chunk_instance_cleanup_waits_for_commit(self):
+        chunk, _ = create_chunk("a" * 40, b"chunk")
+        path = self.chunk_path / chunk.checksum
+
+        with immediate_atomic():
+            chunk.delete()
+            self.assertTrue(path.exists())
+
+        self.assertFalse(path.exists())
+
+    def test_external_chunk_queryset_cleanup_is_not_run_on_rollback(self):
+        chunk, _ = create_chunk("a" * 40, b"chunk")
+
+        with self.assertRaisesMessage(ValueError, "rollback"):
+            with immediate_atomic():
+                Chunk.objects.filter(id=chunk.id).delete()
+                raise ValueError("rollback")
+
+        self.assertTrue(Chunk.objects.filter(id=chunk.id).exists())
+        self.assertEqual(b"chunk", chunk.get_raw_data())
 
 
 class EnterContextMixin:

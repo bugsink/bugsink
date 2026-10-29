@@ -26,7 +26,7 @@ from .models import (
     File,
     FileMetadata,
     write_fileobj_to_storage,
-    _binary_to_bytes,
+    write_to_storage,
 )
 from .minidump import extract_dif_kind
 from .storage_registry import get_write_storage
@@ -56,13 +56,18 @@ DEBUG_ID_SCAN_TAIL_SIZE = 64 * 1024
 def create_chunk(checksum, data):
     # a snug fit around the only DB-writing thing we do here to ensure minimal blocking
     with immediate_atomic():
-        chunk, created = Chunk.objects.get_or_create(
+        write_storage = get_write_storage("chunk")
+        chunk, created = Chunk.objects.defer("data").get_or_create(
             checksum=checksum,
             defaults={
                 "size": len(data),
-                # NOTE: further possible optimization: don't even read the file when already existing
-                "data": data,
+                "data": b"" if write_storage is not None else data,
+                "storage_backend": None if write_storage is None else write_storage.name,
             })
+
+        if created and write_storage is not None:
+            # Keep the write inside immediate_atomic so other requests cannot see an incomplete chunk.
+            write_to_storage("chunk", checksum, data)
 
     return chunk, created
 
@@ -327,7 +332,7 @@ def assemble_file(checksum, chunk_checksums, filename):
             size = 0
 
             for chunk in chunks_in_order:
-                chunk_data = _binary_to_bytes(chunk.data)
+                chunk_data = chunk.get_raw_data()
                 next_size = size + len(chunk_data)
                 if next_size > max_file_size:
                     raise AssembledFileTooLarge("Assembled file exceeds MAX_FILE_SIZE")

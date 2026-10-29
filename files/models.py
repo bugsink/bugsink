@@ -25,16 +25,6 @@ def _binary_to_bytes(value):
     return value
 
 
-class Chunk(models.Model):
-    checksum = models.CharField(max_length=40, unique=True)  # unique implies index, which we also use for lookups
-    size = models.PositiveIntegerField()
-    data = models.BinaryField(null=False)  # as with Events, we can "eventually" move this out of the database
-    created_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
-
-    def __str__(self):
-        return self.checksum
-
-
 class DifAssembly(models.Model):
     # Upload status belongs here, not in Snappea: a task disappears from the queue before it starts running.
     project = models.ForeignKey("projects.Project", on_delete=models.DO_NOTHING)
@@ -111,6 +101,41 @@ class StorageAwareQuerySet(models.QuerySet):
             cleanup_objects_on_storage((object_kind, key, storage_backend) for key, storage_backend in todos)
 
         return result
+
+
+class Chunk(models.Model):
+    checksum = models.CharField(max_length=40, unique=True)  # unique implies index, which we also use for lookups
+    size = models.PositiveIntegerField()
+    data = models.BinaryField(null=False)
+    storage_backend = models.CharField(max_length=255, blank=True, null=True, default=None, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
+
+    objects = StorageAwareQuerySet.as_manager()
+
+    def __str__(self):
+        return self.checksum
+
+    @contextmanager
+    def open_for_read(self):
+        _, key, _, storage = resolve_storage_for_instance(self)
+
+        if storage is None:
+            yield BytesIO(_binary_to_bytes(self.data))
+            return
+
+        with storage.open(key, "rb") as f:
+            yield f
+
+    def get_raw_data(self):
+        with self.open_for_read() as f:
+            return f.read()
+
+    def delete(self, *args, **kwargs):
+        object_kind, key, storage_backend = get_storage_todo_for_instance(self)
+        if storage_backend is not None:
+            cleanup_objects_on_storage([(object_kind, key, storage_backend)])
+
+        return super().delete(*args, **kwargs)
 
 
 class File(models.Model):
