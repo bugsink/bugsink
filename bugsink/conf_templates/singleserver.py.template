@@ -166,6 +166,14 @@ ALLOWED_HOSTS = deduce_allowed_hosts(BUGSINK["BASE_URL"])
 # Alternatively, you can set the ALLOWED_HOSTS manually:
 # ALLOWED_HOSTS = ["{{ host }}"]
 
+# OpenID Connect (SSO) login; see bugsink/settings/default.py for all OIDC_* settings and their defaults.
+# Register {BASE_URL}/accounts/oidc/callback/ as redirect URI at your identity provider.
+# OIDC_ENABLED = True
+# OIDC_RP_CLIENT_ID = "bugsink"
+# OIDC_RP_CLIENT_SECRET = "..."
+# OIDC_OP_DISCOVERY_URL = "https://idp.example.org/realms/main/.well-known/openid-configuration"
+# OIDC_ADMIN_GROUP = "bugsink-admins"
+
 FORCE_SCRIPT_NAME = deduce_script_name(BUGSINK["BASE_URL"])
 if FORCE_SCRIPT_NAME:
     # "in theory" a "relative" (non-leading-slash) config for STATIC_URL should just prepend [FORCE_]SCRIPT_NAME

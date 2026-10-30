@@ -274,6 +274,30 @@ CONN_MAX_AGE = 0
 LOGIN_REDIRECT_URL = "home"
 LOGIN_URL = "login"
 
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "users.oidc.OIDCBackend",  # inert unless OIDC_ENABLED
+]
+
+# OpenID Connect (SSO) login; see users/oidc.py. Endpoints are read from OIDC_OP_DISCOVERY_URL unless set explicitly
+# (OIDC_OP_AUTHORIZATION_ENDPOINT, OIDC_OP_TOKEN_ENDPOINT, OIDC_OP_USER_ENDPOINT, OIDC_OP_JWKS_ENDPOINT).
+OIDC_ENABLED = False
+OIDC_RP_CLIENT_ID = None
+OIDC_RP_CLIENT_SECRET = None
+OIDC_OP_DISCOVERY_URL = None  # e.g. https://idp.example.org/realms/main/.well-known/openid-configuration
+OIDC_RP_SIGN_ALGO = "RS256"
+OIDC_RP_SCOPES = "openid email profile"
+OIDC_USE_PKCE = True
+OIDC_TIMEOUT = 10
+OIDC_STORE_ID_TOKEN = True  # needed for id_token_hint on logout
+OIDC_CREATE_USER = True  # create unknown users on first login (never in SINGLE_USER mode)
+OIDC_REQUIRE_VERIFIED_EMAIL = True  # require the email_verified claim to be true
+OIDC_GROUPS_CLAIM = "groups"
+OIDC_REQUIRED_GROUP = None  # if set, only members of this group may log in
+OIDC_ADMIN_GROUP = None  # if set, superuser status is synced from membership of this group on each login
+OIDC_ONLY = False  # SSO only: no password login/signup/reset (break-glass: /accounts/login/?local=1)
+OIDC_LOGIN_BUTTON_TEXT = "Log in with SSO"
+
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
 AUTH_PASSWORD_VALIDATORS = [

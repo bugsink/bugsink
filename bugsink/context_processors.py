@@ -221,7 +221,11 @@ def useful_settings_processor(request):
 
     return {
         'site_title': get_settings().SITE_TITLE,
-        'registration_enabled': get_settings().USER_REGISTRATION == CB_ANYBODY,
+        'registration_enabled': get_settings().USER_REGISTRATION == CB_ANYBODY and not (
+            settings.OIDC_ENABLED and settings.OIDC_ONLY),
+        'oidc_enabled': settings.OIDC_ENABLED,
+        'oidc_only': settings.OIDC_ENABLED and settings.OIDC_ONLY,
+        'oidc_login_button_text': settings.OIDC_LOGIN_BUTTON_TEXT,
         'app_settings': get_settings(),
         'system_warnings': get_system_warnings,
         'script_prefix': get_script_prefix().rstrip("/"),  # TODO why
