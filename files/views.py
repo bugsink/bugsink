@@ -23,7 +23,7 @@ from bugsink.streams import handle_request_content_encoding, copy_stream_limited
 from projects.models import Project
 
 from .models import ArtifactBundleAssembly, Chunk, DifAssembly, File
-from .tasks import assemble_artifact_bundle, assemble_dif
+from .tasks import assemble_artifact_bundle, assemble_dif, create_chunk
 
 logger = logging.getLogger("bugsink.api")
 
@@ -222,15 +222,7 @@ def chunk_upload(request, organization_slug):
             if sha1(data, usedforsecurity=False).hexdigest() != chunk.name:
                 raise Exception("checksum mismatch")
 
-            # a snug fit around the only DB-writing thing we do here to ensure minimal blocking
-            with immediate_atomic():
-                _, _ = Chunk.objects.get_or_create(
-                    checksum=chunk.name,
-                    defaults={
-                        "size": len(data),
-                        # NOTE: further possible optimization: don't even read the file when already existing
-                        "data": data,
-                    })
+            create_chunk(chunk.name, data)
 
         for chunk in request.FILES.getlist("file_gzip"):
             output_stream = BytesIO()
@@ -246,15 +238,7 @@ def chunk_upload(request, organization_slug):
             if sha1(data, usedforsecurity=False).hexdigest() != chunk.name:
                 raise Exception("checksum mismatch")
 
-            # a snug fit around the only DB-writing thing we do here to ensure minimal blocking
-            with immediate_atomic():
-                _, _ = Chunk.objects.get_or_create(
-                    checksum=chunk.name,
-                    defaults={
-                        "size": len(data),
-                        # NOTE: further possible optimization: don't even read the file when already existing
-                        "data": data,
-                    })
+            create_chunk(chunk.name, data)
     except MaxLengthExceeded as e:
         return JsonResponse({"error": str(e)}, status=413)
 

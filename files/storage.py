@@ -27,6 +27,8 @@ class ObjectStorage:
 
 
 class ObjectFileStorage(ObjectStorage):
+    """NOTE: basepath and get_basepath must provide separate directories for different object kinds."""
+
     def __init__(self, name, object_kind, basepath=None, get_basepath=None, **kwargs):
         super().__init__(name, object_kind)
 
