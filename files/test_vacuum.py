@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 
-from files.models import Chunk, File, FileMetadata
+from files.models import Chunk, File, FileMetadata, _binary_to_bytes
 from files.tasks import vacuum_files_batch, vacuum_files_sync
 
 
@@ -21,7 +21,7 @@ class VacuumFilesBatchTestCase(TransactionTestCase):
         vacuum_files_sync()
 
         self.assertEqual([recent.id], list(Chunk.objects.values_list("id", flat=True)))
-        self.assertEqual(b"recent", Chunk.objects.get(id=recent.id).data)
+        self.assertEqual(b"recent", _binary_to_bytes(Chunk.objects.get(id=recent.id).data))
 
     def _create_file(self, checksum, filename, size, accessed_at):
         file = File.objects.create(checksum=checksum, filename=filename, size=size, data=b"x" * size)
