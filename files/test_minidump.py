@@ -258,8 +258,8 @@ int main(void) {
         self.process_state.modules = modules
         used_metadata_ids = set()
 
-        with patch("files.minidump.symalot.process_minidump",
-                   return_value=self.process_state):
+        with patch("files.minidump.symalot.minidump_modules",
+                   return_value=self.process_state.modules):
             with patch("files.minidump.symalot.generate_cfi", wraps=symalot.generate_cfi) as parse:
                 build_cfi_map_from_minidump_bytes(b"", self.project, used_metadata_ids=used_metadata_ids)
 

@@ -9,10 +9,8 @@ from .zip import open_zip_entry
 
 
 def build_cfi_map_from_minidump_bytes(minidump_bytes, project, *, used_metadata_ids=None):
-    process_state = symalot.process_minidump(minidump_bytes)
-
     module_ids_by_debug_id = defaultdict(set)
-    for module in process_state.modules:
+    for module in symalot.minidump_modules(minidump_bytes):
         if module.debug_id:
             debug_id = UUID(symalot.normalize_debug_id(module.debug_id))
             module_ids_by_debug_id[debug_id].add(module.debug_id)
