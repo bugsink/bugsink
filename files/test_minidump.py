@@ -6,7 +6,7 @@ from unittest import TestCase
 from unittest.mock import patch
 from zipfile import ZipFile, ZIP_DEFLATED
 
-import symbolic
+import symalot
 from django.test import tag
 from django.utils._os import safe_join
 
@@ -16,7 +16,7 @@ from projects.models import Project
 
 from .minidump import (
     build_cfi_map_from_minidump_bytes, event_threads_for_process_state, extract_dif_kind, extract_source_context,
-    parse_debug_object, read_source_lines,
+    read_source_lines,
 )
 from .models import File, FileMetadata
 from .zip import open_zip_entry
@@ -32,7 +32,7 @@ class DifKindTests(TestCase):
 
     def test_source_bundle_cannot_be_used_as_debug_file(self):
         with self.assertRaisesRegex(ValueError, "Expected debug information, got a source bundle"):
-            parse_debug_object(b"SYSB\x02\x00\x00\x00")
+            symalot.debug_file_kind(b"SYSB\x02\x00\x00\x00")
 
 
 class SourceContextTests(TestCase):
@@ -131,17 +131,17 @@ int main(void) {
 
         # Only the already-unwound threads/modules are stand-ins; symbol lookup and source extraction are real.
         self.process_state = SimpleNamespace(
-            modules=lambda: [
+            modules=[
                 SimpleNamespace(addr=0x1000, size=0x100, debug_id=self.main_debug_id),
                 SimpleNamespace(addr=0x2000, size=0x100, debug_id=self.worker_debug_id),
             ],
-            threads=lambda: [
-                SimpleNamespace(thread_id=101, frames=lambda: [
+            threads=[
+                SimpleNamespace(thread_id=101, frames=[
                     SimpleNamespace(instruction=0x2010),
                     SimpleNamespace(instruction=0x1020),
                     SimpleNamespace(instruction=0x1010),
                 ]),
-                SimpleNamespace(thread_id=202, frames=lambda: [
+                SimpleNamespace(thread_id=202, frames=[
                     SimpleNamespace(instruction=0x1010),
                     SimpleNamespace(instruction=0x3000),
                 ]),
@@ -154,7 +154,7 @@ int main(void) {
         file = File.objects.create(
             checksum=sha1(data, usedforsecurity=False).hexdigest(), filename=file_type, size=len(data), data=data)
         FileMetadata.objects.create(
-            project=self.project, debug_id=symbolic.debuginfo.id_from_breakpad(debug_id),
+            project=self.project, debug_id=symalot.normalize_debug_id(debug_id),
             file_type=file_type, file=file)
 
     def test_symbolication_with_source_context(self):
@@ -165,23 +165,23 @@ int main(void) {
         self.assertEqual([
             {"id": 101, "crashed": True, "stacktrace": {"frames": [
                 {
-                    "instruction_addr": "0x2010", "function": "worker", "filename": "worker.c", "lineno": 2,
+                    "instruction_addr": "0x2010", "function": "worker", "filename": "src/worker.c", "lineno": 2,
                     "pre_context": ["void worker(void) {"], "context_line": "    do_work();", "post_context": ["}"],
                 },
                 {
-                    "instruction_addr": "0x1020", "function": "helper", "filename": "main.c", "lineno": 2,
+                    "instruction_addr": "0x1020", "function": "helper", "filename": "src/main.c", "lineno": 2,
                     "pre_context": ["int helper(void) {"], "context_line": "    return 42;",
                     "post_context": ["}", "", "int main(void) {", "    return helper();", "}"],
                 },
                 {
-                    "instruction_addr": "0x1010", "function": "main", "filename": "main.c", "lineno": 6,
+                    "instruction_addr": "0x1010", "function": "main", "filename": "src/main.c", "lineno": 6,
                     "pre_context": ["int helper(void) {", "    return 42;", "}", "", "int main(void) {"],
                     "context_line": "    return helper();", "post_context": ["}"],
                 },
             ]}},
             {"id": 202, "crashed": False, "stacktrace": {"frames": [
                 {
-                    "instruction_addr": "0x1010", "function": "main", "filename": "main.c", "lineno": 6,
+                    "instruction_addr": "0x1010", "function": "main", "filename": "src/main.c", "lineno": 6,
                     "pre_context": ["int helper(void) {", "    return 42;", "}", "", "int main(void) {"],
                     "context_line": "    return helper();", "post_context": ["}"],
                 },
@@ -210,20 +210,20 @@ int main(void) {
         threads = event_threads_for_process_state(self.process_state, self.project)
 
         self.assertEqual([
-            {"instruction_addr": "0x2010", "function": "worker", "filename": "worker.c", "lineno": 2},
-            {"instruction_addr": "0x1020", "function": "helper", "filename": "main.c", "lineno": 2},
-            {"instruction_addr": "0x1010", "function": "main", "filename": "main.c", "lineno": 6},
+            {"instruction_addr": "0x2010", "function": "worker", "filename": "src/worker.c", "lineno": 2},
+            {"instruction_addr": "0x1020", "function": "helper", "filename": "src/main.c", "lineno": 2},
+            {"instruction_addr": "0x1010", "function": "main", "filename": "src/main.c", "lineno": 6},
         ], threads[0]["stacktrace"]["frames"])
 
     def test_debug_file_is_parsed_once_for_frames_at_different_load_addresses(self):
-        modules = list(self.process_state.modules())
+        modules = list(self.process_state.modules)
         modules.append(SimpleNamespace(addr=0x4000, size=0x100, debug_id=self.main_debug_id))
-        self.process_state.modules = lambda: modules
-        self.process_state.threads = lambda: [SimpleNamespace(thread_id=101, frames=lambda: [
+        self.process_state.modules = modules
+        self.process_state.threads = [SimpleNamespace(thread_id=101, frames=[
             SimpleNamespace(instruction=0x1010), SimpleNamespace(instruction=0x4020),
         ] * 100)]
 
-        with patch("files.minidump.parse_debug_object", wraps=parse_debug_object) as parse:
+        with patch("files.minidump.symalot.lookup_addresses", wraps=symalot.lookup_addresses) as parse:
             threads = event_threads_for_process_state(self.process_state, self.project)
 
         self.assertEqual(1, parse.call_count)
@@ -239,7 +239,7 @@ int main(void) {
 
     def test_missing_debug_files_are_looked_up_together(self):
         FileMetadata.objects.all().delete()
-        self.process_state.threads = lambda: [SimpleNamespace(thread_id=101, frames=lambda: [
+        self.process_state.threads = [SimpleNamespace(thread_id=101, frames=[
             SimpleNamespace(instruction=0x1010), SimpleNamespace(instruction=0x2010),
         ] * 100)]
 
@@ -254,13 +254,13 @@ int main(void) {
             threads[0]["stacktrace"]["frames"])
 
     def test_cfi_is_prepared_once_for_repeated_modules(self):
-        modules = list(self.process_state.modules()) * 100
-        self.process_state.modules = lambda: modules
+        modules = list(self.process_state.modules) * 100
+        self.process_state.modules = modules
         used_metadata_ids = set()
 
-        with patch("files.minidump.symbolic.minidump.ProcessState.from_minidump_buffer",
-                   return_value=self.process_state):
-            with patch("files.minidump.parse_debug_object", wraps=parse_debug_object) as parse:
+        with patch("files.minidump.symalot.minidump_modules",
+                   return_value=self.process_state.modules):
+            with patch("files.minidump.symalot.generate_cfi", wraps=symalot.generate_cfi) as parse:
                 build_cfi_map_from_minidump_bytes(b"", self.project, used_metadata_ids=used_metadata_ids)
 
         self.assertEqual(2, parse.call_count)
@@ -281,8 +281,8 @@ STACK CFI INIT 2170 8 .cfa: $rsp 8 + .ra: .cfa -8 + ^
             minidump_bytes = f.read()
 
         frame_infos = build_cfi_map_from_minidump_bytes(minidump_bytes, self.project)
-        process_state = symbolic.ProcessState.from_minidump_buffer(minidump_bytes, frame_infos=frame_infos)
-        frames = list(process_state.get_thread(process_state.requesting_thread).frames())
+        process_state = symalot.process_minidump(minidump_bytes, cfi=frame_infos)
+        frames = process_state.threads[process_state.requesting_thread].frames
 
         self.assertEqual(0x402170, frames[0].instruction)
         self.assertEqual(0x401fce, frames[1].instruction)

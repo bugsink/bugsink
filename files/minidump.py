@@ -1,43 +1,22 @@
 from collections import defaultdict
 from uuid import UUID
 import zipfile
-import symbolic
-from sentry_sdk_extensions import capture_or_log_exception
+import symalot
 
-from bugsink.utils import assert_
 from bugsink.streams import MaxDataReader, MaxLengthExceeded
 from .models import get_file_metadata_for_debug_ids
 from .zip import open_zip_entry
 
 
-def parse_debug_object(dif_bytes):
-    """Parse exactly one native debug object from bytes"""
-
-    if dif_bytes.startswith(b"SYSB"):
-        # we explicitly refuse source bundles here; this is security-critical. The reason is that source bundles can
-        # contain highly compressed manifests that Symbolic decompresses and parses without a size limit, potentially
-        # exhausting memory. Artifact uploads can label source bundles as "dbg", so we cannot trust the stored type.
-        raise ValueError("Expected debug information, got a source bundle")
-
-    archive = symbolic.debuginfo.Archive.from_bytes(dif_bytes)
-    # our understanding: sentry-cli uploads single-object archives; we need to get the single object out of it...
-    # ...but this does raise the question of why archives exist at all... hence the assert
-    objects = list(archive.iter_objects())
-    assert_(len(objects) == 1)
-    return objects[0]
-
-
 def build_cfi_map_from_minidump_bytes(minidump_bytes, project, *, used_metadata_ids=None):
-    process_state = symbolic.minidump.ProcessState.from_minidump_buffer(minidump_bytes)
-
     module_ids_by_debug_id = defaultdict(set)
-    for module in process_state.modules():
+    for module in symalot.minidump_modules(minidump_bytes):
         if module.debug_id:
-            debug_id = UUID(symbolic.debuginfo.id_from_breakpad(module.debug_id))
+            debug_id = UUID(symalot.normalize_debug_id(module.debug_id))
             module_ids_by_debug_id[debug_id].add(module.debug_id)
 
     metadata = get_file_metadata_for_debug_ids(project, module_ids_by_debug_id, "dbg", defer_file_data=True)
-    frame_info_map = symbolic.minidump.FrameInfoMap.new()
+    frame_info_map = {}
     for debug_id, module_ids in module_ids_by_debug_id.items():
         if debug_id not in metadata:
             continue
@@ -54,24 +33,18 @@ def build_cfi_map_from_minidump_bytes(minidump_bytes, project, *, used_metadata_
 
 def _add_cfi_for_modules(frame_info_map, file, module_ids):
     dif_bytes = file.get_raw_data()
-    debug_object = parse_debug_object(dif_bytes)
+    cfi = symalot.generate_cfi(dif_bytes)
     for module_id in module_ids:
-        cfi = symbolic.minidump.CfiCache.from_object(debug_object)
-        frame_info_map.add(module_id, cfi)
+        frame_info_map[module_id] = cfi
 
 
 def extract_dif_kind(dif_bytes):
     if dif_bytes.startswith(b"SYSB"):
-        # Source bundles are valid uploads, but parse_debug_object deliberately rejects them to protect against
+        # Source bundles are valid uploads, but symalot rejects them as debug files to protect against
         # unbounded manifest parsing in Symbolic. Classify them here without parsing the manifest.
         return "src"
 
-    try:
-        return parse_debug_object(dif_bytes).kind
-    except Exception as e:
-        raise  # TODO stabalize what we do later
-        capture_or_log_exception(e)
-        return None
+    return symalot.debug_file_kind(dif_bytes)
 
 
 def read_source_lines(zf, filename):
@@ -112,21 +85,21 @@ def _find_module_for_address(modules, abs_addr: int):
 
 
 def event_threads_for_process_state(process_state, project, *, used_metadata_ids=None):
-    modules = list(process_state.modules())
+    modules = list(process_state.modules)
     debug_ids = {}
     frames_by_debug_id = defaultdict(list)
     threads = []
-    for thread_index, symbolic_thread in enumerate(process_state.threads()):
+    for thread_index, symbolic_thread in enumerate(process_state.threads):
         frames = []
 
-        for symbolic_frame in symbolic_thread.frames():
+        for symbolic_frame in symbolic_thread.frames:
             module = _find_module_for_address(modules, symbolic_frame.instruction)
 
             frame = {"instruction_addr": f"0x{symbolic_frame.instruction:x}"}
 
             if module and module.debug_id:
                 if module.debug_id not in debug_ids:
-                    debug_ids[module.debug_id] = UUID(symbolic.debuginfo.id_from_breakpad(module.debug_id))
+                    debug_ids[module.debug_id] = UUID(symalot.normalize_debug_id(module.debug_id))
                 debug_id = debug_ids[module.debug_id]
                 frames_by_debug_id[debug_id].append((frame, symbolic_frame.instruction - module.addr))
 
@@ -169,11 +142,9 @@ def event_threads_for_process_state(process_state, project, *, used_metadata_ids
 
 def _symbolicate_frames(file, frames):
     dif_bytes = file.get_raw_data()
-    obj = parse_debug_object(dif_bytes)
-    symcache = obj.make_symcache()
     frames_by_filename = defaultdict(list)
-    for frame, rel in frames:
-        infos = symcache.lookup(rel)
+    locations = symalot.lookup_addresses(dif_bytes, [rel for _, rel in frames])
+    for (frame, _), infos in zip(frames, locations, strict=True):
         if infos:
             # tentative understanding: lookup may give multiple results (e.g. inlined code). we just pick
             # the first arbitrarily which is "good enough for a PoC until proven otherwise"

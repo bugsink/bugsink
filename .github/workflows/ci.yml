@@ -88,10 +88,11 @@ jobs:
           fi
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
+        runner: [ubuntu-latest]
         python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
         db: [sqlite, mysql, postgres]
         include:
@@ -101,6 +102,21 @@ jobs:
           - db: postgres
             db_user: bugsink
             db_password: bugsink
+          - runner: ubuntu-24.04-arm
+            python-version: "3.11"
+            db: sqlite
+          - runner: ubuntu-24.04-arm
+            python-version: "3.12"
+            db: sqlite
+          - runner: ubuntu-24.04-arm
+            python-version: "3.13"
+            db: sqlite
+          - runner: ubuntu-24.04-arm
+            python-version: "3.14"
+            db: sqlite
+          - runner: ubuntu-24.04-arm
+            python-version: "3.15"
+            db: sqlite
     env:
       DB: ${{ matrix.db }}
       DB_USER: ${{ matrix.db_user }}

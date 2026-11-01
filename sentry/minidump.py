@@ -2,7 +2,7 @@
 # https://github.com/getsentry/sentry/blob/f0ac91f2ec6b45ad18e5eea6df72c5c72573e964/src/sentry/models/minidump.py#L53
 # with (as it stands) minor modifications.
 
-import symbolic
+import symalot
 from files.minidump import build_cfi_map_from_minidump_bytes, event_threads_for_process_state
 
 
@@ -10,7 +10,7 @@ def merge_minidump_event(data, minidump_bytes, project):
     used_metadata_ids = set()
     frame_info_map = build_cfi_map_from_minidump_bytes(
         minidump_bytes, project, used_metadata_ids=used_metadata_ids)
-    process_state = symbolic.ProcessState.from_minidump_buffer(minidump_bytes, frame_infos=frame_info_map)
+    process_state = symalot.process_minidump(minidump_bytes, cfi=frame_info_map)
 
     data['level'] = 'fatal' if process_state.crashed else 'info'
 
@@ -26,12 +26,12 @@ def merge_minidump_event(data, minidump_bytes, project):
     device = context.setdefault('device', {})
     os['name'] = info.os_name
     os['version'] = info.os_version
-    device['arch'] = info.cpu_family
+    device['arch'] = info.cpu
 
     threads = event_threads_for_process_state(process_state, project, used_metadata_ids=used_metadata_ids)
     data.setdefault("threads", {})["values"] = threads
 
-    if process_state.requesting_thread > -1:
+    if process_state.requesting_thread is not None:
         crashed_thread = threads[process_state.requesting_thread]
 
         exception_value = 'Assertion Error: %s' % process_state.assertion if process_state.assertion \
@@ -60,7 +60,7 @@ def merge_minidump_event(data, minidump_bytes, project):
             .setdefault('values', []) \
             .append(exception)
 
-    # Extract referenced (not all loaded) images
+    # Extract loaded images
     images = [{
         'type': 'elf',                    # TODO not sure what this should _actually_ be
         'image_addr': module.addr,
@@ -68,8 +68,8 @@ def merge_minidump_event(data, minidump_bytes, project):
         'code_file': module.code_file,
         'code_id': module.code_id,
         'debug_file': module.debug_file,
-        'debug_id': symbolic.debuginfo.id_from_breakpad(module.debug_id) if module.debug_id else None,
-    } for module in process_state.modules()]
+        'debug_id': symalot.normalize_debug_id(module.debug_id) if module.debug_id else None,
+    } for module in process_state.modules]
 
     data.setdefault('debug_meta', {})['images'] = images
 

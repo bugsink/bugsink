@@ -10,7 +10,7 @@ import brotli_rs as brotli
 from hashlib import sha1
 
 import datetime
-import symbolic
+import symalot
 from unittest.mock import patch
 from unittest import TestCase as RegularTestCase
 from dateutil.relativedelta import relativedelta
@@ -1714,7 +1714,7 @@ class MinidumpIngestRegressionTestCase(TransactionTestCase):
             checksum=sha1(data, usedforsecurity=False).hexdigest(), filename="overflow.sym", size=len(data), data=data)
         FileMetadata.objects.create(
             project=self.project,
-            debug_id=symbolic.debuginfo.id_from_breakpad(debug_id),
+            debug_id=symalot.normalize_debug_id(debug_id),
             file_type="dbg",
             file=file,
             data="{}",

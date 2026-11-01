@@ -843,12 +843,12 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(data, metadata.file.get_raw_data())
 
     @patch("files.minidump.extract_source_context")
-    @patch("files.minidump.symbolic.debuginfo.Archive.from_bytes")
-    @patch("files.minidump.symbolic.debuginfo.id_from_breakpad")
+    @patch("files.minidump.symalot.lookup_addresses")
+    @patch("files.minidump.symalot.normalize_debug_id")
     def test_minidump_symbolication_uses_project_scoped_debug_files(
         self,
-        mock_id_from_breakpad,
-        mock_archive_from_bytes,
+        mock_normalize_debug_id,
+        mock_lookup_addresses,
         mock_extract_source_context,
     ):
         debug_id = uuid4()
@@ -863,19 +863,16 @@ class FilesTests(TransactionTestCase):
         FileMetadata.objects.create(project=other_project, debug_id=debug_id, file_type="src", file=src_file)
 
         line_info = SimpleNamespace(function_name="otherFunction", filename="other.c", line=7)
-        symcache = SimpleNamespace(lookup=lambda rel: [line_info])
-        debug_object = SimpleNamespace(make_symcache=lambda: symcache)
-        archive = SimpleNamespace(iter_objects=lambda: [debug_object])
-        mock_id_from_breakpad.return_value = str(debug_id)
-        mock_archive_from_bytes.return_value = archive
+        mock_normalize_debug_id.return_value = str(debug_id)
+        mock_lookup_addresses.return_value = [[line_info]]
         mock_extract_source_context.return_value = (["pre"], "context", ["post"])
 
         module = SimpleNamespace(addr=1000, size=100, debug_id="breakpad-debug-id")
         frame = SimpleNamespace(instruction=1010)
-        thread = SimpleNamespace(thread_id=1, frames=lambda: [frame])
+        thread = SimpleNamespace(thread_id=1, frames=[frame])
         process_state = SimpleNamespace(
-            modules=lambda: [module],
-            threads=lambda: [thread],
+            modules=[module],
+            threads=[thread],
             requesting_thread=0,
         )
 
@@ -888,13 +885,13 @@ class FilesTests(TransactionTestCase):
         self.assertEqual("context", rendered_frame["context_line"])
 
         # Negative case: the same debug ID does not resolve across project boundaries.
-        mock_archive_from_bytes.reset_mock()
+        mock_lookup_addresses.reset_mock()
         mock_extract_source_context.reset_mock()
 
         threads = event_threads_for_process_state(process_state, self.project)
         rendered_frame = threads[0]["stacktrace"]["frames"][0]
         self.assertEqual({"instruction_addr": "0x3f2"}, rendered_frame)
-        mock_archive_from_bytes.assert_not_called()
+        mock_lookup_addresses.assert_not_called()
         mock_extract_source_context.assert_not_called()
 
     @tag("samples")
