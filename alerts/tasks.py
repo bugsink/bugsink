@@ -67,6 +67,15 @@ def send_unmute_alert(issue_id, unmute_reason):
     _send_alert(issue_id, "Unmuted issue", "an", "UNMUTED", unmute_reason=unmute_reason)
 
 
+def _latest_environment(issue):
+    # The environment of the issue's latest event; matches the "latest event" semantics used for the issue title.
+    # Empty string when no event carries an environment (or no events are stored), in which case callers omit it.
+    from events.models import Event  # avoid circular import
+
+    return Event.objects.filter(issue=issue).order_by("-digest_order").values_list(
+        "environment", flat=True).first() or ""
+
+
 def _send_alert(issue_id, state_description, alert_article, alert_reason, **kwargs):
     # NOTE: as it stands, there is a bit of asymmetry here: _send_alert is always called in delayed fashion; it delays
     # some work itself (message backends) though not all (emails). I kept it like this to be able to add functionality
@@ -83,9 +92,13 @@ def _send_alert(issue_id, state_description, alert_article, alert_reason, **kwar
         service_backend = service.get_backend()
         service_backend.send_alert(issue_id, state_description, alert_article, alert_reason, **kwargs)
 
+    environment = _latest_environment(issue)
+    environment_part = f" [{truncatechars(environment, 64)}]" if environment else ""
+
     for user in _get_users_for_email_alert(issue):
         send_rendered_email(
-            subject=f'"{truncatechars(issue.title(), 80)}" in "{issue.project.name}" ({state_description})',
+            subject=f'"{truncatechars(issue.title(), 80)}" in "{issue.project.name}"{environment_part} '
+                    f'({state_description})',
             base_template_name="mails/issue_alert",
             recipient_list=[user.email],
             context={

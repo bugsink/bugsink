@@ -102,6 +102,32 @@ class TestAlertSending(DjangoTestCase):
 
         self.assertEqual(len(mail.outbox), 1)
 
+    def test_alert_subject_includes_environment(self):
+        project = Project.objects.create(name="Test project")
+        user = User.objects.create_user(username="testuser", email="test@example.org")
+        ProjectMembership.objects.create(project=project, user=user, send_email_alerts=True, accepted=True)
+
+        issue, _ = get_or_create_issue(project=project)
+        create_event(project=project, issue=issue, environment="production")
+
+        send_new_issue_alert(issue.id)
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("[production]", mail.outbox[0].subject)
+
+    def test_alert_subject_omits_empty_environment(self):
+        project = Project.objects.create(name="Test project")
+        user = User.objects.create_user(username="testuser", email="test@example.org")
+        ProjectMembership.objects.create(project=project, user=user, send_email_alerts=True, accepted=True)
+
+        issue, _ = get_or_create_issue(project=project)
+        create_event(project=project, issue=issue)  # no environment
+
+        send_new_issue_alert(issue.id)
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertNotIn("[", mail.outbox[0].subject)
+
     def test_txt_and_html_have_relevant_variables_defined(self):
         example_context = DEBUG_CONTEXTS["issue_alert"]
         html_template = get_template("mails/issue_alert.html")
