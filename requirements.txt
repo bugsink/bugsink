@@ -19,4 +19,4 @@ fastjsonschema==2.22.*
 ecma426>=0.2.0
 djangorestframework==3.18.*
 drf-spectacular[sidecar]
-symalot==1.0.0
+symalot==1.0.1
