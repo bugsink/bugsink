@@ -54,6 +54,10 @@ pip install -r requirements.txt
 
 # Install development dependencies
 pip install -r requirements.development.txt
+
+# Install Bugsink itself in editable mode. This generates bugsink/_version.py from the git tags. Without it the
+# app reports version 0.0.0+unknown, and version-gated tests (e.g. phonehome) fail.
+pip install -e .
 ```
 
 4. **Run database migrations**
@@ -88,6 +92,14 @@ python manage.py test
 python manage.py test alerts api events issues
 
 # If you didn't clone the event-samples repository, you can run tests that don't depend on sample data like this:
+python manage.py test --exclude-tag=samples
+```
+
+Some tests call command-line tools from the venv (`sentry-cli` and `identity-sourcemap`, see
+`requirements.development.txt`). They are looked up on PATH, so activate the venv before running the tests:
+
+```bash
+source venv/bin/activate
 python manage.py test --exclude-tag=samples
 ```
 
