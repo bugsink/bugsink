@@ -144,8 +144,9 @@ class RemoteMessagesTestCase(TransactionTestCase):
         self.remote_message.refresh_from_db()
         self.assertTrue(self.remote_message.silenced)
 
+    @patch("bugsink.context_processors.version_tuple", (1, 0, 1))
     def test_remote_message_is_not_shown_after_its_last_applicable_version(self):
-        self.remote_message.applies_until_version = "0.0.1"
+        self.remote_message.applies_until_version = "1.0.0"
         self.remote_message.save(update_fields=["applies_until_version"])
 
         superuser = User.objects.create_superuser(username="admin", password="admin")
