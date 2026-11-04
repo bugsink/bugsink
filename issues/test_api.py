@@ -186,6 +186,12 @@ class IssueApiTests(TransactionTestCase):
             [row["id"] for row in response.json()["results"]],
         )
 
+    def test_list_limit(self):
+        response = self.client.get(reverse("api:issue-list"), {"limit": 1})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["results"]), 1)
+        self.assertIsNotNone(response.json()["next"])
+
     def test_list_rejects_bad_order(self):
         response = self.client.get(reverse("api:issue-list"), {"project": str(self.project.id), "order": "sideways"})
         self.assertEqual(response.status_code, 400)
@@ -946,3 +952,31 @@ class IssuePaginationTests(TransactionTestCase):
             self._ids(r2),
             [str(self._idx_by_event_count(issues, 3)), str(self._idx_by_event_count(issues, 2))],
         )
+
+
+class UserBoundAuthorshipTests(TransactionTestCase):
+    def setUp(self):
+        super().setUp()
+        self.user = get_user_model().objects.create_user(username="alice")
+        self.issue, _ = get_or_create_issue()
+        ProjectMembership.objects.create(project=self.issue.project, user=self.user, accepted=True)
+        self.client = APIClient()
+
+    def use_token(self, **kwargs):
+        token = AuthToken.objects.create(issues_comment=True, issues_triage=True, **kwargs)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+    def test_comment_records_user_of_user_bound_token(self):
+        self.use_token(is_user_bound=True, user=self.user)
+        response = self.client.post(
+            reverse("api:issue-comment-list"), {"issue": str(self.issue.id), "comment": "Fixed in abc123"},
+            format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["user"], self.user.id)
+
+    def test_resolve_records_user_of_user_bound_token(self):
+        self.use_token(is_user_bound=True, user=self.user)
+        response = self.client.post(reverse("api:issue-resolve", args=[self.issue.id]))
+        self.assertEqual(response.status_code, 200)
+        turning_point = TurningPoint.objects.get(issue=self.issue, kind=TurningPointKind.RESOLVED)
+        self.assertEqual(turning_point.user, self.user)

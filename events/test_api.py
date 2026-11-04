@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -311,3 +313,22 @@ class EventPaginationTests(TransactionTestCase):
         r2 = self.client.get(r1.json()["next"])
         self.assertEqual(self._ids(r2), [str(events[1].id), str(events[0].id)])
         self.assertIsNone(r2.json()["next"])
+
+
+class StacktraceInAppOnlyTests(TransactionTestCase):
+    def setUp(self):
+        super().setUp()
+        self.event = create_event()
+        token = AuthToken.objects.create(events_read=True)
+        self.client = APIClient()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+    @patch("events.api_views.render_stacktrace_md", return_value="trace")
+    def test_in_app_only_param(self, render):
+        self.client.get(reverse("api:event-stacktrace", args=[self.event.id]), {"in_app_only": "true"})
+        render.assert_called_once_with(self.event, in_app_only=True, include_locals=True)
+
+    @patch("events.api_views.render_stacktrace_md", return_value="trace")
+    def test_default_is_all_frames(self, render):
+        self.client.get(reverse("api:event-stacktrace", args=[self.event.id]))
+        render.assert_called_once_with(self.event, in_app_only=False, include_locals=True)

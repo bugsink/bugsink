@@ -14,7 +14,7 @@ from .models import AuthToken
 
 def _auth_tokens_visible_to(user):
     not_expired = Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
-    auth_tokens = AuthToken.objects.filter(not_expired)
+    auth_tokens = AuthToken.objects.filter(not_expired, oauth_grant__isnull=True)
     if user.is_superuser:
         return auth_tokens
     return auth_tokens.filter(is_user_bound=True, user=user)

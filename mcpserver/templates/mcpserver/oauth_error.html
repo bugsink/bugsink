@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "Cannot connect agent" %} · {{ site_title }}{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-center">
+    <div class="m-4 max-w-4xl flex-auto">
+        <h1 class="text-4xl my-4 font-bold">{% translate "Cannot connect agent" %}</h1>
+        <p class="text-gray-500 dark:text-gray-400">
+            {% translate "This connection request is invalid or comes from an unknown app. Start the connection again from your agent." %}
+        </p>
+    </div>
+</div>
+{% endblock %}

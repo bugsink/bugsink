@@ -39,6 +39,8 @@ ISSUE_ID_PARAMETER = OpenApiParameter(
 class IssueRelatedPagination(CursorPagination):
     ordering = "id"
     page_size = 250
+    page_size_query_param = "limit"
+    max_page_size = 250
 
 
 class IssuesCursorPagination(CursorPagination):
@@ -60,6 +62,8 @@ class IssuesCursorPagination(CursorPagination):
     # i.e. the typical usage would in fact just be to get the "first page" of recent activity.
     # Event-count sorting has the same instability when new events arrive.
     page_size = 250
+    page_size_query_param = "limit"
+    max_page_size = 250
     default_direction = "asc"
     default_sort = "digest_order"
 
@@ -268,7 +272,8 @@ class IssueViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
             raise ValidationError({"detail": "Issue is already muted."})
 
     def _apply_issue_action(self, issue, action):
-        apply_issue_action(IssueStateManager, issue, action, user=None)
+        auth = self.request.auth
+        apply_issue_action(IssueStateManager, issue, action, user=auth.user if auth.is_user_bound else None)
         return self._action_response(issue)
 
     @token_guard("issues:triage", guarding_issue=lookup(url="pk"))

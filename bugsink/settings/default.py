@@ -129,6 +129,7 @@ BUGSINK_APPS = [
     'events',
     'tags',
     'alerts',
+    'mcpserver',
 
     'performance',
 ]

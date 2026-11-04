@@ -106,6 +106,11 @@ class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         summary="Render an event stacktrace",
         description="Render the event's stacktrace (frames, source, locals) as Markdown-like text.",
+        parameters=[
+            OpenApiParameter(
+                name="in_app_only", type=OpenApiTypes.BOOL, location=OpenApiParameter.QUERY, required=False,
+                description="Only show frames from your own code (default: false)."),
+        ],
         responses={
             200: OpenApiResponse(
                 response=str,
@@ -127,5 +132,6 @@ class EventViewSet(AtomicRequestMixin, viewsets.ReadOnlyModelViewSet):
         renderer_classes=[MarkdownRenderer],
     )
     def stacktrace(self, request, event, pk=None):
-        text = render_stacktrace_md(event, in_app_only=False, include_locals=True)
+        in_app_only = request.query_params.get("in_app_only") == "true"
+        text = render_stacktrace_md(event, in_app_only=in_app_only, include_locals=True)
         return Response(text)

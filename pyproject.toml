@@ -81,6 +81,7 @@ include = [
     "ingest*",
     "issues*",
     "files*",
+    "mcpserver*",
     "performance*",
     "phonehome*",
     "projects*",

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "Connected agents" %} · {{ site_title }}{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-center">
+    <div class="m-4 max-w-4xl flex-auto">
+
+        {% if messages %}
+        <ul class="mb-4">
+            {% for message in messages %}
+                <li class="bg-cyan-50 dark:bg-cyan-900 border-2 border-cyan-800 dark:border-cyan-400 p-4 rounded-lg">{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        <h1 class="text-4xl mt-4 font-bold">{% translate "Connected agents" %}</h1>
+
+        <form action="." method="post">
+            {% csrf_token %}
+            <table class="w-full mt-8">
+                <thead>
+                    <tr class="bg-slate-200 dark:bg-slate-800 text-left">
+                        <th class="p-4">{% translate "Agent" %}</th>
+                        <th class="p-4">{% translate "Capabilities" %}</th>
+                        <th class="p-4">{% translate "Project" %}</th>
+                        <th class="p-4">{% translate "Connected" %}</th>
+                        <th class="p-4">{% translate "Last refreshed" %}</th>
+                        <th class="p-4"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for grant in grants %}
+                    <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
+                        <td class="p-4">
+                            {{ grant.client_name }}
+                            {% if request.user.is_superuser %}<div class="text-sm text-gray-500 dark:text-gray-400">{{ grant.auth_token.user }}</div>{% endif %}
+                        </td>
+                        <td class="p-4 font-mono text-sm">{{ grant.capability_list|join:", " }}</td>
+                        <td class="p-4">{{ grant.auth_token.project.name|default:_("All projects") }}</td>
+                        <td class="p-4">{{ grant.created_at|date:"Y-m-d H:i" }}</td>
+                        <td class="p-4">{{ grant.last_refreshed_at|date:"Y-m-d H:i"|default:"-" }}</td>
+                        <td class="p-4">
+                            <button name="disconnect" value="{{ grant.pk }}" class="font-bold text-red-500 dark:text-red-400">{% translate "Disconnect" %}</button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr class="bg-white dark:bg-slate-900">
+                        <td class="p-4 text-gray-500 dark:text-gray-400" colspan="6">{% translate "No agents connected yet." %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </form>
+
+        <h2 class="text-2xl mt-8 font-bold">{% translate "Recent tool calls" %}</h2>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% translate "The last 100 calls; kept for 30 days." %}</p>
+        <table class="w-full mt-4 text-sm">
+            <thead>
+                <tr class="bg-slate-200 dark:bg-slate-800 text-left">
+                    <th class="p-3">{% translate "Time" %}</th>
+                    <th class="p-3">{% translate "Agent" %}</th>
+                    <th class="p-3">{% translate "Tool" %}</th>
+                    <th class="p-3">{% translate "Arguments" %}</th>
+                    <th class="p-3">{% translate "Result" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for call in calls %}
+                <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2 align-top">
+                    <td class="p-3 whitespace-nowrap">{{ call.timestamp|date:"Y-m-d H:i:s" }}</td>
+                    <td class="p-3">
+                        {{ call.client_name }}
+                        {% if request.user.is_superuser %}<div class="text-gray-500 dark:text-gray-400">{{ call.user }}</div>{% endif %}
+                    </td>
+                    <td class="p-3 font-mono">{{ call.tool }}</td>
+                    <td class="p-3 font-mono break-words">{{ call.arguments_text }}</td>
+                    <td class="p-3">
+                        {% if call.error %}<span class="text-red-500 dark:text-red-400 break-words">{{ call.error|truncatechars:200 }}</span>{% else %}{% translate "OK" %}{% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr class="bg-white dark:bg-slate-900">
+                    <td class="p-3 text-gray-500 dark:text-gray-400" colspan="5">{% translate "No tool calls yet." %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <h2 class="text-2xl mt-8 mb-4 font-bold">{% translate "Connect an agent" %}</h2>
+        {% for setup in setup_instructions %}
+        <details class="mb-2 bg-white dark:bg-slate-900 rounded-md border-2 border-slate-200 dark:border-slate-700">
+            <summary class="p-4 font-bold cursor-pointer">{{ setup.agent }}</summary>
+            <div class="px-4 pb-4">
+                <p class="mb-2">{{ setup.where }}</p>
+                <pre class="mb-2 p-4 bg-slate-100 dark:bg-slate-800 rounded-md font-mono text-sm overflow-x-auto">{{ setup.snippet }}</pre>
+                <p class="text-gray-500 dark:text-gray-400">{{ setup.then }}</p>
+            </div>
+        </details>
+        {% endfor %}
+        <p class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+            {% translate "Local agents connect from your machine, so it must be able to reach Bugsink at this address. After 30 days without use, sign in again from your agent. If an agent using mcp-remote keeps failing to sign in, delete ~/.mcp-auth and restart it." %}
+        </p>
+    </div>
+</div>
+{% endblock %}

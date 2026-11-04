@@ -21,6 +21,8 @@ class AscDescCursorPagination(CursorPagination):
     # solved). For now: we'll keep this for the API only, and see how it goes.
 
     base_ordering = None
+    page_size_query_param = "limit"
+    max_page_size = 250
     default_direction = "desc"
 
     def get_ordering(self, request, queryset, view):

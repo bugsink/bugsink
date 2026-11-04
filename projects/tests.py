@@ -256,7 +256,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
         # correct for bugsink/transaction.py's select_for_update for non-sqlite databases
         correct_for_select_for_update = 1 if 'sqlite' not in settings.DATABASES['default']['ENGINE'] else 0
 
-        with self.assertNumQueries(39 + correct_for_select_for_update):
+        with self.assertNumQueries(45 + correct_for_select_for_update):
             self.project.delete_deferred()
 
         # tests run w/ TASK_ALWAYS_EAGER, so in the below we can just check the database directly
@@ -280,6 +280,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
 
         self.assertEqual(walk(orig, 'projects.Project'), [
             (apps.get_model('bsmain', 'AuthToken'), 'project'),
+            (apps.get_model('mcpserver', 'OAuthGrant'), 'auth_token'),
             (apps.get_model('projects', 'ProjectMembership'), 'project'),
             (apps.get_model('releases', 'Release'), 'project'),
             (apps.get_model('issues', 'Issue'), 'project'),
@@ -318,6 +319,7 @@ class ProjectDeletionTestCase(TransactionTestCase):
             (apps.get_model('tags', 'EventTag'), 'project'),
             (apps.get_model('tags', 'IssueTag'), 'project'),
             (apps.get_model('alerts', 'MessagingServiceConfig'), 'project'),
+            (apps.get_model('mcpserver', 'OAuthAuthorizationCode'), 'project'),
         ])
 
         self.assertEqual(walk(override, 'projects.Project'), [
@@ -335,9 +337,11 @@ class ProjectDeletionTestCase(TransactionTestCase):
             (apps.get_model('releases', 'Release'), 'project'),
             (apps.get_model('issues', 'Issue'), 'project'),
             (apps.get_model('bsmain', 'AuthToken'), 'project'),
+            (apps.get_model('mcpserver', 'OAuthGrant'), 'auth_token'),
             (apps.get_model('files', 'DifAssembly'), 'project'),
             (apps.get_model('files', 'ArtifactBundleAssembly'), 'project'),
             (apps.get_model('files', 'FileMetadata'), 'project'),
+            (apps.get_model('mcpserver', 'OAuthAuthorizationCode'), 'project'),
         ])
 
 

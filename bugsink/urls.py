@@ -104,6 +104,7 @@ urlpatterns = [
     path('orgredirect/organizations/:orgslug/settings/auth-tokens/',
          RedirectView.as_view(url='/bsmain/auth_tokens/', permanent=False)),
 
+    path("", include("mcpserver.urls")),
     path('bsmain/', include('bsmain.urls')),
 ]
 

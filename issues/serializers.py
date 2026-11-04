@@ -117,11 +117,12 @@ class IssueCommentSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         issue = validated_data["issue"]
+        auth = self.context["request"].auth
         return TurningPoint.objects.create(
             project=issue.project,
             issue=issue,
             kind=TurningPointKind.MANUAL_ANNOTATION,
-            user=None,  # Bearer-token API auth currently represents a global token, not a user.
+            user=auth.user if auth.is_user_bound else None,
             comment=validated_data["comment"],
             timestamp=timezone.now(),
         )

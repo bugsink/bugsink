@@ -37,6 +37,7 @@ module.exports = {
         "../../ingest/templates/**/*.html",
         "../../issues/templates/**/*.html",
         "../../files/templates/**/*.html",
+        "../../mcpserver/templates/**/*.html",
         "../../performance/templates/**/*.html",
         "../../phonehome/templates/**/*.html",
         "../../projects/templates/**/*.html",
