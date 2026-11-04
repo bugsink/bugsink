@@ -80,7 +80,7 @@ def register(request):
         "client_id": sign_client(name, redirect_uris),
         "client_name": name,
         "redirect_uris": redirect_uris,
-        "token_endpoint_auth_method": "none",
+        "token_endpoint_auth_method": "none",  # nosec B105
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
     }, status=201)
@@ -141,7 +141,7 @@ def _token_error(error, status=400):
 def _token_response(grant, now):
     response = JsonResponse({
         "access_token": grant.auth_token.token,
-        "token_type": "Bearer",
+        "token_type": "Bearer",  # nosec B105
         "expires_in": max(0, int((grant.auth_token.expires_at - now).total_seconds())),
         "refresh_token": grant.refresh_token,
     })

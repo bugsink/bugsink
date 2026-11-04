@@ -71,7 +71,7 @@ class AuthorizeTests(TransactionTestCase):
         self.assertEqual(code.user, self.user)
 
     def test_superuser_gets_user_bound_code_without_unoffered_capabilities(self):
-        superuser = get_user_model().objects.create_superuser(username="root", password="x")
+        superuser = get_user_model().objects.create_superuser(username="root", password="x")  # nosec B106
         browser = Client()
         browser.force_login(superuser)
         response = browser.post(self.url(), {

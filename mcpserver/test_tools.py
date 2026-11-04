@@ -90,7 +90,7 @@ class CallToolTests(TransactionTestCase):
         self.assertNotIn("stacktrace_md", data)
 
     def test_create_project_returns_dsn(self):
-        superuser = get_user_model().objects.create_superuser(username="root", password="x")
+        superuser = get_user_model().objects.create_superuser(username="root", password="x")  # nosec B106
         token = AuthToken.objects.create(is_user_bound=True, user=superuser, projects_manage=True, projects_read=True)
         team = Team.objects.create(name="Core")
         result = self.call("create_project", {"team": str(team.id), "name": "web"}, token=token)
