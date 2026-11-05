@@ -592,3 +592,44 @@ class ProjectScopedActionTestCase(TransactionTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(MessagingServiceConfig.objects.filter(id=other_service.id).exists())
+
+    def test_alert_service_can_be_disabled_and_enabled(self):
+        service = MessagingServiceConfig.objects.create(
+            project=self.project, display_name="Slack", kind="slack", config="{}")
+
+        response = self.client.get(f"/projects/{self.project.id}/alerts/")
+        self.assertContains(response, f'value="disable:{service.id}"')
+        self.assertNotContains(response, "Disabled")
+
+        response = self.client.post(
+            f"/projects/{self.project.id}/alerts/",
+            {"action": f"disable:{service.id}"},
+        )
+        service.refresh_from_db()
+        self.assertFalse(service.is_active)
+        self.assertContains(response, "Messaging service disabled.")
+        self.assertContains(response, f'value="enable:{service.id}"')
+        self.assertContains(response, "Disabled")
+
+        response = self.client.post(
+            f"/projects/{self.project.id}/alerts/",
+            {"action": f"enable:{service.id}"},
+        )
+        service.refresh_from_db()
+        self.assertTrue(service.is_active)
+        self.assertContains(response, "Messaging service enabled.")
+        self.assertContains(response, f'value="disable:{service.id}"')
+        self.assertNotContains(response, "Disabled")
+
+    def test_alert_service_disable_scopes_to_project(self):
+        other_project = Project.objects.create(name="other")
+        other_service = MessagingServiceConfig.objects.create(project=other_project, is_active=True)
+
+        response = self.client.post(
+            f"/projects/{self.project.id}/alerts/",
+            {"action": f"disable:{other_service.id}"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        other_service.refresh_from_db()
+        self.assertTrue(other_service.is_active)

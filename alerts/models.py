@@ -49,6 +49,9 @@ class MessagingServiceConfig(models.Model):
 
     kind = models.CharField(choices=get_alert_service_kind_choices, max_length=20, default="slack")
 
+    is_active = models.BooleanField(
+        default=True, help_text="Inactive services stay configured but do not receive alerts.")
+
     config = models.TextField(blank=False)
 
     # Alert backend failure tracking
