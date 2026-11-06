@@ -2,6 +2,7 @@ import io
 import pprint
 import re
 import zlib
+import zlib_rust
 import brotli_rs as brotli
 
 from unittest import TestCase as RegularTestCase
@@ -155,7 +156,7 @@ class StreamsTestCase(RegularTestCase):
         for wbits in [WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE]:
             compressed = compress_with_zlib(io.BytesIO(b"hello" * 100), wbits)
 
-            with self.assertRaises(zlib.error):
+            with self.assertRaises(zlib_rust.error):
                 list(zlib_generator(io.BytesIO(compressed[:-1]), wbits))
 
     def test_decompress_stdlib_compressed_stream(self):
