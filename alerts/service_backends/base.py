@@ -26,6 +26,9 @@ def post_pinned(parsed, ip, *args, headers, **kwargs):
     with requests.Session() as session:
         # Session.mount() means: for any request to pinned_url, use the given adapter
         session.mount(pinned_url, OriginalHostnameAdapter(parsed.hostname))
+        # urllib3 automatically uses C-zlib (analogous issue for brotli here:
+        # https://github.com/urllib3/urllib3/issues/5342)
+        # TODO swap that out too.
         return session.post(pinned_url, *args, headers=headers, **kwargs)
 
 
