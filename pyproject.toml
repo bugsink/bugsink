@@ -10,7 +10,7 @@ name = "bugsink"
 authors = [
     {name = "Bugsink B.V.", email = "info@bugsink.com"},
 ]
-description = "Self-hosted Error Tracking"
+description = "Error Tracking Made Simple"
 readme = "README.md"
 requires-python = ">=3.11"
 license-files = ["LICENSE"]
