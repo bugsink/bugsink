@@ -1,6 +1,6 @@
 import json
 from hashlib import sha1
-from gzip import GzipFile
+from zlib_rust.gzip import GzipFile
 from io import BytesIO
 import logging
 from uuid import UUID

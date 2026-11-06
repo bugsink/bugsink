@@ -5,7 +5,7 @@ import io
 import uuid
 import time
 import tempfile
-import gzip
+import gzip  # intentionally uses C-zlib to test compatibility with the Rust codec
 import brotli_rs as brotli
 from hashlib import sha1
 

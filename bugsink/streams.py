@@ -1,6 +1,6 @@
 from django.core.exceptions import BadRequest
 
-import zlib
+import zlib_rust as zlib
 import io
 import brotli_rs as brotli
 
