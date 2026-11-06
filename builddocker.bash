@@ -68,4 +68,4 @@ else
     fi
 fi
 
-docker build -f Dockerfile.fromwheel --build-arg WHEEL_FILE="$WHEEL_FILE" $TAGS .
+docker build --pull -f Dockerfile.fromwheel --build-arg WHEEL_FILE="$WHEEL_FILE" $TAGS .
