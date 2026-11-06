@@ -1,18 +1,24 @@
-# Bugsink: Self-hosted Error Tracking
+# Bugsink: Error Tracking Made Simple
+
+Bugsink shows you when your code fails in production and why, with full stacktraces, local variables, and request
+context.
+
+**[Sign Up](https://www.bugsink.com/register/15K/)** and let us run Bugsink for you, or
+**[Self-Host](https://www.bugsink.com/docs/installation/)** on infrastructure you control.
 
 * [Error Tracking](https://www.bugsink.com/error-tracking/)
-* [Built to self-host](https://www.bugsink.com/built-to-self-host/)
 * [Sentry-SDK compatible](https://www.bugsink.com/connect-any-application/)
 * [Scalable and reliable](https://www.bugsink.com/scalable-and-reliable/)
+* [Built to self-host](https://www.bugsink.com/built-to-self-host/)
 
 ### Screenshot
 
 ![Screenshot](https://www.bugsink.com/static/images/JsonSchemaDefinitionException.5e02c1544273.png)
 
 
-### Installation & docs
+### Self-hosting & docs
 
-The **quickest way to evaluate Bugsink** is to spin up a throw-away instance using Docker:
+To try self-hosting Bugsink, spin up a throw-away instance using Docker:
 
 ```
 docker pull bugsink/bugsink:latest
