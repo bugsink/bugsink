@@ -390,6 +390,21 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(413, response.status_code)
         self.assertIn("chunk upload size", response.json()["error"])
 
+    def test_chunk_upload_with_concatenated_gzip_members(self):
+        data = b"hello world"
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+        upload = BytesIO(gzip.compress(data[:5]) + gzip.compress(data[5:]))
+        upload.name = checksum
+
+        response = self.client.post(
+            "/api/0/organizations/anyorg/chunk-upload/",
+            data={"file_gzip": upload},
+            headers=self.token_headers,
+        )
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(data, Chunk.objects.get(checksum=checksum).data)
+
     def test_assemble_file_to_object_storage(self):
         data = b"hello world"
         checksum = sha1(data, usedforsecurity=False).hexdigest()

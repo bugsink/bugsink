@@ -22,7 +22,7 @@ from .volume_based_condition import VolumeBasedCondition
 from .utils import email_backend_delivers_mail, send_rendered_email
 from .streams import (
     compress_with_zlib, GeneratorReader, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE, MaxDataReader,
-    MaxDataWriter, zlib_generator, brotli_generator, BrotliError)
+    MaxDataWriter, zlib_generator, brotli_generator, BrotliError, ZlibStreamWriter)
 
 User = get_user_model()
 
@@ -157,6 +157,31 @@ class StreamsTestCase(RegularTestCase):
 
             with self.assertRaises(zlib.error):
                 list(zlib_generator(io.BytesIO(compressed[:-1]), wbits))
+
+    def test_decompress_stdlib_compressed_stream(self):
+        data = b"hello" * 1000
+        for wbits in [WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE]:
+            compressed = zlib.compress(data, wbits=wbits)
+            reader = GeneratorReader(zlib_generator(io.BytesIO(compressed), wbits, chunk_size=7))
+
+            self.assertEqual(data, reader.read())
+
+    def test_compress_for_stdlib_decompression(self):
+        data = b"hello" * 1000
+        for wbits in [WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE]:
+            compressed = compress_with_zlib(io.BytesIO(data), wbits, chunk_size=7)
+
+            self.assertEqual(data, zlib.decompress(compressed, wbits=wbits))
+
+    def test_zlib_stream_writer_for_stdlib_decompression(self):
+        data = b"hello" * 1000
+        output = io.BytesIO()
+        writer = ZlibStreamWriter(output, level=6, wbits=WBITS_PARAM_FOR_GZIP)
+        writer.write(data[:17])
+        writer.write(data[17:])
+        writer.close()
+
+        self.assertEqual(data, zlib.decompress(output.getvalue(), wbits=WBITS_PARAM_FOR_GZIP))
 
     def test_compress_decompress_brotli(self):
         with open(__file__, 'rb') as f:
