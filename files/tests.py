@@ -2,7 +2,7 @@ from hashlib import sha1
 from datetime import timedelta
 from uuid import UUID, uuid4
 import json
-import gzip
+import gzip  # intentionally uses C-zlib to test compatibility with the Rust codec
 import io
 from io import BytesIO
 import os
@@ -12,7 +12,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
-from zipfile import ZipFile, ZIP_BZIP2, ZIP_DEFLATED
+from zipfile import (  # intentionally uses C-zlib to test compatibility with the Rust codec
+    ZipFile, ZIP_BZIP2, ZIP_DEFLATED,
+)
 
 from django.test import tag
 from django.test.utils import CaptureQueriesContext

@@ -1,7 +1,7 @@
 from io import BytesIO
 from unittest import TestCase
 from unittest.mock import patch
-from zipfile import ZipFile, ZIP_DEFLATED
+from zipfile import ZipFile, ZIP_DEFLATED  # intentionally uses C-zlib to test compatibility with the Rust codec
 
 from .zip import open_zip_entry
 
