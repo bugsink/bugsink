@@ -36,7 +36,7 @@ from bugsink.moreiterutils import batched
 from bugsink.app_settings import override_settings as bugsink_override_settings
 from bugsink.streams import MaxLengthExceeded
 
-from .models import Chunk, File, FileMetadata, get_file_metadata_for_debug_ids
+from .models import Chunk, File, FileMetadata, get_file_metadata_for_debug_ids, _binary_to_bytes
 from .minidump import event_threads_for_process_state
 from .storage_registry import override_object_storages
 from .tasks import assemble_file, create_chunk, create_file_from_local_file, process_artifact_bundle, vacuum_files_sync
@@ -405,7 +405,7 @@ class FilesTests(TransactionTestCase):
         )
 
         self.assertEqual(200, response.status_code)
-        self.assertEqual(data, Chunk.objects.get(checksum=checksum).data)
+        self.assertEqual(data, _binary_to_bytes(Chunk.objects.get(checksum=checksum).data))
 
     def test_assemble_file_to_object_storage(self):
         data = b"hello world"
