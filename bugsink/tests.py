@@ -1,7 +1,7 @@
 import io
 import pprint
 import re
-import zlib
+import zlib  # intentionally uses C-zlib to test compatibility with the Rust codec
 import zlib_rust
 import brotli_rs as brotli
 
