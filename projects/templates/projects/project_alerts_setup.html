@@ -45,7 +45,10 @@
                 <td class="w-full p-4">
                     <div class="flex items-center">
                         <div class="flex-grow">
-                            <a href="{% url "project_messaging_service_edit" project_pk=project.pk service_pk=service_config.pk %}" class="text-xl text-cyan-500 dark:text-cyan-300 font-bold">{{ service_config.display_name }}</a>
+                            <a href="{% url "project_messaging_service_edit" project_pk=project.pk service_pk=service_config.pk %}" class="text-xl font-bold {% if service_config.is_active %}text-cyan-500 dark:text-cyan-300{% else %}text-slate-500 dark:text-slate-300{% endif %}">{{ service_config.display_name }}</a>
+                            {% if not service_config.is_active %}
+                                <span class="ml-2 text-sm font-bold text-slate-500 dark:text-slate-300">{% translate "Disabled" context "Alerts" %}</span>
+                            {% endif %}
                             {% if service_config.has_recent_failure %}
                                 <div class="text-sm text-red-600 dark:text-red-400 mt-1">
                                     <span class="inline-flex items-center leading-none">
@@ -66,6 +69,11 @@
                 <td class="p-4">
                     <div class="flex justify-end">
                         <button name="action" value="test:{{ service_config.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Test" context "Alerts" %}</button>
+                        {% if service_config.is_active %}
+                        <button name="action" value="disable:{{ service_config.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Disable" context "Alerts" %}</button>
+                        {% else %}
+                        <button name="action" value="enable:{{ service_config.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Enable" context "Alerts" %}</button>
+                        {% endif %}
                         <button name="action" value="remove:{{ service_config.id }}" class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 ml-2 border-2 hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3 rounded-md whitespace-nowrap">{% translate "Remove" context "Alerts" %}</button>
                     </div>
                 </td>
