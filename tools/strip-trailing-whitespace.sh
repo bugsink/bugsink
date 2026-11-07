@@ -11,12 +11,9 @@ EXT_REGEX='\.(py|js|ts|sh|md|txt|html|css|bash|template)$'
 
 # Detect sed flavor
 if sed --version >/dev/null 2>&1; then
-    SED_CMD=(sed -i -e 's/[[:space:]]\+$//')
-elif sed -i '' testfile 2>/dev/null; then
-    SED_CMD=(sed -i '' -e 's/[[:space:]]\+$//')
+    SED_CMD=(sed -i -E -e 's/[[:space:]]+$//')
 else
-    echo "Unsupported sed version. Must be GNU sed or BSD sed (macOS)." >&2
-    exit 1
+    SED_CMD=(sed -i '' -E -e 's/[[:space:]]+$//')
 fi
 
 git ls-files -z | while IFS= read -r -d '' file; do
