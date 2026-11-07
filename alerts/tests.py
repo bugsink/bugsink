@@ -37,6 +37,13 @@ from .service_backends.google_chat import (
     google_chat_backend_send_alert,
     google_chat_backend_send_test_message,
 )
+from .service_backends.pagerduty import (
+    PagerDutyBackend,
+    PagerDutyConfigForm,
+    pagerduty_backend_send_alert,
+    pagerduty_backend_send_resolve,
+    pagerduty_backend_send_test_message,
+)
 from .service_backends.custom import CustomBackendForm, custom_backend_send_test_message, custom_backend_send_alert
 from .service_backends.webhook_security import _embedded_ipv4_addresses, validate_webhook_url
 from .tasks import send_new_issue_alert, send_regression_alert, send_unmute_alert, _get_users_for_email_alert
@@ -1399,3 +1406,140 @@ class TestGoogleChatBackendErrorHandling(DjangoTestCase):
         self.assertIn(r"Ops \*on-call\* \<prod\>", payload["text"])
         self.assertIn(r"matched \*pattern\*", payload["text"])
         self.assertRegex(payload["text"], r"<https?://.+\|view on Bugsink>")
+
+
+class TestPagerDutyBackend(DjangoTestCase):
+    routing_key = "R0UT1NGKEY0123456789abcdefABCDEF"
+
+    def setUp(self):
+        self.project = Project.objects.create(name="Test project")
+        self.config = MessagingServiceConfig.objects.create(
+            project=self.project,
+            display_name="Test PagerDuty",
+            kind="pagerduty",
+            config=json.dumps({"routing_key": self.routing_key, "region": "us", "severity": "error"}),
+        )
+
+    def _response(self, status_code):
+        response = Mock()
+        response.status_code = status_code
+        response.text = json.dumps({"status": "error", "message": f"key {self.routing_key} rejected"})
+        if status_code >= 400:
+            error = requests.HTTPError(f"{status_code} Error")
+            error.response = response
+            response.raise_for_status.side_effect = error
+        else:
+            response.raise_for_status.return_value = None
+        return response
+
+    def _posted_events(self, mock_post):
+        return [json.loads(call.kwargs["data"]) for call in mock_post.call_args_list]
+
+    def test_backend_class_is_registered(self):
+        self.assertIsInstance(self.config.get_backend(), PagerDutyBackend)
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_alert_triggers_with_issue_id_as_dedup_key(self, mock_post):
+        issue, _ = get_or_create_issue(project=self.project)
+        mock_post.return_value = self._response(202)
+
+        pagerduty_backend_send_alert(
+            self.routing_key, "eu", "critical", str(issue.id), "Unmuted issue", "an", "UNMUTED", self.config.id,
+            unmute_reason="More than 5 events per day")
+
+        self.assertEqual("https://events.eu.pagerduty.com/v2/enqueue", mock_post.call_args.args[0])
+        [event] = self._posted_events(mock_post)
+        self.assertEqual(self.routing_key, event["routing_key"])
+        self.assertEqual("trigger", event["event_action"])
+        self.assertEqual(str(issue.id), event["dedup_key"])
+        self.assertEqual("critical", event["payload"]["severity"])
+        self.assertEqual(f"[Test project] {issue.title()}", event["payload"]["summary"])
+        self.assertEqual("UNMUTED issue", event["payload"]["custom_details"]["alert_reason"])
+        self.assertEqual("More than 5 events per day", event["payload"]["custom_details"]["unmute_reason"])
+        self.assertTrue(event["links"][0]["href"].endswith(issue.get_absolute_url()))
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_test_message_triggers_info_event(self, mock_post):
+        mock_post.return_value = self._response(202)
+
+        pagerduty_backend_send_test_message(self.routing_key, "us", "Test project", "Test PagerDuty", self.config.id)
+
+        self.assertEqual("https://events.pagerduty.com/v2/enqueue", mock_post.call_args.args[0])
+        [event] = self._posted_events(mock_post)
+        self.assertEqual("info", event["payload"]["severity"])
+        self.assertEqual(f"bugsink-test-{self.config.id}", event["dedup_key"])
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_resolve_sends_one_event_per_issue(self, mock_post):
+        mock_post.return_value = self._response(202)
+
+        pagerduty_backend_send_resolve(self.routing_key, "us", ["id-1", "id-2"], self.config.id)
+
+        self.assertEqual([
+            {"routing_key": self.routing_key, "event_action": "resolve", "dedup_key": "id-1"},
+            {"routing_key": self.routing_key, "event_action": "resolve", "dedup_key": "id-2"},
+        ], self._posted_events(mock_post))
+
+    @patch("alerts.service_backends.pagerduty.time.sleep")
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_server_error_is_retried(self, mock_post, mock_sleep):
+        self.config.last_failure_timestamp = timezone.now()
+        self.config.save()
+        mock_post.side_effect = [self._response(503), self._response(202)]
+
+        pagerduty_backend_send_resolve(self.routing_key, "us", ["id-1"], self.config.id)
+
+        self.assertEqual(2, mock_post.call_count)
+        self.config.refresh_from_db()
+        self.assertIsNone(self.config.last_failure_timestamp)
+
+    @patch("alerts.service_backends.pagerduty.time.sleep")
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_connection_error_is_retried(self, mock_post, mock_sleep):
+        mock_post.side_effect = [requests.ConnectionError("Connection refused"), self._response(202)]
+
+        pagerduty_backend_send_resolve(self.routing_key, "us", ["id-1"], self.config.id)
+
+        self.assertEqual(2, mock_post.call_count)
+
+    @patch("alerts.service_backends.pagerduty.time.sleep")
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_rate_limit_gives_up_after_three_attempts_and_stops_the_batch(self, mock_post, mock_sleep):
+        mock_post.return_value = self._response(429)
+
+        pagerduty_backend_send_resolve(self.routing_key, "us", ["id-1", "id-2"], self.config.id)
+
+        self.assertEqual(3, mock_post.call_count)
+        self.assertEqual([1, 2], [call.args[0] for call in mock_sleep.call_args_list])
+        self.config.refresh_from_db()
+        self.assertEqual(429, self.config.last_failure_status_code)
+
+    @patch("alerts.service_backends.pagerduty.time.sleep")
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_bad_request_is_not_retried_and_routing_key_is_masked(self, mock_post, mock_sleep):
+        mock_post.return_value = self._response(400)
+
+        pagerduty_backend_send_resolve(self.routing_key, "us", ["id-1"], self.config.id)
+
+        self.assertEqual(1, mock_post.call_count)
+        self.config.refresh_from_db()
+        self.assertEqual(400, self.config.last_failure_status_code)
+        self.assertTrue(self.config.last_failure_is_json)
+        self.assertNotIn(self.routing_key, self.config.last_failure_response_text)
+        self.assertIn(MASKED, self.config.last_failure_response_text)
+
+    def test_config_form(self):
+        form = PagerDutyConfigForm(data={"routing_key": self.routing_key, "region": "eu", "severity": "warning"})
+        self.assertTrue(form.is_valid())
+        self.assertEqual(
+            {"routing_key": self.routing_key, "region": "eu", "severity": "warning"}, form.get_config())
+
+        form = PagerDutyConfigForm(data={"routing_key": "too-short", "region": "us", "severity": "error"})
+        self.assertFalse(form.is_valid())
+        self.assertIn("routing_key", form.errors)
+
+    @override_bugsink_settings(ALERTS_WEBHOOK_OUTBOUND_MODE="allowlist_only", ALERTS_WEBHOOK_ALLOW_LIST=[])
+    def test_config_form_respects_outbound_policy(self):
+        form = PagerDutyConfigForm(data={"routing_key": self.routing_key, "region": "us", "severity": "error"})
+        self.assertFalse(form.is_valid())
+        self.assertIn("region", form.errors)
