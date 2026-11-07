@@ -17,7 +17,7 @@ from bugsink.period_utils import add_periods_to_datetime
 from bugsink.utils import assert_
 from bugsink.volume_based_condition import VolumeBasedCondition
 from bugsink.transaction import delay_on_commit
-from alerts.tasks import send_unmute_alert
+from alerts.tasks import send_unmute_alert, send_resolve_notification
 from compat.timestamp import parse_timestamp, format_timestamp
 from tags.models import IssueTag, TagValue
 
@@ -694,8 +694,31 @@ def make_issue_history(issue_or_qs, action, user):
         ])
 
 
+def _is_closing_action(action):
+    # actions after which the issue no longer needs attention; incident-style backends (PagerDuty) resolve on these.
+    return action.startswith("resolve") or action.startswith("mute") or action == "delete"
+
+
+def _schedule_resolve_notifications(issue_or_qs):
+    if isinstance(issue_or_qs, Issue):
+        pairs = [(issue_or_qs.project_id, issue_or_qs.id)]
+    else:
+        pairs = issue_or_qs.values_list("project_id", "id")
+
+    issue_ids_by_project = {}
+    for project_id, issue_id in pairs:
+        issue_ids_by_project.setdefault(project_id, []).append(str(issue_id))
+
+    for project_id, issue_ids in issue_ids_by_project.items():
+        delay_on_commit(send_resolve_notification, project_id, issue_ids)
+
+
 def apply_issue_action(manager, issue_or_qs, action, user):
     make_issue_history(issue_or_qs, action, user)
+
+    if _is_closing_action(action):
+        # before the action itself: a bulk delete makes the issues drop out of the queryset.
+        _schedule_resolve_notifications(issue_or_qs)
 
     if action == "resolve":
         manager.resolve(issue_or_qs)
