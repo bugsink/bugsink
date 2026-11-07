@@ -47,7 +47,7 @@
 {% endif %}
 
 <div class="flex flex-wrap bg-slate-50 dark:bg-slate-800 border-b-2 mt-4 items-end">
-    <div class="flex">
+    <div class="flex max-w-full overflow-x-auto">
     {% if is_global_issue_list %}
     <a href="{% url "global_issue_list_open" %}{% querystring sort=sort page=None %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "open" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">{% translate "Open" %}</div></a>
     <a href="{% url "global_issue_list_unresolved" %}{% querystring sort=sort page=None %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "unresolved" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4 {% else %}text-slate-500 dark:text-slate-300 hover:border-b-4 hover:border-slate-400{% endif %}">{% translate "Unresolved" %}</div></a>
@@ -93,7 +93,7 @@
                     {% if page_obj.object_list|length > 0 %}<input type="checkbox" class="dark:bg-slate-900 checked:dark:bg-cyan-500 border-cyan-800 dark:border-cyan-400 text-cyan-500 dark:text-cyan-300 focus:ring-cyan-200 dark:focus:ring-cyan-700 m-4 cursor-pointer js-main-checkbox" onclick="event.stopPropagation(); matchIssueCheckboxesStateToMain(this.parentNode)"/>{% endif %}
                 </div>
             </td>
-            <td class="w-full ml-0 pb-4 pt-4 pr-4 flex">
+            <td class="w-full ml-0 pb-4 pt-4 pr-1 sm:pr-4 flex">
                 <div class="ml-auto">
 
                 {% if disable_resolve_buttons %}

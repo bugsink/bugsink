@@ -57,11 +57,11 @@
       <form action="." method="post">
       {% csrf_token %}
 
-      <table class="w-full">
-      <tbody>
+      <table class="w-full block md:table">
+      <tbody class="block md:table-row-group">
             {% for project in project_list %}
-            <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
-            <td class="w-full p-4 pr-12 {# a bit of spacing to visually seprate the chart & the buttons #}">
+            <tr class="flex flex-wrap items-center justify-end pb-2 md:table-row md:pb-0 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
+            <td class="w-full p-4 md:pr-12 {# a bit of spacing to visually seprate the chart & the buttons #}">
                 <div class="flex items-end gap-4">
                 <div class="min-w-0 flex-1">
                 <div>

@@ -6,14 +6,14 @@
 
 {% block tab_content %}
 
-<div class="flex">
+<div class="flex flex-wrap">
 
     <div class="overflow-hidden">
         <div class="italic">{{ issue.digested_event_count|intcomma }} events in total{% if q %} — {{ event_qs_count }} found by search{% endif %}.</div>
     </div>
 
-    <div class="ml-auto flex-none">
-        <div class="flex place-content-end">
+    <div class="ml-auto flex-none max-w-full">
+        <div class="flex flex-wrap place-content-end gap-y-2">
             {# copy/paste of _event_nav, but not based on any event (we have none), prev/next are meaningless also; first/last only when we have an event_qs to navigate through #}
                 <form action="{% url this_view issue_pk=issue.pk nav="last" %}" method="get">{# nav="last": when doing a new search on an event-page, you want the most recent matching event to show up #}
                 {% include "theme/_search_input.html" with placeholder="search..." search_container_class="mr-2" %}

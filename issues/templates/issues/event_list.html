@@ -6,7 +6,7 @@
 
 {% block tab_content %}
 
-<div class="flex">
+<div class="flex flex-wrap">
     <div class="overflow-hidden">
         <div class="italic">
             Showing {{ page_obj.start_index|intcomma }} - {{ page_obj.end_index|intcomma }} of
@@ -22,11 +22,11 @@
         </div>
     </div>
 
-    <div class="ml-auto flex-none">
+    <div class="ml-auto flex-none max-w-full">
         {# UI / UX question: is it a good idea to reuse-with-different-meaning (pages, not events) for this? #}
         {# adapted copy/pasta from _event_nav #}
-        <div class="flex place-content-end">
-                <form action="." method="get">
+        <div class="flex flex-wrap place-content-end gap-y-2">
+                <form action="." method="get" class="flex justify-end w-full sm:w-auto">
                 {% include "theme/_search_input.html" with placeholder="search..." search_container_class="mr-2" %}
                 </form>
 
@@ -74,7 +74,7 @@
     </div>
 </div>
 
-<div class="pt-4">
+<div class="pt-4 overflow-x-auto">
 <table class="w-full">
 <thead>
 

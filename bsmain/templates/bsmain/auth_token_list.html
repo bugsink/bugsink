@@ -8,7 +8,7 @@
 
 <div class="flex items-center justify-center">
 
-    <div class="m-4 max-w-4xl flex-auto">
+    <div class="m-4 max-w-4xl min-w-0 flex-auto">
 
         {% if messages %}
         <ul class="mb-4">
@@ -19,10 +19,10 @@
         </ul>
         {% endif %}
 
-        <div class="flex">
+        <div class="flex flex-wrap gap-x-4">
             <h1 class="text-4xl mt-4 font-bold">{% translate "Auth Tokens" %}</h1>
 
-            <div class="ml-auto mt-6">
+            <div class="ml-auto mt-6 whitespace-nowrap">
                 <a href="{% url "auth_token_create" %}" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">{% translate "Add Token" %}</a>
             </div>
         </div>

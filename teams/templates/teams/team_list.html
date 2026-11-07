@@ -58,10 +58,10 @@
       <form action="." method="post">
       {% csrf_token %}
 
-      <table class="w-full">
-      <tbody>
+      <table class="w-full block md:table">
+      <tbody class="block md:table-row-group">
             {% for team in team_list %}
-            <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
+            <tr class="flex flex-wrap items-center justify-end pb-2 md:table-row md:pb-0 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
             <td class="w-full p-4">
                 <div class="text-xl font-bold text-slate-800 dark:text-slate-100">
                     {{ team.name }}
