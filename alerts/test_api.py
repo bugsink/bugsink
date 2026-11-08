@@ -112,7 +112,67 @@ class MessagingServiceApiTests(TransactionTestCase):
         self.assertEqual(400, response.status_code)
         self.assertIn("bot_token", response.json()["config"])
 
-    def test_retrieve_is_not_routed(self, mock_resolve):
+    def test_retrieve_is_not_supported(self, mock_resolve):
         response = self.client.get("/api/canonical/0/messaging-services/1/")
 
-        self.assertEqual(404, response.status_code)
+        self.assertEqual(405, response.status_code)
+
+    def test_update_replaces_config_without_returning_secrets(self, mock_resolve):
+        service_id = self._create().json()["id"]
+        user = get_user_model().objects.create_user(username="project-admin")
+        ProjectMembership.objects.create(project=self.project, user=user, role=ProjectRole.ADMIN, accepted=True)
+        token = AuthToken.objects.create(is_user_bound=True, user=user, projects_manage=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        new_url = "https://discord.com/api/webhooks/456/replacement-token"
+
+        response = self.client.patch(
+            reverse("api:messaging-service-detail", args=[service_id]),
+            {"display_name": "New alerts", "config": {"webhook_url": new_url}}, format="json")
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual({"id", "project", "display_name", "kind"}, set(response.json()))
+        service = MessagingServiceConfig.objects.get(id=service_id)
+        self.assertEqual("New alerts", service.display_name)
+        self.assertEqual({"webhook_url": new_url}, json.loads(service.config))
+
+        other = Project.objects.create(team=self.team, name="Other")
+        response = self.client.patch(
+            reverse("api:messaging-service-detail", args=[service_id]),
+            {"display_name": "Name only", "project": other.id, "kind": "telegram"}, format="json")
+
+        self.assertEqual(200, response.status_code)
+        service.refresh_from_db()
+        self.assertEqual("Name only", service.display_name)
+        self.assertEqual({"webhook_url": new_url}, json.loads(service.config))
+        self.assertEqual(self.project, service.project)
+        self.assertEqual("discord", service.kind)
+
+    def test_update_rejects_invalid_config(self, mock_resolve):
+        service_id = self._create().json()["id"]
+        mock_resolve.return_value = {"10.0.0.1"}
+
+        response = self.client.patch(
+            reverse("api:messaging-service-detail", args=[service_id]),
+            {"display_name": "Changed", "config": {"webhook_url": "https://internal.example/hook"}}, format="json")
+
+        self.assertEqual(400, response.status_code)
+        service = MessagingServiceConfig.objects.get(id=service_id)
+        self.assertEqual("#alerts", service.display_name)
+        self.assertEqual({"webhook_url": WEBHOOK_URL}, json.loads(service.config))
+
+    def test_personal_token_cannot_update_another_projects_destination(self, mock_resolve):
+        service_id = self._create().json()["id"]
+        other = Project.objects.create(team=self.team, name="Other")
+        user = get_user_model().objects.create_user(username="other-admin")
+        ProjectMembership.objects.create(project=other, user=user, role=ProjectRole.ADMIN, accepted=True)
+        token = AuthToken.objects.create(is_user_bound=True, user=user, projects_manage=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        mock_resolve.reset_mock()
+
+        response = self.client.patch(
+            reverse("api:messaging-service-detail", args=[service_id]),
+            {"config": {"webhook_url": "https://internal.example/hook"}}, format="json")
+
+        self.assertEqual(403, response.status_code)
+        mock_resolve.assert_not_called()
+        self.assertEqual({"webhook_url": WEBHOOK_URL}, json.loads(MessagingServiceConfig.objects.get().config))

@@ -16,3 +16,10 @@ class MessagingServiceConfigSerializer(UTCModelSerializer):
         model = MessagingServiceConfig
         fields = ["id", "project", "display_name", "kind", "config"]
         extra_kwargs = {"kind": {"required": True}}
+
+
+class MessagingServiceConfigUpdateSerializer(MessagingServiceConfigSerializer):
+    class Meta(MessagingServiceConfigSerializer.Meta):
+        read_only_fields = ["project", "kind"]
+
+    project = serializers.PrimaryKeyRelatedField(read_only=True)

@@ -10,7 +10,7 @@ from bugsink.api_capabilities import lookup, token_guard
 from bugsink.transaction import durable_atomic, immediate_atomic
 
 from .models import MessagingServiceConfig, get_alert_service_backend_class
-from .serializers import MessagingServiceConfigSerializer
+from .serializers import MessagingServiceConfigSerializer, MessagingServiceConfigUpdateSerializer
 
 
 class MessagingServicePagination(AscDescCursorPagination):
@@ -23,7 +23,7 @@ class MessagingServiceViewSet(
         mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
     queryset = MessagingServiceConfig.objects.all()
     serializer_class = MessagingServiceConfigSerializer
-    http_method_names = ["get", "post", "head", "options"]
+    http_method_names = ["get", "post", "patch", "head", "options"]
     pagination_class = MessagingServicePagination
 
     @durable_atomic()
@@ -57,15 +57,35 @@ class MessagingServiceViewSet(
         ),
     )
     def create(self, request, serializer, project, *args, **kwargs):
-        kind = serializer.validated_data["kind"]
-        config_form = get_alert_service_backend_class(kind).get_form_class()(data=serializer.validated_data["config"])
-        if not config_form.is_valid():
-            raise ValidationError({"config": config_form.errors})
-
+        config = validate_config(serializer.validated_data["kind"], serializer.validated_data["config"])
         with immediate_atomic():
-            serializer.save(config=json.dumps(config_form.get_config()))
+            serializer.save(config=config)
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    @token_guard("projects:manage", guarding_messaging_service=lookup(url="pk"))
+    @extend_schema(
+        summary="Update a messaging service",
+        description=(
+            "Change the display name or replace the complete configuration. "
+            "The project and backend kind cannot be changed. `config` is never returned."
+        ),
+    )
+    def partial_update(self, request, messaging_service, *args, **kwargs):
+        serializer = self.get_serializer(messaging_service, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        if "config" in serializer.validated_data:
+            serializer.validated_data["config"] = validate_config(
+                messaging_service.kind, serializer.validated_data["config"])
+
+        with immediate_atomic():
+            serializer.save()
+        return Response(serializer.data)
+
+    def get_serializer_class(self):
+        if self.action == "partial_update":
+            return MessagingServiceConfigUpdateSerializer
+        return MessagingServiceConfigSerializer
 
     def filter_queryset(self, queryset):
         queryset = super().filter_queryset(queryset)
@@ -73,3 +93,10 @@ class MessagingServiceViewSet(
             return queryset
 
         return queryset.filter(project=self.project)
+
+
+def validate_config(kind, config):
+    form = get_alert_service_backend_class(kind).get_form_class()(data=config)
+    if not form.is_valid():
+        raise ValidationError({"config": form.errors})
+    return json.dumps(form.get_config())

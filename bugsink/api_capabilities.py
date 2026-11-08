@@ -82,6 +82,7 @@ def token_guard(
     guarding_event=None,
     guarding_release=None,
     guarding_team=None,
+    guarding_messaging_service=None,
     scopable_by_bound_project=False,
 ):
     """Require a capability and inject its guarded resource or bound-project scope into the view."""
@@ -96,6 +97,7 @@ def token_guard(
             ("event", guarding_event),
             ("release", guarding_release),
             ("team", guarding_team),
+            ("messaging_service", guarding_messaging_service),
         )
         if object_lookup is not None
     }
