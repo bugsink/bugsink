@@ -63,7 +63,7 @@
             {% for team in team_list %}
             <tr class="flex flex-wrap items-center justify-end pb-2 md:table-row md:pb-0 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
             <td class="w-full p-4">
-                <div class="text-xl font-bold text-slate-800 dark:text-slate-100">
+                <div class="text-xl font-bold wrap-anywhere text-slate-800 dark:text-slate-100">
                     {{ team.name }}
                 </div>
                 <div>
@@ -133,7 +133,7 @@
 
             </tr>
             {% empty %}
-            <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
+            <tr class="flex md:table-row bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
             <td class="w-full p-4">
                 {% translate "No teams found." %}
             </td>

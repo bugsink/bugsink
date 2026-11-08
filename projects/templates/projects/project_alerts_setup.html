@@ -45,7 +45,7 @@
                 <td class="w-full p-4">
                     <div class="flex items-center">
                         <div class="flex-grow">
-                            <a href="{% url "project_messaging_service_edit" project_pk=project.pk service_pk=service_config.pk %}" class="text-xl text-cyan-500 dark:text-cyan-300 font-bold">{{ service_config.display_name }}</a>
+                            <a href="{% url "project_messaging_service_edit" project_pk=project.pk service_pk=service_config.pk %}" class="text-xl wrap-anywhere text-cyan-500 dark:text-cyan-300 font-bold">{{ service_config.display_name }}</a>
                             {% if service_config.has_recent_failure %}
                                 <div class="text-sm text-red-600 dark:text-red-400 mt-1">
                                     <span class="inline-flex items-center leading-none">

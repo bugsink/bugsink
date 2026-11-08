@@ -46,7 +46,7 @@
                 <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
                 <td class="w-full p-4">
                     <div>
-                        <a href="{% url "project_member_settings" project_pk=project.pk user_pk=member.user_id %}" class="text-xl text-cyan-500 font-bold">{{ member.user.email }}</a>  {# "best name" perhaps later? #}
+                        <a href="{% url "project_member_settings" project_pk=project.pk user_pk=member.user_id %}" class="text-xl wrap-anywhere text-cyan-500 font-bold">{{ member.user.email }}</a>  {# "best name" perhaps later? #}
                         {% if not member.accepted %}
                         <span class="bg-slate-100 dark:bg-slate-700 rounded-2xl px-4 py-2 ml-2 text-sm">{% translate "Invitation pending" %}</span>
                         {% elif member.is_admin %} {# NOTE: we intentionally hide admin-ness for non-accepted users #}

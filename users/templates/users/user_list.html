@@ -66,7 +66,7 @@
                 <tr class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 border-b-2">
                 <td class="w-full p-4">
                     <div>
-                        <a href="{% url "user_edit" user_pk=user.pk %}" class="text-xl text-cyan-500 dark:text-cyan-300 font-bold">{{ user.username }}</a>
+                        <a href="{% url "user_edit" user_pk=user.pk %}" class="text-xl wrap-anywhere text-cyan-500 dark:text-cyan-300 font-bold">{{ user.username }}</a>
                         {% if member.is_superuser %}
                         <span class="bg-cyan-100 dark:bg-cyan-900 rounded-2xl px-4 py-2 ml-2 text-sm">{% translate "Superuser" %}</span>
                         {% endif %}
