@@ -2,7 +2,7 @@ from hashlib import sha1
 from datetime import timedelta
 from uuid import UUID, uuid4
 import json
-import gzip
+import gzip  # intentionally uses C-zlib to test compatibility with the Rust codec
 import io
 from io import BytesIO
 import os
@@ -12,7 +12,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
-from zipfile import ZipFile, ZIP_BZIP2, ZIP_DEFLATED
+from zipfile import (  # intentionally uses C-zlib to test compatibility with the Rust codec
+    ZipFile, ZIP_BZIP2, ZIP_DEFLATED,
+)
 
 from django.test import tag
 from django.test.utils import CaptureQueriesContext
@@ -34,7 +36,7 @@ from bugsink.moreiterutils import batched
 from bugsink.app_settings import override_settings as bugsink_override_settings
 from bugsink.streams import MaxLengthExceeded
 
-from .models import Chunk, File, FileMetadata, get_file_metadata_for_debug_ids
+from .models import Chunk, File, FileMetadata, get_file_metadata_for_debug_ids, _binary_to_bytes
 from .minidump import event_threads_for_process_state
 from .storage_registry import override_object_storages
 from .tasks import assemble_file, create_chunk, create_file_from_local_file, process_artifact_bundle, vacuum_files_sync
@@ -389,6 +391,21 @@ class FilesTests(TransactionTestCase):
 
         self.assertEqual(413, response.status_code)
         self.assertIn("chunk upload size", response.json()["error"])
+
+    def test_chunk_upload_with_concatenated_gzip_members(self):
+        data = b"hello world"
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+        upload = BytesIO(gzip.compress(data[:5]) + gzip.compress(data[5:]))
+        upload.name = checksum
+
+        response = self.client.post(
+            "/api/0/organizations/anyorg/chunk-upload/",
+            data={"file_gzip": upload},
+            headers=self.token_headers,
+        )
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(data, _binary_to_bytes(Chunk.objects.get(checksum=checksum).data))
 
     def test_assemble_file_to_object_storage(self):
         data = b"hello world"
