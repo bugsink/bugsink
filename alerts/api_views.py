@@ -7,7 +7,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from bugsink.api_pagination import AscDescCursorPagination
 from bugsink.api_capabilities import lookup, token_guard
-from bugsink.api_mixins import AtomicRequestMixin
+from bugsink.transaction import durable_atomic, immediate_atomic
 
 from .models import MessagingServiceConfig, get_alert_service_backend_class
 from .serializers import MessagingServiceConfigSerializer
@@ -20,12 +20,13 @@ class MessagingServicePagination(AscDescCursorPagination):
 
 
 class MessagingServiceViewSet(
-        AtomicRequestMixin, mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+        mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
     queryset = MessagingServiceConfig.objects.all()
     serializer_class = MessagingServiceConfigSerializer
     http_method_names = ["get", "post", "head", "options"]
     pagination_class = MessagingServicePagination
 
+    @durable_atomic()
     @token_guard("projects:manage", guarding_project=lookup(query="project"))
     @extend_schema(
         summary="List messaging services",
@@ -61,7 +62,8 @@ class MessagingServiceViewSet(
         if not config_form.is_valid():
             raise ValidationError({"config": config_form.errors})
 
-        serializer.save(config=json.dumps(config_form.get_config()))
+        with immediate_atomic():
+            serializer.save(config=json.dumps(config_form.get_config()))
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
