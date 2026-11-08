@@ -1,3 +1,5 @@
+import json
+
 from django.conf import settings
 from django.apps import apps
 from django.contrib.auth import get_user_model
@@ -592,3 +594,28 @@ class ProjectScopedActionTestCase(TransactionTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(MessagingServiceConfig.objects.filter(id=other_service.id).exists())
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses", return_value={"162.159.135.232"})
+    def test_add_and_edit_alert_service(self, mock_resolve):
+        alerts_url = reverse("project_alerts_setup", args=[self.project.id])
+        webhook_url = "https://discord.com/api/webhooks/test"
+
+        response = self.client.post(reverse("project_messaging_service_add", args=[self.project.id]), {
+            "display_name": "Alerts", "kind": "discord", "webhook_url": webhook_url,
+        })
+
+        self.assertRedirects(response, alerts_url, fetch_redirect_response=False)
+        service = MessagingServiceConfig.objects.get(project=self.project)
+        self.assertEqual("Alerts", service.display_name)
+        self.assertEqual("discord", service.kind)
+        self.assertEqual({"webhook_url": webhook_url}, json.loads(service.config))
+
+        replacement_url = "https://discord.com/api/webhooks/replacement"
+        edit_url = reverse("project_messaging_service_edit", args=[self.project.id, service.id])
+        self.assertEqual(200, self.client.get(edit_url).status_code)
+        response = self.client.post(edit_url, {"display_name": "Renamed", "webhook_url": replacement_url})
+
+        self.assertRedirects(response, alerts_url, fetch_redirect_response=False)
+        service.refresh_from_db()
+        self.assertEqual("Renamed", service.display_name)
+        self.assertEqual({"webhook_url": replacement_url}, json.loads(service.config))
