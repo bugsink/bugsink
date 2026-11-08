@@ -23,7 +23,7 @@ class MessagingServiceViewSet(
         mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
     queryset = MessagingServiceConfig.objects.all()
     serializer_class = MessagingServiceConfigSerializer
-    http_method_names = ["get", "post", "patch", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
     pagination_class = MessagingServicePagination
 
     @durable_atomic()
@@ -81,6 +81,13 @@ class MessagingServiceViewSet(
         with immediate_atomic():
             serializer.save()
         return Response(serializer.data)
+
+    @immediate_atomic()
+    @token_guard("projects:manage", guarding_messaging_service=lookup(url="pk"))
+    @extend_schema(summary="Delete a messaging service", responses={204: None})
+    def destroy(self, request, messaging_service, *args, **kwargs):
+        messaging_service.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def get_serializer_class(self):
         if self.action == "partial_update":

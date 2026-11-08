@@ -176,3 +176,45 @@ class MessagingServiceApiTests(TransactionTestCase):
         self.assertEqual(403, response.status_code)
         mock_resolve.assert_not_called()
         self.assertEqual({"webhook_url": WEBHOOK_URL}, json.loads(MessagingServiceConfig.objects.get().config))
+
+    def test_delete_removes_only_the_selected_destination(self, mock_resolve):
+        service_id = self._create().json()["id"]
+        other_id = self._create(display_name="Keep me").json()["id"]
+
+        response = self.client.delete(reverse("api:messaging-service-detail", args=[service_id]))
+
+        self.assertEqual(204, response.status_code)
+        self.assertEqual([other_id], list(MessagingServiceConfig.objects.values_list("id", flat=True)))
+
+    def test_personal_project_admin_can_delete(self, mock_resolve):
+        service_id = self._create().json()["id"]
+        user = get_user_model().objects.create_user(username="admin")
+        ProjectMembership.objects.create(project=self.project, user=user, role=ProjectRole.ADMIN, accepted=True)
+        token = AuthToken.objects.create(is_user_bound=True, user=user, projects_manage=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        url = reverse("api:messaging-service-detail", args=[service_id])
+
+        response = self.client.delete(url)
+
+        self.assertEqual(204, response.status_code)
+        self.assertFalse(MessagingServiceConfig.objects.exists())
+
+    def test_member_cannot_delete(self, mock_resolve):
+        service_id = self._create().json()["id"]
+        user = get_user_model().objects.create_user(username="member")
+        ProjectMembership.objects.create(project=self.project, user=user, role=ProjectRole.MEMBER, accepted=True)
+        token = AuthToken.objects.create(is_user_bound=True, user=user, projects_manage=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+        url = reverse("api:messaging-service-detail", args=[service_id])
+
+        self.assertEqual(403, self.client.delete(url).status_code)
+        self.assertEqual("#alerts", MessagingServiceConfig.objects.get().display_name)
+
+    def test_deleted_project_destinations_cannot_be_deleted(self, mock_resolve):
+        service_id = self._create().json()["id"]
+        self.project.is_deleted = True
+        self.project.save()
+        url = reverse("api:messaging-service-detail", args=[service_id])
+
+        self.assertEqual(404, self.client.delete(url).status_code)
+        self.assertEqual("#alerts", MessagingServiceConfig.objects.get().display_name)

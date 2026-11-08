@@ -63,6 +63,7 @@ EXPECTED_CAPABILITY_OPERATIONS = {
             "GET /api/canonical/0/messaging-services/",
             "POST /api/canonical/0/messaging-services/",
             "PATCH /api/canonical/0/messaging-services/{id}/",
+            "DELETE /api/canonical/0/messaging-services/{id}/",
         },
         "teams:read": {
             "GET /api/canonical/0/teams/",
