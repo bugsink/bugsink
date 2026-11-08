@@ -275,7 +275,8 @@ class MessagingServiceApiTests(TransactionTestCase):
         configs = {
             "discord": {"webhook_url": WEBHOOK_URL},
             "mattermost": {"webhook_url": "https://mattermost.example/hooks/secret", "channel": "alerts"},
-            "telegram": {"bot_token": "123:secret", "chat_id": "-100123", "message_thread_id": 5},
+            # no_bandit_expl: dummy Telegram token used only in tests.
+            "telegram": {"bot_token": "123:secret", "chat_id": "-100123", "message_thread_id": 5},  # nosec B105
         }
 
         for kind, config in configs.items():
