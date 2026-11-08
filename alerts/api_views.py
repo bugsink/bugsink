@@ -2,6 +2,7 @@ import json
 
 from rest_framework import mixins, status, viewsets
 from rest_framework.exceptions import ValidationError
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
@@ -88,6 +89,13 @@ class MessagingServiceViewSet(
     def destroy(self, request, messaging_service, *args, **kwargs):
         messaging_service.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @token_guard("projects:manage", guarding_messaging_service=lookup(url="pk"))
+    @extend_schema(summary="Send a test message", request=None, responses={202: None})
+    @action(detail=True, methods=["post"], url_path="test-send")
+    def test_send(self, request, messaging_service, *args, **kwargs):
+        messaging_service.get_backend().send_test_message()
+        return Response(status=status.HTTP_202_ACCEPTED)
 
     def get_serializer_class(self):
         if self.action == "partial_update":

@@ -2,6 +2,7 @@ import json
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.db import connection
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -218,3 +219,47 @@ class MessagingServiceApiTests(TransactionTestCase):
 
         self.assertEqual(404, self.client.delete(url).status_code)
         self.assertEqual("#alerts", MessagingServiceConfig.objects.get().display_name)
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_send_sends_a_test_message_to_the_configured_destination(self, mock_post, mock_resolve):
+        service_id = self._create().json()["id"]
+
+        transactions = []
+
+        def post(webhook_url, **kwargs):
+            transactions.append(connection.in_atomic_block)
+            return mock_post.return_value
+
+        mock_post.side_effect = post
+        response = self.client.post(reverse("api:messaging-service-test-send", args=[service_id]))
+
+        self.assertEqual(202, response.status_code)
+        mock_post.assert_called_once()
+        self.assertEqual([False], transactions)
+        self.assertEqual(WEBHOOK_URL, mock_post.call_args.args[0])
+        self.assertIn("Alpha", mock_post.call_args.kwargs["data"])
+        self.assertIsNone(MessagingServiceConfig.objects.get().last_failure_timestamp)
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_member_cannot_send_a_test_message(self, mock_post, mock_resolve):
+        service_id = self._create().json()["id"]
+        user = get_user_model().objects.create_user(username="member")
+        ProjectMembership.objects.create(project=self.project, user=user, role=ProjectRole.MEMBER, accepted=True)
+        token = AuthToken.objects.create(is_user_bound=True, user=user, projects_manage=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        response = self.client.post(reverse("api:messaging-service-test-send", args=[service_id]))
+
+        self.assertEqual(403, response.status_code)
+        mock_post.assert_not_called()
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_cannot_send_a_test_message_for_a_deleted_project(self, mock_post, mock_resolve):
+        service_id = self._create().json()["id"]
+        self.project.is_deleted = True
+        self.project.save()
+
+        response = self.client.post(reverse("api:messaging-service-test-send", args=[service_id]))
+
+        self.assertEqual(404, response.status_code)
+        mock_post.assert_not_called()
