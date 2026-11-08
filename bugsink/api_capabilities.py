@@ -17,7 +17,7 @@ CAPABILITIES = {
     "releases:create": "Create releases.",
     "debug-files:upload": "Upload and assemble debug files and artifact bundles.",
     "projects:read": "View projects and their details.",
-    "projects:manage": "Create and update projects.",
+    "projects:manage": "Create and update projects; list, add, edit, delete and test their alert destinations.",
     "teams:read": "View teams and their details.",
     "teams:manage": "Create and update teams.",
 }
