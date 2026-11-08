@@ -10,6 +10,7 @@ from bugsink.api_pagination import AscDescCursorPagination
 from bugsink.api_capabilities import lookup, token_guard
 from bugsink.transaction import durable_atomic, immediate_atomic
 
+from .api_schema import MessagingServiceSchema, messaging_service_create_schema
 from .models import MessagingServiceConfig, get_alert_service_backend_class
 from .serializers import MessagingServiceConfigSerializer, MessagingServiceConfigUpdateSerializer
 
@@ -22,6 +23,7 @@ class MessagingServicePagination(AscDescCursorPagination):
 
 class MessagingServiceViewSet(
         mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+    schema = MessagingServiceSchema()
     queryset = MessagingServiceConfig.objects.all()
     serializer_class = MessagingServiceConfigSerializer
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
@@ -53,9 +55,11 @@ class MessagingServiceViewSet(
     @extend_schema(
         summary="Add a messaging service",
         description=(
-            "Add a messaging service to a project. `project` is the integer project ID. `config` holds the "
-            "settings for `kind`, e.g. `{\"webhook_url\": \"...\"}` for Discord; it is write-only."
+            "Add a messaging service to a project. `kind` selects the backend and its required configuration fields. "
+            "Configuration is validated using the same rules as the UI and is never returned."
         ),
+        request={"application/json": messaging_service_create_schema()},
+        responses={201: MessagingServiceConfigSerializer},
     )
     def create(self, request, serializer, project, *args, **kwargs):
         config = validate_config(serializer.validated_data["kind"], serializer.validated_data["config"])

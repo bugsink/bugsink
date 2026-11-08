@@ -5,6 +5,8 @@ from django.contrib.auth import get_user_model
 from django.db import connection
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from django.urls import reverse
+from drf_spectacular.generators import SchemaGenerator
+from jsonschema import Draft4Validator
 from rest_framework.test import APIClient
 
 from bsmain.models import AuthToken
@@ -263,3 +265,41 @@ class MessagingServiceApiTests(TransactionTestCase):
 
         self.assertEqual(404, response.status_code)
         mock_post.assert_not_called()
+
+    def test_create_backend_configurations_match_documented_schema(self, mock_resolve):
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        request_body = schema["paths"]["/api/canonical/0/messaging-services/"]["post"]["requestBody"]
+        self.assertTrue(request_body["required"])
+        request_schema = request_body["content"]["application/json"]["schema"]
+        validator = Draft4Validator(request_schema)
+        configs = {
+            "discord": {"webhook_url": WEBHOOK_URL},
+            "mattermost": {"webhook_url": "https://mattermost.example/hooks/secret", "channel": "alerts"},
+            "telegram": {"bot_token": "123:secret", "chat_id": "-100123", "message_thread_id": 5},
+        }
+
+        for kind, config in configs.items():
+            with self.subTest(kind=kind):
+                data = {"project": self.project.id, "display_name": kind, "kind": kind, "config": config}
+                validator.validate(data)
+                response = self.client.post(reverse("api:messaging-service-list"), data, format="json")
+
+                self.assertEqual(201, response.status_code)
+                self.assertNotIn("config", response.json())
+                service = MessagingServiceConfig.objects.get(id=response.json()["id"])
+                self.assertEqual(config, json.loads(service.config))
+
+    def test_telegram_requires_its_own_complete_config(self, mock_resolve):
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        request_schema = schema["paths"]["/api/canonical/0/messaging-services/"]["post"]["requestBody"][
+            "content"]["application/json"]["schema"]
+        data = {"project": self.project.id, "display_name": "Telegram", "kind": "telegram",
+                "config": {"webhook_url": WEBHOOK_URL}}
+
+        self.assertFalse(Draft4Validator(request_schema).is_valid(data))
+        response = self.client.post(reverse("api:messaging-service-list"), data, format="json")
+
+        self.assertEqual(400, response.status_code)
+        self.assertIn("bot_token", response.json()["config"])
+        self.assertIn("chat_id", response.json()["config"])
+        self.assertFalse(MessagingServiceConfig.objects.exists())
