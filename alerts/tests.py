@@ -8,6 +8,7 @@ import json
 import requests
 import socket
 from socket import gaierror
+from urllib3.exceptions import ProtocolError
 
 from django.core import mail
 from django.contrib.auth import get_user_model
@@ -20,7 +21,7 @@ from events.factories import create_event
 from teams.models import Team, TeamMembership
 
 from .models import MessagingServiceConfig
-from .service_backends.base import BaseWebhookBackend
+from .service_backends.base import BaseWebhookBackend, MAX_WEBHOOK_RESPONSE_BYTES
 from .service_backends.slack import slack_backend_send_test_message, slack_backend_send_alert
 from .service_backends.discord import discord_backend_send_test_message, discord_backend_send_alert
 from .service_backends.discord import DiscordConfigForm
@@ -985,6 +986,55 @@ class TestWebhookResponses(SimpleTestCase):
             self.assertEqual(response.request.url, "http://93.184.216.34/test")
             sent = b"".join(call.args[0] for call in connection.sendall.call_args_list)
             self.assertIn(b"Host: hooks.example.com\r\n", sent)
+
+    def test_requests_and_accepts_identity_encoding(self):
+        response_bytes = b"HTTP/1.1 200 OK\r\nContent-Encoding: Identity\r\nContent-Length: 2\r\n\r\nOK"
+        with self.webhook_response(response_bytes) as (_, connection, _):
+            response = BaseWebhookBackend.safe_post("http://hooks.example.com/test", json={"text": "hello"})
+
+            sent = b"".join(call.args[0] for call in connection.sendall.call_args_list)
+            self.assertIn(b"Accept-Encoding: identity\r\n", sent)
+            self.assertEqual(response.text, "OK")
+
+    def test_response_is_closed_when_reading_fails(self):
+        response_bytes = b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n"
+        with self.webhook_response(response_bytes) as (stream, _, close):
+            with patch.object(stream, "read", side_effect=OSError("connection lost")):
+                with self.assertRaises(ProtocolError):
+                    BaseWebhookBackend.safe_post("http://hooks.example.com/test", json={"text": "hello"})
+            close.assert_called()
+
+    def test_compressed_responses_are_closed_without_reading_or_decoding(self):
+        for encoding in (b"gzip", b"deflate", b"br", b"zstd", b"identity, gzip", b"unknown", b""):
+            for status in (b"200 OK", b"400 Bad Request", b"302 Found"):
+                with self.subTest(encoding=encoding, status=status):
+                    headers = (
+                        b"HTTP/1.1 " + status + b"\r\nContent-Encoding: " + encoding +
+                        b"\r\nLocation: http://other.example.com/\r\nContent-Length: 4\r\n\r\n"
+                    )
+                    with self.webhook_response(headers + b"body") as (stream, _, close):
+                        with patch("urllib3.response._get_decoder", side_effect=AssertionError("decoder invoked")):
+                            with self.assertRaisesRegex(requests.RequestException, "Compressed webhook responses") as e:
+                                BaseWebhookBackend.safe_post("http://hooks.example.com/test", json={"text": "hello"})
+
+                        self.assertIsNone(e.exception.response)
+                        self.assertEqual(stream.tell(), len(headers))
+                        close.assert_called()
+
+    def test_large_responses_are_truncated_before_requests_can_read_them(self):
+        body = b"x" * (MAX_WEBHOOK_RESPONSE_BYTES * 2)
+        for framing in (b"", b"Content-Length: 4000\r\n", b"Transfer-Encoding: chunked\r\n"):
+            with self.subTest(framing=framing):
+                headers = b"HTTP/1.1 302 Found\r\nLocation: http://other.example.com/\r\n" + framing + b"\r\n"
+                wire_body = b"fa0\r\n" + body + b"\r\n0\r\n\r\n" if b"chunked" in framing else body
+                with self.webhook_response(headers + wire_body) as (stream, connection, close):
+                    response = BaseWebhookBackend.safe_post("http://hooks.example.com/test", json={"text": "hello"})
+
+                    self.assertEqual(response.content, body[:MAX_WEBHOOK_RESPONSE_BYTES])
+                    self.assertEqual(response.text, "x" * MAX_WEBHOOK_RESPONSE_BYTES)
+                    self.assertLess(stream.tell(), len(headers + wire_body))
+                    self.assertEqual(connection.makefile.call_count, 1)
+                    close.assert_called()
 
 
 class TestWebhookSecurityValidation(DjangoTestCase):
