@@ -1,5 +1,8 @@
 from django.test import TestCase as DjangoTestCase
+from django.test import SimpleTestCase
 from unittest.mock import patch, Mock
+from contextlib import contextmanager
+import io
 import ipaddress
 import json
 import requests
@@ -958,6 +961,31 @@ class TestMsTeamsBackend(DjangoTestCase):
         self.assertIsNotNone(self.config.last_failure_timestamp)
         self.assertEqual(self.config.last_failure_status_code, 404)
         self.assertEqual(self.config.last_failure_error_type, "HTTPError")
+
+class TestWebhookResponses(SimpleTestCase):
+    @contextmanager
+    def webhook_response(self, response_bytes):
+        connection = Mock()
+        with io.BytesIO(response_bytes) as stream:
+            connection.makefile.return_value = stream
+            with (
+                override_bugsink_settings(ALERTS_WEBHOOK_OUTBOUND_MODE="open"),
+                patch.dict("os.environ", {"NO_PROXY": "*", "no_proxy": "*"}),
+                patch("alerts.service_backends.webhook_security._resolve_ip_addresses", return_value=["93.184.216.34"]),
+                patch("urllib3.connection.HTTPConnection._new_conn", return_value=connection),
+                patch.object(stream, "close") as close,
+            ):
+                yield stream, connection, close
+
+    def test_pinned_request_uses_original_host_header(self):
+        response_bytes = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
+        with self.webhook_response(response_bytes) as (_, connection, _):
+            response = BaseWebhookBackend.safe_post("http://hooks.example.com/test", json={"text": "hello"})
+
+            self.assertEqual(response.request.url, "http://93.184.216.34/test")
+            sent = b"".join(call.args[0] for call in connection.sendall.call_args_list)
+            self.assertIn(b"Host: hooks.example.com\r\n", sent)
+
 
 class TestWebhookSecurityValidation(DjangoTestCase):
     def test_extracts_embedded_ipv4_addresses(self):
