@@ -19,6 +19,7 @@ from teams.models import TeamMembership, Team, TeamRole
 from bugsink.app_settings import get_settings, CB_ANYBODY, CB_MEMBERS, CB_ADMINS
 from bugsink.decorators import login_exempt, atomic_for_request_method
 from bugsink.invite_links import email_not_sent_invite_link_notice, manual_invite_link_notice
+from bugsink.transaction import immediate_atomic
 from bugsink.utils import assert_, email_backend_delivers_mail
 
 from alerts.models import MessagingServiceConfig, get_alert_service_backend_class, get_alert_service_kind_choices
@@ -536,7 +537,6 @@ def project_alerts_setup(request, project_pk):
     })
 
 
-@atomic_for_request_method
 def project_messaging_service_add(request, project_pk):
     project = Project.objects.get(id=project_pk, is_deleted=False)
     _check_project_admin(project, request.user)
@@ -556,7 +556,8 @@ def project_messaging_service_add(request, project_pk):
             if config_form.is_valid():
                 service = form.save(commit=False)
                 service.config = json.dumps(config_form.get_config())
-                service.save()
+                with immediate_atomic():
+                    service.save()
 
                 messages.success(request, "Messaging service added successfully.")
                 return redirect('project_alerts_setup', project_pk=project_pk)
@@ -573,7 +574,6 @@ def project_messaging_service_add(request, project_pk):
     })
 
 
-@atomic_for_request_method
 def project_messaging_service_edit(request, project_pk, service_pk):
     project = Project.objects.get(id=project_pk, is_deleted=False)
     _check_project_admin(project, request.user)
@@ -591,7 +591,8 @@ def project_messaging_service_edit(request, project_pk, service_pk):
         if form.is_valid() and config_form.is_valid():
             service = form.save(commit=False)
             service.config = json.dumps(config_form.get_config())
-            service.save()
+            with immediate_atomic():
+                service.save(update_fields=["display_name", "config"])
 
             messages.success(request, "Messaging service updated successfully.")
             return redirect('project_alerts_setup', project_pk=project_pk)
