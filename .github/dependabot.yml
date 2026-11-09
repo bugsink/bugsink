@@ -36,11 +36,6 @@ updates:
       versions:
       - ">4.2.0"
 
-    # 8.7.2. is the last version to support ProcessState (i.e. minidump parsing) which we need
-    - dependency-name: "symbolic"
-      versions:
-      - ">8.7.2"
-
 # Turn off all pull requests for npm dependencies; we only use npm as a development-side
 # dependency (for tailwind, the results of which we simply commit into the repo).
 # This looks like a work-around ("limit: 0") but it's in fact the official way:
