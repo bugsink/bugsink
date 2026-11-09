@@ -7,6 +7,20 @@ updates:
     time: "15:00"
 
   ignore:
+    # Listing all three update types is the idiomatic way to allow only security updates for these build tools.
+    # We'll update them ourselves when needed.
+    - dependency-name: "setuptools"
+      update-types:
+        - "version-update:semver-major"
+        - "version-update:semver-minor"
+        - "version-update:semver-patch"
+
+    - dependency-name: "setuptools-scm"
+      update-types:
+        - "version-update:semver-major"
+        - "version-update:semver-minor"
+        - "version-update:semver-patch"
+
     # Upgrading Django: we'll time this ourselves
     - dependency-name: "django"
       versions:
