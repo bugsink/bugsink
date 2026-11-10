@@ -53,6 +53,10 @@ class OriginalHostnameAdapter(HTTPAdapter):
 
         # Mark consumed only after closing: Response.close() otherwise skips closing the unread remainder.
         response._content_consumed = True
+        if response.encoding is None:
+            # Avoid potentially CPU-intensive encoding guesswork via charset-normalizer; "utf-8" is a good enough guess
+            # for error-reponses from webhook endpoints.
+            response.encoding = "utf-8"
         return response
 
 
