@@ -136,25 +136,28 @@ class GeneratorReader:
         return result
 
     def readline(self, size=-1):
-        newline_index = self.buffer.find(b"\n")
-        while newline_index == -1:
-            chunk = self.read(DEFAULT_CHUNK_SIZE)
-            if not chunk:
-                break
-            self.buffer.extend(chunk)
+        try:
             newline_index = self.buffer.find(b"\n")
+            while newline_index == -1:
+                chunk = next(self.generator)
+                if not chunk:
+                    break
+                self.buffer.extend(chunk)
+                newline_index = self.buffer.find(b"\n")
 
-        if newline_index != -1:
-            end = newline_index + 1
-        else:
-            end = len(self.buffer)
+            if newline_index != -1:
+                end = newline_index + 1
+            else:
+                end = len(self.buffer)
 
-        if size >= 0:
-            end = min(end, size)
+            if size >= 0:
+                end = min(end, size)
 
-        result = bytes(self.buffer[:end])
-        del self.buffer[:end]
-        return result
+            result = bytes(self.buffer[:end])
+            del self.buffer[:end]
+            return result
+        except self.bad_request_exceptions as e:
+            raise BadRequest(str(e)) from e
 
     def flush(self):
         pass  # no-op for interface compatibility
@@ -269,8 +272,24 @@ class MaxDataReader:
 
         return result
 
+    def readline(self, size=-1):
+        if size == -1 or size is None:
+            size = self.max_length - self.bytes_read + 1  # +1 to trigger the max length check
+        else:
+            size = min(size, self.max_length - self.bytes_read + 1)
+
+        result = self.stream.readline(size)
+        self.bytes_read += len(result)
+
+        if self.bytes_read > self.max_length:
+            raise MaxLengthExceeded("Max length (%s) exceeded" % self.reason)
+
+        return result
+
     def __getattr__(self, attr):
-        return getattr(self.stream, attr)
+        if attr in {"META", "_stream", "readable", "writable", "seekable", "close", "closed"}:
+            return getattr(self.stream, attr)
+        raise AttributeError(attr)
 
 
 class MaxDataWriter:
