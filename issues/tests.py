@@ -803,8 +803,10 @@ class ViewTests(TransactionTestCase):
             size=len(good_sourcemap),
             data=good_sourcemap,
         )
-        FileMetadata.objects.create(file=broken_file, debug_id=broken_debug_id, file_type="source_map", data="{}")
-        FileMetadata.objects.create(file=good_file, debug_id=good_debug_id, file_type="source_map", data="{}")
+        FileMetadata.objects.create(
+            project=self.project, file=broken_file, debug_id=broken_debug_id, file_type="source_map", data="{}")
+        FileMetadata.objects.create(
+            project=self.project, file=good_file, debug_id=good_debug_id, file_type="source_map", data="{}")
 
         class FakeMapping:
             source = "good-source.ts"
@@ -903,7 +905,8 @@ class ViewTests(TransactionTestCase):
             size=len(sourcemap),
             data=sourcemap,
         )
-        FileMetadata.objects.create(file=sourcemap_file, debug_id=debug_id, file_type="source_map", data="{}")
+        FileMetadata.objects.create(
+            project=self.project, file=sourcemap_file, debug_id=debug_id, file_type="source_map", data="{}")
 
         class FakeMapping:
             source = "good-source.ts"
@@ -970,7 +973,8 @@ class ViewTests(TransactionTestCase):
             size=len(sourcemap),
             data=sourcemap,
         )
-        FileMetadata.objects.create(file=sourcemap_file, debug_id=debug_id, file_type="source_map", data="{}")
+        FileMetadata.objects.create(
+            project=self.project, file=sourcemap_file, debug_id=debug_id, file_type="source_map", data="{}")
 
         class FakeMapping:
             source = "good-source.ts"
