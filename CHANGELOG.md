@@ -1,5 +1,16 @@
 # Changes
 
+## 2.7.0 (unreleased)
+
+### Backwards incompatible changes
+
+Bugsink 2.7.0 removes the fallback for previously uploaded projectless sourcemap and native debug-file uploads.
+
+This fallback was introduced in Bugsink 2.2.0, when the requirement for a project to be specified in the upload request
+was added. The upgrade infers projects from retained events' Debug IDs where possible, preserving existing
+project-scoped mappings.  However, this is not always possible, so some existing uploads (from pre-2.2.0 times), which
+do not have a project assigned, may not survive the upgrade.
+
 ## 2.6.3 (6 November 2026)
 
 ### Security
