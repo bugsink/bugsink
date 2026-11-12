@@ -243,10 +243,8 @@ int main(void) {
             SimpleNamespace(instruction=0x1010), SimpleNamespace(instruction=0x2010),
         ] * 100)]
 
-        # First look for debug files belonging to this project. For missing files, also look among older uploads
-        # that have no project recorded, so those uploads keep working. These are two queries for all 200 frames
-        # together; we must not repeat the searches for each frame.
-        with self.assertNumQueries(2):
+        # Look up all 200 frames together rather than repeating the search for each frame.
+        with self.assertNumQueries(1):
             threads = event_threads_for_process_state(self.process_state, self.project)
 
         self.assertEqual(

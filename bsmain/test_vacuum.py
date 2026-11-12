@@ -133,6 +133,7 @@ class VacuumCommandTestCase(TransactionTestCase):
 
     @patch("files.tasks.VACUUM_FILES_BATCH_SIZE", 2)
     def test_vacuum_files_runs_inline_to_completion(self):
+        project = Project.objects.create(name="files")
         old = timezone.now() - timedelta(days=100)
 
         old_chunks = [
@@ -145,10 +146,11 @@ class VacuumCommandTestCase(TransactionTestCase):
 
         old_file = File.objects.create(checksum="a" * 40, filename="old.js.map", size=1, data=b"x")
         File.objects.filter(id=old_file.id).update(accessed_at=old)
-        FileMetadata.objects.create(file=old_file, debug_id=uuid4(), file_type="source_map", data="{}")
+        FileMetadata.objects.create(project=project, file=old_file, debug_id=uuid4(), file_type="source_map", data="{}")
 
         recent_file = File.objects.create(checksum="b" * 40, filename="recent.js.map", size=1, data=b"x")
-        FileMetadata.objects.create(file=recent_file, debug_id=uuid4(), file_type="source_map", data="{}")
+        FileMetadata.objects.create(
+            project=project, file=recent_file, debug_id=uuid4(), file_type="source_map", data="{}")
 
         call_command("vacuum", "--files", stdout=io.StringIO())
 
@@ -158,13 +160,14 @@ class VacuumCommandTestCase(TransactionTestCase):
 
     @patch("files.tasks.VACUUM_FILES_BATCH_SIZE", 2)
     def test_vacuum_files_respects_max_file_count(self):
+        project = Project.objects.create(name="files")
         now = timezone.now()
 
         oldest = File.objects.create(checksum="c" * 40, filename="oldest.js.map", size=1, data=b"x")
         middle = File.objects.create(checksum="d" * 40, filename="middle.js.map", size=1, data=b"x")
         newest = File.objects.create(checksum="e" * 40, filename="newest.js.map", size=1, data=b"x")
         for file in [oldest, middle, newest]:
-            FileMetadata.objects.create(file=file, debug_id=uuid4(), file_type="source_map", data="{}")
+            FileMetadata.objects.create(project=project, file=file, debug_id=uuid4(), file_type="source_map", data="{}")
 
         File.objects.filter(id=oldest.id).update(accessed_at=now - timedelta(days=3))
         File.objects.filter(id=middle.id).update(accessed_at=now - timedelta(days=2))
@@ -183,13 +186,14 @@ class VacuumCommandTestCase(TransactionTestCase):
 
     @patch("files.tasks.VACUUM_FILES_BATCH_SIZE", 2)
     def test_vacuum_files_respects_max_file_bytes(self):
+        project = Project.objects.create(name="files")
         now = timezone.now()
 
         oldest = File.objects.create(checksum="f" * 40, filename="oldest.js.map", size=3, data=b"xxx")
         middle = File.objects.create(checksum="1" * 40, filename="middle.js.map", size=4, data=b"xxxx")
         newest = File.objects.create(checksum="2" * 40, filename="newest.js.map", size=5, data=b"xxxxx")
         for file in [oldest, middle, newest]:
-            FileMetadata.objects.create(file=file, debug_id=uuid4(), file_type="source_map", data="{}")
+            FileMetadata.objects.create(project=project, file=file, debug_id=uuid4(), file_type="source_map", data="{}")
 
         File.objects.filter(id=oldest.id).update(accessed_at=now - timedelta(days=3))
         File.objects.filter(id=middle.id).update(accessed_at=now - timedelta(days=2))
@@ -202,12 +206,13 @@ class VacuumCommandTestCase(TransactionTestCase):
 
     @patch("files.tasks.VACUUM_FILES_BATCH_SIZE", 2)
     def test_vacuum_files_uses_bugsink_file_caps_by_default(self):
+        project = Project.objects.create(name="files")
         now = timezone.now()
 
         oldest = File.objects.create(checksum="3" * 40, filename="oldest.js.map", size=1, data=b"x")
         newest = File.objects.create(checksum="4" * 40, filename="newest.js.map", size=1, data=b"x")
         for file in [oldest, newest]:
-            FileMetadata.objects.create(file=file, debug_id=uuid4(), file_type="source_map", data="{}")
+            FileMetadata.objects.create(project=project, file=file, debug_id=uuid4(), file_type="source_map", data="{}")
 
         File.objects.filter(id=oldest.id).update(accessed_at=now - timedelta(days=2))
         File.objects.filter(id=newest.id).update(accessed_at=now - timedelta(days=1))
@@ -219,12 +224,13 @@ class VacuumCommandTestCase(TransactionTestCase):
 
     @patch("files.tasks.VACUUM_FILES_BATCH_SIZE", 2)
     def test_vacuum_files_cli_cap_overrides_bugsink_setting(self):
+        project = Project.objects.create(name="files")
         now = timezone.now()
 
         oldest = File.objects.create(checksum="5" * 40, filename="oldest.js.map", size=1, data=b"x")
         newest = File.objects.create(checksum="6" * 40, filename="newest.js.map", size=1, data=b"x")
         for file in [oldest, newest]:
-            FileMetadata.objects.create(file=file, debug_id=uuid4(), file_type="source_map", data="{}")
+            FileMetadata.objects.create(project=project, file=file, debug_id=uuid4(), file_type="source_map", data="{}")
 
         File.objects.filter(id=oldest.id).update(accessed_at=now - timedelta(days=2))
         File.objects.filter(id=newest.id).update(accessed_at=now - timedelta(days=1))
@@ -292,6 +298,7 @@ class VacuumCommandTestCase(TransactionTestCase):
 class VacuumFilesBatchTestCase(TransactionTestCase):
     @patch("files.tasks.VACUUM_FILES_BATCH_SIZE", 10)
     def test_vacuum_files_batch_applies_age_then_caps_in_oldest_first_order(self):
+        project = Project.objects.create(name="files")
         now = timezone.now()
 
         very_old = File.objects.create(checksum="7" * 40, filename="very-old.js.map", size=3, data=b"xxx")
@@ -299,7 +306,7 @@ class VacuumFilesBatchTestCase(TransactionTestCase):
         recent = File.objects.create(checksum="9" * 40, filename="recent.js.map", size=5, data=b"xxxxx")
         newest = File.objects.create(checksum="a" * 39 + "b", filename="newest.js.map", size=6, data=b"xxxxxx")
         for file in [very_old, old, recent, newest]:
-            FileMetadata.objects.create(file=file, debug_id=uuid4(), file_type="source_map", data="{}")
+            FileMetadata.objects.create(project=project, file=file, debug_id=uuid4(), file_type="source_map", data="{}")
 
         File.objects.filter(id=very_old.id).update(accessed_at=now - timedelta(days=95))
         File.objects.filter(id=old.id).update(accessed_at=now - timedelta(days=91))
