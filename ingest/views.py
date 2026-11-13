@@ -11,6 +11,7 @@ from django.core.exceptions import ValidationError, PermissionDenied
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from django.utils.http import content_disposition_header
 from django.contrib.auth.decorators import user_passes_test
 
 from compat.auth import parse_auth_header_value
@@ -625,5 +626,6 @@ class MinidumpAPIView(BaseIngestAPIView):
 def download_envelope(request, envelope_id=None):
     envelope = get_object_or_404(Envelope, pk=envelope_id)
     response = HttpResponse(envelope.data, content_type="application/x-sentry-envelope")
-    response["Content-Disposition"] = f'attachment; filename="envelope-{envelope_id}.envelope"'
+    response["Content-Disposition"] = content_disposition_header(
+        as_attachment=True, filename=f"envelope-{envelope_id}.envelope")
     return response

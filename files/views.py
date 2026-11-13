@@ -10,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import user_passes_test
 from django.http import Http404
 from django.utils import timezone
+from django.utils.http import content_disposition_header
 from rest_framework.exceptions import PermissionDenied
 
 from sentry.assemble import ChunkFileState
@@ -392,7 +393,7 @@ def difs_assemble(request, organization_slug, project_slug):
 def download_file(request, checksum):
     file = File.objects.get(checksum=checksum)
     response = HttpResponse(file.get_raw_data(), content_type="application/octet-stream")
-    response["Content-Disposition"] = f"attachment; filename={file.filename}"
+    response["Content-Disposition"] = content_disposition_header(as_attachment=True, filename=file.filename)
     return response
 
 
