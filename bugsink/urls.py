@@ -19,6 +19,7 @@ from files.views import chunk_upload, artifact_bundle_assemble, difs_assemble, a
 from bugsink.decorators import login_exempt
 from bugsink.permissions import IsAuthTokenAuthenticated
 
+from alerts.api_views import MessagingServiceViewSet
 from events.api_views import EventViewSet
 from issues.api_views import IssueCommentViewSet, IssueHistoryViewSet, IssueViewSet
 from projects.api_views import ProjectViewSet
@@ -45,6 +46,7 @@ api_router.register(r'events', EventViewSet)
 api_router.register(r'issue-comments', IssueCommentViewSet, basename='issue-comment')
 api_router.register(r'issue-history', IssueHistoryViewSet, basename='issue-history')
 api_router.register(r'issues', IssueViewSet)
+api_router.register(r'messaging-services', MessagingServiceViewSet, basename='messaging-service')
 api_router.register(r'projects', ProjectViewSet)
 api_router.register(r'releases', ReleaseViewSet)
 api_router.register(r'teams', TeamViewSet)

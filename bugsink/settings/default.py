@@ -101,6 +101,7 @@ SPECTACULAR_SETTINGS = {
         {"bearerAuth": []}
     ],
     "ENUM_NAME_OVERRIDES": {
+        "MessagingServiceKindEnum": "alerts.models.get_alert_service_kind_choices",
         "GroupingKeyMechanismEnum": "issues.grouping_mechanisms.GROUPING_CHOICES",
         "GroupingMechanismEnum": "issues.grouping_mechanisms.GROUPING_MECHANISM_CHOICES",
         "TeamVisibilityEnum": ["joinable", "discoverable", "hidden"],
