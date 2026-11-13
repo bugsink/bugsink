@@ -8,6 +8,7 @@ from .service_backends.telegram import TelegramBackend
 from .service_backends.google_chat import GoogleChatBackend
 from .service_backends.custom import CustomBackend
 from .service_backends.msteams import MsTeamsBackend
+from .service_backends.pagerduty import PagerDutyBackend
 
 
 def get_alert_service_kind_choices():
@@ -18,6 +19,7 @@ def get_alert_service_kind_choices():
         ("google_chat", "Google Chat"),
         ("mattermost", "Mattermost"),
         ("msteams", "Microsoft Teams"),
+        ("pagerduty", "PagerDuty"),
         ("slack", "Slack"),
         ("telegram", "Telegram"),
         ("custom", "Custom"),
@@ -33,6 +35,8 @@ def get_alert_service_backend_class(kind):
         return MattermostBackend
     if kind == "msteams":
         return MsTeamsBackend
+    if kind == "pagerduty":
+        return PagerDutyBackend
     if kind == "slack":
         return SlackBackend
     if kind == "telegram":
