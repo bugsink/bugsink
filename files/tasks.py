@@ -1,7 +1,10 @@
+import os
 import re
 import logging
 import tempfile
+from collections import namedtuple
 from datetime import timedelta
+from uuid import UUID
 from zipfile import ZipFile
 import json
 from hashlib import sha1
@@ -17,6 +20,7 @@ from sentry_sdk_extensions import capture_or_log_exception
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.app_settings import get_settings
 from bugsink.streams import copy_stream_limited, MaxLengthExceeded
+from bugsink.moreiterutils import batched
 from bugsink.timed_sqlite_backend.base import allow_long_running_queries
 
 from .models import (
@@ -51,6 +55,14 @@ IN_CODE_DEBUG_ID_REGEX = re.compile(
     rb'e\._sentryDebugIds\[.*?\]\s*=\s*["\']([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})["\']'
 )
 DEBUG_ID_SCAN_TAIL_SIZE = 64 * 1024
+
+# Keeps each bulk INSERT of file contents well below MySQL's max_allowed_packet (4 MiB by default on older versions).
+BULK_CREATE_MAX_BYTES = 1024 * 1024
+
+# Keeps each "IN (...)" lookup below SQLite's limit on query parameters (999 on older versions).
+IN_LOOKUP_BATCH_SIZE = 500
+
+BundleEntry = namedtuple("BundleEntry", "path checksum filename size debug_id file_type manifest_entry")
 
 
 def create_chunk(checksum, data):
@@ -182,6 +194,134 @@ def find_in_code_debug_ids(local_file):
     return matches
 
 
+def read_manifest(bundle_zip):
+    max_file_size = get_settings().MAX_FILE_SIZE
+    max_manifest_size = min(max_file_size, MAX_MANIFEST_SIZE)
+    manifest_limit_name = "MAX_FILE_SIZE" if max_file_size <= MAX_MANIFEST_SIZE else "MAX_MANIFEST_SIZE"
+
+    with open_zip_entry(bundle_zip, "manifest.json") as manifest_stream:
+        manifest_bytes, _ = read_limited_bytes(
+            manifest_stream, max_manifest_size, reason=f"{manifest_limit_name}: {max_manifest_size}")
+    return json.loads(manifest_bytes.decode("utf-8"))
+
+
+def extract_artifact_bundle(bundle_zip, tempdir):
+    """Extracts the bundle's files to tempdir, and returns a BundleEntry for each."""
+    max_file_size = get_settings().MAX_FILE_SIZE
+    entries = []
+    paths_by_checksum = {}
+
+    for i, (zip_entry_name, manifest_entry) in enumerate(read_manifest(bundle_zip)["files"].items()):
+        filename = basename(manifest_entry.get("url", zip_entry_name))[:255]
+        debug_id = manifest_entry.get("headers", {}).get("debug-id", None)
+        file_type = manifest_entry.get("type", None)
+        if debug_id is None or file_type is None:
+            because = (
+                "it has neither Debug ID nor file-type" if debug_id is None and file_type is None else
+                "it has no Debug ID" if debug_id is None else "it has no file-type")
+            logger.warning("Uploaded file %s will be ignored by Bugsink because %s.", filename, because)
+
+        path = os.path.join(tempdir, str(i))
+        with open(path, "w+b") as local_file:
+            checksum, size = extract_zip_entry_to_file(bundle_zip, zip_entry_name, local_file, max_file_size)
+
+            # the in-code regexes show up in the _minified_ source only (the sourcemap's original source code will not
+            # have been "polluted" with it yet, since it's the original).
+            if debug_id is not None and file_type == "minified_source":
+                mismatches = find_in_code_debug_ids(local_file) - {debug_id}
+                if mismatches:
+                    logger.warning(
+                        "Uploaded file %s contains multiple Debug IDs. Uploaded as %s, but also found: %s.",
+                        filename,
+                        debug_id,
+                        ", ".join(sorted(mismatches)),
+                    )
+
+        # Identical contents are kept on disk only once, so repeated files cannot fill up the disk.
+        if checksum in paths_by_checksum:
+            os.remove(path)
+        path = paths_by_checksum.setdefault(checksum, path)
+
+        entries.append(BundleEntry(
+            path, checksum, filename, size, debug_id and UUID(debug_id), file_type, manifest_entry))
+
+    return entries
+
+
+def batched_by_size(entries, max_bytes):
+    batch, batch_size = [], 0
+    for entry in entries:
+        if batch and batch_size + entry.size > max_bytes:
+            yield batch
+            batch, batch_size = [], 0
+        batch.append(entry)
+        batch_size += entry.size
+
+    if batch:
+        yield batch
+
+
+def build_file(entry, write_storage):
+    with open(entry.path, "rb") as f:
+        if write_storage is None:
+            data = f.read()
+        else:
+            data = b""
+            write_fileobj_to_storage("file", entry.checksum, f)
+
+    return File(
+        checksum=entry.checksum, filename=entry.filename, size=entry.size, data=data,
+        storage_backend=None if write_storage is None else write_storage.name)
+
+
+def store_bundle_entries(entries, project_ids):
+    # Bulk queries rather than a get_or_create per file: bundles with hundreds of files would otherwise take thousands
+    # of queries while holding the write lock.
+    checksums = {entry.checksum for entry in entries}
+    write_storage = get_write_storage("file")
+
+    existing_checksums = {
+        checksum
+        for batch in batched(checksums, IN_LOOKUP_BATCH_SIZE)
+        for checksum in File.objects.filter(checksum__in=batch).values_list("checksum", flat=True)}
+    new_entries = {}
+    for entry in entries:
+        if entry.checksum not in existing_checksums:
+            new_entries.setdefault(entry.checksum, entry)
+
+    for batch in batched_by_size(new_entries.values(), BULK_CREATE_MAX_BYTES):
+        File.objects.bulk_create([build_file(entry, write_storage) for entry in batch])
+
+    # Files without Debug ID or file-type are stored, but get no metadata (Bugsink has no way to look them up).
+    entries = [entry for entry in entries if entry.debug_id is not None and entry.file_type is not None]
+
+    file_ids = {
+        checksum: file_id
+        for batch in batched(checksums, IN_LOOKUP_BATCH_SIZE)
+        for checksum, file_id in File.objects.filter(checksum__in=batch).values_list("checksum", "id")}
+    existing_metadata = {
+        key
+        for batch in batched({entry.debug_id for entry in entries}, IN_LOOKUP_BATCH_SIZE)
+        for key in FileMetadata.objects.filter(
+            project_id__in=project_ids, debug_id__in=batch).values_list("project_id", "debug_id", "file_type")}
+
+    # Like get_or_create: existing metadata is left alone, and the first of any duplicates in the bundle wins.
+    new_metadata = {}
+    for entry in entries:
+        for project_id in project_ids:
+            key = (project_id, entry.debug_id, entry.file_type)
+            if key not in existing_metadata:
+                new_metadata.setdefault(key, FileMetadata(
+                    project_id=project_id,
+                    debug_id=entry.debug_id,
+                    file_type=entry.file_type,
+                    file_id=file_ids[entry.checksum],
+                    data=json.dumps(entry.manifest_entry),
+                ))
+
+    FileMetadata.objects.bulk_create(new_metadata.values())
+
+
 def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
     # arguably, you could just wrap-around each operation, "around everything" guarantees a fully consistent update on
     # the data and we don't do this that often that it's assumed to matter.
@@ -193,68 +333,12 @@ def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
 
         bundle_file, _ = assemble_file(bundle_checksum, chunk_checksums, filename=f"{bundle_checksum}.zip")
 
-        max_file_size = get_settings().MAX_FILE_SIZE
-        max_manifest_size = min(max_file_size, MAX_MANIFEST_SIZE)
-        manifest_limit_name = "MAX_FILE_SIZE" if max_file_size <= MAX_MANIFEST_SIZE else "MAX_MANIFEST_SIZE"
         with tempfile.TemporaryDirectory() as tempdir:
             with bundle_file.open_for_read() as f:
                 with ZipFile(f) as bundle_zip:
-                    with open_zip_entry(bundle_zip, "manifest.json") as manifest_stream:
-                        manifest_bytes, _ = read_limited_bytes(
-                            manifest_stream, max_manifest_size, reason=f"{manifest_limit_name}: {max_manifest_size}")
-                    manifest = json.loads(manifest_bytes.decode("utf-8"))
+                    entries = extract_artifact_bundle(bundle_zip, tempdir)
 
-                    for zip_entry_name, manifest_entry in manifest["files"].items():
-                        with tempfile.TemporaryFile(dir=tempdir) as local_file:
-                            checksum, size = extract_zip_entry_to_file(
-                                bundle_zip, zip_entry_name, local_file, max_file_size,
-                            )
-
-                            local_file.seek(0)
-                            filename = basename(manifest_entry.get("url", zip_entry_name))[:255]
-                            file, _ = create_file_from_local_file(checksum, filename, size, local_file)
-
-                            debug_id = manifest_entry.get("headers", {}).get("debug-id", None)
-                            file_type = manifest_entry.get("type", None)
-                            if debug_id is None or file_type is None:
-                                because = (
-                                    "it has neither Debug ID nor file-type"
-                                    if debug_id is None and file_type is None else
-                                    "it has no Debug ID" if debug_id is None else "it has no file-type")
-
-                                logger.warning(
-                                    "Uploaded file %s will be ignored by Bugsink because %s.",
-                                    filename,
-                                    because,
-                                )
-
-                                continue
-
-                            for project_id in project_ids:
-                                FileMetadata.objects.get_or_create(
-                                    project_id=project_id,
-                                    debug_id=debug_id,
-                                    file_type=file_type,
-                                    defaults={
-                                        "file": file,
-                                        "data": json.dumps(manifest_entry),
-                                    }
-                                )
-
-                            # the in-code regexes show up in the _minified_ source only (the sourcemap's original source
-                            # code will not have been "polluted" with it yet, since it's the original).
-                            if file_type == "minified_source":
-                                mismatches = find_in_code_debug_ids(local_file) - {debug_id}
-                                if mismatches:
-                                    logger.warning(
-                                        (
-                                            "Uploaded file %s contains multiple Debug IDs. "
-                                            "Uploaded as %s, but also found: %s."
-                                        ),
-                                        filename,
-                                        debug_id,
-                                        ", ".join(sorted(mismatches)),
-                                    )
+            store_bundle_entries(entries, project_ids)
 
         if not get_settings().KEEP_ARTIFACT_BUNDLES:
             # delete the bundle file after processing, since we don't need it anymore.
