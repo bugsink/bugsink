@@ -23,7 +23,7 @@ from bugsink.transaction import durable_atomic, immediate_atomic, delay_on_commi
 from bugsink.streams import handle_request_content_encoding, copy_stream_limited, MaxLengthExceeded
 from projects.models import Project
 
-from .models import ArtifactBundleAssembly, Chunk, DifAssembly, File
+from .models import ASSEMBLY_ERROR_MAX_AGE, ArtifactBundleAssembly, Chunk, DifAssembly, File
 from .tasks import assemble_artifact_bundle, assemble_dif, create_chunk
 
 logger = logging.getLogger("bugsink.api")
@@ -277,6 +277,10 @@ def artifact_bundle_assemble(request, organization_slug):
         return JsonResponse({"state": ChunkFileState.NOT_FOUND, "missingChunks": missing_chunks})
 
     with immediate_atomic():
+        ArtifactBundleAssembly.objects.filter(
+            project__in=projects, checksum=checksum,
+            state=ChunkFileState.ERROR, error_at__lt=timezone.now() - ASSEMBLY_ERROR_MAX_AGE,
+        ).delete()
         assemblies = []
         new_project_ids = []
         for project in projects:
@@ -332,10 +336,15 @@ def difs_assemble(request, organization_slug, project_slug):
 
     # Use values_list("checksum") so this existence check doesn't load File.data into memory.
     existing_files = set(File.objects.filter(checksum__in=file_checksums).values_list("checksum", flat=True))
-    assemblies = {
-        (assembly.checksum, assembly.debug_id): assembly
-        for assembly in DifAssembly.objects.filter(project=project, checksum__in=file_checksums)
-    }
+    with immediate_atomic():
+        DifAssembly.objects.filter(
+            project=project, checksum__in=file_checksums,
+            state=ChunkFileState.ERROR, error_at__lt=timezone.now() - ASSEMBLY_ERROR_MAX_AGE,
+        ).delete()
+        assemblies = {
+            (assembly.checksum, assembly.debug_id): assembly
+            for assembly in DifAssembly.objects.filter(project=project, checksum__in=file_checksums)
+        }
 
     all_requested_chunks = {
         chunk

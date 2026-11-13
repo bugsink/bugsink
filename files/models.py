@@ -1,5 +1,6 @@
 import logging
 from contextlib import contextmanager
+from datetime import timedelta
 from io import BytesIO
 from django.db import models
 from django.db import transaction
@@ -17,6 +18,8 @@ from .object_kinds import (
 
 logger = logging.getLogger("bugsink.objectstorage")
 
+ASSEMBLY_ERROR_MAX_AGE = timedelta(minutes=1)
+
 
 def _binary_to_bytes(value):
     # psycopg may return BinaryField values as memoryview objects; callers here expect plain bytes.
@@ -32,6 +35,7 @@ class DifAssembly(models.Model):
     debug_id = models.UUIDField(null=True, blank=True)
     state = models.CharField(max_length=16, default=ChunkFileState.ASSEMBLING)
     detail = models.CharField(max_length=255, blank=True, default="")
+    error_at = models.DateTimeField(null=True, blank=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
     # null=True because we set file only after successful assembly and registration.
     # CASCADE: the simply correct solution, assumed to be performant enough
@@ -59,6 +63,7 @@ class ArtifactBundleAssembly(models.Model):
     checksum = models.CharField(max_length=40)
     state = models.CharField(max_length=16, default=ChunkFileState.CREATED)
     detail = models.CharField(max_length=255, blank=True, default="")
+    error_at = models.DateTimeField(null=True, blank=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)
 
     class Meta:
