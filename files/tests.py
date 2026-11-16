@@ -363,6 +363,7 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(CHUNK_UPLOAD_SIZE, response.json()["chunkSize"])
         self.assertEqual(CHUNK_UPLOAD_SIZE, response.json()["maxRequestSize"])
         self.assertEqual(1234, response.json()["maxFileSize"])
+        self.assertEqual("/organizations/anyorg/chunk-upload/", response.json()["url"])
 
     def test_chunk_upload_rejects_plain_chunk_larger_than_advertised(self):
         data = b"x" * (CHUNK_UPLOAD_SIZE + 1)
@@ -1190,8 +1191,9 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
         self.token = auth.token
         self.project = Project.objects.create(name="test")
 
-        # sentry-cli asks _us_ for our own URL...
-        self.enterContext(bugsink_override_settings(BASE_URL=self.live_server_url))
+        # a BASE_URL that sentry-cli cannot reach (e.g. Bugsink's UI on a private network): sentry-cli must upload to
+        # the url it was given (--url), not to BASE_URL
+        self.enterContext(bugsink_override_settings(BASE_URL="http://unreachable.invalid"))
 
         # propagate exceptions so that we get the errors "from inside the server" instead of just sentry-cli reporting
         # about a 500 error (the setting just makes it end up on the output, it does not actually "escape" in such a
