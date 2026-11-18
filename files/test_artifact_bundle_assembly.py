@@ -3,8 +3,11 @@ from datetime import timedelta
 from hashlib import sha1
 from io import BytesIO
 from unittest.mock import patch
+from uuid import uuid4
 from zipfile import ZipFile
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from bsmain.models import AuthToken
@@ -13,7 +16,57 @@ from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project
 
 from .models import ArtifactBundleAssembly, Chunk, File, FileMetadata
-from .tasks import assemble_artifact_bundle, vacuum_files_batch
+from .tasks import assemble_artifact_bundle, process_artifact_bundle, vacuum_files_batch
+
+
+def create_bundle_chunk(contents_by_debug_id):
+    manifest = {"files": {}}
+    bundle = BytesIO()
+    with ZipFile(bundle, "w") as bundle_zip:
+        for i, (debug_id, contents) in enumerate(contents_by_debug_id.items()):
+            name = f"~/chunk-{i}.js"
+            manifest["files"][name] = {"url": name, "type": "minified_source", "headers": {"debug-id": debug_id}}
+            bundle_zip.writestr(name, contents)
+        bundle_zip.writestr("manifest.json", json.dumps(manifest))
+
+    data = bundle.getvalue()
+    checksum = sha1(data, usedforsecurity=False).hexdigest()
+    Chunk.objects.create(checksum=checksum, size=len(data), data=data)
+    return checksum
+
+
+class ProcessArtifactBundleTests(TransactionTestCase):
+    def setUp(self):
+        super().setUp()
+        self.project = Project.objects.create(name="test")
+
+    def process(self, contents_by_debug_id, project_ids=None):
+        checksum = create_bundle_chunk(contents_by_debug_id)
+        with CaptureQueriesContext(connection) as queries:
+            process_artifact_bundle(checksum, [checksum], project_ids or [self.project.id])
+        return checksum, len(queries)
+
+    def test_query_count_does_not_grow_with_number_of_files(self):
+        _, small_count = self.process({str(uuid4()): f"small({i})" for i in range(5)})
+        _, large_count = self.process({str(uuid4()): f"large({i})" for i in range(50)})
+
+        self.assertEqual(small_count, large_count)
+        self.assertEqual(55, FileMetadata.objects.filter(project=self.project).count())
+
+    def test_existing_and_duplicate_files_are_stored_once(self):
+        debug_id = str(uuid4())
+        self.process({debug_id: "shared"})
+
+        other_project = Project.objects.create(name="other")
+        new_debug_id = str(uuid4())
+        self.process({debug_id: "shared", new_debug_id: "shared"}, [self.project.id, other_project.id])
+
+        self.assertEqual(1, File.objects.filter(filename__startswith="chunk-").count())
+        self.assertEqual(
+            {(self.project.id, debug_id), (self.project.id, new_debug_id), (other_project.id, debug_id),
+             (other_project.id, new_debug_id)},
+            {(project_id, str(d)) for project_id, d in FileMetadata.objects.values_list("project_id", "debug_id")},
+        )
 
 
 class ArtifactBundleAssemblyTests(TransactionTestCase):
