@@ -2129,6 +2129,24 @@ class TestParser(RegularTestCase):
             header, item = next(items)
         self.assertEqual("Header not JSON", str(e.exception))
 
+    def test_non_object_envelope_headers(self):
+        for headers in (b'[{"message":"probe"}]', b'null', b'1', b'"headers"', b'true'):
+            with self.subTest(headers=headers):
+                parser = StreamingEnvelopeParser(io.BytesIO(headers))
+
+                with self.assertRaises(ParseError) as e:
+                    parser.get_envelope_headers()
+                self.assertEqual("Headers must be a JSON object", str(e.exception))
+
+    def test_non_object_item_headers(self):
+        for headers in (b'[]', b'null'):
+            with self.subTest(headers=headers):
+                parser = StreamingEnvelopeParser(io.BytesIO(b'{}\n' + headers + b'\n{}\n'))
+
+                with self.assertRaises(ParseError) as e:
+                    next(parser.get_items_directly())
+                self.assertEqual("Headers must be a JSON object", str(e.exception))
+
     def test_non_utf8_header(self):
         parser = StreamingEnvelopeParser(io.BytesIO(b"\x8b"))
 
