@@ -1,7 +1,6 @@
 {% extends "base.html" %}
-{% load static add_to_qs %}
+{% load static %}
 {% load humanize %}
-{% load add_to_qs %}
 {% load i18n %}
 
 {% block title %}{% translate "Issues" %}{% if project %} · {{ project.name }}{% endif %} · {{ site_title }}{% endblock %}
@@ -64,6 +63,29 @@
     </div>
     <div class="ml-auto p-2">
         <form action="." method="get" class="flex flex-wrap items-center justify-end gap-2">
+        {% if is_global_issue_list and projects|length > 1 %}
+        <details class="relative">
+            <summary class="list-none cursor-pointer bg-slate-50 dark:bg-slate-800 border border-slate-500 rounded-md pl-3 pr-3 pt-2 pb-2">
+                {% if selected_project_ids %}{% blocktranslate count counter=selected_project_ids|length %}{{ counter }} project{% plural %}{{ counter }} projects{% endblocktranslate %}{% else %}{% translate "All projects" %}{% endif %}
+                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-4 h-4 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg>
+            </summary>
+
+            <div class="absolute left-0 md:left-auto md:right-0 z-10 mt-1 w-64 bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-md shadow-lg">
+                <div class="max-h-72 overflow-y-auto p-2">
+                    {% for project in projects %}
+                    <label class="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700">
+                        <input type="checkbox" name="project" value="{{ project.id }}"{% if project.id in selected_project_ids %} checked{% endif %} class="dark:bg-slate-900 checked:dark:bg-cyan-500 border-cyan-800 dark:border-cyan-400 text-cyan-500 dark:text-cyan-300 focus:ring-cyan-200 dark:focus:ring-cyan-700 cursor-pointer"/>
+                        <span class="truncate">{{ project.name }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <div class="flex items-center justify-end gap-4 p-2 border-t-2 border-slate-300 dark:border-slate-600">
+                    {% if selected_project_ids %}<a href="{% querystring project=None page=None %}" class="text-cyan-500 dark:text-cyan-300 font-bold">{% translate "Clear" %}</a>{% endif %}
+                    <button type="submit" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">{% translate "Apply" %}</button>
+                </div>
+            </div>
+        </details>
+        {% endif %}
         <select id="issue-sort" name="sort" aria-label="{% translate 'Sort issues' %}" onchange="this.form.submit()" class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md">
             <option value="last_seen"{% if sort == "last_seen" %} selected{% endif %}>{% translate "Last seen" %}</option>
             <option value="events"{% if sort == "events" %} selected{% endif %}>{% translate "Most events" %}</option>
@@ -248,10 +270,10 @@
 
         <div class="flex ml-2"> {# pagination #}
                 {% if page_obj.has_previous %}
-                <a href="?{% add_to_qs page=1 %}" class="inline-flex" title="First page">
+                <a href="{% querystring page=1 %}" class="inline-flex" title="First page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M3.22 7.595a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 0 0 1.06-1.06l-2.72-2.72 2.72-2.72a.75.75 0 0 0-1.06-1.06l-3.25 3.25Zm8.25-3.25-3.25 3.25a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 1 0 1.06-1.06l-2.72-2.72 2.72-2.72a.75.75 0 0 0-1.06-1.06Z" clip-rule="evenodd" /></svg></a>
 
-                <a href="?{% add_to_qs page=page_obj.previous_page_number %}" class="inline-flex" title="Previous page">
+                <a href="{% querystring page=page_obj.previous_page_number %}" class="inline-flex" title="Previous page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M9.78 4.22a.75.75 0 0 1 0 1.06L7.06 8l2.72 2.72a.75.75 0 1 1-1.06 1.06L5.47 8.53a.75.75 0 0 1 0-1.06l3.25-3.25a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}
@@ -271,7 +293,7 @@
                 {% endif %}
 
                 {% if page_obj.has_next %}
-                <a href="?{% add_to_qs page=page_obj.next_page_number %}" class="inline-flex" title="Next page">
+                <a href="{% querystring page=page_obj.next_page_number %}" class="inline-flex" title="Next page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M6.22 4.22a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06L8.94 8 6.22 5.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}
