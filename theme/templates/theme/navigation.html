@@ -1,6 +1,6 @@
 {% load static add_to_qs %}{% load i18n %}
 {# MOBILE HEADER #}
-<header class="w-full bg-slate-200 dark:bg-slate-800 md:hidden">
+<header class="relative w-full bg-slate-200 dark:bg-slate-800 md:hidden">
 
   <input type="checkbox" id="nav-toggle" class="peer hidden">
 
@@ -17,8 +17,8 @@
     </label>
   </nav>
 
-  {# PUSH-DOWN MENU #}
-  <div class="hidden peer-checked:block px-4 pb-4">
+  {# OVERLAY MENU #}
+  <div class="hidden peer-checked:block absolute top-full inset-x-0 z-50 px-4 pb-4 bg-slate-200 dark:bg-slate-800 shadow-lg">
     <div class="flex flex-col gap-3 text-right">
 
       {% if not app_settings.SINGLE_TEAM %}

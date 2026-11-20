@@ -106,6 +106,18 @@ because we were in the process of fixing borders globally anyway */
   left: 0;
 }
 
+/* On phones, open menus at the left edge of the (relative) button bar, so they stay on screen */
+@media (max-width: 639px) {
+  .dropdown {
+    position: static;
+  }
+
+  .dropdown-content-right {
+    left: 0;
+    right: auto;
+  }
+}
+
 /* Show the dropdown menu on hover */
 .dropdown:hover .dropdown-content-left, .dropdown:hover .dropdown-content-right {
     display: flex;
