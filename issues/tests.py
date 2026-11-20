@@ -21,6 +21,7 @@ from django.apps import apps
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.utils import get_model_topography
 from projects.models import Project, ProjectMembership
+from alerts.models import MessagingServiceConfig
 from releases.models import create_release_if_needed
 from events.factories import create_event, create_event_data
 from bsmain.management.commands.send_json import Command as SendJsonCommand
@@ -424,6 +425,64 @@ class MuteUnmuteTestCase(TransactionTestCase):
         self.assertEqual("[]", Issue.objects.get(id=issue.id).unmute_on_volume_based_conditions)
 
         self.assertEqual(1, send_unmute_alert.delay.call_count)
+
+
+@patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+class PagerDutyResolveTestCase(TransactionTestCase):
+    routing_key = "R0UT1NGKEY0123456789abcdefABCDEF"
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(username='test', password='test')
+        self.project = Project.objects.create(name="test")
+        ProjectMembership.objects.create(project=self.project, user=self.user, accepted=True)
+        MessagingServiceConfig.objects.create(
+            project=self.project, display_name="On-call", kind="pagerduty",
+            config=json.dumps({"routing_key": self.routing_key, "region": "us", "severity": "error"}))
+        self.issue, _ = get_or_create_issue(self.project)
+        self.client.force_login(self.user)
+
+    def _posted(self, safe_post):
+        return [
+            (event["event_action"], event["dedup_key"])
+            for event in (json.loads(call.kwargs["data"]) for call in safe_post.call_args_list)]
+
+    def test_resolve_and_mute_resolve_the_incident(self, safe_post):
+        for action in ["resolve", "resolved_next", "mute", "mute_for:day,1,0"]:
+            Issue.objects.filter(id=self.issue.id).update(is_resolved=False, is_muted=False)
+            safe_post.reset_mock()
+
+            self.client.post(f"/issues/issue/{self.issue.id}/history/", {"action": action})
+
+            self.assertEqual([("resolve", str(self.issue.id))], self._posted(safe_post), action)
+
+    def test_reopen_and_unmute_send_nothing(self, safe_post):
+        Issue.objects.filter(id=self.issue.id).update(is_resolved=True)
+        self.client.post(f"/issues/issue/{self.issue.id}/history/", {"action": "reopen"})
+
+        Issue.objects.filter(id=self.issue.id).update(is_muted=True)
+        self.client.post(f"/issues/issue/{self.issue.id}/history/", {"action": "unmute"})
+
+        self.assertEqual([], self._posted(safe_post))
+
+    def test_bulk_delete_resolves_every_incident(self, safe_post):
+        other_issue, _ = get_or_create_issue(self.project, create_event_data(exception_type="OtherIssue"))
+        Project.objects.filter(id=self.project.id).update(issue_count=2)
+
+        self.client.post(
+            f"/issues/{self.project.id}/",
+            {"issue_ids[]": [str(self.issue.id), str(other_issue.id)], "action": "delete"})
+
+        self.assertEqual(
+            {("resolve", str(self.issue.id)), ("resolve", str(other_issue.id))}, set(self._posted(safe_post)))
+
+    def test_projects_without_pagerduty_post_nothing_on_resolve(self, safe_post):
+        MessagingServiceConfig.objects.filter(project=self.project).update(
+            kind="slack", config=json.dumps({"webhook_url": "https://hooks.slack.com/test"}))
+
+        self.client.post(f"/issues/issue/{self.issue.id}/history/", {"action": "resolve"})
+
+        self.assertEqual(0, safe_post.call_count)
 
 
 class ViewTests(TransactionTestCase):
