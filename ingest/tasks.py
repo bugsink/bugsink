@@ -46,8 +46,8 @@ logger = logging.getLogger("bugsink.ingest")
 def digest(event_id, event_metadata):
     ingestion_id = event_metadata["ingestion_id"]
 
-    with open(get_filename_for_event_id(ingestion_id), "rb") as f:
-        event_data = json.loads(f.read().decode("utf-8"))
+    with open(get_filename_for_event_id(ingestion_id), encoding="utf-8") as f:
+        event_data = json.load(f)
         opened = [get_filename_for_event_id(ingestion_id)]
 
     if event_metadata.get("has_minidump"):
