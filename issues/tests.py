@@ -536,6 +536,39 @@ class ViewTests(TransactionTestCase):
 
         self.assertNotContains(response, "PendingError")
 
+    def test_global_issue_list_filters_by_project(self):
+        second_project = Project.objects.create(name="second")
+        third_project = Project.objects.create(name="third")
+        ProjectMembership.objects.create(project=second_project, user=self.user, accepted=True)
+        ProjectMembership.objects.create(project=third_project, user=self.user, accepted=True)
+        second_issue, _ = get_or_create_issue(second_project)
+        get_or_create_issue(third_project)
+
+        response = self.client.get("/issues/", {"project": [self.project.id, second_project.id]})
+
+        self.assertEqual({self.issue.id, second_issue.id}, {issue.id for issue in response.context["page_obj"]})
+        self.assertContains(response, "2 projects")
+        self.assertContains(response, f'name="project" value="{third_project.id}" class=')
+
+    def test_global_issue_list_project_filter_ignores_inaccessible_projects(self):
+        other_project = Project.objects.create(name="other")
+        get_or_create_issue(other_project)
+
+        response = self.client.get("/issues/", {"project": [other_project.id, "not-a-number"]})
+
+        self.assertEqual([self.issue.id], [issue.id for issue in response.context["page_obj"]])
+        self.assertEqual([], response.context["selected_project_ids"])
+
+    def test_global_issue_list_project_filter_survives_tabs_and_pagination(self):
+        second_project = Project.objects.create(name="second")
+        ProjectMembership.objects.create(project=second_project, user=self.user, accepted=True)
+        query = f"project={self.project.id}&amp;project={second_project.id}"
+
+        response = self.client.get("/issues/", {"project": [self.project.id, second_project.id], "page": 2})
+
+        self.assertContains(response, f'href="/issues/muted/?{query}&amp;sort=last_seen"')
+        self.assertContains(response, f'href="?{query}&amp;page=1"')
+
     def test_global_issue_list_bulk_action_ignores_issues_from_inaccessible_projects(self):
         other_project = Project.objects.create(name="other")
         other_issue, _ = get_or_create_issue(other_project)
