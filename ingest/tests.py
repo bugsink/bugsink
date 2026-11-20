@@ -1357,6 +1357,33 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual("GroupingError + grouping value", Grouping.objects.get().grouping_key)  # proves actual use
 
 
+class DigestInvalidInputTestCase(TransactionTestCase):
+    def test_invalid_event_is_discarded_with_its_minidump(self):
+        project = Project.objects.create(name="test", alert_on_new_issue=False)
+        for payload in [b'{}\\n', b'{"message":"\xff"}', b'null', b'[]']:
+            with self.subTest(payload=payload):
+                with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+                    metadata = {
+                        "event_id": str(uuid.uuid4()),
+                        "ingestion_id": str(uuid.uuid4()),
+                        "project_id": project.id,
+                        "ingested_at": format_timestamp(timezone.now()),
+                        "has_minidump": True,
+                    }
+                    with open(get_filename_for_event_id(metadata["ingestion_id"]), "wb") as f:
+                        f.write(payload)
+                    with open(get_filename_for_event_id(metadata["ingestion_id"], filetype="minidump"), "wb") as f:
+                        f.write(b"unread minidump")
+
+                    with self.assertLogs("bugsink.ingest", level="WARNING") as logs:
+                        digest(metadata["event_id"], metadata)
+
+                    self.assertIn("ValidationError in digest", logs.output[0])
+                    self.assertEqual([], os.listdir(tempdir))
+
+        self.assertEqual(0, Event.objects.count())
+
+
 class DigestQuotaTestCase(TransactionTestCase):
     # LLM-generated; not deeply inspected, but they do seem to cover the main cases we care about.
 
