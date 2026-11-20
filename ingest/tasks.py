@@ -44,10 +44,7 @@ logger = logging.getLogger("bugsink.ingest")
 
 @shared_task
 def digest(event_id, event_metadata):
-    if "ingestion_id" in event_metadata:
-        ingestion_id = event_metadata["ingestion_id"]  # the normal case
-    else:
-        ingestion_id = event_id  # for bugsink<=2.0.11 events in-transit in snappea queue cross version upgrade
+    ingestion_id = event_metadata["ingestion_id"]
 
     with open(get_filename_for_event_id(ingestion_id), "rb") as f:
         event_data = json.loads(f.read().decode("utf-8"))
