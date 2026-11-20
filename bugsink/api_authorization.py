@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.generics import get_object_or_404
 
+from alerts.models import MessagingServiceConfig
 from bugsink.utils import assert_
 from events.models import Event
 from issues.models import Issue, issue_lookup_kwargs
@@ -64,6 +65,9 @@ def _object_from_identifier(object_type, identifier):
         return get_object_or_404(Release.objects.select_related("project"), pk=identifier)
     if object_type == "team":
         return get_object_or_404(Team.objects.all(), pk=identifier)
+    if object_type == "messaging_service":
+        return get_object_or_404(
+            MessagingServiceConfig.objects.select_related("project").filter(project__is_deleted=False), pk=identifier)
 
     raise NotImplementedError("Object lookup not implemented for object type: %s." % object_type)
 
@@ -71,7 +75,7 @@ def _object_from_identifier(object_type, identifier):
 def _project_for_object(object_type, guarded_object):
     if object_type == "project":
         return guarded_object
-    if object_type in ("issue", "release", "event"):
+    if object_type in ("issue", "release", "event", "messaging_service"):
         return guarded_object.project
 
     raise NotImplementedError("Project lookup not implemented for object type: %s." % object_type)
