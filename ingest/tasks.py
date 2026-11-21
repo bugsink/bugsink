@@ -49,6 +49,7 @@ def digest(event_id, event_metadata):
     if event_metadata.get("has_minidump"):
         filenames.append(get_filename_for_event_id(ingestion_id, filetype="minidump"))
 
+    keep_files = False
     try:
         try:
             with open(get_filename_for_event_id(ingestion_id), encoding="utf-8") as f:
@@ -99,16 +100,23 @@ def digest(event_id, event_metadata):
         digest_event(event_metadata, event_data)
     except ValidationError as e:
         logger.warning("ValidationError in digest", exc_info=e)
+    except Exception:
+        # Files are removed on error (failing payloads must not fill the disk), unless KEEP_ENVELOPES is on.
+        if get_settings().KEEP_ENVELOPES > 0:
+            keep_files = True
+            logger.error("Unexpected error in digest, keeping ingestion files %s (KEEP_ENVELOPES)", filenames)
+        raise
     finally:
-        # "Robustly" remove all ingestion files (don't stop on failure), but still report any errors at the end
-        errors = []
-        for filename in filenames:
-            try:
-                os.unlink(filename)
-            except FileNotFoundError as e:
-                errors.append(e)
-        if errors:
-            raise Exception(errors)
+        if not keep_files:
+            # "Robustly" remove all ingestion files (don't stop on failure), but still report any errors at the end
+            errors = []
+            for filename in filenames:
+                try:
+                    os.unlink(filename)
+                except FileNotFoundError as e:
+                    errors.append(e)
+            if errors:
+                raise Exception(errors)
 
 
 @immediate_atomic()

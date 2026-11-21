@@ -1451,6 +1451,53 @@ class DigestQuotaTestCase(TransactionTestCase):
         self.assertEqual(1, Event.objects.count())  # No incoming event was stored; deletion is queued.
 
 
+class DigestFailureKeepsPayloadTestCase(TransactionTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.project = Project.objects.create(name="test", alert_on_new_issue=False)
+
+    def write_queued_event(self):
+        data = create_event_data()
+        metadata = {
+            "event_id": data["event_id"],
+            "ingestion_id": str(uuid.uuid4()),
+            "project_id": self.project.id,
+            "ingested_at": format_timestamp(timezone.now()),
+        }
+        with open(get_filename_for_event_id(metadata["ingestion_id"]), "w") as f:
+            json.dump(data, f)
+        return metadata
+
+    def test_payload_is_kept_when_digest_event_raises_and_keep_envelopes_is_enabled(self):
+        with tempfile.TemporaryDirectory() as tempdir, \
+                override_settings(INGEST_STORE_BASE_DIR=tempdir, KEEP_ENVELOPES=10):
+            metadata = self.write_queued_event()
+            with patch("ingest.tasks.digest_event", side_effect=RuntimeError("boom")):
+                with self.assertRaises(RuntimeError):
+                    digest(metadata["event_id"], metadata)
+
+            self.assertEqual([get_filename_for_event_id(metadata["ingestion_id"])],
+                             [os.path.join(tempdir, f) for f in os.listdir(tempdir)])
+
+    def test_payload_is_removed_when_digest_event_raises_by_default(self):
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            metadata = self.write_queued_event()
+            with patch("ingest.tasks.digest_event", side_effect=RuntimeError("boom")):
+                with self.assertRaises(RuntimeError):
+                    digest(metadata["event_id"], metadata)
+
+            self.assertEqual([], os.listdir(tempdir))
+
+    def test_payload_is_removed_when_digest_event_raises_validation_error(self):
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            metadata = self.write_queued_event()
+            with patch("ingest.tasks.digest_event", side_effect=ValidationError("bad")):
+                digest(metadata["event_id"], metadata)
+
+            self.assertEqual([], os.listdir(tempdir))
+
+
 class IngestSecurityViewTestCase(TransactionTestCase):
     # Tests for the CSP report endpoint (POST /api/<project_pk>/security/). Goes through self.client so we exercise the
     # full URL routing, content-type check, auth, parse, digest path. TransactionTestCase because digest.delay() relies
