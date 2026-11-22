@@ -563,6 +563,11 @@ class ViewTests(TransactionTestCase):
         self.assertContains(response, "The selected projects are no longer available.")
         self.assertContains(
             response, 'href="?" class="text-cyan-500 dark:text-cyan-300 font-bold">Show all projects</a>')
+        sort_form = re.search(r'<form[^>]*id="issue-sort-form">(.*?)</form>', response.content.decode(), re.S).group(1)
+        project_ids = re.findall(r'type="hidden" name="project" value="([^"]*)"', sort_form)
+        response = self.client.get("/issues/", {"project": project_ids, "sort": "events"})
+        self.assertEqual([], list(response.context["page_obj"]))
+        self.assertContains(response, "The selected projects are no longer available.")
 
         response = self.client.get("/issues/")
         self.assertEqual([self.issue.id], [issue.id for issue in response.context["page_obj"]])

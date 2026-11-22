@@ -67,7 +67,7 @@
     <a href="{% url "issue_list_all" project_pk=project.id %}{% querystring sort=sort page=None %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "all" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "All" %}</div></a>
     {% endif %}
     </div>
-    <div class="ml-auto p-2">
+    <div class="ml-auto p-2 flex flex-wrap items-center justify-end gap-2">
         <form action="." method="get" class="flex flex-wrap items-center justify-end gap-2">
         {% if is_global_issue_list and projects|length > 1 or project_filter_unavailable %}
         <details class="relative">
@@ -91,6 +91,14 @@
                 </div>
             </div>
         </details>
+        {% endif %}
+        {% if is_global_issue_list %}
+        <input type="hidden" name="sort" value="{{ sort }}">
+        </form>
+        <form action="." method="get" id="issue-sort-form">
+            {% for project_id in requested_project_ids %}
+            <input type="hidden" name="project" value="{{ project_id }}">
+            {% endfor %}
         {% endif %}
         <select id="issue-sort" name="sort" aria-label="{% translate 'Sort issues' %}" onchange="this.form.submit()" class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md">
             <option value="last_seen"{% if sort == "last_seen" %} selected{% endif %}>{% translate "Last seen" %}</option>

@@ -303,6 +303,7 @@ def _global_issue_list_pt_2(request, accessible_project_ids, state_filter, unapp
         "page_obj": page_obj,
         "projects": Project.objects.filter(id__in=accessible_project_ids).order_by("name"),
         "selected_project_ids": selected_project_ids,
+        "requested_project_ids": requested_project_ids,
         "project_filter_unavailable": bool(requested_project_ids) and not selected_project_ids,
     })
 
