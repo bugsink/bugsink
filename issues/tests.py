@@ -602,6 +602,12 @@ class ViewTests(TransactionTestCase):
         response = self.client.get(details_url)
         self.assertContains(response, f'href="{escape(list_url)}"', count=2)
 
+        self.assertContains(response, f'action=".{escape(details_url[details_url.index("?"):])}" method="post"')
+        response = self.client.post(details_url, {"action": "resolve"})
+        self.assertRedirects(response, details_url)
+        response = self.client.get(response.url)
+        self.assertContains(response, f'href="{escape(list_url)}"', count=2)
+
         response = self.client.get(list_url)
         self.assertEqual([self.issue.id], [issue.id for issue in response.context["page_obj"]])
         self.assertEqual("all", response.context["state_filter"])

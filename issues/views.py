@@ -341,7 +341,7 @@ def _handle_post(request, issue):
     # resolve an issue for a specific release, and while you where thinking about that, it occurred for that
     # release. In that case it will probably stand out that your buttons don't become greyed out, and that the
     # dropdown no longer functions. already-true-vbc-unmute may be another exception to this rule.
-    return HttpResponseRedirect(request.path)
+    return HttpResponseRedirect(request.get_full_path())
 
 
 def _get_event(qs, issue, event_pk, digest_order, nav, bounds):
