@@ -424,7 +424,7 @@ def project_members_accept_new_user(request, project_pk, token):
             seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)).delete()
 
     try:
-        verification = EmailVerification.objects.get(token=token)
+        verification = EmailVerification.objects.get(token=token, email=models.F("user__username"))
     except EmailVerification.DoesNotExist:
         # good enough (though a special page might be prettier)
         raise Http404("Invalid or expired token")

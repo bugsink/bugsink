@@ -62,12 +62,18 @@ class User(AbstractUser):
         password_changed = (
             self.pk is not None and self._password is not None
             and (update_fields is None or "password" in update_fields))
-        if not password_changed:
+        email_may_change = self.pk is not None and (update_fields is None or "email" in update_fields)
+        if not password_changed and not email_may_change:
             return super().save(*args, **kwargs)
 
-        with immediate_atomic(using=kwargs.get("using") or self._state.db, only_if_needed=True):
+        using = kwargs.get("using") or self._state.db
+        with immediate_atomic(using=using, only_if_needed=True):
+            saved_user = type(self).objects.using(using).filter(pk=self.pk)
+            invalidate_tokens = password_changed or (
+                email_may_change and saved_user.exclude(email=self.email).exists())
             super().save(*args, **kwargs)
-            self.emailverification_set.all().delete()
+            if invalidate_tokens:
+                self.emailverification_set.all().delete()
 
     def deactivate(self):
         self.is_active = False
@@ -85,7 +91,7 @@ class User(AbstractUser):
 
 class EmailVerification(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    email = models.EmailField()  # redundant, but future-proof for when we allow multiple emails per user
+    email = models.EmailField()
     token = models.CharField(max_length=64, default=secrets.token_urlsafe, blank=False, null=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

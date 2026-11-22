@@ -64,7 +64,8 @@ class UserDeactivationTestCase(TransactionTestCase):
 
     def test_deactivated_user_cannot_request_or_redeem_email_recovery(self):
         user = User.objects.create_user(
-            username="deactivated@example.com", is_active=False, is_deactivated=True, password="old-password")
+            username="deactivated@example.com", email="deactivated@example.com",
+            is_active=False, is_deactivated=True, password="old-password")
         verification = EmailVerification.objects.create(user=user, email=user.username)
 
         for view in ["request_reset_password", "resend_confirmation"]:
@@ -299,7 +300,8 @@ class PreferencesPasswordTestCase(TransactionTestCase):
 
 class PasswordResetTokensTestCase(TransactionTestCase):
     def test_reset_invalidates_other_outstanding_email_links(self):
-        user = User.objects.create_user(username="reset@example.com", password="OldSecurePassw0rd!")
+        user = User.objects.create_user(
+            username="reset@example.com", email="reset@example.com", password="OldSecurePassw0rd!")
         verification = EmailVerification.objects.create(user=user, email=user.email)
         other_verification = EmailVerification.objects.create(user=user, email=user.email)
         other_user = User.objects.create_user(username="other@example.com")
@@ -319,3 +321,49 @@ class PasswordResetTokensTestCase(TransactionTestCase):
         self.assertEqual(response.status_code, 404)
         user.refresh_from_db()
         self.assertTrue(user.check_password("NewSecurePassw0rd!"))
+
+
+class EmailChangeTokensTestCase(TransactionTestCase):
+    def test_changing_email_invalidates_old_links_but_allows_new_recovery(self):
+        user = User.objects.create_user(
+            username="before@example.com", email="before@example.com", password="OldSecurePassw0rd!")
+        verification = EmailVerification.objects.create(user=user, email=user.email)
+        admin = User.objects.create_superuser(username="admin@example.com", password="test")
+        self.client.force_login(admin)
+
+        response = self.client.post(reverse("user_edit", kwargs={"user_pk": user.pk}), {
+            "username": "after@example.com",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+        self.client.logout()
+        response = self.client.post(reverse("reset_password", kwargs={"token": verification.token}), {
+            "new_password1": "AttackerSecurePassw0rd!", "new_password2": "AttackerSecurePassw0rd!",
+        })
+        self.assertEqual(response.status_code, 404)
+
+        with patch("users.views.send_reset_email.delay") as send_reset:
+            response = self.client.post(reverse("request_reset_password"), {"email": "after@example.com"})
+        self.assertEqual(response.status_code, 200)
+        verification = EmailVerification.objects.get(user=user)
+        send_reset.assert_called_once_with("after@example.com", verification.token)
+        response = self.client.post(reverse("reset_password", kwargs={"token": verification.token}), {
+            "new_password1": "NewSecurePassw0rd!", "new_password2": "NewSecurePassw0rd!",
+        })
+        self.assertEqual(response.status_code, 302)
+        user.refresh_from_db()
+        self.assertTrue(user.check_password("NewSecurePassw0rd!"))
+
+    def test_links_for_a_different_email_cannot_confirm_or_reset(self):
+        user = User.objects.create_user(username="current@example.com", email="current@example.com", is_active=False)
+        verification = EmailVerification.objects.create(user=user, email="previous@example.com")
+
+        for view in ["confirm_email", "reset_password"]:
+            response = self.client.post(reverse(view, kwargs={"token": verification.token}), {
+                "new_password1": "NewSecurePassw0rd!", "new_password2": "NewSecurePassw0rd!",
+            })
+            self.assertEqual(response.status_code, 404)
+        user.refresh_from_db()
+        self.assertFalse(user.is_active)
+        self.assertFalse(user.has_usable_password())

@@ -11,6 +11,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.utils.translation import gettext as _
 from django.utils import translation
+from django.db.models import F
 from django.views.decorators.debug import sensitive_post_parameters
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
@@ -120,7 +121,7 @@ def confirm_email(request, token=None):
             seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)).delete()
 
     try:
-        verification = EmailVerification.objects.get(token=token)
+        verification = EmailVerification.objects.get(token=token, email=F("user__username"))
     except EmailVerification.DoesNotExist:
         # good enough (though a special page might be prettier)
         raise Http404("Invalid or expired token")
@@ -202,7 +203,7 @@ def reset_password(request, token=None):
             seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)).delete()
 
     try:
-        verification = EmailVerification.objects.get(token=token)
+        verification = EmailVerification.objects.get(token=token, email=F("user__username"))
     except EmailVerification.DoesNotExist:
         # good enough (though a special page might be prettier)
         raise Http404("Invalid or expired token")
