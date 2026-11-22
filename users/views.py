@@ -11,6 +11,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.utils.translation import gettext as _
 from django.utils import translation
+from django.views.decorators.debug import sensitive_post_parameters
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
 from bugsink.decorators import atomic_for_request_method
@@ -82,6 +83,7 @@ def user_edit(request, user_pk):
     return render(request, "users/user_edit.html", {"form": form})
 
 
+@sensitive_post_parameters("password1", "password2")
 @atomic_for_request_method
 def signup(request):
     if get_settings().USER_REGISTRATION != CB_ANYBODY:
@@ -188,6 +190,7 @@ def request_reset_password(request):
     return render(request, "users/request_reset_password.html", {"form": form})
 
 
+@sensitive_post_parameters("new_password1", "new_password2")
 @atomic_for_request_method
 def reset_password(request, token=None):
     # alternative name: set_password (because this one also works for initial setting of a password)
@@ -260,6 +263,7 @@ def preferences(request):
     })
 
 
+@sensitive_post_parameters("old_password", "new_password1", "new_password2")
 @atomic_for_request_method
 # in the general case this is done by Middleware but we're under /accounts/, so we need it back.
 # not security-critical because we simply get a failure on request.user if this wasn't there, but still the right thing.

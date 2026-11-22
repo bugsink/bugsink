@@ -12,6 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
+from django.views.decorators.debug import sensitive_post_parameters
 
 from users.models import EmailVerification
 from teams.models import TeamMembership, Team, TeamRole
@@ -545,6 +546,7 @@ def project_alerts_setup(request, project_pk):
     })
 
 
+@sensitive_post_parameters("webhook_url", "bot_token")
 def project_messaging_service_add(request, project_pk):
     project = Project.objects.get(id=project_pk, is_deleted=False)
     _check_project_admin(project, request.user)
@@ -582,6 +584,7 @@ def project_messaging_service_add(request, project_pk):
     })
 
 
+@sensitive_post_parameters("webhook_url", "bot_token")
 def project_messaging_service_edit(request, project_pk, service_pk):
     project = Project.objects.get(id=project_pk, is_deleted=False)
     _check_project_admin(project, request.user)
