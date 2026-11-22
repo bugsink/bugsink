@@ -14,8 +14,17 @@ from tags.search import parse_query
 from .templatetags.issues import (
     _pygmentize_lines as actual_pygmentize_lines, format_var, pygmentize, timestamp_with_millis)
 from .templatetags.tag_search import _tag_clause, tag_drilldown
+from .templatetags.issue_navigation import global_issue_list_url
 
 User = get_user_model()
+
+
+class IssueNavigationTests(RegularTestCase):
+    def test_return_link_only_accepts_global_issue_lists(self):
+        self.assertEqual("/issues/all/?project=1&project=2", global_issue_list_url("/issues/all/?project=1&project=2"))
+        for url in ("", "https://example.org/issues/", "//example.org/issues/", "/accounts/logout/", "/issues/1/"):
+            with self.subTest(url=url):
+                self.assertEqual("", global_issue_list_url(url))
 
 
 class TestPygmentizeLineLineCountHandling(RegularTestCase):

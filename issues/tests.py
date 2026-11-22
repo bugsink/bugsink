@@ -5,6 +5,8 @@ import uuid
 import json
 import hashlib
 import gzip  # intentionally uses C-zlib to test compatibility with the Rust codec
+import re
+from html import unescape
 from io import BytesIO, StringIO
 from glob import glob
 from unittest import TestCase as RegularTestCase
@@ -17,6 +19,7 @@ from django.contrib.auth import get_user_model
 from django.test import tag
 from django.conf import settings
 from django.apps import apps
+from django.utils.html import escape
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.utils import get_model_topography
@@ -578,6 +581,31 @@ class ViewTests(TransactionTestCase):
 
         self.assertContains(response, f'href="/issues/muted/?{query}&amp;sort=last_seen"')
         self.assertContains(response, f'href="?{query}&amp;page=1"')
+
+    def test_issue_navigation_returns_to_filtered_global_list(self):
+        second_project = Project.objects.create(name="second")
+        ProjectMembership.objects.create(project=second_project, user=self.user, accepted=True)
+        response = self.client.get(
+            "/issues/all/", {"project": [self.project.id, second_project.id], "sort": "events", "page": 1})
+        list_url = response.wsgi_request.get_full_path()
+        issue_url = unescape(re.search(
+            rf'href="([^"]*/issues/issue/{self.issue.id}/event/last/[^" ]*)"',
+            response.content.decode()).group(1))
+
+        response = self.client.get(issue_url)
+        self.assertContains(response, f'href="{escape(list_url)}"', count=2)
+        self.assertContains(response, "Back to issues", count=2)
+
+        details_url = unescape(re.search(
+            rf'href="([^"]*/issues/issue/{self.issue.id}/event/[^/]+/details/[^" ]*)"',
+            response.content.decode()).group(1))
+        response = self.client.get(details_url)
+        self.assertContains(response, f'href="{escape(list_url)}"', count=2)
+
+        response = self.client.get(list_url)
+        self.assertEqual([self.issue.id], [issue.id for issue in response.context["page_obj"]])
+        self.assertEqual("all", response.context["state_filter"])
+        self.assertEqual("events", response.context["sort"])
 
     def test_global_issue_list_bulk_action_ignores_issues_from_inaccessible_projects(self):
         other_project = Project.objects.create(name="other")
