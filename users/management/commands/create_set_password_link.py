@@ -21,5 +21,8 @@ class Command(BaseCommand):
         except User.DoesNotExist as e:
             raise CommandError("No user with this email address exists") from e
 
+        if user.is_deactivated:
+            raise CommandError("Reactivate or reinvite this user before creating a set-password link")
+
         verification = EmailVerification.objects.create(user=user, email=user.username)
         self.stdout.write(get_settings().BASE_URL + reverse("reset_password", kwargs={"token": verification.token}))

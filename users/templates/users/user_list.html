@@ -51,6 +51,10 @@
             {% endcomment %}
         </div>
 
+        <p class="mt-4">
+            {% translate "Deactivating a user removes all team and project memberships, administrator privileges, personal API tokens and outstanding email links. It also invalidates their password and existing sessions. The user must reset their password after activation, or set a new password when invited back." %}
+        </p>
+
         <div>
           <form action="." method="post">
           {% csrf_token %}

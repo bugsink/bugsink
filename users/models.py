@@ -28,8 +28,8 @@ class User(AbstractUser):
     # as long as the number of fields is small I think the User model makes more sense. We can always push them out
     # later)
 
-    # Django provides is_active. Bugsink currently uses it for both "may authenticate" and "email/setup is confirmed".
-    # If we ever allow login with an unconfirmed email address, split that state into an explicit field.
+    # Inactive users may complete email/setup unless an administrator has deactivated them.
+    is_deactivated = models.BooleanField(default=False)
 
     send_email_alerts = models.BooleanField(default=True, blank=True)
 
@@ -54,6 +54,19 @@ class User(AbstractUser):
 
     class Meta:
         db_table = 'auth_user'
+
+    def deactivate(self):
+        self.is_active = False
+        self.is_deactivated = True
+        self.is_superuser = False
+        self.is_staff = False
+        self.set_unusable_password()  # also invalidates existing sessions
+        self.save()
+
+        self.teammembership_set.all().delete()
+        self.projectmembership_set.all().delete()
+        self.emailverification_set.all().delete()
+        self.auth_tokens.filter(is_user_bound=True).delete()
 
 
 class EmailVerification(models.Model):

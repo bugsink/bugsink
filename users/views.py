@@ -36,8 +36,7 @@ def user_list(request):
         action, user_pk = full_action_str.split(":", 1)
         if action == "deactivate":
             user = User.objects.get(pk=user_pk)
-            user.is_active = False
-            user.save()
+            user.deactivate()
 
             messages.success(request, 'User %s deactivated' % user.username)
             return redirect('user_list')
@@ -45,6 +44,7 @@ def user_list(request):
         if action == "activate":
             user = User.objects.get(pk=user_pk)
             user.is_active = True
+            user.is_deactivated = False
             user.save()
 
             messages.success(request, 'User %s activated' % user.username)
@@ -123,6 +123,9 @@ def confirm_email(request, token=None):
         # good enough (though a special page might be prettier)
         raise Http404("Invalid or expired token")
 
+    if verification.user.is_active or verification.user.is_deactivated:
+        raise Http404("This account is not awaiting email confirmation.")
+
     if request.method == 'POST':
         # We insist on POST requests to do the actual confirmation (at the cost of an extra click). See:
         # https://softwareengineering.stackexchange.com/a/422579/168778
@@ -148,8 +151,8 @@ def resend_confirmation(request):
 
         if form.is_valid():
             user = User.objects.get(username=form.cleaned_data['email'])
-            if user.is_active:
-                raise Http404("This email is already confirmed.")
+            if user.is_active or user.is_deactivated:
+                raise Http404("This account is not awaiting email confirmation.")
 
             verification = EmailVerification.objects.create(user=user, email=user.username)
             send_confirm_email.delay(user.username, verification.token)
@@ -170,11 +173,11 @@ def request_reset_password(request):
 
         if form.is_valid():
             user = User.objects.get(username=form.cleaned_data['email'])
-            # if not user.is_active  no separate branch for this: password-reset implies email-confirmation
+            if not user.is_active or user.is_deactivated:
+                raise Http404("Cannot reset the password of an inactive account.")
 
-            # we reuse the EmailVerification model for password resets; security wise it doesn't matter, because the
-            # visiting any link with the token implies control over the email account; and we have defined that such
-            # control implies both verification and password-resetting.
+            # We reuse email-verification tokens for password resets and initial password setup after invitations.
+            # Both use mailbox access to prove account ownership.
             verification = EmailVerification.objects.create(user=user, email=user.username)
             send_reset_email.delay(user.username, verification.token)
             return render(request, "users/reset_password_email_sent.html", {"email": user.username})
@@ -202,6 +205,9 @@ def reset_password(request, token=None):
         raise Http404("Invalid or expired token")
 
     user = verification.user
+    if user.is_deactivated:
+        raise Http404("This account has been deactivated.")
+
     next_url = request.POST.get("next", request.GET.get("next", reverse("home")))
 
     if not is_safe_next_url(next_url, request):
@@ -210,7 +216,7 @@ def reset_password(request, token=None):
     if request.method == 'POST':
         form = SetPasswordForm(user, request.POST)
         if form.is_valid():
-            user.is_active = True  # password-reset implies email-confirmation
+            user.is_active = True  # also completes initial setup for invited users
             user.set_password(form.cleaned_data['new_password1'])
             user.save()
 

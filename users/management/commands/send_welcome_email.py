@@ -1,4 +1,4 @@
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth import get_user_model
 
 from users.models import EmailVerification
@@ -19,6 +19,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         email = options["email"]
         user = User.objects.get(email=email)
+
+        if user.is_deactivated:
+            raise CommandError("Reactivate or reinvite this user before sending a welcome email")
 
         # copy/paste from views.py (excluding the comments)
         verification = EmailVerification.objects.create(user=user, email=user.username)

@@ -46,6 +46,55 @@ class ProjectInviteLinkTestCase(TransactionTestCase):
             project=self.project, user=self.admin, role=ProjectRole.ADMIN, accepted=True)
         self.client.force_login(self.admin)
 
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
+    def test_deactivated_user_can_be_invited_back_without_old_access(self):
+        user = User.objects.create_user(
+            username="returning-project-member@example.com", email="returning-project-member@example.com",
+            password="old-password", is_superuser=True, is_staff=True)
+        old_team = Team.objects.create(name="Old team")
+        old_project = Project.objects.create(name="Old project", team=old_team)
+        TeamMembership.objects.create(team=old_team, user=user, role=TeamRole.ADMIN, accepted=True)
+        ProjectMembership.objects.create(project=old_project, user=user, role=ProjectRole.ADMIN, accepted=True)
+        old_verification = EmailVerification.objects.create(user=user, email=user.email)
+        old_token = AuthToken.objects.create(user=user, is_user_bound=True, projects_read=True)
+        user.deactivate()
+
+        response = self.client.post(reverse("project_members_invite", kwargs={"project_pk": self.project.pk}), {
+            "email": user.email, "role": ProjectRole.MEMBER, "action": "invite",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        verification = EmailVerification.objects.get(user=user)
+        self.assertContains(response, reverse("project_members_accept_new_user", kwargs={
+            "project_pk": self.project.pk, "token": verification.token,
+        }))
+        self.client.logout()
+        response = self.client.get(reverse("project_members_accept_new_user", kwargs={
+            "project_pk": self.project.pk, "token": verification.token,
+        }))
+        self.assertEqual(response.status_code, 302)
+        response = self.client.post(response["Location"], {
+            "new_password1": "NewSecurePassw0rd!", "new_password2": "NewSecurePassw0rd!",
+        })
+        self.assertEqual(response.status_code, 302)
+        response = self.client.post(reverse("project_members_accept", kwargs={"project_pk": self.project.pk}), {
+            "action": "accept",
+        })
+        self.assertEqual(response.status_code, 302)
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
+        self.assertFalse(user.is_deactivated)
+        self.assertFalse(user.is_superuser)
+        self.assertFalse(user.is_staff)
+        self.assertTrue(user.check_password("NewSecurePassw0rd!"))
+        self.assertFalse(TeamMembership.objects.filter(user=user).exists())
+        membership = ProjectMembership.objects.get(user=user)
+        self.assertEqual(membership.project, self.project)
+        self.assertEqual(membership.role, ProjectRole.MEMBER)
+        self.assertTrue(membership.accepted)
+        self.assertFalse(EmailVerification.objects.filter(pk=old_verification.pk).exists())
+        self.assertFalse(AuthToken.objects.filter(pk=old_token.pk).exists())
+
     def test_expired_new_user_invite_token_is_rejected(self):
         user = User.objects.create_user(
             username="expired-project-invite@example.com",
