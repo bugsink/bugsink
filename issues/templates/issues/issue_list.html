@@ -38,6 +38,12 @@
 <div class="m-4">
 <h1 class="text-4xl mt-4 font-bold">{% translate "Issues" %}{% if project %} · {{ project.name }}{% endif %}</h1>
 
+{% if project_filter_unavailable %}
+<div class="mt-4 p-4 bg-slate-50 dark:bg-slate-800">
+    {% translate "The selected projects are no longer available." %}
+    <a href="{% querystring project=None page=None %}" class="text-cyan-500 dark:text-cyan-300 font-bold">{% translate "Show all projects" %}</a>
+</div>
+{% endif %}
 
 {% if unapplied_issue_ids %}
 <div class="bg-red-100 dark:bg-red-900 w-full mt-2 mb-2 p-4 border-red-800 dark:border-red-700 border-2">
@@ -63,10 +69,10 @@
     </div>
     <div class="ml-auto p-2">
         <form action="." method="get" class="flex flex-wrap items-center justify-end gap-2">
-        {% if is_global_issue_list and projects|length > 1 %}
+        {% if is_global_issue_list and projects|length > 1 or project_filter_unavailable %}
         <details class="relative">
             <summary class="list-none cursor-pointer bg-slate-50 dark:bg-slate-800 border border-slate-500 rounded-md pl-3 pr-3 pt-2 pb-2">
-                {% if selected_project_ids %}{% blocktranslate count counter=selected_project_ids|length %}{{ counter }} project{% plural %}{{ counter }} projects{% endblocktranslate %}{% else %}{% translate "All projects" %}{% endif %}
+                {% if project_filter_unavailable %}{% translate "Unavailable projects" %}{% elif selected_project_ids %}{% blocktranslate count counter=selected_project_ids|length %}{{ counter }} project{% plural %}{{ counter }} projects{% endblocktranslate %}{% else %}{% translate "All projects" %}{% endif %}
                 <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-4 h-4 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg>
             </summary>
 
@@ -80,7 +86,7 @@
                     {% endfor %}
                 </div>
                 <div class="flex items-center justify-end gap-4 p-2 border-t-2 border-slate-300 dark:border-slate-600">
-                    {% if selected_project_ids %}<a href="{% querystring project=None page=None %}" class="text-cyan-500 dark:text-cyan-300 font-bold">{% translate "Clear" %}</a>{% endif %}
+                    {% if selected_project_ids or project_filter_unavailable %}<a href="{% querystring project=None page=None %}" class="text-cyan-500 dark:text-cyan-300 font-bold">{% translate "Clear" %}</a>{% endif %}
                     <button type="submit" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">{% translate "Apply" %}</button>
                 </div>
             </div>
@@ -244,7 +250,9 @@
 
             <td class="w-full ml-0 pb-4 pt-4 pr-4 text-center">
                 <div class="p-4 text-xl font-bold text-slate-800 dark:text-slate-100">
-                {% if q %}{# a single text is the catch-all for searching w/o results; 'seems enough' because one would generally only search after already having seen some issues (or not), i.e. having seen the relevant message as per below #}
+                {% if project_filter_unavailable %}
+                    {% translate "No issues to show for the selected projects." %}
+                {% elif q %}{# a single text is the catch-all for searching w/o results; 'seems enough' because one would generally only search after already having seen some issues (or not), i.e. having seen the relevant message as per below #}
                     No {{ state_filter }} issues found for "{{ q }}"
                 {% else %}
                     {% if state_filter == "open" %}

@@ -550,14 +550,24 @@ class ViewTests(TransactionTestCase):
         self.assertContains(response, "2 projects")
         self.assertContains(response, f'name="project" value="{third_project.id}" class=')
 
-    def test_global_issue_list_project_filter_ignores_inaccessible_projects(self):
+    def test_global_issue_list_unavailable_project_filter_does_not_show_all_projects(self):
         other_project = Project.objects.create(name="other")
         get_or_create_issue(other_project)
 
         response = self.client.get("/issues/", {"project": [other_project.id, "not-a-number"]})
 
+        self.assertEqual([], list(response.context["page_obj"]))
+        self.assertContains(response, "The selected projects are no longer available.")
+        self.assertContains(
+            response, 'href="?" class="text-cyan-500 dark:text-cyan-300 font-bold">Show all projects</a>')
+
+        response = self.client.get("/issues/")
         self.assertEqual([self.issue.id], [issue.id for issue in response.context["page_obj"]])
-        self.assertEqual([], response.context["selected_project_ids"])
+
+        response = self.client.get("/issues/", {"project": [self.project.id, other_project.id]})
+
+        self.assertEqual([self.issue.id], [issue.id for issue in response.context["page_obj"]])
+        self.assertNotContains(response, "The selected projects are no longer available.")
 
     def test_global_issue_list_project_filter_survives_tabs_and_pagination(self):
         second_project = Project.objects.create(name="second")

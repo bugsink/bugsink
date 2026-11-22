@@ -271,7 +271,8 @@ def _global_issue_list_pt_2(request, accessible_project_ids, state_filter, unapp
     requested_project_ids = request.GET.getlist("project")
     selected_project_ids = [pid for pid in accessible_project_ids if str(pid) in requested_project_ids]
     issue_list = _filter_issue_list_by_state(
-        Issue.objects.filter(project_id__in=selected_project_ids or accessible_project_ids, is_deleted=False),
+        Issue.objects.filter(
+            project_id__in=selected_project_ids if requested_project_ids else accessible_project_ids, is_deleted=False),
         state_filter,
     ).select_related("project").order_by(*ISSUE_LIST_SORTS[sort])
 
@@ -302,6 +303,7 @@ def _global_issue_list_pt_2(request, accessible_project_ids, state_filter, unapp
         "page_obj": page_obj,
         "projects": Project.objects.filter(id__in=accessible_project_ids).order_by("name"),
         "selected_project_ids": selected_project_ids,
+        "project_filter_unavailable": bool(requested_project_ids) and not selected_project_ids,
     })
 
 
