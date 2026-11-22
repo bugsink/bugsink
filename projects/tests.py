@@ -73,7 +73,9 @@ class ProjectInviteLinkTestCase(TransactionTestCase):
             "project_pk": self.project.pk, "token": verification.token,
         }))
         self.assertEqual(response.status_code, 302)
-        response = self.client.post(response["Location"], {
+        response = self.client.get(response["Location"], follow=True)
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(response.request["PATH_INFO"], {
             "new_password1": "NewSecurePassw0rd!", "new_password2": "NewSecurePassw0rd!",
         })
         self.assertEqual(response.status_code, 302)

@@ -93,7 +93,8 @@ class UserDeactivationTestCase(TransactionTestCase):
         self.assertEqual(response.status_code, 200)
         verification = EmailVerification.objects.get(user=user)
         send_reset.assert_called_once_with(user.username, verification.token)
-        response = self.client.post(reverse("reset_password", kwargs={"token": verification.token}), {
+        response = self.client.get(reverse("reset_password", kwargs={"token": verification.token}))
+        response = self.client.post(response["Location"], {
             "new_password1": "NewSecurePassw0rd!", "new_password2": "NewSecurePassw0rd!",
         })
         self.assertEqual(response.status_code, 302)
@@ -225,9 +226,10 @@ class ResetPasswordRedirectTestCase(TransactionTestCase):
 
     def test_reset_password_rejects_external_next_redirect(self):
         verification = self._verification_for()
+        self.client.get(reverse("reset_password", kwargs={"token": verification.token}))
 
         response = self.client.post(
-            reverse("reset_password", kwargs={"token": verification.token}),
+            reverse("reset_password", kwargs={"token": "set-password"}),
             {
                 "new_password1": "S3curePassw0rd!",
                 "new_password2": "S3curePassw0rd!",
@@ -240,9 +242,10 @@ class ResetPasswordRedirectTestCase(TransactionTestCase):
 
     def test_reset_password_allows_local_next_redirect(self):
         verification = self._verification_for("local@example.com")
+        self.client.get(reverse("reset_password", kwargs={"token": verification.token}))
 
         response = self.client.post(
-            reverse("reset_password", kwargs={"token": verification.token}),
+            reverse("reset_password", kwargs={"token": "set-password"}),
             {
                 "new_password1": "S3curePassw0rd!",
                 "new_password2": "S3curePassw0rd!",
@@ -252,6 +255,40 @@ class ResetPasswordRedirectTestCase(TransactionTestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], "/accounts/preferences/")
+
+    def test_reset_form_uses_session_token_and_cannot_be_cached(self):
+        verification = self._verification_for()
+        reset_url = reverse("reset_password", kwargs={"token": "set-password"})
+        other_browser = Client()
+        self.assertEqual(other_browser.get(reset_url).status_code, 404)
+
+        response = self.client.get(reverse("reset_password", kwargs={"token": verification.token}), {
+            "next": reverse("preferences"),
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertNotIn(verification.token, response["Location"])
+        self.assertIn("no-store", response["Cache-Control"])
+        response = self.client.get(response["Location"])
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, verification.token)
+        self.assertEqual(response.context["next"], reverse("preferences"))
+        self.assertIn("no-store", response["Cache-Control"])
+        self.assertEqual(other_browser.get(reset_url).status_code, 404)
+
+        response = self.client.post(reset_url, {"new_password1": "one", "new_password2": "different"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("no-store", response["Cache-Control"])
+        self.assertTrue(EmailVerification.objects.filter(pk=verification.pk).exists())
+
+        response = self.client.post(reset_url, {
+            "new_password1": "NewSecurePassw0rd!", "new_password2": "NewSecurePassw0rd!",
+            "next": reverse("preferences"),
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("preferences"))
+        self.assertNotIn("_password_reset_token", self.client.session)
+        self.assertEqual(self.client.get(reset_url).status_code, 404)
 
 
 class CreateSetPasswordLinkCommandTestCase(TransactionTestCase):
@@ -307,7 +344,8 @@ class PasswordResetTokensTestCase(TransactionTestCase):
         other_user = User.objects.create_user(username="other@example.com")
         unrelated_verification = EmailVerification.objects.create(user=other_user, email=other_user.email)
 
-        response = self.client.post(reverse("reset_password", kwargs={"token": verification.token}), {
+        response = self.client.get(reverse("reset_password", kwargs={"token": verification.token}))
+        response = self.client.post(response["Location"], {
             "new_password1": "NewSecurePassw0rd!", "new_password2": "NewSecurePassw0rd!",
         })
 
@@ -348,7 +386,8 @@ class EmailChangeTokensTestCase(TransactionTestCase):
         self.assertEqual(response.status_code, 200)
         verification = EmailVerification.objects.get(user=user)
         send_reset.assert_called_once_with("after@example.com", verification.token)
-        response = self.client.post(reverse("reset_password", kwargs={"token": verification.token}), {
+        response = self.client.get(reverse("reset_password", kwargs={"token": verification.token}))
+        response = self.client.post(response["Location"], {
             "new_password1": "NewSecurePassw0rd!", "new_password2": "NewSecurePassw0rd!",
         })
         self.assertEqual(response.status_code, 302)

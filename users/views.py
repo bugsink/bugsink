@@ -1,4 +1,5 @@
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from django.contrib.auth import login
 from django.contrib.auth import update_session_auth_hash
@@ -13,6 +14,7 @@ from django.utils.translation import gettext as _
 from django.utils import translation
 from django.db.models import F
 from django.views.decorators.debug import sensitive_post_parameters
+from django.views.decorators.cache import never_cache
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
 from bugsink.decorators import atomic_for_request_method
@@ -191,6 +193,7 @@ def request_reset_password(request):
     return render(request, "users/request_reset_password.html", {"form": form})
 
 
+@never_cache
 @sensitive_post_parameters("new_password1", "new_password2")
 @atomic_for_request_method
 def reset_password(request, token=None):
@@ -202,8 +205,10 @@ def reset_password(request, token=None):
         created_at__lt=timezone.now() - timedelta(
             seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)).delete()
 
+    verification_token = request.session.get("_password_reset_token") if token == "set-password" else token
+
     try:
-        verification = EmailVerification.objects.get(token=token, email=F("user__username"))
+        verification = EmailVerification.objects.get(token=verification_token, email=F("user__username"))
     except EmailVerification.DoesNotExist:
         # good enough (though a special page might be prettier)
         raise Http404("Invalid or expired token")
@@ -217,6 +222,12 @@ def reset_password(request, token=None):
     if not is_safe_next_url(next_url, request):
         next_url = reverse("home")
 
+    if token != "set-password":
+        # Keep the bearer token out of the form URL and subsequent Referer headers.
+        request.session["_password_reset_token"] = verification.token
+        reset_url = reverse("reset_password", kwargs={"token": "set-password"})
+        return redirect(reset_url + "?" + urlencode({"next": next_url}))
+
     if request.method == 'POST':
         form = SetPasswordForm(user, request.POST)
         if form.is_valid():
@@ -224,6 +235,7 @@ def reset_password(request, token=None):
             user.set_password(form.cleaned_data['new_password1'])
             user.save()
 
+            request.session.pop("_password_reset_token", None)
             login(request, verification.user)
 
             return redirect(next_url)
