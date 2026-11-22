@@ -274,6 +274,7 @@ class PreferencesPasswordTestCase(TransactionTestCase):
             email="preferences@example.com",
             password="OldSecurePassw0rd!",
         )
+        verification = EmailVerification.objects.create(user=user, email=user.email)
         self.client.force_login(user)
 
         preferences_response = self.client.get(reverse("preferences"))
@@ -291,3 +292,30 @@ class PreferencesPasswordTestCase(TransactionTestCase):
         user.refresh_from_db()
         self.assertTrue(user.check_password("NewSecurePassw0rd!"))
         self.assertEqual(self.client.get(reverse("preferences")).status_code, 200)
+        self.client.logout()
+        response = self.client.get(reverse("reset_password", kwargs={"token": verification.token}))
+        self.assertEqual(response.status_code, 404)
+
+
+class PasswordResetTokensTestCase(TransactionTestCase):
+    def test_reset_invalidates_other_outstanding_email_links(self):
+        user = User.objects.create_user(username="reset@example.com", password="OldSecurePassw0rd!")
+        verification = EmailVerification.objects.create(user=user, email=user.email)
+        other_verification = EmailVerification.objects.create(user=user, email=user.email)
+        other_user = User.objects.create_user(username="other@example.com")
+        unrelated_verification = EmailVerification.objects.create(user=other_user, email=other_user.email)
+
+        response = self.client.post(reverse("reset_password", kwargs={"token": verification.token}), {
+            "new_password1": "NewSecurePassw0rd!", "new_password2": "NewSecurePassw0rd!",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+        self.assertTrue(EmailVerification.objects.filter(pk=unrelated_verification.pk).exists())
+        self.client.logout()
+        response = self.client.post(reverse("reset_password", kwargs={"token": other_verification.token}), {
+            "new_password1": "AnotherSecurePassw0rd!", "new_password2": "AnotherSecurePassw0rd!",
+        })
+        self.assertEqual(response.status_code, 404)
+        user.refresh_from_db()
+        self.assertTrue(user.check_password("NewSecurePassw0rd!"))

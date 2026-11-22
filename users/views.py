@@ -223,8 +223,6 @@ def reset_password(request, token=None):
             user.set_password(form.cleaned_data['new_password1'])
             user.save()
 
-            verification.delete()
-
             login(request, verification.user)
 
             return redirect(next_url)

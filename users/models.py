@@ -5,6 +5,8 @@ from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _, get_language_info
 
+from bugsink.transaction import immediate_atomic
+
 
 def language_choices():
     items = [("auto", _("Auto (browser preference)"))]
@@ -54,6 +56,18 @@ class User(AbstractUser):
 
     class Meta:
         db_table = 'auth_user'
+
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        password_changed = (
+            self.pk is not None and self._password is not None
+            and (update_fields is None or "password" in update_fields))
+        if not password_changed:
+            return super().save(*args, **kwargs)
+
+        with immediate_atomic(using=kwargs.get("using") or self._state.db, only_if_needed=True):
+            super().save(*args, **kwargs)
+            self.emailverification_set.all().delete()
 
     def deactivate(self):
         self.is_active = False
