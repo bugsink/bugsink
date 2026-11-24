@@ -1,8 +1,21 @@
+import json
+
 import requests
 from requests.adapters import HTTPAdapter
 
 from .webhook_security import parse_webhook_url, pin_url_to_ip, validate_webhook_destination
 from bugsink.utils import assert_
+
+
+def load_service_config(service_config_id):
+    # Tasks read their webhook URL or bot token here rather than receiving it as an argument: those values are secrets,
+    # and Snappea logs the arguments of every task it starts (and stores them in its queue until then).
+    from alerts.models import MessagingServiceConfig
+
+    try:
+        return json.loads(MessagingServiceConfig.objects.get(id=service_config_id).config)
+    except MessagingServiceConfig.DoesNotExist:
+        return None
 
 
 class OriginalHostnameAdapter(HTTPAdapter):
