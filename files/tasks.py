@@ -111,6 +111,8 @@ def create_files_from_local_files(local_files):
 def _create_files_from_local_files(local_files, write_storage):
     checksums = {checksum for checksum, filename, size, local_path in local_files}
     files_by_checksum = File.objects.only("id", "checksum").in_bulk(checksums, field_name="checksum")
+    if files_by_checksum:
+        File.objects.filter(checksum__in=files_by_checksum).update(accessed_at=timezone.now())
     new_files_by_checksum = {}
     for checksum, filename, size, local_path in local_files:
         if checksum in files_by_checksum or checksum in new_files_by_checksum:

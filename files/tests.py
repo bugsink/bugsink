@@ -553,6 +553,37 @@ class FilesTests(TransactionTestCase):
                         self.assertEqual("original.js", existing_file.filename)
                         self.assertIsNone(existing_file.storage_backend)
 
+    def test_artifact_bundle_reupload_renews_file_retention(self):
+        for use_storage in (False, True):
+            with self.subTest(use_storage=use_storage), tempfile.TemporaryDirectory() as tempdir:
+                with override_object_storages(get_test_object_storages(tempdir, use_for_write=use_storage)):
+                    contents = f"reuploaded-{use_storage}".encode()
+                    debug_id = uuid4()
+                    checksum = self.create_artifact_bundle({
+                        "source.js": (contents, {"type": "source", "headers": {"debug-id": str(debug_id)}}),
+                    })
+                    process_artifact_bundle(checksum, [checksum], [self.project.id])
+                    metadata = FileMetadata.objects.get(project=self.project, debug_id=debug_id)
+                    file = metadata.file
+                    old = timezone.now() - timedelta(days=91)
+                    File.objects.filter(id=file.id).update(accessed_at=old)
+                    stale_file = File.objects.create(
+                        checksum=sha1(f"stale-{use_storage}".encode(), usedforsecurity=False).hexdigest(),
+                        filename="stale.js", size=5, data=b"stale",
+                    )
+                    File.objects.filter(id=stale_file.id).update(accessed_at=old)
+
+                    reuploaded_at = timezone.now()
+                    process_artifact_bundle(checksum, [checksum], [self.project.id])
+                    vacuum_files_sync(file_max_days=90)
+
+                    renewed = File.objects.get(id=file.id)
+                    self.assertGreaterEqual(renewed.accessed_at, reuploaded_at)
+                    self.assertEqual(file.created_at, renewed.created_at)
+                    self.assertEqual(contents, renewed.get_raw_data())
+                    self.assertTrue(FileMetadata.objects.filter(id=metadata.id, file=renewed).exists())
+                    self.assertFalse(File.objects.filter(id=stale_file.id).exists())
+
     def test_artifact_bundle_queries_do_not_grow_per_file(self):
         for use_storage in (False, True):
             with self.subTest(use_storage=use_storage), tempfile.TemporaryDirectory() as tempdir:
