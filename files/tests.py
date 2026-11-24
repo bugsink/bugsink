@@ -608,6 +608,14 @@ class FilesTests(TransactionTestCase):
         self.assertFalse(FileMetadata.objects.exists())
         self.assertEqual([checksum], list(File.objects.values_list("checksum", flat=True)))
 
+    def test_artifact_bundle_rejects_overlong_file_type(self):
+        checksum = self.create_artifact_bundle({
+            "source.js": (b"contents", {"type": "x" * 256, "headers": {"debug-id": str(uuid4())}}),
+        })
+        with self.assertRaisesMessage(ValueError, "Artifact file type is too long"):
+            process_artifact_bundle(checksum, [checksum], [self.project.id])
+        self.assertFalse(FileMetadata.objects.exists())
+
     def test_artifact_bundle_rejects_bzip2_manifest(self):
         bundle = BytesIO()
         with ZipFile(bundle, "w", compression=ZIP_BZIP2) as zf:

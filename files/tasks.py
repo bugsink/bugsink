@@ -294,6 +294,11 @@ def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
 
                                 continue
 
+                            # Django's ignore_conflicts=True uses INSERT IGNORE on MySQL, which can truncate
+                            # an overlong file_type instead of rejecting it.
+                            if len(str(file_type)) > FileMetadata._meta.get_field("file_type").max_length:
+                                raise ValueError("Artifact file type is too long")
+
                             for project_id in project_ids:
                                 metadata.append(FileMetadata(
                                     project_id=project_id,
