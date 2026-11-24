@@ -186,37 +186,35 @@ def find_in_code_debug_ids(local_file):
 
 
 def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
-    # arguably, you could just wrap-around each operation, "around everything" guarantees a fully consistent update on
-    # the data and we don't do this that often that it's assumed to matter.
-    with immediate_atomic():
-        # NOTE: as it stands we don't store the (optional) extra info of release/dist.
+    # NOTE: as it stands we don't store the (optional) extra info of release/dist.
 
-        # NOTE: there's also the concept of an artifact bundle as _tied_ to a release, i.e. without debug_ids. We don't
-        # support that, but if we ever were to support it we'd need a separate method/param to distinguish it.
+    # NOTE: there's also the concept of an artifact bundle as _tied_ to a release, i.e. without debug_ids. We don't
+    # support that, but if we ever were to support it we'd need a separate method/param to distinguish it.
 
-        bundle_file, _ = assemble_file(bundle_checksum, chunk_checksums, filename=f"{bundle_checksum}.zip")
+    bundle_file, _ = assemble_file(bundle_checksum, chunk_checksums, filename=f"{bundle_checksum}.zip")
 
-        max_file_size = get_settings().MAX_FILE_SIZE
-        max_manifest_size = min(max_file_size, MAX_MANIFEST_SIZE)
-        manifest_limit_name = "MAX_FILE_SIZE" if max_file_size <= MAX_MANIFEST_SIZE else "MAX_MANIFEST_SIZE"
-        with tempfile.TemporaryDirectory() as tempdir:
-            with bundle_file.open_for_read() as f:
-                with ZipFile(f) as bundle_zip:
-                    with open_zip_entry(bundle_zip, "manifest.json") as manifest_stream:
-                        manifest_bytes, _ = read_limited_bytes(
-                            manifest_stream, max_manifest_size, reason=f"{manifest_limit_name}: {max_manifest_size}")
-                    manifest = json.loads(manifest_bytes.decode("utf-8"))
+    max_file_size = get_settings().MAX_FILE_SIZE
+    max_manifest_size = min(max_file_size, MAX_MANIFEST_SIZE)
+    manifest_limit_name = "MAX_FILE_SIZE" if max_file_size <= MAX_MANIFEST_SIZE else "MAX_MANIFEST_SIZE"
+    with tempfile.TemporaryDirectory() as tempdir:
+        with bundle_file.open_for_read() as f:
+            with ZipFile(f) as bundle_zip:
+                with open_zip_entry(bundle_zip, "manifest.json") as manifest_stream:
+                    manifest_bytes, _ = read_limited_bytes(
+                        manifest_stream, max_manifest_size, reason=f"{manifest_limit_name}: {max_manifest_size}")
+                manifest = json.loads(manifest_bytes.decode("utf-8"))
 
-                    with ExitStack() as stack:
-                        prepared_files = []
-                        for zip_entry_name, manifest_entry in manifest["files"].items():
-                            local_file = stack.enter_context(tempfile.TemporaryFile(dir=tempdir))
-                            checksum, size = extract_zip_entry_to_file(
-                                bundle_zip, zip_entry_name, local_file, max_file_size,
-                            )
-                            filename = basename(manifest_entry.get("url", zip_entry_name))[:255]
-                            prepared_files.append((checksum, filename, size, local_file, manifest_entry))
+                with ExitStack() as stack:
+                    prepared_files = []
+                    for zip_entry_name, manifest_entry in manifest["files"].items():
+                        local_file = stack.enter_context(tempfile.TemporaryFile(dir=tempdir))
+                        checksum, size = extract_zip_entry_to_file(
+                            bundle_zip, zip_entry_name, local_file, max_file_size,
+                        )
+                        filename = basename(manifest_entry.get("url", zip_entry_name))[:255]
+                        prepared_files.append((checksum, filename, size, local_file, manifest_entry))
 
+                    with immediate_atomic():
                         for checksum, filename, size, local_file, manifest_entry in prepared_files:
                             local_file.seek(0)
                             file, _ = create_file_from_local_file(checksum, filename, size, local_file)
@@ -263,6 +261,7 @@ def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
                                         ", ".join(sorted(mismatches)),
                                     )
 
+    with immediate_atomic():
         if not get_settings().KEEP_ARTIFACT_BUNDLES:
             # delete the bundle file after processing, since we don't need it anymore.
             bundle_file.delete()
