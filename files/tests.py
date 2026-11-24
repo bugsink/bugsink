@@ -611,6 +611,36 @@ class FilesTests(TransactionTestCase):
         self.assertFalse(FileMetadata.objects.exists())
         self.assertEqual([checksum], list(File.objects.values_list("checksum", flat=True)))
 
+    def test_artifact_bundle_closes_and_cleans_up_temp_files(self):
+        named_temporary_file = tempfile.NamedTemporaryFile
+        for invalid in (False, True):
+            with self.subTest(invalid=invalid):
+                temp_files = []
+
+                def create_temp_file(*args, **kwargs):
+                    self.assertTrue(all(file.closed for file in temp_files))
+                    file = named_temporary_file(*args, **kwargs)
+                    temp_files.append(file)
+                    return file
+
+                checksum = self.create_artifact_bundle({
+                    f"{i}.js": (
+                        f"contents-{invalid}-{i}".encode(),
+                        {"type": "source", "headers": {"debug-id": (
+                            "invalid" if invalid and i == 2 else str(uuid4()))}},
+                    )
+                    for i in range(3)
+                })
+                with patch("files.tasks.tempfile.NamedTemporaryFile", side_effect=create_temp_file):
+                    if invalid:
+                        with self.assertRaises(ValidationError):
+                            process_artifact_bundle(checksum, [checksum], [self.project.id])
+                    else:
+                        process_artifact_bundle(checksum, [checksum], [self.project.id])
+                self.assertEqual(3, len(temp_files))
+                self.assertTrue(all(file.closed for file in temp_files))
+                self.assertFalse(any(os.path.exists(file.name) for file in temp_files))
+
     def test_artifact_bundle_scans_debug_ids_outside_the_write_transaction(self):
         debug_id, other_debug_id = uuid4(), uuid4()
         contents = f'e._sentryDebugIds["stack"] = "{other_debug_id}";'.encode()

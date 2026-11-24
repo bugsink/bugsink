@@ -1,7 +1,6 @@
 import re
 import logging
 import tempfile
-from contextlib import ExitStack
 from datetime import timedelta
 from zipfile import ZipFile
 import json
@@ -110,22 +109,22 @@ def create_files_from_local_files(local_files):
 
 
 def _create_files_from_local_files(local_files, write_storage):
-    checksums = {checksum for checksum, filename, size, local_file in local_files}
+    checksums = {checksum for checksum, filename, size, local_path in local_files}
     files_by_checksum = File.objects.only("id", "checksum").in_bulk(checksums, field_name="checksum")
     new_files_by_checksum = {}
-    for checksum, filename, size, local_file in local_files:
+    for checksum, filename, size, local_path in local_files:
         if checksum in files_by_checksum or checksum in new_files_by_checksum:
             continue
-        local_file.seek(0)
-        if write_storage is not None:
-            write_fileobj_to_storage("file", checksum, local_file)
-        new_files_by_checksum[checksum] = File(
-            checksum=checksum,
-            filename=filename,
-            size=size,
-            data=local_file.read() if write_storage is None else b"",
-            storage_backend=None if write_storage is None else write_storage.name,
-        )
+        with open(local_path, "rb") as local_file:
+            if write_storage is not None:
+                write_fileobj_to_storage("file", checksum, local_file)
+            new_files_by_checksum[checksum] = File(
+                checksum=checksum,
+                filename=filename,
+                size=size,
+                data=local_file.read() if write_storage is None else b"",
+                storage_backend=None if write_storage is None else write_storage.name,
+            )
     File.objects.bulk_create(new_files_by_checksum.values())
     files_by_checksum.update(
         File.objects.only("id", "checksum").in_bulk(new_files_by_checksum, field_name="checksum"))
@@ -138,14 +137,14 @@ def local_file_batches(local_files, max_bytes):
     # (DB-backed contents only, avoiding memory growth from loading too many files together).
     batch = []
     batch_bytes = 0
-    for checksum, filename, size, local_file in local_files:
+    for checksum, filename, size, local_path in local_files:
         full = len(batch) >= FILE_BULK_BATCH_SIZE
         too_large = max_bytes is not None and batch_bytes + size > max_bytes
         if batch and (full or too_large):
             yield batch
             batch = []
             batch_bytes = 0
-        batch.append((checksum, filename, size, local_file))
+        batch.append((checksum, filename, size, local_path))
         batch_bytes += size
     if batch:
         yield batch
@@ -260,10 +259,11 @@ def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
                         manifest_stream, max_manifest_size, reason=f"{manifest_limit_name}: {max_manifest_size}")
                 manifest = json.loads(manifest_bytes.decode("utf-8"))
 
-                with ExitStack() as stack:
-                    prepared_files = []
-                    for zip_entry_name, manifest_entry in manifest["files"].items():
-                        local_file = stack.enter_context(tempfile.TemporaryFile(dir=tempdir))
+                prepared_files = []
+                for zip_entry_name, manifest_entry in manifest["files"].items():
+                    # delete=False keeps the file after closing so storage can reopen it.
+                    # The enclosing TemporaryDirectory deletes it after processing.
+                    with tempfile.NamedTemporaryFile(dir=tempdir, delete=False) as local_file:
                         checksum, size = extract_zip_entry_to_file(
                             bundle_zip, zip_entry_name, local_file, max_file_size,
                         )
@@ -286,50 +286,50 @@ def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
                                     ", ".join(sorted(mismatches)),
                                 )
 
-                        prepared_files.append((checksum, filename, size, local_file, manifest_entry))
+                        prepared_files.append((checksum, filename, size, local_file.name, manifest_entry))
 
-                    with immediate_atomic():
-                        files_by_checksum = create_files_from_local_files([
-                            (checksum, filename, size, local_file)
-                            for checksum, filename, size, local_file, manifest_entry in prepared_files
-                        ])
+                with immediate_atomic():
+                    files_by_checksum = create_files_from_local_files([
+                        (checksum, filename, size, local_path)
+                        for checksum, filename, size, local_path, manifest_entry in prepared_files
+                    ])
 
-                        metadata = []
-                        for checksum, filename, size, local_file, manifest_entry in prepared_files:
-                            debug_id = manifest_entry.get("headers", {}).get("debug-id", None)
-                            file_type = manifest_entry.get("type", None)
-                            if debug_id is None or file_type is None:
-                                because = (
-                                    "it has neither Debug ID nor file-type"
-                                    if debug_id is None and file_type is None else
-                                    "it has no Debug ID" if debug_id is None else "it has no file-type")
+                    metadata = []
+                    for checksum, filename, size, local_path, manifest_entry in prepared_files:
+                        debug_id = manifest_entry.get("headers", {}).get("debug-id", None)
+                        file_type = manifest_entry.get("type", None)
+                        if debug_id is None or file_type is None:
+                            because = (
+                                "it has neither Debug ID nor file-type"
+                                if debug_id is None and file_type is None else
+                                "it has no Debug ID" if debug_id is None else "it has no file-type")
 
-                                logger.warning(
-                                    "Uploaded file %s will be ignored by Bugsink because %s.",
-                                    filename,
-                                    because,
-                                )
+                            logger.warning(
+                                "Uploaded file %s will be ignored by Bugsink because %s.",
+                                filename,
+                                because,
+                            )
 
-                                continue
+                            continue
 
-                            # Django's ignore_conflicts=True uses INSERT IGNORE on MySQL, which can truncate
-                            # an overlong file_type instead of rejecting it.
-                            if len(str(file_type)) > FileMetadata._meta.get_field("file_type").max_length:
-                                raise ValueError("Artifact file type is too long")
+                        # Django's ignore_conflicts=True uses INSERT IGNORE on MySQL, which can truncate
+                        # an overlong file_type instead of rejecting it.
+                        if len(str(file_type)) > FileMetadata._meta.get_field("file_type").max_length:
+                            raise ValueError("Artifact file type is too long")
 
-                            for project_id in project_ids:
-                                metadata.append(FileMetadata(
-                                    project_id=project_id,
-                                    debug_id=debug_id,
-                                    file_type=file_type,
-                                    file=files_by_checksum[checksum],
-                                    data=json.dumps(manifest_entry),
-                                ))
+                        for project_id in project_ids:
+                            metadata.append(FileMetadata(
+                                project_id=project_id,
+                                debug_id=debug_id,
+                                file_type=file_type,
+                                file=files_by_checksum[checksum],
+                                data=json.dumps(manifest_entry),
+                            ))
 
-                        # Note (2026-11-24): existing mappings win, otherwise the first in the bundle wins.
-                        # This preserves the previous get_or_create behavior; that policy was not reconsidered here.
-                        for batch in batched(metadata, FILE_BULK_BATCH_SIZE):
-                            FileMetadata.objects.bulk_create(batch, ignore_conflicts=True)
+                    # Note (2026-11-24): existing mappings win, otherwise the first in the bundle wins.
+                    # This preserves the previous get_or_create behavior; that policy was not reconsidered here.
+                    for batch in batched(metadata, FILE_BULK_BATCH_SIZE):
+                        FileMetadata.objects.bulk_create(batch, ignore_conflicts=True)
 
     with immediate_atomic():
         if not get_settings().KEEP_ARTIFACT_BUNDLES:
