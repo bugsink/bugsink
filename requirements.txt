@@ -13,7 +13,7 @@ brotli-rs==9.1.*
 zlib-rust==0.6.8.post2
 whitenoise==6.12.*
 requests==2.34.*
-certifi>=2026.10.23
+certifi>=2026.11.20
 monofy==1.2.*
 user-agents==2.2.*
 fastjsonschema==2.22.*
