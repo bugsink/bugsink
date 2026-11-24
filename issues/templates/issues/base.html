@@ -22,7 +22,7 @@
 <div class="m-4 flex flex-col lg:flex-row-reverse"><!-- container for the white bit (issue title, buttons) at the top of the page -->
 
     <div class="ml-auto flex-none pb-4 lg:pb-0"><!-- top, RHS (buttons) -->
-        <form action="." method="post">
+        <form action=".{% querystring %}" method="post">
         {% csrf_token %}
         {% if issue.is_resolved %}{# i.e. buttons disabled #}
             <button class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 ml-1 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md" name="action" value="reopen">{% translate "Reopen" %}</button>

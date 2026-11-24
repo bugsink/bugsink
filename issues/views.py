@@ -27,7 +27,7 @@ from events.models import Event
 from events.sparklines import get_issue_event_sparkline, get_issue_list_event_sparklines
 from events.ua_stuff import get_contexts_enriched_with_ua
 
-from projects.models import ProjectMembership, get_issue_accessible_project_ids
+from projects.models import Project, ProjectMembership, get_issue_accessible_project_ids
 from tags.search import search_issues, search_events, search_events_optimized
 from theme.templatetags.issues import timestamp_with_millis
 
@@ -268,8 +268,11 @@ def _issue_list_pt_2(request, project, state_filter, unapplied_issue_ids):
 
 def _global_issue_list_pt_2(request, accessible_project_ids, state_filter, unapplied_issue_ids):
     sort = _get_issue_list_sort(request)
+    requested_project_ids = request.GET.getlist("project")
+    selected_project_ids = [pid for pid in accessible_project_ids if str(pid) in requested_project_ids]
     issue_list = _filter_issue_list_by_state(
-        Issue.objects.filter(project_id__in=accessible_project_ids, is_deleted=False),
+        Issue.objects.filter(
+            project_id__in=selected_project_ids if requested_project_ids else accessible_project_ids, is_deleted=False),
         state_filter,
     ).select_related("project").order_by(*ISSUE_LIST_SORTS[sort])
 
@@ -298,6 +301,10 @@ def _global_issue_list_pt_2(request, accessible_project_ids, state_filter, unapp
         "q": "",
         "sort": sort,
         "page_obj": page_obj,
+        "projects": Project.objects.filter(id__in=accessible_project_ids).order_by("name"),
+        "selected_project_ids": selected_project_ids,
+        "requested_project_ids": requested_project_ids,
+        "project_filter_unavailable": bool(requested_project_ids) and not selected_project_ids,
     })
 
 
@@ -335,7 +342,7 @@ def _handle_post(request, issue):
     # resolve an issue for a specific release, and while you where thinking about that, it occurred for that
     # release. In that case it will probably stand out that your buttons don't become greyed out, and that the
     # dropdown no longer functions. already-true-vbc-unmute may be another exception to this rule.
-    return HttpResponseRedirect(request.path)
+    return HttpResponseRedirect(request.get_full_path())
 
 
 def _get_event(qs, issue, event_pk, digest_order, nav, bounds):

@@ -1,7 +1,6 @@
 {% extends "base.html" %}
-{% load static add_to_qs %}
+{% load static %}
 {% load humanize %}
-{% load add_to_qs %}
 {% load i18n %}
 
 {% block title %}{% translate "Issues" %}{% if project %} · {{ project.name }}{% endif %} · {{ site_title }}{% endblock %}
@@ -39,6 +38,12 @@
 <div class="m-4">
 <h1 class="text-4xl mt-4 font-bold">{% translate "Issues" %}{% if project %} · {{ project.name }}{% endif %}</h1>
 
+{% if project_filter_unavailable %}
+<div class="mt-4 p-4 bg-slate-50 dark:bg-slate-800">
+    {% translate "The selected projects are no longer available." %}
+    <a href="{% querystring project=None page=None %}" class="text-cyan-500 dark:text-cyan-300 font-bold">{% translate "Show all projects" %}</a>
+</div>
+{% endif %}
 
 {% if unapplied_issue_ids %}
 <div class="bg-red-100 dark:bg-red-900 w-full mt-2 mb-2 p-4 border-red-800 dark:border-red-700 border-2">
@@ -62,8 +67,39 @@
     <a href="{% url "issue_list_all" project_pk=project.id %}{% querystring sort=sort page=None %}"><div class="p-4 font-bold hover:bg-slate-200 dark:hover:bg-slate-800 {% if state_filter == "all" %}text-cyan-500 dark:text-cyan-300 border-cyan-500 border-b-4{% else %}text-slate-500 dark:text-slate-300 hover:border-slate-400 hover:border-b-4{% endif %}">{% translate "All" %}</div></a>
     {% endif %}
     </div>
-    <div class="ml-auto p-2">
+    <div class="ml-auto p-2 flex flex-wrap items-center justify-end gap-2">
         <form action="." method="get" class="flex flex-wrap items-center justify-end gap-2">
+        {% if is_global_issue_list and projects|length > 1 or project_filter_unavailable %}
+        <details class="relative">
+            <summary class="list-none cursor-pointer bg-slate-50 dark:bg-slate-800 border border-slate-500 rounded-md pl-3 pr-3 pt-2 pb-2">
+                {% if project_filter_unavailable %}{% translate "Unavailable projects" %}{% elif selected_project_ids %}{% blocktranslate count counter=selected_project_ids|length %}{{ counter }} project{% plural %}{{ counter }} projects{% endblocktranslate %}{% else %}{% translate "All projects" %}{% endif %}
+                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" class="w-4 h-4 inline"><path d="M6.5,8.5l6,7l6-7H6.5z"/></svg>
+            </summary>
+
+            <div class="absolute left-0 md:left-auto md:right-0 z-10 mt-1 w-64 bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-md shadow-lg">
+                <div class="max-h-72 overflow-y-auto p-2">
+                    {% for project in projects %}
+                    <label class="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700">
+                        <input type="checkbox" name="project" value="{{ project.id }}"{% if project.id in selected_project_ids %} checked{% endif %} class="dark:bg-slate-900 checked:dark:bg-cyan-500 border-cyan-800 dark:border-cyan-400 text-cyan-500 dark:text-cyan-300 focus:ring-cyan-200 dark:focus:ring-cyan-700 cursor-pointer"/>
+                        <span class="truncate">{{ project.name }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <div class="flex items-center justify-end gap-4 p-2 border-t-2 border-slate-300 dark:border-slate-600">
+                    {% if selected_project_ids or project_filter_unavailable %}<a href="{% querystring project=None page=None %}" class="text-cyan-500 dark:text-cyan-300 font-bold">{% translate "Clear" %}</a>{% endif %}
+                    <button type="submit" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">{% translate "Apply" %}</button>
+                </div>
+            </div>
+        </details>
+        {% endif %}
+        {% if is_global_issue_list %}
+        <input type="hidden" name="sort" value="{{ sort }}">
+        </form>
+        <form action="." method="get" id="issue-sort-form">
+            {% for project_id in requested_project_ids %}
+            <input type="hidden" name="project" value="{{ project_id }}">
+            {% endfor %}
+        {% endif %}
         <select id="issue-sort" name="sort" aria-label="{% translate 'Sort issues' %}" onchange="this.form.submit()" class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md">
             <option value="last_seen"{% if sort == "last_seen" %} selected{% endif %}>{% translate "Last seen" %}</option>
             <option value="events"{% if sort == "events" %} selected{% endif %}>{% translate "Most events" %}</option>
@@ -195,7 +231,7 @@
                 <div class="flex items-end gap-4">
                 <div class="min-w-0 flex-1">
                 <div>
-                    <a href="{{ script_prefix }}/issues/issue/{{ issue.id }}/event/last/{% querystring page=None sort=None %}" class="text-cyan-500 dark:text-cyan-300 fill-cyan-500 font-bold {% if issue.is_resolved %}italic{% endif %}">{% if issue.is_resolved %}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6 inline"><path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
+                    <a href="{{ script_prefix }}/issues/issue/{{ issue.id }}/event/last/{% if is_global_issue_list %}{% querystring page=None sort=None project=None issue_list=request.get_full_path %}{% else %}{% querystring page=None sort=None %}{% endif %}" class="text-cyan-500 dark:text-cyan-300 fill-cyan-500 font-bold {% if issue.is_resolved %}italic{% endif %}">{% if issue.is_resolved %}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6 inline"><path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" />
 </svg>{% endif %}{% if issue.is_muted %}<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 inline">
   <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 9.75 19.5 12m0 0 2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6 4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" />
 </svg>&nbsp;&nbsp;{% endif %}{{ issue.title|truncatechars:100 }}</a>
@@ -222,7 +258,9 @@
 
             <td class="w-full ml-0 pb-4 pt-4 pr-4 text-center">
                 <div class="p-4 text-xl font-bold text-slate-800 dark:text-slate-100">
-                {% if q %}{# a single text is the catch-all for searching w/o results; 'seems enough' because one would generally only search after already having seen some issues (or not), i.e. having seen the relevant message as per below #}
+                {% if project_filter_unavailable %}
+                    {% translate "No issues to show for the selected projects." %}
+                {% elif q %}{# a single text is the catch-all for searching w/o results; 'seems enough' because one would generally only search after already having seen some issues (or not), i.e. having seen the relevant message as per below #}
                     No {{ state_filter }} issues found for "{{ q }}"
                 {% else %}
                     {% if state_filter == "open" %}
@@ -248,10 +286,10 @@
 
         <div class="flex ml-2"> {# pagination #}
                 {% if page_obj.has_previous %}
-                <a href="?{% add_to_qs page=1 %}" class="inline-flex" title="First page">
+                <a href="{% querystring page=1 %}" class="inline-flex" title="First page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M3.22 7.595a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 0 0 1.06-1.06l-2.72-2.72 2.72-2.72a.75.75 0 0 0-1.06-1.06l-3.25 3.25Zm8.25-3.25-3.25 3.25a.75.75 0 0 0 0 1.06l3.25 3.25a.75.75 0 1 0 1.06-1.06l-2.72-2.72 2.72-2.72a.75.75 0 0 0-1.06-1.06Z" clip-rule="evenodd" /></svg></a>
 
-                <a href="?{% add_to_qs page=page_obj.previous_page_number %}" class="inline-flex" title="Previous page">
+                <a href="{% querystring page=page_obj.previous_page_number %}" class="inline-flex" title="Previous page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M9.78 4.22a.75.75 0 0 1 0 1.06L7.06 8l2.72 2.72a.75.75 0 1 1-1.06 1.06L5.47 8.53a.75.75 0 0 1 0-1.06l3.25-3.25a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}
@@ -271,7 +309,7 @@
                 {% endif %}
 
                 {% if page_obj.has_next %}
-                <a href="?{% add_to_qs page=page_obj.next_page_number %}" class="inline-flex" title="Next page">
+                <a href="{% querystring page=page_obj.next_page_number %}" class="inline-flex" title="Next page">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M6.22 4.22a.75.75 0 0 1 1.06 0l3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06L8.94 8 6.22 5.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>
                 </a>
                 {% else %}
