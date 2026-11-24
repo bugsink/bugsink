@@ -17,6 +17,7 @@ from sentry_sdk_extensions import capture_or_log_exception
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.app_settings import get_settings
+from bugsink.moreiterutils import batched
 from bugsink.streams import copy_stream_limited, MaxLengthExceeded
 from bugsink.timed_sqlite_backend.base import allow_long_running_queries
 
@@ -44,6 +45,9 @@ VACUUM_FILES_BATCH_SIZE = 50
 # At roughly 200-500 bytes per file (reasonable enough for paths), 50 MiB accommodates about 100,000-250,000 files,
 # which "should be enough" for non-pathalogical use-cases.
 MAX_MANIFEST_SIZE = 50 * 1024 * 1024
+
+FILE_BULK_BATCH_SIZE = 64
+FILE_BULK_MAX_BYTES = 16 * 1024 * 1024
 
 
 # "In the wild", we have run into non-unique debug IDs (one in code, one in comment-at-bottom). This regex matches a
@@ -96,29 +100,55 @@ def create_file_from_local_file(checksum, filename, size, local_file):
 
 
 def create_files_from_local_files(local_files):
+    write_storage = get_write_storage("file")
+    max_bytes = FILE_BULK_MAX_BYTES if write_storage is None else None
+    files_by_checksum = {}
     with immediate_atomic(only_if_needed=True):
-        write_storage = get_write_storage("file")
-        checksums = {checksum for checksum, filename, size, local_file in local_files}
-        files_by_checksum = File.objects.only("id", "checksum").in_bulk(checksums, field_name="checksum")
-        new_files_by_checksum = {}
-        for checksum, filename, size, local_file in local_files:
-            if checksum in files_by_checksum or checksum in new_files_by_checksum:
-                continue
-            local_file.seek(0)
-            if write_storage is not None:
-                write_fileobj_to_storage("file", checksum, local_file)
-            new_files_by_checksum[checksum] = File(
-                checksum=checksum,
-                filename=filename,
-                size=size,
-                data=local_file.read() if write_storage is None else b"",
-                storage_backend=None if write_storage is None else write_storage.name,
-            )
-        File.objects.bulk_create(new_files_by_checksum.values())
-        files_by_checksum.update(
-            File.objects.only("id", "checksum").in_bulk(new_files_by_checksum, field_name="checksum"))
+        for batch in local_file_batches(local_files, max_bytes):
+            files_by_checksum.update(_create_files_from_local_files(batch, write_storage))
+    return files_by_checksum
+
+
+def _create_files_from_local_files(local_files, write_storage):
+    checksums = {checksum for checksum, filename, size, local_file in local_files}
+    files_by_checksum = File.objects.only("id", "checksum").in_bulk(checksums, field_name="checksum")
+    new_files_by_checksum = {}
+    for checksum, filename, size, local_file in local_files:
+        if checksum in files_by_checksum or checksum in new_files_by_checksum:
+            continue
+        local_file.seek(0)
+        if write_storage is not None:
+            write_fileobj_to_storage("file", checksum, local_file)
+        new_files_by_checksum[checksum] = File(
+            checksum=checksum,
+            filename=filename,
+            size=size,
+            data=local_file.read() if write_storage is None else b"",
+            storage_backend=None if write_storage is None else write_storage.name,
+        )
+    File.objects.bulk_create(new_files_by_checksum.values())
+    files_by_checksum.update(
+        File.objects.only("id", "checksum").in_bulk(new_files_by_checksum, field_name="checksum"))
 
     return files_by_checksum
+
+
+def local_file_batches(local_files, max_bytes):
+    # Create batches bounded by file count (avoid oversized queries) and total file size
+    # (DB-backed contents only, avoiding memory growth from loading too many files together).
+    batch = []
+    batch_bytes = 0
+    for checksum, filename, size, local_file in local_files:
+        full = len(batch) >= FILE_BULK_BATCH_SIZE
+        too_large = max_bytes is not None and batch_bytes + size > max_bytes
+        if batch and (full or too_large):
+            yield batch
+            batch = []
+            batch_bytes = 0
+        batch.append((checksum, filename, size, local_file))
+        batch_bytes += size
+    if batch:
+        yield batch
 
 
 @shared_task
@@ -290,7 +320,8 @@ def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
 
                         # Note (2026-11-24): existing mappings win, otherwise the first in the bundle wins.
                         # This preserves the previous get_or_create behavior; that policy was not reconsidered here.
-                        FileMetadata.objects.bulk_create(metadata, ignore_conflicts=True)
+                        for batch in batched(metadata, FILE_BULK_BATCH_SIZE):
+                            FileMetadata.objects.bulk_create(batch, ignore_conflicts=True)
 
     with immediate_atomic():
         if not get_settings().KEEP_ARTIFACT_BUNDLES:

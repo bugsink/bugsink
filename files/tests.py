@@ -492,6 +492,7 @@ class FilesTests(TransactionTestCase):
         Chunk.objects.create(checksum=checksum, size=len(contents), data=contents)
         return checksum
 
+    @patch("files.tasks.FILE_BULK_BATCH_SIZE", 2)
     def test_artifact_bundle_reuses_files_and_metadata(self):
         other_project = Project.objects.create(name="other")
         for use_storage in (False, True):
@@ -554,7 +555,7 @@ class FilesTests(TransactionTestCase):
             with self.subTest(use_storage=use_storage), tempfile.TemporaryDirectory() as tempdir:
                 with override_object_storages(get_test_object_storages(tempdir, use_for_write=use_storage)):
                     query_counts = []
-                    for count in (5, 25):
+                    for count in (5, 25, 65):
                         files = {
                             f"{i}.js": (
                                 f"contents-{use_storage}-{count}-{i}".encode(),
@@ -567,7 +568,36 @@ class FilesTests(TransactionTestCase):
                             process_artifact_bundle(checksum, [checksum], [self.project.id])
                         query_counts.append(len(queries))
                     self.assertEqual(query_counts[0], query_counts[1])
+                    self.assertGreater(query_counts[2], query_counts[1])
 
+    @patch("files.tasks.FILE_BULK_MAX_BYTES", 4096)
+    def test_artifact_bundle_byte_batches_only_apply_to_db_contents(self):
+        for use_storage in (False, True):
+            with self.subTest(use_storage=use_storage), tempfile.TemporaryDirectory() as tempdir:
+                with override_object_storages(get_test_object_storages(tempdir, use_for_write=use_storage)):
+                    query_counts = []
+                    for size in (100, 3000, 5000):
+                        files = {
+                            f"{i}.js": (
+                                f"contents-{use_storage}-{size}-{i}".encode().ljust(size, b"x"),
+                                {"type": "source", "headers": {"debug-id": str(uuid4())}},
+                            )
+                            for i in range(4)
+                        }
+                        checksum = self.create_artifact_bundle(files)
+                        with CaptureQueriesContext(connection) as queries:
+                            process_artifact_bundle(checksum, [checksum], [self.project.id])
+                        query_counts.append(len(queries))
+                        for contents, manifest_entry in files.values():
+                            file = File.objects.get(checksum=sha1(contents, usedforsecurity=False).hexdigest())
+                            self.assertEqual(contents, file.get_raw_data())
+                    if use_storage:
+                        self.assertEqual([query_counts[0]] * 3, query_counts)
+                    else:
+                        self.assertGreater(query_counts[1], query_counts[0])
+                        self.assertEqual(query_counts[1], query_counts[2])
+
+    @patch("files.tasks.FILE_BULK_BATCH_SIZE", 1)
     def test_artifact_bundle_metadata_failure_rolls_back_all_extracted_files(self):
         checksum = self.create_artifact_bundle({
             "valid.js": (b"valid", {"type": "source", "headers": {"debug-id": str(uuid4())}}),
