@@ -95,6 +95,32 @@ def create_file_from_local_file(checksum, filename, size, local_file):
     return file, created
 
 
+def create_files_from_local_files(local_files):
+    with immediate_atomic(only_if_needed=True):
+        write_storage = get_write_storage("file")
+        checksums = {checksum for checksum, filename, size, local_file in local_files}
+        files_by_checksum = File.objects.only("id", "checksum").in_bulk(checksums, field_name="checksum")
+        new_files_by_checksum = {}
+        for checksum, filename, size, local_file in local_files:
+            if checksum in files_by_checksum or checksum in new_files_by_checksum:
+                continue
+            local_file.seek(0)
+            if write_storage is not None:
+                write_fileobj_to_storage("file", checksum, local_file)
+            new_files_by_checksum[checksum] = File(
+                checksum=checksum,
+                filename=filename,
+                size=size,
+                data=local_file.read() if write_storage is None else b"",
+                storage_backend=None if write_storage is None else write_storage.name,
+            )
+        File.objects.bulk_create(new_files_by_checksum.values())
+        files_by_checksum.update(
+            File.objects.only("id", "checksum").in_bulk(new_files_by_checksum, field_name="checksum"))
+
+    return files_by_checksum
+
+
 @shared_task
 def assemble_dif(assembly_id, chunk_checksums, filename):
     assemblies = DifAssembly.objects.filter(
@@ -215,10 +241,13 @@ def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
                         prepared_files.append((checksum, filename, size, local_file, manifest_entry))
 
                     with immediate_atomic():
-                        for checksum, filename, size, local_file, manifest_entry in prepared_files:
-                            local_file.seek(0)
-                            file, _ = create_file_from_local_file(checksum, filename, size, local_file)
+                        files_by_checksum = create_files_from_local_files([
+                            (checksum, filename, size, local_file)
+                            for checksum, filename, size, local_file, manifest_entry in prepared_files
+                        ])
 
+                        metadata = []
+                        for checksum, filename, size, local_file, manifest_entry in prepared_files:
                             debug_id = manifest_entry.get("headers", {}).get("debug-id", None)
                             file_type = manifest_entry.get("type", None)
                             if debug_id is None or file_type is None:
@@ -236,15 +265,13 @@ def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
                                 continue
 
                             for project_id in project_ids:
-                                FileMetadata.objects.get_or_create(
+                                metadata.append(FileMetadata(
                                     project_id=project_id,
                                     debug_id=debug_id,
                                     file_type=file_type,
-                                    defaults={
-                                        "file": file,
-                                        "data": json.dumps(manifest_entry),
-                                    }
-                                )
+                                    file=files_by_checksum[checksum],
+                                    data=json.dumps(manifest_entry),
+                                ))
 
                             # the in-code regexes show up in the _minified_ source only (the sourcemap's original source
                             # code will not have been "polluted" with it yet, since it's the original).
@@ -260,6 +287,10 @@ def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
                                         debug_id,
                                         ", ".join(sorted(mismatches)),
                                     )
+
+                        # Note (2026-11-24): existing mappings win, otherwise the first in the bundle wins.
+                        # This preserves the previous get_or_create behavior; that policy was not reconsidered here.
+                        FileMetadata.objects.bulk_create(metadata, ignore_conflicts=True)
 
     with immediate_atomic():
         if not get_settings().KEEP_ARTIFACT_BUNDLES:

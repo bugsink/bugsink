@@ -21,6 +21,7 @@ from django.test.utils import CaptureQueriesContext
 from django.contrib.auth import get_user_model
 from django.test import LiveServerTestCase, override_settings
 from django.db import connection
+from django.core.exceptions import ValidationError
 from django.core.management.base import CommandError
 from django.core.management import call_command
 from django.utils import timezone
@@ -478,6 +479,104 @@ class FilesTests(TransactionTestCase):
         data_column = f'{connection.ops.quote_name("files_chunk")}.{connection.ops.quote_name("data")}'
         for query in queries:
             self.assertNotIn(data_column, query["sql"])
+
+    def create_artifact_bundle(self, files):
+        manifest = {"files": {name: metadata for name, (contents, metadata) in files.items()}}
+        bundle = BytesIO()
+        with ZipFile(bundle, "w") as bundle_zip:
+            bundle_zip.writestr("manifest.json", json.dumps(manifest))
+            for name, (contents, metadata) in files.items():
+                bundle_zip.writestr(name, contents)
+        contents = bundle.getvalue()
+        checksum = sha1(contents, usedforsecurity=False).hexdigest()
+        Chunk.objects.create(checksum=checksum, size=len(contents), data=contents)
+        return checksum
+
+    def test_artifact_bundle_reuses_files_and_metadata(self):
+        other_project = Project.objects.create(name="other")
+        for use_storage in (False, True):
+            with self.subTest(use_storage=use_storage), tempfile.TemporaryDirectory() as tempdir:
+                with override_object_storages(get_test_object_storages(tempdir, use_for_write=use_storage)):
+                    debug_ids = [uuid4() for _ in range(3)]
+                    manifests = [
+                        {"type": "source", "headers": {"debug-id": str(debug_id)}} for debug_id in debug_ids
+                    ]
+                    existing_contents = f"existing-{use_storage}".encode()
+                    existing_file = File.objects.create(
+                        checksum=sha1(existing_contents, usedforsecurity=False).hexdigest(),
+                        filename="original.js", size=len(existing_contents), data=existing_contents,
+                    )
+                    existing_metadata = FileMetadata.objects.create(
+                        project=self.project, debug_id=debug_ids[0], file_type="source", file=existing_file, data="{}",
+                    )
+                    shared_contents = f"shared-{use_storage}".encode()
+                    files = {
+                        "first.js": (shared_contents, manifests[0]),
+                        "duplicate-mapping.js": (f"different-{use_storage}".encode(), manifests[0]),
+                        "shared.js": (shared_contents, manifests[1]),
+                        "existing.js": (existing_contents, manifests[2]),
+                        "no-debug-id.js": (f"no-debug-id-{use_storage}".encode(), {"type": "source"}),
+                    }
+                    checksum = self.create_artifact_bundle(files)
+                    for _ in range(2):
+                        with self.assertLogs("bugsink.api", level="WARNING"):
+                            process_artifact_bundle(checksum, [checksum], [self.project.id, other_project.id])
+
+                        shared_file = File.objects.get(
+                            checksum=sha1(shared_contents, usedforsecurity=False).hexdigest())
+                        self.assertEqual("first.js", shared_file.filename)
+                        self.assertEqual("local" if use_storage else None, shared_file.storage_backend)
+                        expected = {
+                            (self.project.id, debug_ids[0]): existing_file.id,
+                            (other_project.id, debug_ids[0]): shared_file.id,
+                            (self.project.id, debug_ids[1]): shared_file.id,
+                            (other_project.id, debug_ids[1]): shared_file.id,
+                            (self.project.id, debug_ids[2]): existing_file.id,
+                            (other_project.id, debug_ids[2]): existing_file.id,
+                        }
+                        metadata = FileMetadata.objects.filter(debug_id__in=debug_ids)
+                        self.assertEqual(expected, {
+                            (project_id, debug_id): file_id
+                            for project_id, debug_id, file_id in metadata.values_list(
+                                "project_id", "debug_id", "file_id")
+                        })
+                        self.assertEqual(
+                            existing_metadata.id, metadata.get(project=self.project, debug_id=debug_ids[0]).id)
+                        for contents, manifest_entry in files.values():
+                            file = File.objects.get(checksum=sha1(contents, usedforsecurity=False).hexdigest())
+                            self.assertEqual(contents, file.get_raw_data())
+                        existing_file.refresh_from_db()
+                        self.assertEqual("original.js", existing_file.filename)
+                        self.assertIsNone(existing_file.storage_backend)
+
+    def test_artifact_bundle_queries_do_not_grow_per_file(self):
+        for use_storage in (False, True):
+            with self.subTest(use_storage=use_storage), tempfile.TemporaryDirectory() as tempdir:
+                with override_object_storages(get_test_object_storages(tempdir, use_for_write=use_storage)):
+                    query_counts = []
+                    for count in (5, 25):
+                        files = {
+                            f"{i}.js": (
+                                f"contents-{use_storage}-{count}-{i}".encode(),
+                                {"type": "source", "headers": {"debug-id": str(uuid4())}},
+                            )
+                            for i in range(count)
+                        }
+                        checksum = self.create_artifact_bundle(files)
+                        with CaptureQueriesContext(connection) as queries:
+                            process_artifact_bundle(checksum, [checksum], [self.project.id])
+                        query_counts.append(len(queries))
+                    self.assertEqual(query_counts[0], query_counts[1])
+
+    def test_artifact_bundle_metadata_failure_rolls_back_all_extracted_files(self):
+        checksum = self.create_artifact_bundle({
+            "valid.js": (b"valid", {"type": "source", "headers": {"debug-id": str(uuid4())}}),
+            "invalid.js": (b"invalid", {"type": "source", "headers": {"debug-id": "invalid"}}),
+        })
+        with self.assertRaises(ValidationError):
+            process_artifact_bundle(checksum, [checksum], [self.project.id])
+        self.assertFalse(FileMetadata.objects.exists())
+        self.assertEqual([checksum], list(File.objects.values_list("checksum", flat=True)))
 
     def test_artifact_bundle_rejects_bzip2_manifest(self):
         bundle = BytesIO()
