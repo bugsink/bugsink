@@ -46,6 +46,7 @@ from bugsink.app_settings import override_settings
 from bugsink.streams import UnclosableBytesIO
 from compat.timestamp import format_timestamp
 from compat.dsn import get_header_value
+from bsmain.models import AuthToken
 from bsmain.management.commands.send_json import Command as SendJsonCommand
 from phonehome.models import Installation
 from files.models import File, FileMetadata
@@ -1697,6 +1698,54 @@ class MinidumpIngestRegressionTestCase(TransactionTestCase):
             merge.assert_called_once()
             self.assertEqual("SIGABRT: Fatal Error: SIGABRT", Event.objects.get().title())
             self.assertEqual([], os.listdir(tempdir))
+
+    def test_windows_minidump_uses_symbols_for_the_matching_pdb_age(self):
+        debug_id = "5a9832e5-2872-41c1-838e-d98914e9b7ff"
+        token = AuthToken.objects.create(debug_files_upload=True)
+        for age, function in (("1", "CrashFunction"), ("2", "OtherRevision")):
+            contents = (
+                f"MODULE windows x86 5A9832E5287241C1838ED98914E9B7FF{age} test_app.pdb\n"
+                f"FILE 0 test_app.cc\nFUNC 4290 20 0 {function}\n4290 20 58 0\n"
+            ).encode()
+            checksum = sha1(contents, usedforsecurity=False).hexdigest()
+            upload = io.BytesIO(contents)
+            upload.name = checksum
+            headers = {"Authorization": f"Bearer {token.token}"}
+            response = self.client.post(
+                "/api/0/organizations/anyorg/chunk-upload/", {"file": upload}, headers=headers)
+            self.assertEqual(200, response.status_code)
+            response = self.client.post(
+                f"/api/0/projects/anyorg/{self.project.slug}/files/difs/assemble/",
+                {checksum: {"name": "test_app.sym", "debug_id": f"{debug_id}-{age}", "chunks": [checksum]}},
+                content_type="application/json", headers=headers,
+            )
+            self.assertEqual(200, response.status_code, response.content)
+            response = self.client.post(
+                f"/api/0/projects/anyorg/{self.project.slug}/files/difs/assemble/",
+                {checksum: {"name": "test_app.sym", "debug_id": f"{debug_id.replace('-', '').upper()}{age}",
+                            "chunks": []}},
+                content_type="application/json", headers=headers,
+            )
+            self.assertEqual(200, response.status_code, response.content)
+            self.assertEqual("ok", response.json()[checksum]["state"])
+
+        filename = os.path.join(os.getenv("SAMPLES_DIR", "../event-samples"), "minidumps", "minidump2.dmp")
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            with open(filename, "rb") as minidump:
+                response = self.client.post(
+                    f"/api/{self.project.id}/minidump/",
+                    {"upload_file_minidump": minidump},
+                    headers={"X-Sentry-Auth": self.sentry_auth_header},
+                )
+            self.assertEqual(200, response.status_code, response.content)
+            event = Event.objects.get()
+            exception = event.get_parsed_data()["exception"]["values"][0]
+            frame = next(frame for frame in exception["stacktrace"]["frames"]
+                         if frame["instruction_addr"] == "0x40429e")
+            self.assertEqual("CrashFunction", frame["function"])
+            self.assertEqual(58, frame["lineno"])
+            self.assertEqual([], os.listdir(tempdir))
+        self.assertEqual(2, FileMetadata.objects.filter(project=self.project, file_type="dbg").count())
 
     @override_settings(MAX_ATTACHMENT_SIZE=64 * 1024)
     def test_direct_minidump_endpoint_records_debug_file_access(self):

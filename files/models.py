@@ -32,7 +32,7 @@ class DifAssembly(models.Model):
     # Upload status belongs here, not in Snappea: a task disappears from the queue before it starts running.
     project = models.ForeignKey("projects.Project", on_delete=models.DO_NOTHING)
     checksum = models.CharField(max_length=40)
-    debug_id = models.UUIDField(null=True, blank=True)
+    debug_id = models.CharField(max_length=64, null=True, blank=True)
     state = models.CharField(max_length=16, default=ChunkFileState.ASSEMBLING)
     detail = models.CharField(max_length=255, blank=True, default="")
     error_at = models.DateTimeField(null=True, blank=True, editable=False)
@@ -222,7 +222,7 @@ class FileMetadata(models.Model):
 
     # debug_id & file_type nullability: such data exists in manifest.json; we are future-proof for it although we
     # currently don't store it as such.
-    debug_id = models.UUIDField(max_length=40, null=True, blank=True)
+    debug_id = models.CharField(max_length=64, null=True, blank=True)
     file_type = models.CharField(max_length=255, null=True, blank=True)
     data = models.TextField()  # we just dump the rest in here; let's see how much we really need.
     created_at = models.DateTimeField(auto_now_add=True, editable=False, db_index=True)

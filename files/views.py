@@ -3,7 +3,7 @@ from hashlib import sha1
 from zlib_rust.gzip import GzipFile
 from io import BytesIO
 import logging
-from uuid import UUID
+import symalot
 
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -327,7 +327,7 @@ def difs_assemble(request, organization_slug, project_slug):
     try:
         # TODO : .get implies "no debug_id", but in that case it's useless
         debug_ids = {
-            checksum: UUID(info["debug_id"]) if info.get("debug_id") is not None else None
+            checksum: symalot.normalize_debug_id(info["debug_id"]) if info.get("debug_id") is not None else None
             for checksum, info in data.items()
         }
     except (ValueError, TypeError, AttributeError):

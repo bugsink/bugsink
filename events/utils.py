@@ -200,7 +200,7 @@ def apply_sourcemaps(event_data, project):
         return
 
     debug_id_for_filename = {
-        image["code_file"]: UUID(image["debug_id"])
+        image["code_file"]: str(UUID(image["debug_id"]))
         for image in images
         if "debug_id" in image and "code_file" in image and image["type"] == "sourcemap"
     }
@@ -278,7 +278,7 @@ def get_sourcemap_images(event_data, project):
         return []
 
     debug_id_for_filename = {
-        image["code_file"]: UUID(image["debug_id"])
+        image["code_file"]: str(UUID(image["debug_id"]))
         for image in images
         if "debug_id" in image and "code_file" in image and image["type"] == "sourcemap"
     }

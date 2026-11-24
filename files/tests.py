@@ -21,7 +21,6 @@ from django.test.utils import CaptureQueriesContext
 from django.contrib.auth import get_user_model
 from django.test import LiveServerTestCase, override_settings
 from django.db import connection
-from django.core.exceptions import ValidationError
 from django.core.management.base import CommandError
 from django.core.management import call_command
 from django.utils import timezone
@@ -32,6 +31,7 @@ from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.transaction import immediate_atomic
 from projects.models import Project, ProjectMembership, ProjectRole
 from events.models import Event
+from events.utils import get_sourcemap_images
 from bsmain.models import AuthToken
 from bugsink.moreiterutils import batched
 from bugsink.app_settings import override_settings as bugsink_override_settings
@@ -501,7 +501,7 @@ class FilesTests(TransactionTestCase):
         for use_storage in (False, True):
             with self.subTest(use_storage=use_storage), tempfile.TemporaryDirectory() as tempdir:
                 with override_object_storages(get_test_object_storages(tempdir, use_for_write=use_storage)):
-                    debug_ids = [uuid4() for _ in range(3)]
+                    debug_ids = [str(uuid4()) for _ in range(3)]
                     manifests = [
                         {"type": "source", "headers": {"debug-id": str(debug_id)}} for debug_id in debug_ids
                     ]
@@ -637,7 +637,7 @@ class FilesTests(TransactionTestCase):
             "valid.js": (b"valid", {"type": "source", "headers": {"debug-id": str(uuid4())}}),
             "invalid.js": (b"invalid", {"type": "source", "headers": {"debug-id": "invalid"}}),
         })
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(ValueError):
             process_artifact_bundle(checksum, [checksum], [self.project.id])
         self.assertFalse(FileMetadata.objects.exists())
         self.assertEqual([checksum], list(File.objects.values_list("checksum", flat=True)))
@@ -664,7 +664,7 @@ class FilesTests(TransactionTestCase):
                 })
                 with patch("files.tasks.tempfile.NamedTemporaryFile", side_effect=create_temp_file):
                     if invalid:
-                        with self.assertRaises(ValidationError):
+                        with self.assertRaises(ValueError):
                             process_artifact_bundle(checksum, [checksum], [self.project.id])
                     else:
                         process_artifact_bundle(checksum, [checksum], [self.project.id])
@@ -974,34 +974,28 @@ class FilesTests(TransactionTestCase):
                 self.assertTrue(File.objects.filter(checksum=checksum).exists())
                 self.assertTrue(Path(tempdir, checksum).exists())
 
-    def test_uuid_behavior_of_django(self):
-        # test to check Django is doing the thing of converting various UUID-like things on "both sides" before
-        # comparing. "this probably shouldn't be necessary" to test, but I'd rather have a test that proves it works
-        # than to have to reason about it. Context: https://github.com/bugsink/bugsink/issues/105
+    def test_artifact_debug_ids_are_normalized_for_upload_and_lookup(self):
+        debug_id = "abcdefab-1234-5678-1234-567812345678"
+        bundle = BytesIO()
+        with ZipFile(bundle, "w") as zf:
+            zf.writestr("manifest.json", json.dumps({"files": {
+                "app.js.map": {"type": "source_map", "headers": {"debug-id": debug_id.replace("-", "").upper()}},
+            }}))
+            zf.writestr("app.js.map", "{}")
+        data = bundle.getvalue()
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+        Chunk.objects.create(checksum=checksum, size=len(data), data=data)
+        process_artifact_bundle(checksum, [checksum], [self.project.pk])
 
-        uuids = [
-            "12345678123456781234567812345678",  # uuid_str_no_dashes
-            "12345678-1234-5678-1234-567812345678",  # uuid_str_with_dashes
-            UUID("12345678-1234-5678-1234-567812345678"),  # uuid_object
-        ]
-
-        file = File.objects.create(size=0)
-        for create_with in uuids:
-            FileMetadata.objects.all().delete()  # clean up before each test
-            FileMetadata.objects.create(
-                project=self.project,
-                debug_id=create_with,
-                file_type="source_map",
-                file=file,
-            )
-
-            for test_with in uuids:
-                fms = FileMetadata.objects.filter(debug_id__in=[test_with])
-                self.assertEqual(1, fms.count())
+        self.assertEqual(debug_id, FileMetadata.objects.get().debug_id)
+        event_data = {"debug_meta": {"images": [{
+            "type": "sourcemap", "debug_id": debug_id.upper(), "code_file": "app.js",
+        }]}}
+        self.assertEqual([("app.js", f"{debug_id}  (uploaded)")], get_sourcemap_images(event_data, self.project))
 
     def test_get_file_metadata_for_debug_ids_only_uses_the_requested_project(self):
-        scoped_debug_id = uuid4()
-        other_debug_id = uuid4()
+        scoped_debug_id = str(uuid4())
+        other_debug_id = str(uuid4())
         other_project = Project.objects.create(name="other")
         file = File.objects.create(checksum="a" * 40, filename="scoped.js.map", size=0)
         other_file = File.objects.create(checksum="b" * 40, filename="other.js.map", size=0)
@@ -1485,7 +1479,7 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
         self.assertTrue(File.objects.filter(filename__endswith=".zip").exists())
 
         self.assertEqual(
-            UUID(debug_id),
+            str(UUID(debug_id)),
             FileMetadata.objects.get(file__filename="captureException.js.map").debug_id)
         self.assertEqual(self.project, FileMetadata.objects.get(file__filename="captureException.js.map").project)
 
