@@ -1,6 +1,7 @@
 import re
 import logging
 import tempfile
+from contextlib import ExitStack
 from datetime import timedelta
 from zipfile import ZipFile
 import json
@@ -206,14 +207,18 @@ def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
                             manifest_stream, max_manifest_size, reason=f"{manifest_limit_name}: {max_manifest_size}")
                     manifest = json.loads(manifest_bytes.decode("utf-8"))
 
-                    for zip_entry_name, manifest_entry in manifest["files"].items():
-                        with tempfile.TemporaryFile(dir=tempdir) as local_file:
+                    with ExitStack() as stack:
+                        prepared_files = []
+                        for zip_entry_name, manifest_entry in manifest["files"].items():
+                            local_file = stack.enter_context(tempfile.TemporaryFile(dir=tempdir))
                             checksum, size = extract_zip_entry_to_file(
                                 bundle_zip, zip_entry_name, local_file, max_file_size,
                             )
-
-                            local_file.seek(0)
                             filename = basename(manifest_entry.get("url", zip_entry_name))[:255]
+                            prepared_files.append((checksum, filename, size, local_file, manifest_entry))
+
+                        for checksum, filename, size, local_file, manifest_entry in prepared_files:
+                            local_file.seek(0)
                             file, _ = create_file_from_local_file(checksum, filename, size, local_file)
 
                             debug_id = manifest_entry.get("headers", {}).get("debug-id", None)
