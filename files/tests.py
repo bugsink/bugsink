@@ -40,7 +40,10 @@ from bugsink.streams import MaxLengthExceeded
 from .models import Chunk, File, FileMetadata, get_file_metadata_for_debug_ids, _binary_to_bytes
 from .minidump import event_threads_for_process_state
 from .storage_registry import override_object_storages
-from .tasks import assemble_file, create_chunk, create_file_from_local_file, process_artifact_bundle, vacuum_files_sync
+from .tasks import (
+    assemble_file, create_chunk, create_file_from_local_file, find_in_code_debug_ids,
+    process_artifact_bundle, vacuum_files_sync,
+)
 from .views import CHUNK_UPLOAD_SIZE
 
 
@@ -607,6 +610,24 @@ class FilesTests(TransactionTestCase):
             process_artifact_bundle(checksum, [checksum], [self.project.id])
         self.assertFalse(FileMetadata.objects.exists())
         self.assertEqual([checksum], list(File.objects.values_list("checksum", flat=True)))
+
+    def test_artifact_bundle_scans_debug_ids_outside_the_write_transaction(self):
+        debug_id, other_debug_id = uuid4(), uuid4()
+        contents = f'e._sentryDebugIds["stack"] = "{other_debug_id}";'.encode()
+        checksum = self.create_artifact_bundle({
+            "app.min.js": (contents, {"type": "minified_source", "headers": {"debug-id": str(debug_id)}}),
+        })
+
+        def scan(local_file):
+            self.assertFalse(connection.in_atomic_block)
+            return find_in_code_debug_ids(local_file)
+
+        with patch("files.tasks.find_in_code_debug_ids", side_effect=scan):
+            with self.assertLogs("bugsink.api", level="WARNING") as logs:
+                process_artifact_bundle(checksum, [checksum], [self.project.id])
+        self.assertIn(f"Uploaded as {debug_id}, but also found: {other_debug_id}.", logs.output[0])
+        metadata = FileMetadata.objects.get(project=self.project, debug_id=debug_id, file_type="minified_source")
+        self.assertEqual(contents, metadata.file.get_raw_data())
 
     def test_artifact_bundle_rejects_overlong_file_type(self):
         checksum = self.create_artifact_bundle({

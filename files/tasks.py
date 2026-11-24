@@ -268,6 +268,24 @@ def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
                             bundle_zip, zip_entry_name, local_file, max_file_size,
                         )
                         filename = basename(manifest_entry.get("url", zip_entry_name))[:255]
+                        debug_id = manifest_entry.get("headers", {}).get("debug-id", None)
+                        file_type = manifest_entry.get("type", None)
+
+                        # the in-code regexes show up in the _minified_ source only (the sourcemap's original source
+                        # code will not have been "polluted" with it yet, since it's the original).
+                        if debug_id is not None and file_type == "minified_source":
+                            mismatches = find_in_code_debug_ids(local_file) - {debug_id}
+                            if mismatches:
+                                logger.warning(
+                                    (
+                                        "Uploaded file %s contains multiple Debug IDs. "
+                                        "Uploaded as %s, but also found: %s."
+                                    ),
+                                    filename,
+                                    debug_id,
+                                    ", ".join(sorted(mismatches)),
+                                )
+
                         prepared_files.append((checksum, filename, size, local_file, manifest_entry))
 
                     with immediate_atomic():
@@ -307,21 +325,6 @@ def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
                                     file=files_by_checksum[checksum],
                                     data=json.dumps(manifest_entry),
                                 ))
-
-                            # the in-code regexes show up in the _minified_ source only (the sourcemap's original source
-                            # code will not have been "polluted" with it yet, since it's the original).
-                            if file_type == "minified_source":
-                                mismatches = find_in_code_debug_ids(local_file) - {debug_id}
-                                if mismatches:
-                                    logger.warning(
-                                        (
-                                            "Uploaded file %s contains multiple Debug IDs. "
-                                            "Uploaded as %s, but also found: %s."
-                                        ),
-                                        filename,
-                                        debug_id,
-                                        ", ".join(sorted(mismatches)),
-                                    )
 
                         # Note (2026-11-24): existing mappings win, otherwise the first in the bundle wins.
                         # This preserves the previous get_or_create behavior; that policy was not reconsidered here.
