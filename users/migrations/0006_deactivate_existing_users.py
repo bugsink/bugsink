@@ -16,15 +16,16 @@ def deactivate_existing_users(apps, schema_editor):
     database = schema_editor.connection.alias
 
     cutoff = timezone.now() - timedelta(seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)
-    pending_users = User.objects.using(database).filter(
+    # MySQL cannot update auth_user while selecting from it in a subquery.
+    pending_user_ids = list(User.objects.using(database).filter(
         is_active=False,
         last_login__isnull=True,
         date_joined__gte=cutoff,
         is_superuser=False,
         is_staff=False,
         emailverification__created_at__gte=cutoff,
-    )
-    User.objects.using(database).filter(is_active=False).exclude(pk__in=pending_users).update(
+    ).values_list("pk", flat=True))
+    User.objects.using(database).filter(is_active=False).exclude(pk__in=pending_user_ids).update(
         is_deactivated=True, is_superuser=False, is_staff=False, password=make_password(None))
 
     deactivated_users = User.objects.using(database).filter(is_deactivated=True)
