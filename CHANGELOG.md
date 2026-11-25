@@ -58,6 +58,7 @@ selected projects, state, sort order and page. See #545.
   See #603 and #605.
 * Fix multipart request handling while preserving upload size limits. See #573.
 * Avoid blocking database writes while validating webhook destinations in the UI. See #590.
+* Remove pip from the final Docker images after installation. See #611.
 * Update navigation icons and favicons to the new Bugsink logo. See #600.
 
 ## 2.6.3 (6 November 2026)

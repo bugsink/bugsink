@@ -69,6 +69,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
  && pip install --find-links /wheels --no-index mysqlclient \
  && pip install "psycopg[binary]" \
  && pip install /tmp/$WHEEL_FILE \
+ && pip uninstall -y pip \
  && find /usr/local/lib/python3.12/site-packages -name '*.so' -exec strip --strip-unneeded {} + \
  && apt-get purge -y binutils && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/*
