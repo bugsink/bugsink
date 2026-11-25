@@ -205,7 +205,8 @@ def reset_password(request, token=None):
         created_at__lt=timezone.now() - timedelta(
             seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)).delete()
 
-    verification_token = request.session.get("_password_reset_token") if token == "set-password" else token
+    # no_bandit_expl: "set-password" is a URL marker, not a secret token.
+    verification_token = request.session.get("_password_reset_token") if token == "set-password" else token  # nosec B105
 
     try:
         verification = EmailVerification.objects.get(token=verification_token, email=F("user__username"))
@@ -222,10 +223,12 @@ def reset_password(request, token=None):
     if not is_safe_next_url(next_url, request):
         next_url = reverse("home")
 
-    if token != "set-password":
+    # no_bandit_expl: "set-password" is a URL marker, not a secret token.
+    if token != "set-password":  # nosec B105
         # Keep the bearer token out of the form URL and subsequent Referer headers.
         request.session["_password_reset_token"] = verification.token
-        reset_url = reverse("reset_password", kwargs={"token": "set-password"})
+        # no_bandit_expl: "set-password" is a URL marker, not a secret token.
+        reset_url = reverse("reset_password", kwargs={"token": "set-password"})  # nosec B105
         return redirect(reset_url + "?" + urlencode({"next": next_url}))
 
     if request.method == 'POST':
