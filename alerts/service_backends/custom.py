@@ -10,7 +10,7 @@ from issues.models import Issue
 from issues.serializers import IssueSerializer
 from snappea.decorators import shared_task
 
-from .base import BaseWebhookBackend
+from .base import BaseWebhookBackend, load_service_config
 from .webhook_security import validate_webhook_url
 
 
@@ -88,7 +88,12 @@ def _store_success_info(service_config_id):
 
 
 @shared_task
-def custom_backend_send_test_message(webhook_url, project_name, display_name, service_config_id):
+def custom_backend_send_test_message(project_name, display_name, service_config_id):
+    config = load_service_config(service_config_id)
+    if config is None:
+        return  # the service was removed after this task was queued
+    webhook_url = config["webhook_url"]
+
     data = {
         "id": "497f6eca-6276-4993-bfeb-53cbbbba6f08",
         "friendly_id": "TEST-1",
@@ -135,8 +140,13 @@ def custom_backend_send_test_message(webhook_url, project_name, display_name, se
 
 @shared_task
 def custom_backend_send_alert(
-    webhook_url, issue_id, state_description, alert_article, alert_reason, service_config_id, unmute_reason=None
+    issue_id, state_description, alert_article, alert_reason, service_config_id, unmute_reason=None
 ):
+    config = load_service_config(service_config_id)
+    if config is None:
+        return  # the service was removed after this task was queued
+    webhook_url = config["webhook_url"]
+
     issue = Issue.objects.get(id=issue_id)
 
     # Deliberately mirror the canonical issue API; a test keeps the test-message fields aligned with this payload.
@@ -178,18 +188,14 @@ class CustomBackend(BaseWebhookBackend):
         return CustomBackendForm
 
     def send_test_message(self):
-        config = json.loads(self.service_config.config)
         custom_backend_send_test_message.delay(
-            config["webhook_url"],
             self.service_config.project.name,
             self.service_config.display_name,
             self.service_config.id,
         )
 
     def send_alert(self, issue_id, state_description, alert_article, alert_reason, **kwargs):
-        config = json.loads(self.service_config.config)
         custom_backend_send_alert.delay(
-            config["webhook_url"],
             issue_id,
             state_description,
             alert_article,

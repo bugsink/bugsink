@@ -11,7 +11,7 @@ from bugsink.app_settings import get_settings
 from bugsink.transaction import immediate_atomic
 
 from issues.models import Issue
-from .base import BaseWebhookBackend
+from .base import BaseWebhookBackend, load_service_config
 from .webhook_security import validate_webhook_url
 
 
@@ -104,8 +104,13 @@ def _store_success_info(service_config_id):
 
 @shared_task
 def discord_backend_send_test_message(
-    webhook_url, project_name, display_name, service_config_id
+    project_name, display_name, service_config_id
 ):
+    config = load_service_config(service_config_id)
+    if config is None:
+        return  # the service was removed after this task was queued
+    webhook_url = config["webhook_url"]
+
     # Discord uses embeds for rich formatting
     # Color: 0x7289DA is Discord's blurple color
 
@@ -143,7 +148,11 @@ def discord_backend_send_test_message(
 
 @shared_task
 def discord_backend_send_alert(
-        webhook_url, issue_id, state_description, alert_article, alert_reason, service_config_id, unmute_reason=None):
+        issue_id, state_description, alert_article, alert_reason, service_config_id, unmute_reason=None):
+    config = load_service_config(service_config_id)
+    if config is None:
+        return  # the service was removed after this task was queued
+    webhook_url = config["webhook_url"]
 
     issue = Issue.objects.get(id=issue_id)
 
@@ -219,16 +228,13 @@ class DiscordBackend(BaseWebhookBackend):
 
     def send_test_message(self):
         discord_backend_send_test_message.delay(
-            json.loads(self.service_config.config)["webhook_url"],
             self.service_config.project.name,
             self.service_config.display_name,
             self.service_config.id,
         )
 
     def send_alert(self, issue_id, state_description, alert_article, alert_reason, **kwargs):
-        config = json.loads(self.service_config.config)
         discord_backend_send_alert.delay(
-            config["webhook_url"],
             issue_id,
             state_description,
             alert_article,
