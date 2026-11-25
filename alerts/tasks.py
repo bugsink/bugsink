@@ -67,6 +67,14 @@ def send_unmute_alert(issue_id, unmute_reason):
     _send_alert(issue_id, "Unmuted issue", "an", "UNMUTED", unmute_reason=unmute_reason)
 
 
+@shared_task
+def send_resolve_notification(project_id, issue_ids):
+    from alerts.models import MessagingServiceConfig  # avoid circular import
+
+    for service in MessagingServiceConfig.objects.filter(project_id=project_id):
+        service.get_backend().send_resolve(issue_ids)
+
+
 def _send_alert(issue_id, state_description, alert_article, alert_reason, **kwargs):
     # NOTE: as it stands, there is a bit of asymmetry here: _send_alert is always called in delayed fashion; it delays
     # some work itself (message backends) though not all (emails). I kept it like this to be able to add functionality

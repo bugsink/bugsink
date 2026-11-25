@@ -33,6 +33,9 @@ def post_pinned(parsed, ip, *args, headers, **kwargs):
 
 
 class BaseWebhookBackend:
+    def send_resolve(self, issue_ids):
+        pass  # most backends post messages for alerts only; resolving is for incident-style backends (PagerDuty)
+
     @classmethod
     def safe_post(cls, webhook_url, *args, **kwargs):
         # Ensure the carefully picked values in the below cannot be accidentally overwritten caller-side; complain
