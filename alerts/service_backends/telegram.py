@@ -183,12 +183,14 @@ def _build_alert_message(issue, alert_reason, issue_url, unmute_reason=None):
 
 @shared_task
 def telegram_backend_send_test_message(
-    chat_id, project_name, display_name, service_config_id, message_thread_id=None
+    project_name, display_name, service_config_id
 ):
     config = load_service_config(service_config_id)
     if config is None:
         return  # the service was removed after this task was queued
     bot_token = config["bot_token"]
+    chat_id = config["chat_id"]
+    message_thread_id = config.get("message_thread_id")
     webhook_url = _build_webhook_url(bot_token)
 
     data = {
@@ -220,19 +222,19 @@ def telegram_backend_send_test_message(
 
 @shared_task
 def telegram_backend_send_alert(
-    chat_id,
     issue_id,
     state_description,
     alert_article,
     alert_reason,
     service_config_id,
     unmute_reason=None,
-    message_thread_id=None,
 ):
     config = load_service_config(service_config_id)
     if config is None:
         return  # the service was removed after this task was queued
     bot_token = config["bot_token"]
+    chat_id = config["chat_id"]
+    message_thread_id = config.get("message_thread_id")
     webhook_url = _build_webhook_url(bot_token)
 
     issue = Issue.objects.get(id=issue_id)
@@ -275,24 +277,18 @@ class TelegramBackend(BaseWebhookBackend):
         return TelegramConfigForm
 
     def send_test_message(self):
-        config = json.loads(self.service_config.config)
         telegram_backend_send_test_message.delay(
-            config["chat_id"],
             self.service_config.project.name,
             self.service_config.display_name,
             self.service_config.id,
-            message_thread_id=config.get("message_thread_id"),
         )
 
     def send_alert(self, issue_id, state_description, alert_article, alert_reason, **kwargs):
-        config = json.loads(self.service_config.config)
         telegram_backend_send_alert.delay(
-            config["chat_id"],
             issue_id,
             state_description,
             alert_article,
             alert_reason,
             self.service_config.id,
-            message_thread_id=config.get("message_thread_id"),
             **kwargs,
         )

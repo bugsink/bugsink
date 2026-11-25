@@ -536,11 +536,9 @@ class TestTelegramBackend(DjangoTestCase):
         mock_post.return_value = mock_response
 
         telegram_backend_send_test_message(
-            self.chat_id,
             "Test project",
             "Test Telegram",
             self.config.id,
-            message_thread_id=123,
         )
 
         self.config.refresh_from_db()
@@ -569,14 +567,12 @@ class TestTelegramBackend(DjangoTestCase):
         mock_post.return_value = mock_response
 
         telegram_backend_send_alert(
-            self.chat_id,
             issue.id,
             "New issue",
             "a",
             "NEW",
             self.config.id,
             unmute_reason="Repeated failures after being muted.",
-            message_thread_id=123,
         )
 
         self.config.refresh_from_db()
@@ -607,7 +603,6 @@ class TestTelegramBackend(DjangoTestCase):
         mock_post.return_value = mock_response
 
         telegram_backend_send_test_message(
-            self.chat_id,
             "Test project",
             "Test Telegram",
             self.config.id,
@@ -630,7 +625,6 @@ class TestTelegramBackend(DjangoTestCase):
         )
 
         telegram_backend_send_test_message(
-            self.chat_id,
             "Test project",
             "Test Telegram",
             self.config.id,
@@ -645,7 +639,6 @@ class TestTelegramBackend(DjangoTestCase):
     def test_telegram_send_uses_outbound_policy(self, mock_post):
         with override_bugsink_settings(ALERTS_WEBHOOK_OUTBOUND_MODE="allowlist_only", ALERTS_WEBHOOK_ALLOW_LIST=[]):
             telegram_backend_send_test_message(
-                self.chat_id,
                 "Test project",
                 "Test Telegram",
                 self.config.id,
@@ -659,13 +652,17 @@ class TestTelegramBackend(DjangoTestCase):
 
     @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
     def test_telegram_test_message_omits_thread_id_when_not_set(self, mock_post):
+        config = json.loads(self.config.config)
+        config.pop("message_thread_id")
+        self.config.config = json.dumps(config)
+        self.config.save()
+
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.raise_for_status.return_value = None
         mock_post.return_value = mock_response
 
         telegram_backend_send_test_message(
-            self.chat_id,
             "Test project",
             "Test Telegram",
             self.config.id,
@@ -676,17 +673,20 @@ class TestTelegramBackend(DjangoTestCase):
 
     @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
     def test_telegram_test_message_omits_thread_id_for_channel_username(self, mock_post):
+        config = json.loads(self.config.config)
+        config["chat_id"] = "@my_channel"
+        self.config.config = json.dumps(config)
+        self.config.save()
+
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.raise_for_status.return_value = None
         mock_post.return_value = mock_response
 
         telegram_backend_send_test_message(
-            "@my_channel",
             "Test project",
             "Test Telegram",
             self.config.id,
-            message_thread_id=123,
         )
 
         payload = json.loads(mock_post.call_args.kwargs["data"])
@@ -1405,6 +1405,54 @@ class TestServiceBackendTaskArguments(DjangoTestCase):
                 self.assertEqual(2, mock_task_create.call_count)
                 for call in mock_task_create.call_args_list:
                     self.assertNotIn("s3cr3t", call.kwargs["args"] + call.kwargs["kwargs"])
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    @patch("snappea.decorators.wakeup_server")
+    @patch("snappea.decorators.Task.objects.create")
+    @patch("snappea.decorators.get_settings", return_value=Mock(TASK_ALWAYS_EAGER=False))
+    def test_queued_messages_use_current_destination(self, mock_get_settings, mock_task_create,
+                                                    mock_wakeup_server, mock_post):
+        from snappea import registry
+
+        project = Project.objects.create(name="Test project")
+        issue, _ = get_or_create_issue(project=project)
+        configs = {
+            "telegram": (
+                {"bot_token": "123456:old", "chat_id": "-111", "message_thread_id": 1},
+                {"bot_token": "123456:new", "chat_id": "-222", "message_thread_id": 2},
+                "https://api.telegram.org/bot123456:new/sendMessage",
+                {"chat_id": "-222", "message_thread_id": 2},
+            ),
+            "mattermost": (
+                {"webhook_url": "https://old.example.com/hooks/test", "channel": "old-channel"},
+                {"webhook_url": "https://new.example.com/hooks/test", "channel": "new-channel"},
+                "https://new.example.com/hooks/test",
+                {"channel": "new-channel"},
+            ),
+        }
+
+        for kind, (old_config, new_config, expected_url, expected_routing) in configs.items():
+            with self.subTest(kind=kind):
+                mock_task_create.reset_mock()
+                service_config = MessagingServiceConfig.objects.create(
+                    project=project, display_name=f"Test {kind}", kind=kind, config=json.dumps(old_config))
+                backend = service_config.get_backend()
+                backend.send_test_message()
+                backend.send_alert(str(issue.id), "New issue", "a", "NEW")
+
+                self.assertEqual(mock_task_create.call_count, 2)
+                service_config.config = json.dumps(new_config)
+                service_config.save()
+
+                for call in mock_task_create.call_args_list:
+                    mock_post.reset_mock()
+                    task = call.kwargs
+                    registry[task["task_name"]](*json.loads(task["args"]), **json.loads(task["kwargs"]))
+                    mock_post.assert_called_once()
+                    self.assertEqual(mock_post.call_args.args[0], expected_url)
+                    payload = json.loads(mock_post.call_args.kwargs["data"])
+                    for key, value in expected_routing.items():
+                        self.assertEqual(payload[key], value)
 
     @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
     def test_task_for_removed_service_does_nothing(self, mock_post):
