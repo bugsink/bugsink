@@ -149,6 +149,13 @@ jobs:
       run: |
         pip install -r requirements.development.txt
         pip install mysqlclient psycopg2
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '22'
+    - name: Install JavaScript upload client
+      run: |
+        npm ci --prefix tools/js-tests
+        echo "$GITHUB_WORKSPACE/tools/js-tests/node_modules/.bin" >> "$GITHUB_PATH"
     - name: Check out event-samples
       uses: actions/checkout@v6
       with:

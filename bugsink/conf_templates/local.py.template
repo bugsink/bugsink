@@ -65,6 +65,9 @@ BUGSINK = {
     # The URL where the Bugsink instance is hosted. This is used in the email notifications and to construct DSNs.
     "BASE_URL": "http://{{ host }}:{{ port }}",  # no trailing slash
 
+    # Optional base URL advertised for file uploads when clients cannot reach BASE_URL. Defaults to BASE_URL.
+    # "UPLOAD_BASE_URL": "http://uploads.example.com:{{ port }}",
+
     # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
     # "SITE_TITLE": "Bugsink",
 

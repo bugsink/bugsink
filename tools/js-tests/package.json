@@ -1,0 +1,7 @@
+{
+  "name": "bugsink-js-tests",
+  "private": true,
+  "devDependencies": {
+    "sentry": "0.49.0"
+  }
+}

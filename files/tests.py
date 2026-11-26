@@ -360,13 +360,24 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(200, allowed_response.status_code)
 
     def test_chunk_upload_settings_use_real_limits(self):
-        with bugsink_override_settings(MAX_FILE_SIZE=1234):
+        with bugsink_override_settings(MAX_FILE_SIZE=1234, BASE_URL="https://bugsink.example.com"):
             response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers=self.token_headers)
 
         self.assertEqual(200, response.status_code)
         self.assertEqual(CHUNK_UPLOAD_SIZE, response.json()["chunkSize"])
         self.assertEqual(CHUNK_UPLOAD_SIZE, response.json()["maxRequestSize"])
         self.assertEqual(1234, response.json()["maxFileSize"])
+        self.assertEqual(
+            "https://bugsink.example.com/api/0/organizations/anyorg/chunk-upload/", response.json()["url"])
+
+    def test_chunk_upload_settings_use_upload_base_url(self):
+        with bugsink_override_settings(
+                BASE_URL="https://bugsink.example.com", UPLOAD_BASE_URL="https://uploads.example.com/bugsink/"):
+            response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers=self.token_headers)
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(
+            "https://uploads.example.com/bugsink/api/0/organizations/anyorg/chunk-upload/", response.json()["url"])
 
     def test_chunk_upload_rejects_plain_chunk_larger_than_advertised(self):
         data = b"x" * (CHUNK_UPLOAD_SIZE + 1)
@@ -1400,8 +1411,7 @@ class EnterContextMixin:
 
 
 class SentryCLITest(EnterContextMixin, LiveServerTestCase):
-    # Test that the _actual_ sentry-cli tool can upload files to our chunk-upload endpoint, and that the files are
-    # correctly assembled and processed.
+    # Test uploads with the actual Rust sentry-cli and JavaScript sentry client, including assembly and metadata.
 
     def setUp(self):
         super().setUp()
@@ -1409,8 +1419,8 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
         self.token = auth.token
         self.project = Project.objects.create(name="test")
 
-        # sentry-cli asks _us_ for our own URL...
-        self.enterContext(bugsink_override_settings(BASE_URL=self.live_server_url))
+        self.enterContext(bugsink_override_settings(
+            BASE_URL="http://unreachable.invalid", UPLOAD_BASE_URL=self.live_server_url))
 
         # propagate exceptions so that we get the errors "from inside the server" instead of just sentry-cli reporting
         # about a 500 error (the setting just makes it end up on the output, it does not actually "escape" in such a
@@ -1529,6 +1539,42 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
                 .values_list("project", flat=True)
             ),
         )
+
+    def test_sentry_js_upload(self):
+        node = shutil.which("node")
+        sentry = shutil.which("sentry")
+        identity = shutil.which("identity-sourcemap")
+        assert node and sentry, "Install Node.js and the JavaScript sentry client as described in CONTRIBUTING.md"
+        assert identity, "identity-sourcemap not found on PATH (pip install ecma426)"
+
+        js_path = Path(self.tempdir) / "captureException.js"
+        map_path = js_path.with_suffix(".js.map")
+        js_path.write_text(MINIMAL_JS, encoding="utf-8")
+        self._run([identity, str(js_path)])
+
+        # Use the same SDK entry point as @sentry/bundler-plugins, rather than the Rust CLI wrapper.
+        sdk_path = Path(sentry).resolve().with_name("index.cjs")
+        self._run([node, "--eval", """
+            const { createSentrySDK } = require(process.argv[1]);
+            const sdk = createSentrySDK({
+                url: process.argv[2], org: 'bugsinkhasnoorgs', project: process.argv[3],
+                token: process.env.SENTRY_AUTH_TOKEN,
+            });
+            (async () => {
+                await sdk.sourcemap.inject({ directory: process.cwd() });
+                await sdk.sourcemap.upload({ directory: process.cwd() });
+            })().catch(error => { console.error(error); process.exitCode = 1; });
+        """, str(sdk_path), self.live_server_url, self.project.slug])
+
+        sourcemap = json.loads(map_path.read_text(encoding="utf-8"))
+        debug_id = sourcemap.get("debugId") or sourcemap.get("debug_id")
+        self.assertIsNotNone(debug_id)
+        self.assertEqual(3, File.objects.count())
+        self.assertTrue(File.objects.filter(filename="captureException.js").exists())
+        self.assertTrue(File.objects.filter(filename__endswith=".zip").exists())
+        metadata = FileMetadata.objects.get(file__filename="captureException.js.map")
+        self.assertEqual(UUID(debug_id), metadata.debug_id)
+        self.assertEqual(self.project, metadata.project)
 
 
 MINIMAL_JS = """\

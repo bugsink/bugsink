@@ -129,6 +129,9 @@ BUGSINK = {
     # The URL where the Bugsink instance is hosted. This is used in the email notifications and to construct DSNs.
     "BASE_URL": os.getenv("BASE_URL", f"http://localhost:{_PORT}"),  # no trailing slash
 
+    # Optional base URL advertised for file uploads when clients cannot reach BASE_URL. Defaults to BASE_URL.
+    "UPLOAD_BASE_URL": os.getenv("UPLOAD_BASE_URL"),
+
     # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
     "SITE_TITLE": os.getenv("SITE_TITLE", "Bugsink"),
 

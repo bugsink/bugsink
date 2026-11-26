@@ -39,16 +39,17 @@ PROJECT_REQUIRED_MESSAGE = (
 
 
 def get_chunk_upload_settings(request, organization_slug):
-    # Sentry / Sentry-CLI has a whole bunch of logic surrounding URLs, which I do not understand and which presumably
-    # doesn't make it past Bugsink's cost/benefit-analysis. feature-completeness. For now, we just return our own URL
-    # which seems to "just work". If we ever want to go down this path :
+    # Sentry / Sentry-CLI has a whole bunch of logic surrounding URLs. Replicating all of that doesn't make it past
+    # Bugsink's cost/benefit-analysis. We return an absolute URL because some upload clients require it (#612).
+    # UPLOAD_BASE_URL explicitly selects a different address when upload clients cannot reach BASE_URL.
     #
     # https://github.com/getsentry/sentry/pull/7095/files <= upload-url-prefix: introduced, but rationale not explained
     #
     # 2 more starting points for the whole "relative" idea
     # * https://github.com/getsentry/sentry-cli/issues/839
     # * https://github.com/getsentry/sentry/pull/29347
-    url = get_settings().BASE_URL + "/api/0/organizations/" + organization_slug + "/chunk-upload/"
+    base_url = get_settings().UPLOAD_BASE_URL or get_settings().BASE_URL
+    url = base_url + "/api/0/organizations/" + organization_slug + "/chunk-upload/"
 
     return JsonResponse({
         "url": url,
