@@ -6,7 +6,7 @@ from alerts.models import MessagingServiceConfig
 from bugsink.utils import assert_
 from events.models import Event
 from issues.models import Issue, issue_lookup_kwargs
-from projects.models import Project, projects_visible_to_user, user_has_project_membership_access, user_is_project_admin
+from projects.models import Project, user_has_project_membership_access, user_is_project_admin
 from releases.models import Release
 from teams.models import Team, teams_visible_to_user, user_is_team_admin
 
@@ -28,9 +28,10 @@ def enforce_user_boundness_for_project(token, capability, project):
         if not user_is_project_admin(token.user, project):
             raise PermissionDenied("The user bound to this token does not administer this project.")
     elif capability == "projects:read":
-        # projects:read follows project-list visibility, including team membership and discoverable projects
-        if not projects_visible_to_user(Project.objects.filter(pk=project.pk), token.user).exists():
-            raise PermissionDenied("This project is not visible to the user bound to this token.")
+        # Project details include the DSN and configuration, so discovery visibility is insufficient.
+        # Require accepted project membership, like the SDK setup page; lists use the same boundary.
+        if not user_has_project_membership_access(token.user, project):
+            raise PermissionDenied("The user bound to this token is not an accepted member of this project.")
     else:
         raise NotImplementedError("No project authorization rule for capability: %s." % capability)
 

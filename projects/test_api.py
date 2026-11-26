@@ -176,46 +176,65 @@ class ProjectApiTests(TransactionTestCase):
         r = self.client.patch(reverse("api:project-list"), {"name": "No object"}, format="json")
         self.assertEqual(r.status_code, 405)
 
-    def test_personal_token_lists_only_projects_visible_to_its_user(self):
+    def test_personal_token_project_reads_require_accepted_project_membership(self):
         user = get_user_model().objects.create_user(username="project-reader")
-        member_project = Project.objects.create(
-            team=self.team,
-            name="Member project",
-            visibility=ProjectVisibility.TEAM_MEMBERS,
-        )
-        ProjectMembership.objects.create(project=member_project, user=user, accepted=True)
+        member_project = Project.objects.create(team=self.team, name="Member project")
+        membership = ProjectMembership.objects.create(project=member_project, user=user, accepted=True)
 
         team = Team.objects.create(name="Readers team")
         TeamMembership.objects.create(team=team, user=user, accepted=True)
-        team_project = Project.objects.create(
-            team=team,
-            name="Team project",
-            visibility=ProjectVisibility.TEAM_MEMBERS,
-        )
-
-        visible_project = Project.objects.create(name="Visible project", visibility=ProjectVisibility.DISCOVERABLE)
-        hidden_project = Project.objects.create(name="Hidden project", visibility=ProjectVisibility.TEAM_MEMBERS)
+        team_project = Project.objects.create(team=team, name="Team project")
+        discoverable_project = Project.objects.create(
+            name="Discoverable project", visibility=ProjectVisibility.DISCOVERABLE)
+        joinable_project = Project.objects.create(name="Joinable project", visibility=ProjectVisibility.JOINABLE)
+        invited_project = Project.objects.create(name="Invited project")
+        ProjectMembership.objects.create(project=invited_project, user=user, accepted=False)
+        hidden_project = Project.objects.create(name="Hidden project")
         token = AuthToken.objects.create(is_user_bound=True, user=user, projects_read=True)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
 
         response = self.client.get(reverse("api:project-list"))
-        hidden_detail = self.client.get(reverse("api:project-detail", args=[hidden_project.id]))
-
         self.assertEqual(200, response.status_code)
-        self.assertEqual(
-            {member_project.id, team_project.id, visible_project.id},
-            {row["id"] for row in response.json()["results"]},
-        )
-        self.assertEqual(403, hidden_detail.status_code)
-        self.assertEqual(
-            "This project is not visible to the user bound to this token.",
-            hidden_detail.json()["detail"],
-        )
-        for project in [member_project, team_project, visible_project]:
-            response = self.client.get(reverse("api:project-event-counts", args=[project.id]))
-            self.assertEqual(200, response.status_code)
-        response = self.client.get(reverse("api:project-event-counts", args=[hidden_project.id]))
-        self.assertEqual(403, response.status_code)
+        self.assertEqual([member_project.id], [row["id"] for row in response.json()["results"]])
+        self.assertEqual(member_project.dsn, response.json()["results"][0]["dsn"])
+        response = self.client.get(reverse("api:project-detail", args=[member_project.id]))
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(member_project.dsn, response.json()["dsn"])
+        response = self.client.get(reverse("api:project-event-counts", args=[member_project.id]))
+        self.assertEqual(200, response.status_code)
+
+        for project in [team_project, discoverable_project, joinable_project, invited_project, hidden_project]:
+            for endpoint in ["api:project-detail", "api:project-event-counts"]:
+                with self.subTest(project=project.name, endpoint=endpoint):
+                    response = self.client.get(reverse(endpoint, args=[project.id]))
+                    self.assertEqual(403, response.status_code)
+                    self.assertEqual(
+                        "The user bound to this token is not an accepted member of this project.",
+                        response.json()["detail"],
+                    )
+
+        membership.delete()
+        response = self.client.get(reverse("api:project-list"))
+        self.assertEqual(200, response.status_code)
+        self.assertEqual([], response.json()["results"])
+        for endpoint in ["api:project-detail", "api:project-event-counts"]:
+            response = self.client.get(reverse(endpoint, args=[member_project.id]))
+            self.assertEqual(403, response.status_code)
+
+    def test_superuser_personal_token_can_read_projects_without_membership(self):
+        user = get_user_model().objects.create_user(username="project-superuser", is_superuser=True)
+        project = Project.objects.create(team=self.team, name="Private project")
+        token = AuthToken.objects.create(is_user_bound=True, user=user, projects_read=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.token}")
+
+        response = self.client.get(reverse("api:project-list"))
+        self.assertEqual(200, response.status_code)
+        self.assertEqual([project.id], [row["id"] for row in response.json()["results"]])
+        response = self.client.get(reverse("api:project-detail", args=[project.id]))
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(project.dsn, response.json()["dsn"])
+        response = self.client.get(reverse("api:project-event-counts", args=[project.id]))
+        self.assertEqual(200, response.status_code)
 
     def test_personal_team_admin_can_create_and_update_projects(self):
         user = get_user_model().objects.create_user(username="project-team-admin")
