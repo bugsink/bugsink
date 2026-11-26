@@ -14,11 +14,11 @@ from django.core.exceptions import SuspiciousOperation
 from django.core import mail
 from django.contrib.auth import get_user_model
 from django.test.utils import CaptureQueriesContext
-from django.db import connection
+from django.db import connection, transaction
 from .wsgi import allowed_hosts_error_message
 
 from .test_utils import TransactionTestCase25251 as TransactionTestCase
-from .transaction import immediate_atomic
+from .transaction import durable_atomic, immediate_atomic
 from .volume_based_condition import VolumeBasedCondition
 from .utils import email_backend_delivers_mail, send_rendered_email
 from .streams import (
@@ -596,6 +596,24 @@ class AllowedHostsMsgTestCase(DjangoTestCase):
 
 
 class TestAtomicTransactions(TransactionTestCase):
+
+    def test_failing_commit_callback_preserves_read_transaction_mode(self):
+        if connection.vendor != "sqlite":
+            self.skipTest("Checks SQLite transaction modes")
+
+        def fail_on_commit():
+            raise ValueError("Commit callback failed")
+
+        with self.assertRaisesMessage(ValueError, "Commit callback failed"):
+            with immediate_atomic():
+                User.objects.create(username="committed")
+                transaction.on_commit(fail_on_commit)
+
+        with CaptureQueriesContext(connection) as queries_context:
+            with durable_atomic():
+                self.assertTrue(User.objects.filter(username="committed").exists())
+
+        self.assertEqual(["BEGIN"], [q["sql"] for q in queries_context if q["sql"].startswith("BEGIN")])
 
     def test_only_if_needed(self):
         with CaptureQueriesContext(connection) as queries_context:

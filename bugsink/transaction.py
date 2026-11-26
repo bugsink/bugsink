@@ -177,17 +177,18 @@ class ImmediateAtomic(SuperDurableAtomic):
         self.t0 = time.time()
 
     def __exit__(self, exc_type, exc_value, traceback):
-        super(ImmediateAtomic, self).__exit__(exc_type, exc_value, traceback)
+        try:
+            super(ImmediateAtomic, self).__exit__(exc_type, exc_value, traceback)
+        finally:
+            connection = django_db_transaction.get_connection(self.using)
+            if hasattr(self, "_start_transaction_under_autocommit_original"):
+                connection._start_transaction_under_autocommit = self._start_transaction_under_autocommit_original
+                del self._start_transaction_under_autocommit_original
 
         took = time.time() - self.t0
         inc_stat(self.using, "immediate_transaction", took)
         using_clause = f" ({ self.using })" if self.using != DEFAULT_DB_ALIAS else ""
         performance_logger.info(f"{took * 1000:6.2f}ms IMMEDIATE transaction{using_clause}")
-
-        connection = django_db_transaction.get_connection(self.using)
-        if hasattr(self, "_start_transaction_under_autocommit_original"):
-            connection._start_transaction_under_autocommit = self._start_transaction_under_autocommit_original
-            del self._start_transaction_under_autocommit_original
 
 
 @contextmanager
