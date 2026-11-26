@@ -1,2 +1,0 @@
-class ViolatedExpectation(Exception):
-    pass

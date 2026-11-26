@@ -52,13 +52,3 @@ def get_grouping_mechanism(identifier):
             return mechanism
 
     raise ValueError(f"Unknown grouping mechanism: {identifier}")
-
-
-def get_next_grouping_mechanism(identifier):
-    for i, mechanism in enumerate(GROUPING_MECHANISMS):
-        if mechanism.identifier == identifier:
-            if i + 1 == len(GROUPING_MECHANISMS):
-                return None
-            return GROUPING_MECHANISMS[i + 1]
-
-    raise ValueError(f"Unknown grouping mechanism: {identifier}")
