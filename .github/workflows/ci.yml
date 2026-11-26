@@ -1,10 +1,5 @@
 name: Continuous Integration
 
-# we use the fact that MySQL and Postgres are part of the ubuntu image, which saves us from
-# "service container" complexities (but gives no choices in the version); this is also where
-# the confured username/passwords for mysql come from
-# approach inspired by https://blog.healthchecks.io/2020/11/using-github-actions-to-run-django-tests/
-
 on:
   push:
     # hardcoded list; GitHub does not support wildcards in branch names AFAICT
@@ -22,172 +17,28 @@ env:
   DJANGO_SETTINGS_MODULE: "bugsink.settings.development"
 
 jobs:
-  ruff:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v6
-    - name: "Set up Python 3.12"
-      uses: actions/setup-python@v6
-      with:
-        python-version: "3.12"
-    - name: Install Ruff
-      run: |
-        python -m pip install --upgrade ruff
-    - name: Run Ruff
-      run: |
-        ruff check .
+  # Python releases can change application behavior and dependency compatibility.
+  cpython-compatibility:
+    name: CPython compatibility
+    uses: ./.github/workflows/test.yml
+    with:
+      python-versions: '["3.11", "3.12", "3.13", "3.14", "3.15"]'
 
-  bandit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
+  # Vendors differ in SQL, constraints and transaction behavior.
+  database-vendors:
+    name: Database vendors
+    uses: ./.github/workflows/test.yml
+    with:
+      databases: >-
+        [{"vendor": "mysql", "name": "MySQL", "version": "8.4"},
+         {"vendor": "postgres", "name": "PostgreSQL", "version": "18"}]
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: 3.12
-
-      - name: Install Bandit and Plugins
-        run: |
-          pip install bandit spoils
-
-      - name: Run Bandit and format results
-        shell: bash
-        run: |
-          # set +e disables "exit on any non-zero command" behavior
-          # set +o pipefail disables GH's default "fail the whole pipeline if any stage fails"
-          set +e +o pipefail
-
-          # Note: .py files only; at the time of writing I checked the conf_templates/*.template
-          # also; but they had 2 False positives only (SECRET_KEY lives there by design) and I
-          # don't want to pollute templates that other people deal with with "nosec".
-          bandit_json_output=$( \
-            git ls-files \
-              | grep '\.py$' \
-              | xargs bandit -q -f json --ini .bandit \
-          )
-          bandit_exit_code=$?
-
-          echo "$bandit_json_output" \
-            | jq -r '
-                .results[]
-                | [ .filename
-                  , .line_number
-                  , .test_id
-                  , .issue_confidence
-                  , .issue_severity
-                  , .test_name
-                  ]
-                | @tsv
-              ' \
-            | column -t
-
-          if [[ $bandit_exit_code -ne 0 ]]; then
-            echo "Bandit found issues (exit code $bandit_exit_code)"
-            exit $bandit_exit_code
-          fi
-
-  test:
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [ubuntu-latest]
-        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
-        db: [sqlite, mysql, postgres]
-        include:
-          - db: mysql
-            db_user: root
-            db_password: root
-          - db: postgres
-            db_user: bugsink
-            db_password: bugsink
-          - runner: ubuntu-24.04-arm
-            python-version: "3.11"
-            db: sqlite
-          - runner: ubuntu-24.04-arm
-            python-version: "3.12"
-            db: sqlite
-          - runner: ubuntu-24.04-arm
-            python-version: "3.13"
-            db: sqlite
-          - runner: ubuntu-24.04-arm
-            python-version: "3.14"
-            db: sqlite
-          - runner: ubuntu-24.04-arm
-            python-version: "3.15"
-            db: sqlite
-    env:
-      DB: ${{ matrix.db }}
-      DB_USER: ${{ matrix.db_user }}
-      DB_PASSWORD: ${{ matrix.db_password }}
-    steps:
-    - uses: actions/checkout@v6
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Start MySQL If Needed
-      if: matrix.db == 'mysql'
-      run: sudo systemctl start mysql.service
-    - name: Start PostgreSQL
-      if: matrix.db == 'postgres'
-      run: |
-        sudo systemctl start postgresql.service
-        sudo -u postgres psql -c "CREATE ROLE bugsink PASSWORD 'bugsink' NOSUPERUSER CREATEDB CREATEROLE INHERIT LOGIN;" postgres
-    - name: Install build
-      run: |
-        python -m pip install --upgrade pip
-        pip install build
-    - name: Build wheel
-      run: |
-        python -m build --wheel
-    - name: Install from wheel
-      run: |
-        python -m pip install dist/*.whl
-    - name: Install development dependencies
-      run: |
-        pip install -r requirements.development.txt
-        pip install mysqlclient psycopg2
-    - uses: actions/setup-node@v6
-      with:
-        node-version: '22'
-    - name: Install JavaScript upload client
-      run: |
-        npm ci --prefix tools/js-tests
-        echo "$GITHUB_WORKSPACE/tools/js-tests/node_modules/.bin" >> "$GITHUB_PATH"
-    - name: Check out event-samples
-      uses: actions/checkout@v6
-      with:
-        repository: bugsink/event-samples
-        path: "event-samples"
-    - name: Create separate dir to avoid accidentally using non-packaged code
-      run: |
-        mkdir separate_dir
-    - name: Run Makemigrations --check
-      working-directory: separate_dir
-      run: |
-        bugsink-manage makemigrations --check
-    - name: Check bugsink-manage in settingless mode
-      working-directory: separate_dir
-      shell: bash
-      run: |
-        # Run the console entry in the most trivial way (--help), but with DJANGO_SETTINGS_MODULE truly unset
-        env -u DJANGO_SETTINGS_MODULE bugsink-manage --help >/dev/null
-    - name: Run Tests
-      working-directory: separate_dir
-      env:
-        SAMPLES_DIR: "${{ github.workspace }}/event-samples"
-        PYTHONWARNINGS: all
-      run: |
-        # because we're outside the project directory, the test discovery won't find our packages. We simply enumerate
-        # them using some shell-magic. Note that the only non-apps that we still care about are 'bugsink' (project, not
-        # app), and sentry_sdk_extensions, which we mention separately
-        bugsink-manage test `bugsink-manage shell -v0 -c 'from django.conf import settings; print(" ".join(settings.BUGSINK_APPS))'` bugsink sentry_sdk_extensions -v2
-        # bugsink-manage test ${GITHUB_WORKSPACE}  -v2  # fails with the following, which I don't understand:
-        # ImportError: 'tests' module incorrectly imported from '/opt/hostedtoolcache/Python/3.10.15/x64/lib/python3.10/site-packages/alerts'. Expected '/home/runner/work/bugsink-private/bugsink-private/alerts'. Is this module globally installed? 
+  linters:
+    name: Linters
+    uses: ./.github/workflows/linters.yml
 
   docker:
+    name: Docker
     runs-on: ubuntu-latest
     # Build the Docker image, start it, wait for readiness, log in at /accounts/login/,
     # and verify that / redirects to /teams/.

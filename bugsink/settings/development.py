@@ -26,6 +26,7 @@ if os.getenv("DB", "sqlite") == "mysql":
         'NAME': 'bugsink',
         'USER': os.environ["DB_USER"],
         'PASSWORD': os.environ["DB_PASSWORD"],
+        'HOST': os.getenv("DB_HOST", ""),
     }
 
 elif os.getenv("DB", "sqlite") == "postgres":
