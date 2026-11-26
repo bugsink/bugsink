@@ -1,0 +1,47 @@
+name: Extended compatibility
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # Native dependencies may be unavailable for a particular Python/ARM combination.
+  arm-compatibility:
+    name: ARM compatibility
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    uses: ./.github/workflows/test.yml
+    with:
+      ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      runner: ubuntu-24.04-arm
+      python-versions: '["3.11", "3.12", "3.13", "3.14", "3.15"]'
+
+  # Database drivers must also install and work on the oldest supported Python.
+  database-drivers-oldest-python:
+    name: Database drivers on oldest Python
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    uses: ./.github/workflows/test.yml
+    with:
+      ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      python-versions: '["3.11"]'
+      databases: >-
+        [{"vendor": "mysql", "name": "MySQL", "version": "8.4"},
+         {"vendor": "postgres", "name": "PostgreSQL", "version": "18"}]
+
+  database-versions:
+    name: Database versions
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    uses: ./.github/workflows/test.yml
+    with:
+      ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      # Server releases can change database behavior. Cover maintained series
+      # supported by Django 5.2; the vendor baselines already run in ordinary CI.
+      databases: >-
+        [{"vendor": "postgres", "name": "PostgreSQL", "version": "15"},
+         {"vendor": "postgres", "name": "PostgreSQL", "version": "16"},
+         {"vendor": "postgres", "name": "PostgreSQL", "version": "17"},
+         {"vendor": "postgres", "name": "PostgreSQL", "version": "19"},
+         {"vendor": "mysql", "name": "MySQL", "version": "9.7"},
+         {"vendor": "mysql", "name": "MySQL", "version": "26.10"}]

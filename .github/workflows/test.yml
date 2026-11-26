@@ -1,0 +1,123 @@
+name: Test installed wheel
+
+# Baseline: Python 3.15, x86_64, SQLite. Callers vary the relevant axis.
+on:
+  workflow_call:
+    inputs:
+      runner:
+        type: string
+        default: ubuntu-latest
+      python-versions:
+        type: string
+        default: '["3.15"]'
+      databases:
+        type: string
+        default: '[{"vendor": "sqlite", "name": "SQLite", "version": ""}]'
+      ref:
+        type: string
+        default: ''
+      integration-only:
+        description: Run integration-tagged tests instead of the regular suite
+        type: boolean
+        default: false
+
+env:
+  DJANGO_SETTINGS_MODULE: "bugsink.settings.development"
+
+jobs:
+  test:
+    name: ${{ matrix.db.vendor == 'sqlite' && format('Python {0}', matrix.python-version) || format('{0} {1}', matrix.db.name, matrix.db.version) }}
+    runs-on: ${{ inputs.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ fromJSON(inputs.python-versions) }}
+        db: ${{ fromJSON(inputs.databases) }}
+    env:
+      DB: ${{ matrix.db.vendor }}
+      DB_USER: ${{ matrix.db.vendor == 'mysql' && 'root' || 'bugsink' }}
+      DB_PASSWORD: bugsink
+      DB_HOST: 127.0.0.1
+    services:
+      mysql:
+        image: ${{ matrix.db.vendor == 'mysql' && format('mysql:{0}', matrix.db.version) || '' }}
+        env:
+          MYSQL_ROOT_PASSWORD: bugsink
+          MYSQL_ROOT_HOST: '%'
+          MYSQL_DATABASE: bugsink
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pbugsink --silent"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+      postgres:
+        image: ${{ matrix.db.vendor == 'postgres' && format('postgres:{0}', matrix.db.version) || '' }}
+        env:
+          POSTGRES_USER: bugsink
+          POSTGRES_PASSWORD: bugsink
+          POSTGRES_DB: bugsink
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U bugsink -d bugsink"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        ref: ${{ inputs.ref }}
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install build
+      run: |
+        python -m pip install --upgrade pip
+        pip install build
+    - name: Build wheel
+      run: |
+        python -m build --wheel
+    - name: Install from wheel
+      run: |
+        python -m pip install dist/*.whl
+    - name: Install development dependencies
+      run: |
+        pip install -r requirements.development.txt
+        pip install mysqlclient psycopg2
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '22'
+    - name: Install JavaScript upload client
+      run: |
+        npm ci --prefix tools/js-tests
+        echo "$GITHUB_WORKSPACE/tools/js-tests/node_modules/.bin" >> "$GITHUB_PATH"
+    - name: Check out event-samples
+      uses: actions/checkout@v6
+      with:
+        repository: bugsink/event-samples
+        path: "event-samples"
+    - name: Create separate dir to avoid accidentally using non-packaged code
+      run: |
+        mkdir separate_dir
+    - name: Run Makemigrations --check
+      working-directory: separate_dir
+      run: |
+        bugsink-manage makemigrations --check
+    - name: Check bugsink-manage in settingless mode
+      working-directory: separate_dir
+      shell: bash
+      run: |
+        # Run the console entry in the most trivial way (--help), but with DJANGO_SETTINGS_MODULE truly unset
+        env -u DJANGO_SETTINGS_MODULE bugsink-manage --help >/dev/null
+    - name: Run Tests
+      working-directory: separate_dir
+      env:
+        SAMPLES_DIR: "${{ github.workspace }}/event-samples"
+        PYTHONWARNINGS: all
+        TEST_TAG: ${{ inputs.integration-only && '--tag=integration' || '--exclude-tag=integration' }}
+      run: |
+        # because we're outside the project directory, the test discovery won't find our packages. We simply enumerate
+        # them using some shell-magic. Note that the only non-apps that we still care about are 'bugsink' (project, not
+        # app), and sentry_sdk_extensions, which we mention separately
+        bugsink-manage test `bugsink-manage shell -v0 -c 'from django.conf import settings; print(" ".join(settings.BUGSINK_APPS))'` bugsink sentry_sdk_extensions "$TEST_TAG" -v2
+        # bugsink-manage test ${GITHUB_WORKSPACE}  -v2  # fails with the following, which I don't understand:
+        # ImportError: 'tests' module incorrectly imported from '/opt/hostedtoolcache/Python/3.10.15/x64/lib/python3.10/site-packages/alerts'. Expected '/home/runner/work/bugsink-private/bugsink-private/alerts'. Is this module globally installed? 
