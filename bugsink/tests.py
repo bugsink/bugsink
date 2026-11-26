@@ -14,11 +14,12 @@ from django.core.exceptions import SuspiciousOperation
 from django.core import mail
 from django.contrib.auth import get_user_model
 from django.test.utils import CaptureQueriesContext
-from django.db import connection
+from django.db import connection, transaction, IntegrityError
+from snappea.settings import get_settings as get_snappea_settings
 from .wsgi import allowed_hosts_error_message
 
 from .test_utils import TransactionTestCase25251 as TransactionTestCase
-from .transaction import immediate_atomic
+from .transaction import durable_atomic, immediate_atomic, immediate_semaphores, get_stat
 from .volume_based_condition import VolumeBasedCondition
 from .utils import email_backend_delivers_mail, send_rendered_email
 from .streams import (
@@ -596,6 +597,93 @@ class AllowedHostsMsgTestCase(DjangoTestCase):
 
 
 class TestAtomicTransactions(TransactionTestCase):
+
+    def test_commit_callback_can_start_another_write_transaction(self):
+        if connection.vendor != "sqlite":
+            self.skipTest("Checks the SQLite write semaphore")
+
+        def create_from_callback():
+            acquired = immediate_semaphores["default"].acquire(blocking=False)
+            if acquired:
+                immediate_semaphores["default"].release()
+            self.assertTrue(acquired, "Commit callback still holds the write semaphore")
+            self.assertTrue(User.objects.filter(username="outer").exists())
+            with immediate_atomic():
+                User.objects.create(username="callback")
+
+        with patch.dict(get_snappea_settings(), TASK_ALWAYS_EAGER=False):
+            with immediate_atomic():
+                User.objects.create(username="outer")
+                transaction.on_commit(create_from_callback)
+
+        self.assertTrue(User.objects.filter(username="callback").exists())
+
+    def test_eager_mode_holds_write_semaphore_during_transaction(self):
+        if connection.vendor != "sqlite":
+            self.skipTest("Checks the SQLite write semaphore")
+
+        with patch.dict(get_snappea_settings(), TASK_ALWAYS_EAGER=True):
+            with immediate_atomic():
+                acquired = immediate_semaphores["default"].acquire(blocking=False)
+                if acquired:
+                    immediate_semaphores["default"].release()
+                self.assertFalse(acquired)
+
+    def test_transaction_time_excludes_commit_callback(self):
+        before = get_stat("immediate_transaction")
+        with patch("bugsink.transaction.time.time", return_value=100) as clock:
+            with immediate_atomic():
+                transaction.on_commit(lambda: setattr(clock, "return_value", 110))
+
+        self.assertEqual(0, get_stat("immediate_transaction") - before)
+
+    def test_rolled_back_transaction_does_not_run_callbacks(self):
+        callbacks = []
+        with self.assertRaisesMessage(ValueError, "Abort transaction"):
+            with immediate_atomic():
+                User.objects.create(username="rolled_back")
+                transaction.on_commit(lambda: callbacks.append("rolled_back"))
+                raise ValueError("Abort transaction")
+
+        with immediate_atomic():
+            User.objects.create(username="committed")
+            transaction.on_commit(lambda: callbacks.append("committed"))
+
+        self.assertEqual(["committed"], callbacks)
+        self.assertFalse(User.objects.filter(username="rolled_back").exists())
+
+    def test_failed_commit_discards_callbacks_and_releases_semaphore(self):
+        # This tests failure during commit, rather than an exception in the transaction body:
+        # SQLite defers the foreign-key check until commit.
+        callbacks = []
+        with self.assertRaises(IntegrityError):
+            with immediate_atomic():
+                User.groups.through.objects.create(user_id=-1, group_id=-1)
+                transaction.on_commit(lambda: callbacks.append("failed"))
+
+        with immediate_atomic():
+            User.objects.create(username="committed")
+            transaction.on_commit(lambda: callbacks.append("committed"))
+
+        self.assertEqual(["committed"], callbacks)
+
+    def test_failing_commit_callback_preserves_read_transaction_mode(self):
+        if connection.vendor != "sqlite":
+            self.skipTest("Checks SQLite transaction modes")
+
+        def fail_on_commit():
+            raise ValueError("Commit callback failed")
+
+        with self.assertRaisesMessage(ValueError, "Commit callback failed"):
+            with immediate_atomic():
+                User.objects.create(username="committed")
+                transaction.on_commit(fail_on_commit)
+
+        with CaptureQueriesContext(connection) as queries_context:
+            with durable_atomic():
+                self.assertTrue(User.objects.filter(username="committed").exists())
+
+        self.assertEqual(["BEGIN"], [q["sql"] for q in queries_context if q["sql"].startswith("BEGIN")])
 
     def test_only_if_needed(self):
         with CaptureQueriesContext(connection) as queries_context:

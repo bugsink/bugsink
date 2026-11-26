@@ -8,8 +8,6 @@ import threading
 from django.db import transaction as django_db_transaction
 from django.db import DEFAULT_DB_ALIAS
 
-from snappea.settings import get_settings as get_snappea_settings
-
 performance_logger = logging.getLogger("bugsink.performance.db")
 local_storage = threading.local()
 
@@ -59,6 +57,27 @@ class SemaphoreContext:
 
     def __exit__(self, exc_type, exc_value, traceback):
         immediate_semaphores[self.using].release()
+
+
+@contextmanager
+def defer_commit_hooks(using):
+    """Run commit callbacks after transaction cleanup and semaphore release."""
+    connection = django_db_transaction.get_connection(using)
+    original = connection.run_and_clear_commit_hooks
+    requested = False
+
+    def defer():
+        nonlocal requested
+        requested = True
+
+    connection.run_and_clear_commit_hooks = defer
+    try:
+        yield
+    finally:
+        connection.run_and_clear_commit_hooks = original
+
+    if requested:
+        original()
 
 
 class SuperDurableAtomic(django_db_transaction.Atomic):
@@ -177,17 +196,18 @@ class ImmediateAtomic(SuperDurableAtomic):
         self.t0 = time.time()
 
     def __exit__(self, exc_type, exc_value, traceback):
-        super(ImmediateAtomic, self).__exit__(exc_type, exc_value, traceback)
+        try:
+            super(ImmediateAtomic, self).__exit__(exc_type, exc_value, traceback)
+        finally:
+            connection = django_db_transaction.get_connection(self.using)
+            if hasattr(self, "_start_transaction_under_autocommit_original"):
+                connection._start_transaction_under_autocommit = self._start_transaction_under_autocommit_original
+                del self._start_transaction_under_autocommit_original
 
         took = time.time() - self.t0
         inc_stat(self.using, "immediate_transaction", took)
         using_clause = f" ({ self.using })" if self.using != DEFAULT_DB_ALIAS else ""
         performance_logger.info(f"{took * 1000:6.2f}ms IMMEDIATE transaction{using_clause}")
-
-        connection = django_db_transaction.get_connection(self.using)
-        if hasattr(self, "_start_transaction_under_autocommit_original"):
-            connection._start_transaction_under_autocommit = self._start_transaction_under_autocommit_original
-            del self._start_transaction_under_autocommit_original
 
 
 @contextmanager
@@ -217,32 +237,22 @@ def immediate_atomic(using=None, savepoint=True, only_if_needed=False):
     else:
         immediate_atomic = ImmediateAtomic(using, savepoint, durable)
 
-    if get_snappea_settings().TASK_ALWAYS_EAGER:
-        # In ALWAYS_EAGER mode we cannot use SemaphoreContext as the outermost context, because any delay_on_commit
-        # tasks that are triggered on __exit__ of the (in that case, inner) immediate_atomic, when themselves initiating
-        # a new task-with-transaction, will not be able to acquire the semaphore (it's not been released yet).
-        # Fundamentally the solution would be to push the "on commit" logic onto the outermost context, but that seems
-        # fragile (monkeypatching/heavy overriding) and since the whole SemaphoreContext is only needed as an extra
-        # guard against WAL growth (not something we care about in the non-production setup), we just simplify for that
-        # case.
-        with immediate_atomic:
-            yield
-
-    elif "sqlite" not in connection.vendor:
-        # The SemaphoreContext was added specifically to address the WAL growth issue in sqlite; better not to use it
-        # for other database backends; in particular, if such databases have longer default timeouts, then the error
-        # message may be confusing (semaphore timeout after 10s throws an error... while the thread that hogs the DB
-        # is _not_ (yet) timed out)
-        #
-        # in-string matching matches both our 'timed' backend and the django default.
-        with immediate_atomic:
-            yield
-
-    else:
-        # https://stackoverflow.com/a/45681273/339144 provides some context on nesting context managers; and how to
-        # proceed if you want to do this with an arbitrary number of context managers.
-        with SemaphoreContext(using), immediate_atomic:
-            yield
+    # Django runs commit hooks while exiting Atomic. Run them after transaction cleanup and semaphore release instead.
+    with defer_commit_hooks(using):
+        if "sqlite" not in connection.vendor:
+            # The SemaphoreContext was added specifically to address the WAL growth issue in sqlite; better not to use
+            # it for other database backends; in particular, if such databases have longer default timeouts, then the
+            # error message may be confusing (semaphore timeout after 10s throws an error... while the thread that hogs
+            # the DB is _not_ (yet) timed out)
+            #
+            # in-string matching matches both our 'timed' backend and the django default.
+            with immediate_atomic:
+                yield
+        else:
+            # https://stackoverflow.com/a/45681273/339144 provides some context on nesting context managers; and how to
+            # proceed if you want to do this with an arbitrary number of context managers.
+            with SemaphoreContext(using), immediate_atomic:
+                yield
 
 
 def delay_on_commit(function, *args, **kwargs):
