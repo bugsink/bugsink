@@ -1,5 +1,19 @@
 # Changes
 
+## 2.7.1 (26 November 2026)
+
+### Security
+
+Restrict personal-token project reads to accepted project members and superusers. This prevents disclosure of DSNs and
+configuration through Discoverable visibility or team membership alone. See `dc8482e5` (GHSA-m72h-p6wv-38f7).
+
+### Smaller fixes
+
+* Fix decompression failures during gzip and deflate uploads, including `UnboundLocalError` in gzipped chunk uploads,
+  by updating `zlib-rust` to 0.6.9.post1. See `fb0bf4a5`.
+* Restore absolute chunk-upload URLs, fixing "Invalid URL" errors with `@sentry/vite-plugin`. See #612.
+* Update the PostgreSQL Compose example to PostgreSQL 18. See #614.
+
 ## 2.7.0 (25 November 2026)
 
 ### Security
