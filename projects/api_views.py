@@ -9,7 +9,7 @@ from bugsink.api_mixins import ExpandViewSetMixin, AtomicRequestMixin
 from events.api_counts import EventCountRangeSerializer, EventCountsSerializer, event_counts_response
 from events.models import ProjectEventCountsPerHour
 
-from .models import Project, projects_visible_to_user
+from .models import Project, get_issue_accessible_project_ids
 from .serializers import (
     ProjectListSerializer,
     ProjectDetailSerializer,
@@ -34,7 +34,13 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
     @token_guard("projects:read", scopable_by_bound_project=True)
     @extend_schema(
         summary="List projects",
-        description="List projects ordered by name.",
+        description=(
+            "List projects ordered by name. "
+            "Personal tokens require accepted project membership (superusers can access all projects). "
+            "Team membership or Joinable/Discoverable visibility alone is insufficient. "
+            "Join projects or accept invitations through the web UI before using them through the API. "
+            "Project-bound tokens stay within their project; deleted projects are excluded."
+        ),
         parameters=[
             OpenApiParameter(
                 name="team",
@@ -64,7 +70,12 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
     @token_guard("projects:read", guarding_project=lookup(url="pk"))
     @extend_schema(
         summary="Retrieve a project",
-        description="Retrieve a project by integer project ID. Use `expand=team` to include the team object.",
+        description=(
+            "Retrieve a project by integer project ID, including its DSN and configuration. "
+            "Personal tokens require accepted project membership (superusers can access all projects). "
+            "Team membership or Joinable/Discoverable visibility alone is insufficient. "
+            "Use `expand=team` to include the team object."
+        ),
         parameters=[
             OpenApiParameter(
                 name="expand",
@@ -86,7 +97,8 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
         description=(
             "Hourly counts by digest time, including evicted events. Empty hours have count zero. "
             "Defaults to 24 hours, including the incomplete current hour. "
-            "Ranges must use UTC hour boundaries and fall within the last 90 days."
+            "Ranges must use UTC hour boundaries and fall within the last 90 days. "
+            "Personal tokens require accepted project membership (superusers can access all projects)."
         ),
         parameters=[EventCountRangeSerializer],
         responses=EventCountsSerializer,
@@ -118,7 +130,9 @@ class ProjectViewSet(AtomicRequestMixin, ExpandViewSetMixin, viewsets.ModelViewS
         if self.bound_project is not None:
             qs = qs.filter(pk=self.bound_project.pk)
         if self.request.auth.is_user_bound:
-            qs = projects_visible_to_user(qs, self.request.auth.user)
+            # Unlike browser discovery, API lists contain projects the user has joined: the API has no join or
+            # invitation-acceptance operation. Use the same membership boundary as project details and issue access.
+            qs = qs.filter(pk__in=get_issue_accessible_project_ids(self.request.auth.user))
 
         # Optional team filter (no hard requirement; avoids guessing UI rules)
         team_id = query_params.get("team")
