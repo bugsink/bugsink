@@ -1400,8 +1400,7 @@ class EnterContextMixin:
 
 
 class SentryCLITest(EnterContextMixin, LiveServerTestCase):
-    # Test that the _actual_ sentry-cli tool can upload files to our chunk-upload endpoint, and that the files are
-    # correctly assembled and processed.
+    # Test uploads with the actual Rust sentry-cli and JavaScript sentry client, including assembly and metadata.
 
     def setUp(self):
         super().setUp()
@@ -1529,6 +1528,42 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
                 .values_list("project", flat=True)
             ),
         )
+
+    def test_sentry_js_upload(self):
+        node = shutil.which("node")
+        sentry = shutil.which("sentry")
+        identity = shutil.which("identity-sourcemap")
+        assert node and sentry, "Install Node.js and the JavaScript sentry client as described in CONTRIBUTING.md"
+        assert identity, "identity-sourcemap not found on PATH (pip install ecma426)"
+
+        js_path = Path(self.tempdir) / "captureException.js"
+        map_path = js_path.with_suffix(".js.map")
+        js_path.write_text(MINIMAL_JS, encoding="utf-8")
+        self._run([identity, str(js_path)])
+
+        # Use the same SDK entry point as @sentry/bundler-plugins, rather than the Rust CLI wrapper.
+        sdk_path = Path(sentry).resolve().with_name("index.cjs")
+        self._run([node, "--eval", """
+            const { createSentrySDK } = require(process.argv[1]);
+            const sdk = createSentrySDK({
+                url: process.argv[2], org: 'bugsinkhasnoorgs', project: process.argv[3],
+                token: process.env.SENTRY_AUTH_TOKEN,
+            });
+            (async () => {
+                await sdk.sourcemap.inject({ directory: process.cwd() });
+                await sdk.sourcemap.upload({ directory: process.cwd() });
+            })().catch(error => { console.error(error); process.exitCode = 1; });
+        """, str(sdk_path), self.live_server_url, self.project.slug])
+
+        sourcemap = json.loads(map_path.read_text(encoding="utf-8"))
+        debug_id = sourcemap.get("debugId") or sourcemap.get("debug_id")
+        self.assertIsNotNone(debug_id)
+        self.assertEqual(3, File.objects.count())
+        self.assertTrue(File.objects.filter(filename="captureException.js").exists())
+        self.assertTrue(File.objects.filter(filename__endswith=".zip").exists())
+        metadata = FileMetadata.objects.get(file__filename="captureException.js.map")
+        self.assertEqual(UUID(debug_id), metadata.debug_id)
+        self.assertEqual(self.project, metadata.project)
 
 
 MINIMAL_JS = """\

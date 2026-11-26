@@ -78,6 +78,14 @@ Visit [http://localhost:8000](http://localhost:8000) to see your local Bugsink i
 
 ### Running tests
 
+The file upload tests use both the Rust `sentry-cli` (installed by
+`requirements.development.txt`) and the JavaScript `sentry` client. With Node.js 22 installed, set up the latter with:
+
+```bash
+npm ci --prefix tools/js-tests
+export PATH="$PWD/tools/js-tests/node_modules/.bin:$PATH"
+```
+
 Bugsink uses Django's built-in test framework. To run the test suite:
 
 ```bash
