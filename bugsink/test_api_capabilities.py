@@ -60,6 +60,11 @@ EXPECTED_CAPABILITY_OPERATIONS = {
         "projects:manage": {
             "POST /api/canonical/0/projects/",
             "PATCH /api/canonical/0/projects/{id}/",
+            "GET /api/canonical/0/messaging-services/",
+            "POST /api/canonical/0/messaging-services/",
+            "PATCH /api/canonical/0/messaging-services/{id}/",
+            "DELETE /api/canonical/0/messaging-services/{id}/",
+            "POST /api/canonical/0/messaging-services/{id}/test-send/",
         },
         "teams:read": {
             "GET /api/canonical/0/teams/",

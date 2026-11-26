@@ -4,19 +4,22 @@ import inspect
 import uuid
 import json
 import hashlib
-import gzip
+import gzip  # intentionally uses C-zlib to test compatibility with the Rust codec
+import re
+from html import unescape
 from io import BytesIO, StringIO
 from glob import glob
 from unittest import TestCase as RegularTestCase
 from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
-from zipfile import ZIP_DEFLATED, ZipFile
+from zipfile import ZIP_DEFLATED, ZipFile  # intentionally uses C-zlib to test compatibility with the Rust codec
 
 from django.test import TestCase as DjangoTestCase
 from django.contrib.auth import get_user_model
 from django.test import tag
 from django.conf import settings
 from django.apps import apps
+from django.utils.html import escape
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.utils import get_model_topography
@@ -536,6 +539,85 @@ class ViewTests(TransactionTestCase):
 
         self.assertNotContains(response, "PendingError")
 
+    def test_global_issue_list_filters_by_project(self):
+        second_project = Project.objects.create(name="second")
+        third_project = Project.objects.create(name="third")
+        ProjectMembership.objects.create(project=second_project, user=self.user, accepted=True)
+        ProjectMembership.objects.create(project=third_project, user=self.user, accepted=True)
+        second_issue, _ = get_or_create_issue(second_project)
+        get_or_create_issue(third_project)
+
+        response = self.client.get("/issues/", {"project": [self.project.id, second_project.id]})
+
+        self.assertEqual({self.issue.id, second_issue.id}, {issue.id for issue in response.context["page_obj"]})
+        self.assertContains(response, "2 projects")
+        self.assertContains(response, f'name="project" value="{third_project.id}" class=')
+
+    def test_global_issue_list_unavailable_project_filter_does_not_show_all_projects(self):
+        other_project = Project.objects.create(name="other")
+        get_or_create_issue(other_project)
+
+        response = self.client.get("/issues/", {"project": [other_project.id, "not-a-number"]})
+
+        self.assertEqual([], list(response.context["page_obj"]))
+        self.assertContains(response, "The selected projects are no longer available.")
+        self.assertContains(
+            response, 'href="?" class="text-cyan-500 dark:text-cyan-300 font-bold">Show all projects</a>')
+        sort_form = re.search(r'<form[^>]*id="issue-sort-form">(.*?)</form>', response.content.decode(), re.S).group(1)
+        project_ids = re.findall(r'type="hidden" name="project" value="([^"]*)"', sort_form)
+        response = self.client.get("/issues/", {"project": project_ids, "sort": "events"})
+        self.assertEqual([], list(response.context["page_obj"]))
+        self.assertContains(response, "The selected projects are no longer available.")
+
+        response = self.client.get("/issues/")
+        self.assertEqual([self.issue.id], [issue.id for issue in response.context["page_obj"]])
+
+        response = self.client.get("/issues/", {"project": [self.project.id, other_project.id]})
+
+        self.assertEqual([self.issue.id], [issue.id for issue in response.context["page_obj"]])
+        self.assertNotContains(response, "The selected projects are no longer available.")
+
+    def test_global_issue_list_project_filter_survives_tabs_and_pagination(self):
+        second_project = Project.objects.create(name="second")
+        ProjectMembership.objects.create(project=second_project, user=self.user, accepted=True)
+        query = f"project={self.project.id}&amp;project={second_project.id}"
+
+        response = self.client.get("/issues/", {"project": [self.project.id, second_project.id], "page": 2})
+
+        self.assertContains(response, f'href="/issues/muted/?{query}&amp;sort=last_seen"')
+        self.assertContains(response, f'href="?{query}&amp;page=1"')
+
+    def test_issue_navigation_returns_to_filtered_global_list(self):
+        second_project = Project.objects.create(name="second")
+        ProjectMembership.objects.create(project=second_project, user=self.user, accepted=True)
+        response = self.client.get(
+            "/issues/all/", {"project": [self.project.id, second_project.id], "sort": "events", "page": 1})
+        list_url = response.wsgi_request.get_full_path()
+        issue_url = unescape(re.search(
+            rf'href="([^"]*/issues/issue/{self.issue.id}/event/last/[^" ]*)"',
+            response.content.decode()).group(1))
+
+        response = self.client.get(issue_url)
+        self.assertContains(response, f'href="{escape(list_url)}"', count=2)
+        self.assertContains(response, "Back to issues", count=2)
+
+        details_url = unescape(re.search(
+            rf'href="([^"]*/issues/issue/{self.issue.id}/event/[^/]+/details/[^" ]*)"',
+            response.content.decode()).group(1))
+        response = self.client.get(details_url)
+        self.assertContains(response, f'href="{escape(list_url)}"', count=2)
+
+        self.assertContains(response, f'action=".{escape(details_url[details_url.index("?"):])}" method="post"')
+        response = self.client.post(details_url, {"action": "resolve"})
+        self.assertRedirects(response, details_url)
+        response = self.client.get(response.url)
+        self.assertContains(response, f'href="{escape(list_url)}"', count=2)
+
+        response = self.client.get(list_url)
+        self.assertEqual([self.issue.id], [issue.id for issue in response.context["page_obj"]])
+        self.assertEqual("all", response.context["state_filter"])
+        self.assertEqual("events", response.context["sort"])
+
     def test_global_issue_list_bulk_action_ignores_issues_from_inaccessible_projects(self):
         other_project = Project.objects.create(name="other")
         other_issue, _ = get_or_create_issue(other_project)
@@ -803,8 +885,10 @@ class ViewTests(TransactionTestCase):
             size=len(good_sourcemap),
             data=good_sourcemap,
         )
-        FileMetadata.objects.create(file=broken_file, debug_id=broken_debug_id, file_type="source_map", data="{}")
-        FileMetadata.objects.create(file=good_file, debug_id=good_debug_id, file_type="source_map", data="{}")
+        FileMetadata.objects.create(
+            project=self.project, file=broken_file, debug_id=broken_debug_id, file_type="source_map", data="{}")
+        FileMetadata.objects.create(
+            project=self.project, file=good_file, debug_id=good_debug_id, file_type="source_map", data="{}")
 
         class FakeMapping:
             source = "good-source.ts"
@@ -903,7 +987,8 @@ class ViewTests(TransactionTestCase):
             size=len(sourcemap),
             data=sourcemap,
         )
-        FileMetadata.objects.create(file=sourcemap_file, debug_id=debug_id, file_type="source_map", data="{}")
+        FileMetadata.objects.create(
+            project=self.project, file=sourcemap_file, debug_id=debug_id, file_type="source_map", data="{}")
 
         class FakeMapping:
             source = "good-source.ts"
@@ -970,7 +1055,8 @@ class ViewTests(TransactionTestCase):
             size=len(sourcemap),
             data=sourcemap,
         )
-        FileMetadata.objects.create(file=sourcemap_file, debug_id=debug_id, file_type="source_map", data="{}")
+        FileMetadata.objects.create(
+            project=self.project, file=sourcemap_file, debug_id=debug_id, file_type="source_map", data="{}")
 
         class FakeMapping:
             source = "good-source.ts"

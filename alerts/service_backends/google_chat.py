@@ -10,7 +10,7 @@ from bugsink.app_settings import get_settings
 from bugsink.transaction import immediate_atomic
 
 from issues.models import Issue
-from .base import BaseWebhookBackend
+from .base import BaseWebhookBackend, load_service_config
 from .webhook_security import validate_webhook_url
 
 
@@ -95,7 +95,12 @@ def _post_text(webhook_url, text, service_config_id):
 
 
 @shared_task
-def google_chat_backend_send_test_message(webhook_url, project_name, display_name, service_config_id):
+def google_chat_backend_send_test_message(project_name, display_name, service_config_id):
+    config = load_service_config(service_config_id)
+    if config is None:
+        return  # the service was removed after this task was queued
+    webhook_url = config["webhook_url"]
+
     _post_text(
         webhook_url,
         (
@@ -110,7 +115,12 @@ def google_chat_backend_send_test_message(webhook_url, project_name, display_nam
 
 @shared_task
 def google_chat_backend_send_alert(
-        webhook_url, issue_id, state_description, alert_article, alert_reason, service_config_id, unmute_reason=None):
+        issue_id, state_description, alert_article, alert_reason, service_config_id, unmute_reason=None):
+    config = load_service_config(service_config_id)
+    if config is None:
+        return  # the service was removed after this task was queued
+    webhook_url = config["webhook_url"]
+
     issue = Issue.objects.get(id=issue_id)
     issue_url = get_settings().BASE_URL + issue.get_absolute_url()
     text = (
@@ -134,7 +144,6 @@ class GoogleChatBackend(BaseWebhookBackend):
 
     def send_test_message(self):
         google_chat_backend_send_test_message.delay(
-            json.loads(self.service_config.config)["webhook_url"],
             self.service_config.project.name,
             self.service_config.display_name,
             self.service_config.id,
@@ -142,7 +151,6 @@ class GoogleChatBackend(BaseWebhookBackend):
 
     def send_alert(self, issue_id, state_description, alert_article, alert_reason, **kwargs):
         google_chat_backend_send_alert.delay(
-            json.loads(self.service_config.config)["webhook_url"],
             issue_id,
             state_description,
             alert_article,

@@ -1,4 +1,5 @@
-{% load static add_to_qs %}{% load i18n %}
+{% load static add_to_qs issue_navigation %}{% load i18n %}
+{% global_issue_list_url request.GET.issue_list as issue_list_url %}
 {# MOBILE HEADER #}
 <header class="relative w-full bg-slate-200 dark:bg-slate-800 md:hidden">
 
@@ -29,6 +30,10 @@
 
       <a href="{% url "global_issue_list_open" %}">Issues</a>
 
+      {% if issue and issue_list_url %}
+      <a href="{{ issue_list_url }}">{% translate "Back to issues" %}</a>
+      {% endif %}
+
       {% if project %}
       <a href="{% url "issue_list_open" project_pk=project.pk %}{% current_qs %}">
         Issues ({{ project.name }})
@@ -50,7 +55,7 @@
 
 {# DESKTOP HEADER #}
 <header class="hidden md:flex pl-4 bg-slate-200 dark:bg-slate-800 items-center">
-    <a href="{{ script_prefix }}/"><img src="{% static 'images/bugsink-logo.png' %}" class="p-2 h-12 w-12 dark:hidden block" alt="Bugsink logo"><img src="{% static 'images/bugsink-logo-dark.png' %}" class="p-2 h-12 w-12 hidden dark:block" alt="Bugsink logo"></a>
+    <a href="{{ script_prefix }}/"><img src="{% static 'images/bugsink-logo-32.png' %}" srcset="{% static 'images/bugsink-logo-64.png' %} 2x" class="p-2 h-12 w-12 block" alt="Bugsink logo"></a>
     <a href="{{ script_prefix }}/"><div class="px-2 py-2 my-2 font-bold hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{{ site_title }}</div></a>
 
     {% if not app_settings.SINGLE_TEAM %}
@@ -60,6 +65,10 @@
     <a href="{% url "project_list" %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Projects" %}</div></a>
 
     <a href="{% url "global_issue_list_open" %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Issues" %}</div></a>
+
+    {% if issue and issue_list_url %}
+    <a href="{{ issue_list_url }}"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Back to issues" %}</div></a>
+    {% endif %}
 
     {% if project %}
     <a href="{% url "issue_list_open" project_pk=project.pk %}{% current_qs %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Issues" %} ({{ project.name }})</div></a>

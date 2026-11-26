@@ -47,7 +47,8 @@ class UserCreationForm(BaseUserCreationForm):
         fields = ("username",)
 
     def clean_username(self):
-        if User.objects.filter(username=self.cleaned_data['username'], is_active=False).exists():
+        if User.objects.filter(
+                username=self.cleaned_data['username'], is_active=False, is_deactivated=False).exists():
             raise ValidationError(mark_safe(
                 'This email is already registered but not yet confirmed. Please check your email for the confirmation '
                 'link or <b><a href="' + reverse("resend_confirmation") + "?email=" +

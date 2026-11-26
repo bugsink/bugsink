@@ -5,7 +5,7 @@ import io
 import uuid
 import time
 import tempfile
-import gzip
+import gzip  # intentionally uses C-zlib to test compatibility with the Rust codec
 import brotli_rs as brotli
 from hashlib import sha1
 
@@ -55,7 +55,6 @@ from .views import IngestSecurityAPIView, MinidumpAPIView
 from .digestion import (
     count_installation_periods_and_act_on_it,
     count_project_periods_and_act_on_it,
-    get_grouping_key_hash,
 )
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 from .event_counter import check_for_thresholds
@@ -1191,40 +1190,6 @@ class IngestViewTestCase(TransactionTestCase):
 
         self.assertEqual(MECHANISM_INDEPENDENT_GROUPING, Grouping.objects.get().grouping_mechanism)
 
-    def test_mechanism_independent_grouping_matches_legacy_multipart_fingerprint(self):
-        # test for "another piece of legacy-handling code in the digest path" (can be removed at some point)
-        issue = Issue.objects.create(
-            project=self.quiet_project,
-            digest_order=1,
-            first_seen=timezone.now(),
-            last_seen=timezone.now(),
-            digested_event_count=1,
-        )
-        # explicit fingerprint, but multi-part so cannot be identified as "none" by our migration
-        grouping_key = "shared ⋄ fingerprint"
-        Grouping.objects.create(
-            project=self.quiet_project,
-            grouping_key=grouping_key,
-            grouping_key_hash=get_grouping_key_hash(grouping_key),
-            grouping_mechanism=BUGSINK_GROUPING_V1,  # the "cannot be identified as none" part of the test
-            issue=issue,
-        )
-
-        event_data = create_event_data()
-        event_data["fingerprint"] = ["shared", "fingerprint"]
-        request = self.request_factory.post("/api/1/store/")
-        digest_event(**_digest_params(event_data, self.quiet_project, request))
-
-        # no new issue is created, but the correct mechanism-independent grouping is created for the legacy issue.
-        self.assertEqual(1, Issue.objects.count())
-        self.assertEqual(2, Grouping.objects.count())
-        self.assertEqual(
-            {BUGSINK_GROUPING_V1, MECHANISM_INDEPENDENT_GROUPING},
-            set(Grouping.objects.values_list("grouping_mechanism", flat=True)),
-        )
-        self.assertEqual({issue.id}, set(Grouping.objects.values_list("issue_id", flat=True)))
-        self.assertEqual(2, Issue.objects.get().digested_event_count)
-
     def test_grouping_transition_links_old_issue_to_new_mechanism(self):
         request = self.request_factory.post("/api/1/store/")
         now = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
@@ -1390,6 +1355,33 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual("DisplayError", issue.calculated_type)
         self.assertEqual("display value", issue.calculated_value)
         self.assertEqual("GroupingError + grouping value", Grouping.objects.get().grouping_key)  # proves actual use
+
+
+class DigestInvalidInputTestCase(TransactionTestCase):
+    def test_invalid_event_is_discarded_with_its_minidump(self):
+        project = Project.objects.create(name="test", alert_on_new_issue=False)
+        for payload in [b'{}\\n', b'{"message":"\xff"}', b'null', b'[]']:
+            with self.subTest(payload=payload):
+                with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+                    metadata = {
+                        "event_id": str(uuid.uuid4()),
+                        "ingestion_id": str(uuid.uuid4()),
+                        "project_id": project.id,
+                        "ingested_at": format_timestamp(timezone.now()),
+                        "has_minidump": True,
+                    }
+                    with open(get_filename_for_event_id(metadata["ingestion_id"]), "wb") as f:
+                        f.write(payload)
+                    with open(get_filename_for_event_id(metadata["ingestion_id"], filetype="minidump"), "wb") as f:
+                        f.write(b"unread minidump")
+
+                    with self.assertLogs("bugsink.ingest", level="WARNING") as logs:
+                        digest(metadata["event_id"], metadata)
+
+                    self.assertIn("ValidationError in digest", logs.output[0])
+                    self.assertEqual([], os.listdir(tempdir))
+
+        self.assertEqual(0, Event.objects.count())
 
 
 class DigestQuotaTestCase(TransactionTestCase):
@@ -2163,6 +2155,24 @@ class TestParser(RegularTestCase):
         with self.assertRaises(ParseError) as e:
             header, item = next(items)
         self.assertEqual("Header not JSON", str(e.exception))
+
+    def test_non_object_envelope_headers(self):
+        for headers in (b'[{"message":"probe"}]', b'null', b'1', b'"headers"', b'true'):
+            with self.subTest(headers=headers):
+                parser = StreamingEnvelopeParser(io.BytesIO(headers))
+
+                with self.assertRaises(ParseError) as e:
+                    parser.get_envelope_headers()
+                self.assertEqual("Headers must be a JSON object", str(e.exception))
+
+    def test_non_object_item_headers(self):
+        for headers in (b'[]', b'null'):
+            with self.subTest(headers=headers):
+                parser = StreamingEnvelopeParser(io.BytesIO(b'{}\n' + headers + b'\n{}\n'))
+
+                with self.assertRaises(ParseError) as e:
+                    next(parser.get_items_directly())
+                self.assertEqual("Headers must be a JSON object", str(e.exception))
 
     def test_non_utf8_header(self):
         parser = StreamingEnvelopeParser(io.BytesIO(b"\x8b"))

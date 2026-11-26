@@ -54,6 +54,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     apt-get update \
  && apt-get install -y --no-install-recommends git \
  && pip install -e . \
+ && pip uninstall -y pip \
  && apt-get purge -y git && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/*
 

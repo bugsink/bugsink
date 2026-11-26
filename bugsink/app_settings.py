@@ -36,7 +36,7 @@ DEFAULTS = {
 
     "USER_REGISTRATION": CB_MEMBERS,  # who can register new users. default: members, i.e. any user can invite others
     "USER_REGISTRATION_VERIFY_EMAIL": True,
-    "USER_REGISTRATION_VERIFY_EMAIL_EXPIRY": 3 * 24 * 60 * 60,  # 7 days
+    "USER_REGISTRATION_VERIFY_EMAIL_EXPIRY": 3 * 24 * 60 * 60,  # 3 days
 
     # if True, there is only one team, and all projects are in that team
     "SINGLE_TEAM": False,

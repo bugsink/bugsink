@@ -12,6 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
+from django.views.decorators.debug import sensitive_post_parameters
 
 from users.models import EmailVerification
 from teams.models import TeamMembership, Team, TeamRole
@@ -19,6 +20,7 @@ from teams.models import TeamMembership, Team, TeamRole
 from bugsink.app_settings import get_settings, CB_ANYBODY, CB_MEMBERS, CB_ADMINS
 from bugsink.decorators import login_exempt, atomic_for_request_method
 from bugsink.invite_links import email_not_sent_invite_link_notice, manual_invite_link_notice
+from bugsink.transaction import immediate_atomic
 from bugsink.utils import assert_, email_backend_delivers_mail
 
 from alerts.models import MessagingServiceConfig, get_alert_service_backend_class, get_alert_service_kind_choices
@@ -309,12 +311,17 @@ def project_members_invite(request, project_pk):
             user, user_created = User.objects.get_or_create(
                 email=email, defaults={'username': email, 'is_active': False})
 
+            was_deactivated = user.is_deactivated
+            if was_deactivated:
+                user.is_deactivated = False
+                user.save(update_fields=["is_deactivated"])
+
             if email_backend_delivers_mail():
                 _send_project_invite_email(user, project_pk)
                 invite_link = None
             else:
                 invite_link = _create_project_invite_link(
-                    user, project_pk, create_account_setup_link=user_created)
+                    user, project_pk, create_account_setup_link=user_created or was_deactivated)
 
             _, membership_created = ProjectMembership.objects.get_or_create(project=project, user=user, defaults={
                 'role': form.cleaned_data['role'],
@@ -417,12 +424,15 @@ def project_members_accept_new_user(request, project_pk, token):
             seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)).delete()
 
     try:
-        verification = EmailVerification.objects.get(token=token)
+        verification = EmailVerification.objects.get(token=token, email=models.F("user__username"))
     except EmailVerification.DoesNotExist:
         # good enough (though a special page might be prettier)
         raise Http404("Invalid or expired token")
 
     user = verification.user
+    if user.is_deactivated:
+        raise Http404("This account has been deactivated.")
+
     if not user.has_usable_password() or not user.is_active:
         # NOTE: we make the had assumption here that users without a password can self-upgrade to become users with a
         # password. In the future (e.g. LDAP) this may not be what we want, and we'll have to implement a separate field
@@ -536,7 +546,7 @@ def project_alerts_setup(request, project_pk):
     })
 
 
-@atomic_for_request_method
+@sensitive_post_parameters("webhook_url", "bot_token")
 def project_messaging_service_add(request, project_pk):
     project = Project.objects.get(id=project_pk, is_deleted=False)
     _check_project_admin(project, request.user)
@@ -556,7 +566,8 @@ def project_messaging_service_add(request, project_pk):
             if config_form.is_valid():
                 service = form.save(commit=False)
                 service.config = json.dumps(config_form.get_config())
-                service.save()
+                with immediate_atomic():
+                    service.save()
 
                 messages.success(request, "Messaging service added successfully.")
                 return redirect('project_alerts_setup', project_pk=project_pk)
@@ -573,7 +584,7 @@ def project_messaging_service_add(request, project_pk):
     })
 
 
-@atomic_for_request_method
+@sensitive_post_parameters("webhook_url", "bot_token")
 def project_messaging_service_edit(request, project_pk, service_pk):
     project = Project.objects.get(id=project_pk, is_deleted=False)
     _check_project_admin(project, request.user)
@@ -591,7 +602,8 @@ def project_messaging_service_edit(request, project_pk, service_pk):
         if form.is_valid() and config_form.is_valid():
             service = form.save(commit=False)
             service.config = json.dumps(config_form.get_config())
-            service.save()
+            with immediate_atomic():
+                service.save(update_fields=["display_name", "config"])
 
             messages.success(request, "Messaging service updated successfully.")
             return redirect('project_alerts_setup', project_pk=project_pk)

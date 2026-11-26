@@ -1,5 +1,5 @@
 import io
-import zlib
+import zlib_rust as zlib
 import os
 import uuid
 import brotli_rs as brotli

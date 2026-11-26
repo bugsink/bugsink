@@ -1,4 +1,4 @@
-gunicorn==26.2.*
+gunicorn==27.0.*
 Django==5.2.*
 verbose_csrf_middleware==5.2.*
 sentry-sdk==2.*
@@ -10,9 +10,10 @@ pygments==2.21.*
 inotify_simple==2.0.*
 python-dateutil==4.0.*
 brotli-rs==9.1.*
+zlib-rust==0.6.8.post2
 whitenoise==6.12.*
 requests==2.34.*
-certifi>=2026.10.23
+certifi>=2026.11.20
 monofy==1.2.*
 user-agents==2.2.*
 fastjsonschema==2.22.*

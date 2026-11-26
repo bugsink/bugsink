@@ -14,8 +14,8 @@ def set_mechanism_independent_groupings(apps, schema_editor):
     # from an explicit SDK fingerprint, because the default grouper always included " ⋄ " in its grouping key (it always
     # appended the transaction, so it always had at least 2 joined parts).
     #
-    # Multi-part fixed-text fingerprints (["foo", "bar"]) will be misclassified under this scheme, for which there is
-    # another piece of legacy-handling code in the digest path.
+    # Multi-part fixed-text fingerprints (["foo", "bar"]) were misclassified under this scheme, for which there was once
+    # another piece of legacy-handling code in the digest path (since removed).
     #
     # Note: in fact we could even do better: since the fingerprint exists on event, we could check whether the
     # fingerprint contains "{{ default }}" or not; presumably expensive and also still not complete (missing events) so

@@ -1,7 +1,8 @@
 import io
 import pprint
 import re
-import zlib
+import zlib  # intentionally uses C-zlib to test compatibility with the Rust codec
+import zlib_rust
 import brotli_rs as brotli
 
 from unittest import TestCase as RegularTestCase
@@ -21,8 +22,9 @@ from .transaction import immediate_atomic
 from .volume_based_condition import VolumeBasedCondition
 from .utils import email_backend_delivers_mail, send_rendered_email
 from .streams import (
-    compress_with_zlib, GeneratorReader, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE, MaxDataReader,
-    MaxDataWriter, zlib_generator, brotli_generator, BrotliError)
+    compress_with_zlib, GeneratorReader, DEFAULT_CHUNK_SIZE, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE,
+    MaxDataReader, MaxLengthExceeded,
+    MaxDataWriter, zlib_generator, brotli_generator, BrotliError, ZlibStreamWriter)
 
 User = get_user_model()
 
@@ -155,8 +157,33 @@ class StreamsTestCase(RegularTestCase):
         for wbits in [WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE]:
             compressed = compress_with_zlib(io.BytesIO(b"hello" * 100), wbits)
 
-            with self.assertRaises(zlib.error):
+            with self.assertRaises(zlib_rust.error):
                 list(zlib_generator(io.BytesIO(compressed[:-1]), wbits))
+
+    def test_decompress_stdlib_compressed_stream(self):
+        data = b"hello" * 1000
+        for wbits in [WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE]:
+            compressed = zlib.compress(data, wbits=wbits)
+            reader = GeneratorReader(zlib_generator(io.BytesIO(compressed), wbits, chunk_size=7))
+
+            self.assertEqual(data, reader.read())
+
+    def test_compress_for_stdlib_decompression(self):
+        data = b"hello" * 1000
+        for wbits in [WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE]:
+            compressed = compress_with_zlib(io.BytesIO(data), wbits, chunk_size=7)
+
+            self.assertEqual(data, zlib.decompress(compressed, wbits=wbits))
+
+    def test_zlib_stream_writer_for_stdlib_decompression(self):
+        data = b"hello" * 1000
+        output = io.BytesIO()
+        writer = ZlibStreamWriter(output, level=6, wbits=WBITS_PARAM_FOR_GZIP)
+        writer.write(data[:17])
+        writer.write(data[17:])
+        writer.close()
+
+        self.assertEqual(data, zlib.decompress(output.getvalue(), wbits=WBITS_PARAM_FOR_GZIP))
 
     def test_compress_decompress_brotli(self):
         with open(__file__, 'rb') as f:
@@ -215,6 +242,18 @@ class StreamsTestCase(RegularTestCase):
 
         self.assertEqual("Max length (250) exceeded", str(e.exception))
 
+    def test_max_data_reader_readline_is_limited(self):
+        reader = MaxDataReader(5, io.BytesIO(b"hello\n"))
+
+        with self.assertRaises(MaxLengthExceeded):
+            reader.readline()
+
+    def test_max_data_reader_rejects_unaccounted_methods(self):
+        reader = MaxDataReader(250, io.BytesIO(b"hello"))
+
+        with self.assertRaises(AttributeError):
+            reader.readinto(bytearray(5))
+
     def test_max_data_writer(self):
         stream = io.BytesIO()
         writer = MaxDataWriter(250, stream)
@@ -239,6 +278,12 @@ class StreamsTestCase(RegularTestCase):
         self.assertEqual(b"I a", reader.read(3))
         self.assertEqual(b"m a", reader.read(3))
         self.assertEqual(b" generator", reader.read(None))
+
+    def test_generator_reader_readline_preserves_large_chunks(self):
+        line = b"P" * DEFAULT_CHUNK_SIZE + b"S" * 1808 + b"\n"
+        reader = GeneratorReader(iter([line]))
+
+        self.assertEqual(line, reader.readline())
 
     def test_generator_reader_performance(self):
         # at least one test directly for GeneratorReader; doubles as a regression test for performance issue that showed

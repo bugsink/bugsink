@@ -7,7 +7,7 @@ import json
 from hashlib import sha1
 from os.path import basename
 from django.utils import timezone
-from django.db.models import Count, Sum
+from django.db.models import Count, Sum, Q
 
 from compat.timestamp import parse_timestamp
 from snappea.decorators import shared_task
@@ -16,10 +16,12 @@ from sentry_sdk_extensions import capture_or_log_exception
 
 from bugsink.transaction import immediate_atomic, delay_on_commit
 from bugsink.app_settings import get_settings
+from bugsink.moreiterutils import batched
 from bugsink.streams import copy_stream_limited, MaxLengthExceeded
 from bugsink.timed_sqlite_backend.base import allow_long_running_queries
 
 from .models import (
+    ASSEMBLY_ERROR_MAX_AGE,
     ArtifactBundleAssembly,
     Chunk,
     DifAssembly,
@@ -42,6 +44,9 @@ VACUUM_FILES_BATCH_SIZE = 50
 # At roughly 200-500 bytes per file (reasonable enough for paths), 50 MiB accommodates about 100,000-250,000 files,
 # which "should be enough" for non-pathalogical use-cases.
 MAX_MANIFEST_SIZE = 50 * 1024 * 1024
+
+FILE_BULK_BATCH_SIZE = 64
+FILE_BULK_MAX_BYTES = 16 * 1024 * 1024
 
 
 # "In the wild", we have run into non-unique debug IDs (one in code, one in comment-at-bottom). This regex matches a
@@ -93,6 +98,60 @@ def create_file_from_local_file(checksum, filename, size, local_file):
     return file, created
 
 
+def create_files_from_local_files(local_files):
+    write_storage = get_write_storage("file")
+    max_bytes = FILE_BULK_MAX_BYTES if write_storage is None else None
+    files_by_checksum = {}
+    with immediate_atomic(only_if_needed=True):
+        for batch in local_file_batches(local_files, max_bytes):
+            files_by_checksum.update(_create_files_from_local_files(batch, write_storage))
+    return files_by_checksum
+
+
+def _create_files_from_local_files(local_files, write_storage):
+    checksums = {checksum for checksum, filename, size, local_path in local_files}
+    files_by_checksum = File.objects.only("id", "checksum").in_bulk(checksums, field_name="checksum")
+    if files_by_checksum:
+        File.objects.filter(checksum__in=files_by_checksum).update(accessed_at=timezone.now())
+    new_files_by_checksum = {}
+    for checksum, filename, size, local_path in local_files:
+        if checksum in files_by_checksum or checksum in new_files_by_checksum:
+            continue
+        with open(local_path, "rb") as local_file:
+            if write_storage is not None:
+                write_fileobj_to_storage("file", checksum, local_file)
+            new_files_by_checksum[checksum] = File(
+                checksum=checksum,
+                filename=filename,
+                size=size,
+                data=local_file.read() if write_storage is None else b"",
+                storage_backend=None if write_storage is None else write_storage.name,
+            )
+    File.objects.bulk_create(new_files_by_checksum.values())
+    files_by_checksum.update(
+        File.objects.only("id", "checksum").in_bulk(new_files_by_checksum, field_name="checksum"))
+
+    return files_by_checksum
+
+
+def local_file_batches(local_files, max_bytes):
+    # Create batches bounded by file count (avoid oversized queries) and total file size
+    # (DB-backed contents only, avoiding memory growth from loading too many files together).
+    batch = []
+    batch_bytes = 0
+    for checksum, filename, size, local_path in local_files:
+        full = len(batch) >= FILE_BULK_BATCH_SIZE
+        too_large = max_bytes is not None and batch_bytes + size > max_bytes
+        if batch and (full or too_large):
+            yield batch
+            batch = []
+            batch_bytes = 0
+        batch.append((checksum, filename, size, local_path))
+        batch_bytes += size
+    if batch:
+        yield batch
+
+
 @shared_task
 def assemble_dif(assembly_id, chunk_checksums, filename):
     assemblies = DifAssembly.objects.filter(
@@ -124,6 +183,7 @@ def assemble_dif(assembly_id, chunk_checksums, filename):
         with immediate_atomic():
             assemblies.update(
                 state=ChunkFileState.ERROR,
+                error_at=timezone.now(),
                 detail="Could not assemble this debug file. Check the server logs for details.",
             )
         capture_or_log_exception(e, logger)
@@ -183,79 +243,97 @@ def find_in_code_debug_ids(local_file):
 
 
 def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
-    # arguably, you could just wrap-around each operation, "around everything" guarantees a fully consistent update on
-    # the data and we don't do this that often that it's assumed to matter.
-    with immediate_atomic():
-        # NOTE: as it stands we don't store the (optional) extra info of release/dist.
+    # NOTE: as it stands we don't store the (optional) extra info of release/dist.
 
-        # NOTE: there's also the concept of an artifact bundle as _tied_ to a release, i.e. without debug_ids. We don't
-        # support that, but if we ever were to support it we'd need a separate method/param to distinguish it.
+    # NOTE: there's also the concept of an artifact bundle as _tied_ to a release, i.e. without debug_ids. We don't
+    # support that, but if we ever were to support it we'd need a separate method/param to distinguish it.
 
-        bundle_file, _ = assemble_file(bundle_checksum, chunk_checksums, filename=f"{bundle_checksum}.zip")
+    bundle_file, _ = assemble_file(bundle_checksum, chunk_checksums, filename=f"{bundle_checksum}.zip")
 
-        max_file_size = get_settings().MAX_FILE_SIZE
-        max_manifest_size = min(max_file_size, MAX_MANIFEST_SIZE)
-        manifest_limit_name = "MAX_FILE_SIZE" if max_file_size <= MAX_MANIFEST_SIZE else "MAX_MANIFEST_SIZE"
-        with tempfile.TemporaryDirectory() as tempdir:
-            with bundle_file.open_for_read() as f:
-                with ZipFile(f) as bundle_zip:
-                    with open_zip_entry(bundle_zip, "manifest.json") as manifest_stream:
-                        manifest_bytes, _ = read_limited_bytes(
-                            manifest_stream, max_manifest_size, reason=f"{manifest_limit_name}: {max_manifest_size}")
-                    manifest = json.loads(manifest_bytes.decode("utf-8"))
+    max_file_size = get_settings().MAX_FILE_SIZE
+    max_manifest_size = min(max_file_size, MAX_MANIFEST_SIZE)
+    manifest_limit_name = "MAX_FILE_SIZE" if max_file_size <= MAX_MANIFEST_SIZE else "MAX_MANIFEST_SIZE"
+    with tempfile.TemporaryDirectory() as tempdir:
+        with bundle_file.open_for_read() as f:
+            with ZipFile(f) as bundle_zip:
+                with open_zip_entry(bundle_zip, "manifest.json") as manifest_stream:
+                    manifest_bytes, _ = read_limited_bytes(
+                        manifest_stream, max_manifest_size, reason=f"{manifest_limit_name}: {max_manifest_size}")
+                manifest = json.loads(manifest_bytes.decode("utf-8"))
 
-                    for zip_entry_name, manifest_entry in manifest["files"].items():
-                        with tempfile.TemporaryFile(dir=tempdir) as local_file:
-                            checksum, size = extract_zip_entry_to_file(
-                                bundle_zip, zip_entry_name, local_file, max_file_size,
+                prepared_files = []
+                for zip_entry_name, manifest_entry in manifest["files"].items():
+                    # delete=False keeps the file after closing so storage can reopen it.
+                    # The enclosing TemporaryDirectory deletes it after processing.
+                    with tempfile.NamedTemporaryFile(dir=tempdir, delete=False) as local_file:
+                        checksum, size = extract_zip_entry_to_file(
+                            bundle_zip, zip_entry_name, local_file, max_file_size,
+                        )
+                        filename = basename(manifest_entry.get("url", zip_entry_name))[:255]
+                        debug_id = manifest_entry.get("headers", {}).get("debug-id", None)
+                        file_type = manifest_entry.get("type", None)
+
+                        # the in-code regexes show up in the _minified_ source only (the sourcemap's original source
+                        # code will not have been "polluted" with it yet, since it's the original).
+                        if debug_id is not None and file_type == "minified_source":
+                            mismatches = find_in_code_debug_ids(local_file) - {debug_id}
+                            if mismatches:
+                                logger.warning(
+                                    (
+                                        "Uploaded file %s contains multiple Debug IDs. "
+                                        "Uploaded as %s, but also found: %s."
+                                    ),
+                                    filename,
+                                    debug_id,
+                                    ", ".join(sorted(mismatches)),
+                                )
+
+                        prepared_files.append((checksum, filename, size, local_file.name, manifest_entry))
+
+                with immediate_atomic():
+                    files_by_checksum = create_files_from_local_files([
+                        (checksum, filename, size, local_path)
+                        for checksum, filename, size, local_path, manifest_entry in prepared_files
+                    ])
+
+                    metadata = []
+                    for checksum, filename, size, local_path, manifest_entry in prepared_files:
+                        debug_id = manifest_entry.get("headers", {}).get("debug-id", None)
+                        file_type = manifest_entry.get("type", None)
+                        if debug_id is None or file_type is None:
+                            because = (
+                                "it has neither Debug ID nor file-type"
+                                if debug_id is None and file_type is None else
+                                "it has no Debug ID" if debug_id is None else "it has no file-type")
+
+                            logger.warning(
+                                "Uploaded file %s will be ignored by Bugsink because %s.",
+                                filename,
+                                because,
                             )
 
-                            local_file.seek(0)
-                            filename = basename(manifest_entry.get("url", zip_entry_name))[:255]
-                            file, _ = create_file_from_local_file(checksum, filename, size, local_file)
+                            continue
 
-                            debug_id = manifest_entry.get("headers", {}).get("debug-id", None)
-                            file_type = manifest_entry.get("type", None)
-                            if debug_id is None or file_type is None:
-                                because = (
-                                    "it has neither Debug ID nor file-type"
-                                    if debug_id is None and file_type is None else
-                                    "it has no Debug ID" if debug_id is None else "it has no file-type")
+                        # Django's ignore_conflicts=True uses INSERT IGNORE on MySQL, which can truncate
+                        # an overlong file_type instead of rejecting it.
+                        if len(str(file_type)) > FileMetadata._meta.get_field("file_type").max_length:
+                            raise ValueError("Artifact file type is too long")
 
-                                logger.warning(
-                                    "Uploaded file %s will be ignored by Bugsink because %s.",
-                                    filename,
-                                    because,
-                                )
+                        for project_id in project_ids:
+                            metadata.append(FileMetadata(
+                                project_id=project_id,
+                                debug_id=debug_id,
+                                file_type=file_type,
+                                file=files_by_checksum[checksum],
+                                data=json.dumps(manifest_entry),
+                            ))
 
-                                continue
+                    # Note (2026-11-24): existing mappings win, otherwise the first in the bundle wins.
+                    # This preserves the previous get_or_create behavior; that policy was not reconsidered here.
+                    for batch in batched(metadata, FILE_BULK_BATCH_SIZE):
+                        FileMetadata.objects.bulk_create(batch, ignore_conflicts=True)
 
-                            for project_id in project_ids:
-                                FileMetadata.objects.get_or_create(
-                                    project_id=project_id,
-                                    debug_id=debug_id,
-                                    file_type=file_type,
-                                    defaults={
-                                        "file": file,
-                                        "data": json.dumps(manifest_entry),
-                                    }
-                                )
-
-                            # the in-code regexes show up in the _minified_ source only (the sourcemap's original source
-                            # code will not have been "polluted" with it yet, since it's the original).
-                            if file_type == "minified_source":
-                                mismatches = find_in_code_debug_ids(local_file) - {debug_id}
-                                if mismatches:
-                                    logger.warning(
-                                        (
-                                            "Uploaded file %s contains multiple Debug IDs. "
-                                            "Uploaded as %s, but also found: %s."
-                                        ),
-                                        filename,
-                                        debug_id,
-                                        ", ".join(sorted(mismatches)),
-                                    )
-
+    with immediate_atomic():
         if not get_settings().KEEP_ARTIFACT_BUNDLES:
             # delete the bundle file after processing, since we don't need it anymore.
             bundle_file.delete()
@@ -282,11 +360,12 @@ def assemble_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
         process_artifact_bundle(bundle_checksum, chunk_checksums, active_project_ids)
     except (AssembledFileTooLarge, MaxLengthExceeded) as e:
         with immediate_atomic():
-            assemblies.update(state=ChunkFileState.ERROR, detail=str(e))
+            assemblies.update(state=ChunkFileState.ERROR, error_at=timezone.now(), detail=str(e))
     except Exception as e:
         with immediate_atomic():
             assemblies.update(
                 state=ChunkFileState.ERROR,
+                error_at=timezone.now(),
                 detail="Could not assemble this artifact bundle. Check the server logs for details.",
             )
         capture_or_log_exception(e, logger)
@@ -433,13 +512,14 @@ def vacuum_files_batch(chunk_max_days=1, file_max_days=90, max_file_count=None, 
         num_deleted = 0
         chunk_cutoff = now - timedelta(days=chunk_max_days)
         file_cutoff = now - timedelta(days=file_max_days)
+        error_cutoff = now - ASSEMBLY_ERROR_MAX_AGE
 
-        # Keep upload statuses for as long as chunks are kept. Otherwise a failed or interrupted task could make every
-        # later upload attempt return "error" or "assembling". Deleting the status allows another attempt;
-        # it does not delete a successfully stored File.
+        # The upload endpoints also expire errors so retries don't have to wait for vacuum.
         for assembly_model in (DifAssembly, ArtifactBundleAssembly):
             assembly_ids = list(
-                assembly_model.objects.filter(created_at__lt=chunk_cutoff)
+                assembly_model.objects.filter(
+                    Q(state=ChunkFileState.ERROR, error_at__lt=error_cutoff)
+                    | (~Q(state=ChunkFileState.ERROR) & Q(created_at__lt=chunk_cutoff)))
                 .values_list("id", flat=True)[:VACUUM_FILES_BATCH_SIZE - num_deleted]
             )
             assembly_model.objects.filter(id__in=assembly_ids).delete()

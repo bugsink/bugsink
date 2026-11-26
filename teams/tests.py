@@ -6,6 +6,7 @@ from django.urls import reverse
 
 from bugsink.app_settings import CB_ADMINS, get_settings, override_settings as override_bugsink_settings
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
+from projects.models import Project, ProjectMembership, ProjectRole
 from users.models import EmailVerification
 
 from .models import Team, TeamMembership, TeamRole, TeamVisibility
@@ -54,6 +55,46 @@ class TeamInviteLinkTestCase(TransactionTestCase):
         self.team = Team.objects.create(name="Invite Team")
         TeamMembership.objects.create(team=self.team, user=self.admin, role=TeamRole.ADMIN, accepted=True)
         self.client.force_login(self.admin)
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_deactivated_user_can_accept_a_new_team_invitation(self):
+        user = User.objects.create_user(
+            username="returning-team-member@example.com", email="returning-team-member@example.com", password="test")
+        old_team = Team.objects.create(name="Old team")
+        old_project = Project.objects.create(name="Old project", team=old_team)
+        TeamMembership.objects.create(team=old_team, user=user, role=TeamRole.ADMIN, accepted=True)
+        ProjectMembership.objects.create(project=old_project, user=user, role=ProjectRole.ADMIN, accepted=True)
+        user.deactivate()
+
+        response = self.client.post(reverse("team_members_invite", kwargs={"team_pk": self.team.pk}), {
+            "email": user.email, "role": TeamRole.MEMBER, "action": "invite",
+        })
+
+        self.assertEqual(response.status_code, 302)
+        verification = EmailVerification.objects.get(user=user)
+        self.client.logout()
+        response = self.client.get(reverse("team_members_accept_new_user", kwargs={
+            "team_pk": self.team.pk, "token": verification.token,
+        }))
+        self.assertEqual(response.status_code, 302)
+        response = self.client.get(response["Location"], follow=True)
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(response.request["PATH_INFO"], {
+            "new_password1": "NewSecurePassw0rd!", "new_password2": "NewSecurePassw0rd!",
+        })
+        self.assertEqual(response.status_code, 302)
+        response = self.client.post(reverse("team_members_accept", kwargs={"team_pk": self.team.pk}), {
+            "action": "accept",
+        })
+        self.assertEqual(response.status_code, 302)
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
+        self.assertFalse(user.is_deactivated)
+        membership = TeamMembership.objects.get(user=user)
+        self.assertEqual(membership.team, self.team)
+        self.assertEqual(membership.role, TeamRole.MEMBER)
+        self.assertTrue(membership.accepted)
+        self.assertFalse(ProjectMembership.objects.filter(user=user).exists())
 
     def test_expired_new_user_invite_token_is_rejected(self):
         user = User.objects.create_user(

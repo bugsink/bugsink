@@ -146,9 +146,14 @@ class StreamingEnvelopeParser:
             raise ParseError("Header not UTF-8") from e
 
         try:
-            return json.loads(header)  # point 2
+            headers = json.loads(header)  # point 2
         except json.JSONDecodeError as e:
             raise ParseError("Header not JSON") from e
+
+        if not isinstance(headers, dict):
+            raise ParseError("Headers must be a JSON object")
+
+        return headers
 
     def get_envelope_headers(self):
         if self.envelope_headers is None:

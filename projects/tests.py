@@ -1,3 +1,5 @@
+import json
+
 from django.conf import settings
 from django.apps import apps
 from django.contrib.auth import get_user_model
@@ -43,6 +45,57 @@ class ProjectInviteLinkTestCase(TransactionTestCase):
         ProjectMembership.objects.create(
             project=self.project, user=self.admin, role=ProjectRole.ADMIN, accepted=True)
         self.client.force_login(self.admin)
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend")
+    def test_deactivated_user_can_be_invited_back_without_old_access(self):
+        user = User.objects.create_user(
+            username="returning-project-member@example.com", email="returning-project-member@example.com",
+            password="old-password", is_superuser=True, is_staff=True)
+        old_team = Team.objects.create(name="Old team")
+        old_project = Project.objects.create(name="Old project", team=old_team)
+        TeamMembership.objects.create(team=old_team, user=user, role=TeamRole.ADMIN, accepted=True)
+        ProjectMembership.objects.create(project=old_project, user=user, role=ProjectRole.ADMIN, accepted=True)
+        old_verification = EmailVerification.objects.create(user=user, email=user.email)
+        old_token = AuthToken.objects.create(user=user, is_user_bound=True, projects_read=True)
+        user.deactivate()
+
+        response = self.client.post(reverse("project_members_invite", kwargs={"project_pk": self.project.pk}), {
+            "email": user.email, "role": ProjectRole.MEMBER, "action": "invite",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        verification = EmailVerification.objects.get(user=user)
+        self.assertContains(response, reverse("project_members_accept_new_user", kwargs={
+            "project_pk": self.project.pk, "token": verification.token,
+        }))
+        self.client.logout()
+        response = self.client.get(reverse("project_members_accept_new_user", kwargs={
+            "project_pk": self.project.pk, "token": verification.token,
+        }))
+        self.assertEqual(response.status_code, 302)
+        response = self.client.get(response["Location"], follow=True)
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(response.request["PATH_INFO"], {
+            "new_password1": "NewSecurePassw0rd!", "new_password2": "NewSecurePassw0rd!",
+        })
+        self.assertEqual(response.status_code, 302)
+        response = self.client.post(reverse("project_members_accept", kwargs={"project_pk": self.project.pk}), {
+            "action": "accept",
+        })
+        self.assertEqual(response.status_code, 302)
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
+        self.assertFalse(user.is_deactivated)
+        self.assertFalse(user.is_superuser)
+        self.assertFalse(user.is_staff)
+        self.assertTrue(user.check_password("NewSecurePassw0rd!"))
+        self.assertFalse(TeamMembership.objects.filter(user=user).exists())
+        membership = ProjectMembership.objects.get(user=user)
+        self.assertEqual(membership.project, self.project)
+        self.assertEqual(membership.role, ProjectRole.MEMBER)
+        self.assertTrue(membership.accepted)
+        self.assertFalse(EmailVerification.objects.filter(pk=old_verification.pk).exists())
+        self.assertFalse(AuthToken.objects.filter(pk=old_token.pk).exists())
 
     def test_expired_new_user_invite_token_is_rejected(self):
         user = User.objects.create_user(
@@ -592,3 +645,28 @@ class ProjectScopedActionTestCase(TransactionTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(MessagingServiceConfig.objects.filter(id=other_service.id).exists())
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses", return_value={"162.159.135.232"})
+    def test_add_and_edit_alert_service(self, mock_resolve):
+        alerts_url = reverse("project_alerts_setup", args=[self.project.id])
+        webhook_url = "https://discord.com/api/webhooks/test"
+
+        response = self.client.post(reverse("project_messaging_service_add", args=[self.project.id]), {
+            "display_name": "Alerts", "kind": "discord", "webhook_url": webhook_url,
+        })
+
+        self.assertRedirects(response, alerts_url, fetch_redirect_response=False)
+        service = MessagingServiceConfig.objects.get(project=self.project)
+        self.assertEqual("Alerts", service.display_name)
+        self.assertEqual("discord", service.kind)
+        self.assertEqual({"webhook_url": webhook_url}, json.loads(service.config))
+
+        replacement_url = "https://discord.com/api/webhooks/replacement"
+        edit_url = reverse("project_messaging_service_edit", args=[self.project.id, service.id])
+        self.assertEqual(200, self.client.get(edit_url).status_code)
+        response = self.client.post(edit_url, {"display_name": "Renamed", "webhook_url": replacement_url})
+
+        self.assertRedirects(response, alerts_url, fetch_redirect_response=False)
+        service.refresh_from_db()
+        self.assertEqual("Renamed", service.display_name)
+        self.assertEqual({"webhook_url": replacement_url}, json.loads(service.config))

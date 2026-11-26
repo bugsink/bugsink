@@ -1,5 +1,66 @@
 # Changes
 
+## 2.7.0 (25 November 2026)
+
+### Security
+
+#### Account recovery
+
+Deactivated users can no longer reactivate themselves through password reset or email confirmation. Deactivation now
+removes their credentials and memberships and invalidates existing sessions. See `39cb2470` (GHSA-g4f5-xhw6-7mwm).
+
+Password and email address changes now invalidate outstanding email links. Password-reset forms keep the token out of
+the URL and prohibit caching. See `527bf252`, `f50eed17` and `d4c16cc1`.
+
+Submitted passwords and messaging-service credentials are now marked sensitive in Django error reports. See `3153617c`.
+
+#### Alerts and webhooks
+
+Keep webhook URLs and Telegram bot tokens out of the Snappea queue and task-start logs. See #609.
+
+Limit how much Bugsink reads from webhook responses, reject compressed responses, and skip automatic encoding
+detection. This reduces exposure to malicious webhook endpoints. See `60c8e15e` and `0f887dac`.
+
+#### Upload decompression
+
+Replace C-based zlib decompression with `zlib-rust` for gzip, deflate and ZIP uploads to reduce security risks.
+See #587.
+
+### Backwards incompatible changes
+
+* Previously uploaded sourcemaps and native debug files must now belong to a project. The upgrade assigns remaining
+  projectless uploads where possible and removes those it cannot assign. This only affects uploads from before
+  Bugsink 2.2.0. See #595.
+* Existing inactive accounts are treated as deactivated, except for recent, unfinished signups with an unexpired
+  verification link. Their old credentials and memberships are removed; reactivating an account does not restore that
+  access. See `39cb2470`.
+* Remove the temporary fallback for legacy multi-part custom fingerprints. Some events with these fingerprints may
+  start a new issue instead of joining their old issue. See #452.
+
+### Messaging services API
+
+The canonical API can now list, add, edit and delete a project's messaging services, and send test messages.
+These endpoints require `projects:manage` access. See #577.
+
+### Project filtering
+
+Filter the global Issues page by one or more projects and bookmark the result. Returning from an issue preserves the
+selected projects, state, sort order and page. See #545.
+
+### Smaller fixes
+
+* Speed up source-map bundle processing and reduce the time it blocks other database writes. Reuploading files now
+  renews their retention. See #608.
+* Allow failed source-map and debug-file uploads to be retried after one minute. See #598.
+* Fix `sentry-cli` uploads when its configured Bugsink URL differs from `BASE_URL`. See #602.
+* Handle download filenames containing spaces or non-ASCII characters correctly. See #596.
+* Reject malformed envelope headers and discard malformed event JSON without raising unhandled exceptions.
+  See #603 and #605.
+* Fix multipart request handling while preserving upload size limits. See #573.
+* Avoid blocking database writes while validating webhook destinations in the UI. See #590.
+* Remove pip from the final Docker images after installation. See #611.
+* Update navigation icons and favicons to the new Bugsink logo. See #600.
+
 ## 2.6.3 (6 November 2026)
 
 ### Security

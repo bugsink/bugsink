@@ -1,10 +1,14 @@
 from django.test import TestCase as DjangoTestCase
+from django.test import SimpleTestCase
 from unittest.mock import patch, Mock
+from contextlib import contextmanager
+import io
 import ipaddress
 import json
 import requests
 import socket
 from socket import gaierror
+from urllib3.exceptions import ProtocolError
 
 from django.core import mail
 from django.contrib.auth import get_user_model
@@ -17,7 +21,7 @@ from events.factories import create_event
 from teams.models import Team, TeamMembership
 
 from .models import MessagingServiceConfig
-from .service_backends.base import BaseWebhookBackend
+from .service_backends.base import BaseWebhookBackend, MAX_WEBHOOK_RESPONSE_BYTES
 from .service_backends.slack import slack_backend_send_test_message, slack_backend_send_alert
 from .service_backends.discord import discord_backend_send_test_message, discord_backend_send_alert
 from .service_backends.discord import DiscordConfigForm
@@ -194,7 +198,6 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
 
         # Send test message
         slack_backend_send_test_message(
-            "https://hooks.slack.com/test",
             "Test project",
             "Test Slack",
             self.config.id
@@ -222,7 +225,6 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
 
         # Send test message
         slack_backend_send_test_message(
-            "https://hooks.slack.com/test",
             "Test project",
             "Test Slack",
             self.config.id
@@ -252,7 +254,6 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
 
         # Send test message and expect it to raise
         slack_backend_send_test_message(
-            "https://hooks.slack.com/test",
             "Test project",
             "Test Slack",
             self.config.id
@@ -272,7 +273,6 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
 
         # Send test message
         slack_backend_send_test_message(
-            "https://hooks.slack.com/test",
             "Test project",
             "Test Slack",
             self.config.id
@@ -305,7 +305,6 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
 
         # Send alert message
         slack_backend_send_alert(
-            "https://hooks.slack.com/test",
             issue.id,
             "New issue",
             "a",
@@ -319,8 +318,10 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
 
     @patch('alerts.service_backends.base.requests.post')
     def test_slack_test_message_blocked_target_stores_failure_without_network_call(self, mock_post):
+        self.config.config = json.dumps({"webhook_url": "http://10.0.0.42/hooks/test"})
+        self.config.save()
+
         slack_backend_send_test_message(
-            "http://10.0.0.42/hooks/test",
             "Test project",
             "Test Slack",
             self.config.id,
@@ -372,7 +373,6 @@ class TestDiscordBackendErrorHandling(DjangoTestCase):
 
         # Send test message
         discord_backend_send_test_message(
-            "https://discord.com/api/webhooks/test",
             "Test project",
             "Test Discord",
             self.config.id
@@ -400,7 +400,6 @@ class TestDiscordBackendErrorHandling(DjangoTestCase):
 
         # Send test message
         discord_backend_send_test_message(
-            "https://discord.com/api/webhooks/test",
             "Test project",
             "Test Discord",
             self.config.id
@@ -430,7 +429,6 @@ class TestDiscordBackendErrorHandling(DjangoTestCase):
 
         # Send test message
         discord_backend_send_test_message(
-            "https://discord.com/api/webhooks/test",
             "Test project",
             "Test Discord",
             self.config.id
@@ -450,7 +448,6 @@ class TestDiscordBackendErrorHandling(DjangoTestCase):
 
         # Send test message
         discord_backend_send_test_message(
-            "https://discord.com/api/webhooks/test",
             "Test project",
             "Test Discord",
             self.config.id
@@ -483,7 +480,6 @@ class TestDiscordBackendErrorHandling(DjangoTestCase):
 
         # Send alert message
         discord_backend_send_alert(
-            "https://discord.com/api/webhooks/test",
             issue.id,
             "New issue",
             "a",
@@ -544,13 +540,9 @@ class TestTelegramBackend(DjangoTestCase):
         mock_post.return_value = mock_response
 
         telegram_backend_send_test_message(
-            f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
-            self.bot_token,
-            self.chat_id,
             "Test project",
             "Test Telegram",
             self.config.id,
-            message_thread_id=123,
         )
 
         self.config.refresh_from_db()
@@ -579,16 +571,12 @@ class TestTelegramBackend(DjangoTestCase):
         mock_post.return_value = mock_response
 
         telegram_backend_send_alert(
-            f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
-            self.bot_token,
-            self.chat_id,
             issue.id,
             "New issue",
             "a",
             "NEW",
             self.config.id,
             unmute_reason="Repeated failures after being muted.",
-            message_thread_id=123,
         )
 
         self.config.refresh_from_db()
@@ -619,9 +607,6 @@ class TestTelegramBackend(DjangoTestCase):
         mock_post.return_value = mock_response
 
         telegram_backend_send_test_message(
-            f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
-            self.bot_token,
-            self.chat_id,
             "Test project",
             "Test Telegram",
             self.config.id,
@@ -644,9 +629,6 @@ class TestTelegramBackend(DjangoTestCase):
         )
 
         telegram_backend_send_test_message(
-            f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
-            self.bot_token,
-            self.chat_id,
             "Test project",
             "Test Telegram",
             self.config.id,
@@ -661,9 +643,6 @@ class TestTelegramBackend(DjangoTestCase):
     def test_telegram_send_uses_outbound_policy(self, mock_post):
         with override_bugsink_settings(ALERTS_WEBHOOK_OUTBOUND_MODE="allowlist_only", ALERTS_WEBHOOK_ALLOW_LIST=[]):
             telegram_backend_send_test_message(
-                f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
-                self.bot_token,
-                self.chat_id,
                 "Test project",
                 "Test Telegram",
                 self.config.id,
@@ -677,15 +656,17 @@ class TestTelegramBackend(DjangoTestCase):
 
     @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
     def test_telegram_test_message_omits_thread_id_when_not_set(self, mock_post):
+        config = json.loads(self.config.config)
+        config.pop("message_thread_id")
+        self.config.config = json.dumps(config)
+        self.config.save()
+
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.raise_for_status.return_value = None
         mock_post.return_value = mock_response
 
         telegram_backend_send_test_message(
-            f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
-            self.bot_token,
-            self.chat_id,
             "Test project",
             "Test Telegram",
             self.config.id,
@@ -696,19 +677,20 @@ class TestTelegramBackend(DjangoTestCase):
 
     @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
     def test_telegram_test_message_omits_thread_id_for_channel_username(self, mock_post):
+        config = json.loads(self.config.config)
+        config["chat_id"] = "@my_channel"
+        self.config.config = json.dumps(config)
+        self.config.save()
+
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.raise_for_status.return_value = None
         mock_post.return_value = mock_response
 
         telegram_backend_send_test_message(
-            f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
-            self.bot_token,
-            "@my_channel",
             "Test project",
             "Test Telegram",
             self.config.id,
-            message_thread_id=123,
         )
 
         payload = json.loads(mock_post.call_args.kwargs["data"])
@@ -741,7 +723,6 @@ class TestCustomBackendErrorHandling(DjangoTestCase):
 
         # Send test message
         custom_backend_send_test_message(
-            "https://hooks.example.com/test",
             "Test project",
             "Test Custom",
             self.config.id
@@ -769,7 +750,6 @@ class TestCustomBackendErrorHandling(DjangoTestCase):
 
         # Send test message
         custom_backend_send_test_message(
-            "https://hooks.example.com/test",
             "Test project",
             "Test Custom",
             self.config.id
@@ -799,7 +779,6 @@ class TestCustomBackendErrorHandling(DjangoTestCase):
 
         # Send test message
         custom_backend_send_test_message(
-            "https://hooks.example.com/test",
             "Test project",
             "Test Custom",
             self.config.id
@@ -819,7 +798,6 @@ class TestCustomBackendErrorHandling(DjangoTestCase):
 
         # Send test message
         custom_backend_send_test_message(
-            "https://hooks.example.com/test",
             "Test project",
             "Test Custom",
             self.config.id
@@ -852,7 +830,6 @@ class TestCustomBackendErrorHandling(DjangoTestCase):
 
         # Send alert message
         custom_backend_send_alert(
-            "https://hooks.example.com/test",
             issue.id,
             "New issue",
             "a",
@@ -871,7 +848,6 @@ class TestCustomBackendErrorHandling(DjangoTestCase):
         mock_post.return_value = mock_response
 
         custom_backend_send_test_message(
-            "https://hooks.example.com/test",
             "Test project",
             "Test Custom",
             self.config.id,
@@ -880,7 +856,6 @@ class TestCustomBackendErrorHandling(DjangoTestCase):
 
         issue, _ = get_or_create_issue(project=self.project)
         custom_backend_send_alert(
-            "https://hooks.example.com/test",
             issue.id,
             "New issue",
             "a",
@@ -931,7 +906,6 @@ class TestMsTeamsBackend(DjangoTestCase):
         mock_post.return_value = mock_response
 
         msteams_backend_send_test_message(
-            "https://example.logic.azure.com/workflows/test",
             "Test project",
             "Test Teams",
             self.config.id,
@@ -954,7 +928,6 @@ class TestMsTeamsBackend(DjangoTestCase):
         mock_post.return_value = mock_response
 
         msteams_backend_send_alert(
-            "https://example.logic.azure.com/workflows/test",
             issue.id,
             "New issue",
             "a",
@@ -980,7 +953,6 @@ class TestMsTeamsBackend(DjangoTestCase):
         mock_post.return_value = mock_response
 
         msteams_backend_send_test_message(
-            "https://example.logic.azure.com/workflows/test",
             "Test project",
             "Test Teams",
             self.config.id,
@@ -990,6 +962,80 @@ class TestMsTeamsBackend(DjangoTestCase):
         self.assertIsNotNone(self.config.last_failure_timestamp)
         self.assertEqual(self.config.last_failure_status_code, 404)
         self.assertEqual(self.config.last_failure_error_type, "HTTPError")
+
+class TestWebhookResponses(SimpleTestCase):
+    @contextmanager
+    def webhook_response(self, response_bytes):
+        connection = Mock()
+        with io.BytesIO(response_bytes) as stream:
+            connection.makefile.return_value = stream
+            with (
+                override_bugsink_settings(ALERTS_WEBHOOK_OUTBOUND_MODE="open"),
+                patch.dict("os.environ", {"NO_PROXY": "*", "no_proxy": "*"}),
+                patch("alerts.service_backends.webhook_security._resolve_ip_addresses", return_value=["93.184.216.34"]),
+                patch("urllib3.connection.HTTPConnection._new_conn", return_value=connection),
+                patch.object(stream, "close") as close,
+            ):
+                yield stream, connection, close
+
+    def test_pinned_request_uses_original_host_header(self):
+        response_bytes = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
+        with self.webhook_response(response_bytes) as (_, connection, _):
+            response = BaseWebhookBackend.safe_post("http://hooks.example.com/test", json={"text": "hello"})
+
+            self.assertEqual(response.request.url, "http://93.184.216.34/test")
+            sent = b"".join(call.args[0] for call in connection.sendall.call_args_list)
+            self.assertIn(b"Host: hooks.example.com\r\n", sent)
+
+    def test_requests_and_accepts_identity_encoding(self):
+        response_bytes = b"HTTP/1.1 200 OK\r\nContent-Encoding: Identity\r\nContent-Length: 2\r\n\r\nOK"
+        with self.webhook_response(response_bytes) as (_, connection, _):
+            response = BaseWebhookBackend.safe_post("http://hooks.example.com/test", json={"text": "hello"})
+
+            sent = b"".join(call.args[0] for call in connection.sendall.call_args_list)
+            self.assertIn(b"Accept-Encoding: identity\r\n", sent)
+            self.assertEqual(response.text, "OK")
+
+    def test_response_is_closed_when_reading_fails(self):
+        response_bytes = b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n"
+        with self.webhook_response(response_bytes) as (stream, _, close):
+            with patch.object(stream, "read", side_effect=OSError("connection lost")):
+                with self.assertRaises(ProtocolError):
+                    BaseWebhookBackend.safe_post("http://hooks.example.com/test", json={"text": "hello"})
+            close.assert_called()
+
+    def test_compressed_responses_are_closed_without_reading_or_decoding(self):
+        for encoding in (b"gzip", b"deflate", b"br", b"zstd", b"identity, gzip", b"unknown", b""):
+            for status in (b"200 OK", b"400 Bad Request", b"302 Found"):
+                with self.subTest(encoding=encoding, status=status):
+                    headers = (
+                        b"HTTP/1.1 " + status + b"\r\nContent-Encoding: " + encoding +
+                        b"\r\nLocation: http://other.example.com/\r\nContent-Length: 4\r\n\r\n"
+                    )
+                    with self.webhook_response(headers + b"body") as (stream, _, close):
+                        with patch("urllib3.response._get_decoder", side_effect=AssertionError("decoder invoked")):
+                            with self.assertRaisesRegex(requests.RequestException, "Compressed webhook responses") as e:
+                                BaseWebhookBackend.safe_post("http://hooks.example.com/test", json={"text": "hello"})
+
+                        self.assertIsNone(e.exception.response)
+                        self.assertEqual(stream.tell(), len(headers))
+                        close.assert_called()
+
+    def test_large_responses_are_truncated_before_requests_can_read_them(self):
+        body = b"x" * (MAX_WEBHOOK_RESPONSE_BYTES * 2)
+        for framing in (b"", b"Content-Length: 4000\r\n", b"Transfer-Encoding: chunked\r\n"):
+            with self.subTest(framing=framing):
+                headers = b"HTTP/1.1 302 Found\r\nLocation: http://other.example.com/\r\n" + framing + b"\r\n"
+                wire_body = b"fa0\r\n" + body + b"\r\n0\r\n\r\n" if b"chunked" in framing else body
+                with self.webhook_response(headers + wire_body) as (stream, connection, close):
+                    response = BaseWebhookBackend.safe_post("http://hooks.example.com/test", json={"text": "hello"})
+
+                    self.assertEqual(response.content, body[:MAX_WEBHOOK_RESPONSE_BYTES])
+                    self.assertEqual(response.text, "x" * MAX_WEBHOOK_RESPONSE_BYTES)
+                    self.assertLess(stream.tell(), len(headers + wire_body))
+                    self.assertEqual(connection.makefile.call_count, 1)
+                    close.assert_called()
+
 
 class TestWebhookSecurityValidation(DjangoTestCase):
     def test_extracts_embedded_ipv4_addresses(self):
@@ -1291,7 +1337,7 @@ class TestGoogleChatBackendErrorHandling(DjangoTestCase):
 
     def _send_test(self):
         google_chat_backend_send_test_message(
-            self.webhook_url, "Test project", "Test Google Chat", self.config.id)
+            "Test project", "Test Google Chat", self.config.id)
 
     def _ok_response(self):
         response = Mock(status_code=200)
@@ -1369,15 +1415,18 @@ class TestGoogleChatBackendErrorHandling(DjangoTestCase):
         mock_post.return_value = self._ok_response()
 
         google_chat_backend_send_alert(
-            self.webhook_url, issue.id, "New issue", "a", "NEW", self.config.id)
+            issue.id, "New issue", "a", "NEW", self.config.id)
 
         self.config.refresh_from_db()
         self.assertIsNone(self.config.last_failure_timestamp)
 
     @patch("alerts.service_backends.base.requests.post")
     def test_google_chat_test_message_blocked_target_stores_failure_without_network_call(self, mock_post):
+        self.config.config = json.dumps({"webhook_url": "http://10.0.0.42/hooks/test"})
+        self.config.save()
+
         google_chat_backend_send_test_message(
-            "http://10.0.0.42/hooks/test", "Test project", "Test Google Chat", self.config.id)
+            "Test project", "Test Google Chat", self.config.id)
 
         mock_post.assert_not_called()
         self.config.refresh_from_db()
@@ -1392,10 +1441,105 @@ class TestGoogleChatBackendErrorHandling(DjangoTestCase):
         mock_post.return_value = self._ok_response()
 
         google_chat_backend_send_alert(
-            self.webhook_url, issue.id, "New issue", "a", "NEW", self.config.id,
+            issue.id, "New issue", "a", "NEW", self.config.id,
             unmute_reason="matched *pattern*")
 
         payload = json.loads(mock_post.call_args.kwargs["data"])
         self.assertIn(r"Ops \*on-call\* \<prod\>", payload["text"])
         self.assertIn(r"matched \*pattern\*", payload["text"])
         self.assertRegex(payload["text"], r"<https?://.+\|view on Bugsink>")
+
+
+class TestServiceBackendTaskArguments(DjangoTestCase):
+    # Snappea stores the arguments of a delayed task in its queue and logs them when the task starts, so the secrets in
+    # a service's config (webhook URLs, bot tokens) must not be among those arguments.
+    configs = {
+        "slack": {"webhook_url": "https://hooks.slack.com/services/T0/B0/s3cr3t"},
+        "mattermost": {"webhook_url": "https://mattermost.example.com/hooks/s3cr3t", "channel": "alerts"},
+        "discord": {"webhook_url": "https://discord.com/api/webhooks/1/s3cr3t"},
+        "msteams": {"webhook_url": "https://example.logic.azure.com/workflows/1/triggers/manual?sig=s3cr3t"},
+        "google_chat": {"webhook_url": "https://chat.googleapis.com/v1/spaces/1/messages?key=k&token=s3cr3t"},
+        "custom": {"webhook_url": "https://hooks.example.com/s3cr3t"},
+        "telegram": {"bot_token": "123456:s3cr3t", "chat_id": "-1001234567890"},
+    }
+
+    @patch("snappea.decorators.wakeup_server")
+    @patch("snappea.decorators.Task.objects.create")
+    @patch("snappea.decorators.get_settings", return_value=Mock(TASK_ALWAYS_EAGER=False))
+    def test_secrets_are_not_passed_as_task_arguments(self, mock_get_settings, mock_task_create, mock_wakeup_server):
+        project = Project.objects.create(name="Test project")
+        issue, _ = get_or_create_issue(project=project)
+
+        for kind, config in self.configs.items():
+            with self.subTest(kind=kind):
+                mock_task_create.reset_mock()
+                service_config = MessagingServiceConfig.objects.create(
+                    project=project, display_name=f"Test {kind}", kind=kind, config=json.dumps(config))
+
+                backend = service_config.get_backend()
+                backend.send_test_message()
+                backend.send_alert(str(issue.id), "New issue", "a", "NEW")
+
+                self.assertEqual(2, mock_task_create.call_count)
+                for call in mock_task_create.call_args_list:
+                    self.assertNotIn("s3cr3t", call.kwargs["args"] + call.kwargs["kwargs"])
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    @patch("snappea.decorators.wakeup_server")
+    @patch("snappea.decorators.Task.objects.create")
+    @patch("snappea.decorators.get_settings", return_value=Mock(TASK_ALWAYS_EAGER=False))
+    def test_queued_messages_use_current_destination(self, mock_get_settings, mock_task_create,
+                                                    mock_wakeup_server, mock_post):
+        from snappea import registry
+
+        project = Project.objects.create(name="Test project")
+        issue, _ = get_or_create_issue(project=project)
+        configs = {
+            "telegram": (
+                {"bot_token": "123456:old", "chat_id": "-111", "message_thread_id": 1},
+                {"bot_token": "123456:new", "chat_id": "-222", "message_thread_id": 2},
+                "https://api.telegram.org/bot123456:new/sendMessage",
+                {"chat_id": "-222", "message_thread_id": 2},
+            ),
+            "mattermost": (
+                {"webhook_url": "https://old.example.com/hooks/test", "channel": "old-channel"},
+                {"webhook_url": "https://new.example.com/hooks/test", "channel": "new-channel"},
+                "https://new.example.com/hooks/test",
+                {"channel": "new-channel"},
+            ),
+        }
+
+        for kind, (old_config, new_config, expected_url, expected_routing) in configs.items():
+            with self.subTest(kind=kind):
+                mock_task_create.reset_mock()
+                service_config = MessagingServiceConfig.objects.create(
+                    project=project, display_name=f"Test {kind}", kind=kind, config=json.dumps(old_config))
+                backend = service_config.get_backend()
+                backend.send_test_message()
+                backend.send_alert(str(issue.id), "New issue", "a", "NEW")
+
+                self.assertEqual(mock_task_create.call_count, 2)
+                service_config.config = json.dumps(new_config)
+                service_config.save()
+
+                for call in mock_task_create.call_args_list:
+                    mock_post.reset_mock()
+                    task = call.kwargs
+                    registry[task["task_name"]](*json.loads(task["args"]), **json.loads(task["kwargs"]))
+                    mock_post.assert_called_once()
+                    self.assertEqual(mock_post.call_args.args[0], expected_url)
+                    payload = json.loads(mock_post.call_args.kwargs["data"])
+                    for key, value in expected_routing.items():
+                        self.assertEqual(payload[key], value)
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_task_for_removed_service_does_nothing(self, mock_post):
+        project = Project.objects.create(name="Test project")
+        service_config = MessagingServiceConfig.objects.create(
+            project=project, display_name="Test Slack", kind="slack", config=json.dumps(self.configs["slack"]))
+        service_config_id = service_config.id
+        service_config.delete()
+
+        slack_backend_send_test_message("Test project", "Test Slack", service_config_id)
+
+        mock_post.assert_not_called()

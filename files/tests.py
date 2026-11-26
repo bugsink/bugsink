@@ -2,7 +2,7 @@ from hashlib import sha1
 from datetime import timedelta
 from uuid import UUID, uuid4
 import json
-import gzip
+import gzip  # intentionally uses C-zlib to test compatibility with the Rust codec
 import io
 from io import BytesIO
 import os
@@ -12,13 +12,16 @@ import subprocess
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
-from zipfile import ZipFile, ZIP_BZIP2, ZIP_DEFLATED
+from zipfile import (  # intentionally uses C-zlib to test compatibility with the Rust codec
+    ZipFile, ZIP_BZIP2, ZIP_DEFLATED,
+)
 
 from django.test import tag
 from django.test.utils import CaptureQueriesContext
 from django.contrib.auth import get_user_model
 from django.test import LiveServerTestCase, override_settings
 from django.db import connection
+from django.core.exceptions import ValidationError
 from django.core.management.base import CommandError
 from django.core.management import call_command
 from django.utils import timezone
@@ -34,10 +37,13 @@ from bugsink.moreiterutils import batched
 from bugsink.app_settings import override_settings as bugsink_override_settings
 from bugsink.streams import MaxLengthExceeded
 
-from .models import Chunk, File, FileMetadata, get_file_metadata_for_debug_ids
+from .models import Chunk, File, FileMetadata, get_file_metadata_for_debug_ids, _binary_to_bytes
 from .minidump import event_threads_for_process_state
 from .storage_registry import override_object_storages
-from .tasks import assemble_file, create_chunk, create_file_from_local_file, process_artifact_bundle, vacuum_files_sync
+from .tasks import (
+    assemble_file, create_chunk, create_file_from_local_file, find_in_code_debug_ids,
+    process_artifact_bundle, vacuum_files_sync,
+)
 from .views import CHUNK_UPLOAD_SIZE
 
 
@@ -361,6 +367,7 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(CHUNK_UPLOAD_SIZE, response.json()["chunkSize"])
         self.assertEqual(CHUNK_UPLOAD_SIZE, response.json()["maxRequestSize"])
         self.assertEqual(1234, response.json()["maxFileSize"])
+        self.assertEqual("/organizations/anyorg/chunk-upload/", response.json()["url"])
 
     def test_chunk_upload_rejects_plain_chunk_larger_than_advertised(self):
         data = b"x" * (CHUNK_UPLOAD_SIZE + 1)
@@ -389,6 +396,21 @@ class FilesTests(TransactionTestCase):
 
         self.assertEqual(413, response.status_code)
         self.assertIn("chunk upload size", response.json()["error"])
+
+    def test_chunk_upload_with_concatenated_gzip_members(self):
+        data = b"hello world"
+        checksum = sha1(data, usedforsecurity=False).hexdigest()
+        upload = BytesIO(gzip.compress(data[:5]) + gzip.compress(data[5:]))
+        upload.name = checksum
+
+        response = self.client.post(
+            "/api/0/organizations/anyorg/chunk-upload/",
+            data={"file_gzip": upload},
+            headers=self.token_headers,
+        )
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(data, _binary_to_bytes(Chunk.objects.get(checksum=checksum).data))
 
     def test_assemble_file_to_object_storage(self):
         data = b"hello world"
@@ -460,6 +482,221 @@ class FilesTests(TransactionTestCase):
         data_column = f'{connection.ops.quote_name("files_chunk")}.{connection.ops.quote_name("data")}'
         for query in queries:
             self.assertNotIn(data_column, query["sql"])
+
+    def create_artifact_bundle(self, files):
+        manifest = {"files": {name: metadata for name, (contents, metadata) in files.items()}}
+        bundle = BytesIO()
+        with ZipFile(bundle, "w") as bundle_zip:
+            bundle_zip.writestr("manifest.json", json.dumps(manifest))
+            for name, (contents, metadata) in files.items():
+                bundle_zip.writestr(name, contents)
+        contents = bundle.getvalue()
+        checksum = sha1(contents, usedforsecurity=False).hexdigest()
+        Chunk.objects.create(checksum=checksum, size=len(contents), data=contents)
+        return checksum
+
+    @patch("files.tasks.FILE_BULK_BATCH_SIZE", 2)
+    def test_artifact_bundle_reuses_files_and_metadata(self):
+        other_project = Project.objects.create(name="other")
+        for use_storage in (False, True):
+            with self.subTest(use_storage=use_storage), tempfile.TemporaryDirectory() as tempdir:
+                with override_object_storages(get_test_object_storages(tempdir, use_for_write=use_storage)):
+                    debug_ids = [uuid4() for _ in range(3)]
+                    manifests = [
+                        {"type": "source", "headers": {"debug-id": str(debug_id)}} for debug_id in debug_ids
+                    ]
+                    existing_contents = f"existing-{use_storage}".encode()
+                    existing_file = File.objects.create(
+                        checksum=sha1(existing_contents, usedforsecurity=False).hexdigest(),
+                        filename="original.js", size=len(existing_contents), data=existing_contents,
+                    )
+                    existing_metadata = FileMetadata.objects.create(
+                        project=self.project, debug_id=debug_ids[0], file_type="source", file=existing_file, data="{}",
+                    )
+                    shared_contents = f"shared-{use_storage}".encode()
+                    files = {
+                        "first.js": (shared_contents, manifests[0]),
+                        "duplicate-mapping.js": (f"different-{use_storage}".encode(), manifests[0]),
+                        "shared.js": (shared_contents, manifests[1]),
+                        "existing.js": (existing_contents, manifests[2]),
+                        "no-debug-id.js": (f"no-debug-id-{use_storage}".encode(), {"type": "source"}),
+                    }
+                    checksum = self.create_artifact_bundle(files)
+                    for _ in range(2):
+                        with self.assertLogs("bugsink.api", level="WARNING"):
+                            process_artifact_bundle(checksum, [checksum], [self.project.id, other_project.id])
+
+                        shared_file = File.objects.get(
+                            checksum=sha1(shared_contents, usedforsecurity=False).hexdigest())
+                        self.assertEqual("first.js", shared_file.filename)
+                        self.assertEqual("local" if use_storage else None, shared_file.storage_backend)
+                        expected = {
+                            (self.project.id, debug_ids[0]): existing_file.id,
+                            (other_project.id, debug_ids[0]): shared_file.id,
+                            (self.project.id, debug_ids[1]): shared_file.id,
+                            (other_project.id, debug_ids[1]): shared_file.id,
+                            (self.project.id, debug_ids[2]): existing_file.id,
+                            (other_project.id, debug_ids[2]): existing_file.id,
+                        }
+                        metadata = FileMetadata.objects.filter(debug_id__in=debug_ids)
+                        self.assertEqual(expected, {
+                            (project_id, debug_id): file_id
+                            for project_id, debug_id, file_id in metadata.values_list(
+                                "project_id", "debug_id", "file_id")
+                        })
+                        self.assertEqual(
+                            existing_metadata.id, metadata.get(project=self.project, debug_id=debug_ids[0]).id)
+                        for contents, manifest_entry in files.values():
+                            file = File.objects.get(checksum=sha1(contents, usedforsecurity=False).hexdigest())
+                            self.assertEqual(contents, file.get_raw_data())
+                        existing_file.refresh_from_db()
+                        self.assertEqual("original.js", existing_file.filename)
+                        self.assertIsNone(existing_file.storage_backend)
+
+    def test_artifact_bundle_reupload_renews_file_retention(self):
+        for use_storage in (False, True):
+            with self.subTest(use_storage=use_storage), tempfile.TemporaryDirectory() as tempdir:
+                with override_object_storages(get_test_object_storages(tempdir, use_for_write=use_storage)):
+                    contents = f"reuploaded-{use_storage}".encode()
+                    debug_id = uuid4()
+                    checksum = self.create_artifact_bundle({
+                        "source.js": (contents, {"type": "source", "headers": {"debug-id": str(debug_id)}}),
+                    })
+                    process_artifact_bundle(checksum, [checksum], [self.project.id])
+                    metadata = FileMetadata.objects.get(project=self.project, debug_id=debug_id)
+                    file = metadata.file
+                    old = timezone.now() - timedelta(days=91)
+                    File.objects.filter(id=file.id).update(accessed_at=old)
+                    stale_file = File.objects.create(
+                        checksum=sha1(f"stale-{use_storage}".encode(), usedforsecurity=False).hexdigest(),
+                        filename="stale.js", size=5, data=b"stale",
+                    )
+                    File.objects.filter(id=stale_file.id).update(accessed_at=old)
+
+                    reuploaded_at = timezone.now()
+                    process_artifact_bundle(checksum, [checksum], [self.project.id])
+                    vacuum_files_sync(file_max_days=90)
+
+                    renewed = File.objects.get(id=file.id)
+                    self.assertGreaterEqual(renewed.accessed_at, reuploaded_at)
+                    self.assertEqual(file.created_at, renewed.created_at)
+                    self.assertEqual(contents, renewed.get_raw_data())
+                    self.assertTrue(FileMetadata.objects.filter(id=metadata.id, file=renewed).exists())
+                    self.assertFalse(File.objects.filter(id=stale_file.id).exists())
+
+    def test_artifact_bundle_queries_do_not_grow_per_file(self):
+        for use_storage in (False, True):
+            with self.subTest(use_storage=use_storage), tempfile.TemporaryDirectory() as tempdir:
+                with override_object_storages(get_test_object_storages(tempdir, use_for_write=use_storage)):
+                    query_counts = []
+                    for count in (5, 25, 65):
+                        files = {
+                            f"{i}.js": (
+                                f"contents-{use_storage}-{count}-{i}".encode(),
+                                {"type": "source", "headers": {"debug-id": str(uuid4())}},
+                            )
+                            for i in range(count)
+                        }
+                        checksum = self.create_artifact_bundle(files)
+                        with CaptureQueriesContext(connection) as queries:
+                            process_artifact_bundle(checksum, [checksum], [self.project.id])
+                        query_counts.append(len(queries))
+                    self.assertEqual(query_counts[0], query_counts[1])
+                    self.assertGreater(query_counts[2], query_counts[1])
+
+    @patch("files.tasks.FILE_BULK_MAX_BYTES", 4096)
+    def test_artifact_bundle_byte_batches_only_apply_to_db_contents(self):
+        for use_storage in (False, True):
+            with self.subTest(use_storage=use_storage), tempfile.TemporaryDirectory() as tempdir:
+                with override_object_storages(get_test_object_storages(tempdir, use_for_write=use_storage)):
+                    query_counts = []
+                    for size in (100, 3000, 5000):
+                        files = {
+                            f"{i}.js": (
+                                f"contents-{use_storage}-{size}-{i}".encode().ljust(size, b"x"),
+                                {"type": "source", "headers": {"debug-id": str(uuid4())}},
+                            )
+                            for i in range(4)
+                        }
+                        checksum = self.create_artifact_bundle(files)
+                        with CaptureQueriesContext(connection) as queries:
+                            process_artifact_bundle(checksum, [checksum], [self.project.id])
+                        query_counts.append(len(queries))
+                        for contents, manifest_entry in files.values():
+                            file = File.objects.get(checksum=sha1(contents, usedforsecurity=False).hexdigest())
+                            self.assertEqual(contents, file.get_raw_data())
+                    if use_storage:
+                        self.assertEqual([query_counts[0]] * 3, query_counts)
+                    else:
+                        self.assertGreater(query_counts[1], query_counts[0])
+                        self.assertEqual(query_counts[1], query_counts[2])
+
+    @patch("files.tasks.FILE_BULK_BATCH_SIZE", 1)
+    def test_artifact_bundle_metadata_failure_rolls_back_all_extracted_files(self):
+        checksum = self.create_artifact_bundle({
+            "valid.js": (b"valid", {"type": "source", "headers": {"debug-id": str(uuid4())}}),
+            "invalid.js": (b"invalid", {"type": "source", "headers": {"debug-id": "invalid"}}),
+        })
+        with self.assertRaises(ValidationError):
+            process_artifact_bundle(checksum, [checksum], [self.project.id])
+        self.assertFalse(FileMetadata.objects.exists())
+        self.assertEqual([checksum], list(File.objects.values_list("checksum", flat=True)))
+
+    def test_artifact_bundle_closes_and_cleans_up_temp_files(self):
+        named_temporary_file = tempfile.NamedTemporaryFile
+        for invalid in (False, True):
+            with self.subTest(invalid=invalid):
+                temp_files = []
+
+                def create_temp_file(*args, **kwargs):
+                    self.assertTrue(all(file.closed for file in temp_files))
+                    file = named_temporary_file(*args, **kwargs)
+                    temp_files.append(file)
+                    return file
+
+                checksum = self.create_artifact_bundle({
+                    f"{i}.js": (
+                        f"contents-{invalid}-{i}".encode(),
+                        {"type": "source", "headers": {"debug-id": (
+                            "invalid" if invalid and i == 2 else str(uuid4()))}},
+                    )
+                    for i in range(3)
+                })
+                with patch("files.tasks.tempfile.NamedTemporaryFile", side_effect=create_temp_file):
+                    if invalid:
+                        with self.assertRaises(ValidationError):
+                            process_artifact_bundle(checksum, [checksum], [self.project.id])
+                    else:
+                        process_artifact_bundle(checksum, [checksum], [self.project.id])
+                self.assertEqual(3, len(temp_files))
+                self.assertTrue(all(file.closed for file in temp_files))
+                self.assertFalse(any(os.path.exists(file.name) for file in temp_files))
+
+    def test_artifact_bundle_scans_debug_ids_outside_the_write_transaction(self):
+        debug_id, other_debug_id = uuid4(), uuid4()
+        contents = f'e._sentryDebugIds["stack"] = "{other_debug_id}";'.encode()
+        checksum = self.create_artifact_bundle({
+            "app.min.js": (contents, {"type": "minified_source", "headers": {"debug-id": str(debug_id)}}),
+        })
+
+        def scan(local_file):
+            self.assertFalse(connection.in_atomic_block)
+            return find_in_code_debug_ids(local_file)
+
+        with patch("files.tasks.find_in_code_debug_ids", side_effect=scan):
+            with self.assertLogs("bugsink.api", level="WARNING") as logs:
+                process_artifact_bundle(checksum, [checksum], [self.project.id])
+        self.assertIn(f"Uploaded as {debug_id}, but also found: {other_debug_id}.", logs.output[0])
+        metadata = FileMetadata.objects.get(project=self.project, debug_id=debug_id, file_type="minified_source")
+        self.assertEqual(contents, metadata.file.get_raw_data())
+
+    def test_artifact_bundle_rejects_overlong_file_type(self):
+        checksum = self.create_artifact_bundle({
+            "source.js": (b"contents", {"type": "x" * 256, "headers": {"debug-id": str(uuid4())}}),
+        })
+        with self.assertRaisesMessage(ValueError, "Artifact file type is too long"):
+            process_artifact_bundle(checksum, [checksum], [self.project.id])
+        self.assertFalse(FileMetadata.objects.exists())
 
     def test_artifact_bundle_rejects_bzip2_manifest(self):
         bundle = BytesIO()
@@ -752,6 +989,7 @@ class FilesTests(TransactionTestCase):
         for create_with in uuids:
             FileMetadata.objects.all().delete()  # clean up before each test
             FileMetadata.objects.create(
+                project=self.project,
                 debug_id=create_with,
                 file_type="source_map",
                 file=file,
@@ -761,11 +999,12 @@ class FilesTests(TransactionTestCase):
                 fms = FileMetadata.objects.filter(debug_id__in=[test_with])
                 self.assertEqual(1, fms.count())
 
-    def test_get_file_metadata_for_debug_ids_uses_project_scope_before_legacy_fallback(self):
+    def test_get_file_metadata_for_debug_ids_only_uses_the_requested_project(self):
         scoped_debug_id = uuid4()
-        legacy_debug_id = uuid4()
+        other_debug_id = uuid4()
+        other_project = Project.objects.create(name="other")
         file = File.objects.create(checksum="a" * 40, filename="scoped.js.map", size=0)
-        legacy_file = File.objects.create(checksum="b" * 40, filename="legacy.js.map", size=0)
+        other_file = File.objects.create(checksum="b" * 40, filename="other.js.map", size=0)
 
         scoped_metadata = FileMetadata.objects.create(
             project=self.project,
@@ -773,17 +1012,17 @@ class FilesTests(TransactionTestCase):
             file_type="source_map",
             file=file,
         )
-        FileMetadata.objects.create(debug_id=scoped_debug_id, file_type="source_map", file=legacy_file)
-        legacy_metadata = FileMetadata.objects.create(debug_id=legacy_debug_id, file_type="source_map", file=file)
+        for debug_id in (scoped_debug_id, other_debug_id):
+            FileMetadata.objects.create(
+                project=other_project, debug_id=debug_id, file_type="source_map", file=other_file)
 
         result = get_file_metadata_for_debug_ids(
             self.project,
-            [scoped_debug_id, legacy_debug_id],
+            [scoped_debug_id, other_debug_id],
             "source_map",
         )
 
-        self.assertEqual(scoped_metadata, result[scoped_debug_id])
-        self.assertEqual(legacy_metadata, result[legacy_debug_id])
+        self.assertEqual({scoped_debug_id: scoped_metadata}, result)
 
     @patch("files.tasks.extract_dif_kind")
     def test_difs_assemble_stores_project_scoped_metadata(self, mock_extract_dif_kind):
@@ -1171,8 +1410,9 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
         self.token = auth.token
         self.project = Project.objects.create(name="test")
 
-        # sentry-cli asks _us_ for our own URL...
-        self.enterContext(bugsink_override_settings(BASE_URL=self.live_server_url))
+        # a BASE_URL that sentry-cli cannot reach (e.g. Bugsink's UI on a private network): sentry-cli must upload to
+        # the url it was given (--url), not to BASE_URL
+        self.enterContext(bugsink_override_settings(BASE_URL="http://unreachable.invalid"))
 
         # propagate exceptions so that we get the errors "from inside the server" instead of just sentry-cli reporting
         # about a 500 error (the setting just makes it end up on the output, it does not actually "escape" in such a

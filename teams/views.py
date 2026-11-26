@@ -256,11 +256,17 @@ def team_members_invite(request, team_pk):
             user, user_created = User.objects.get_or_create(
                 email=email, defaults={'username': email, 'is_active': False})
 
+            was_deactivated = user.is_deactivated
+            if was_deactivated:
+                user.is_deactivated = False
+                user.save(update_fields=["is_deactivated"])
+
             if email_backend_delivers_mail():
                 _send_team_invite_email(user, team_pk)
                 invite_link = None
             else:
-                invite_link = _create_team_invite_link(user, team_pk, create_account_setup_link=user_created)
+                invite_link = _create_team_invite_link(
+                    user, team_pk, create_account_setup_link=user_created or was_deactivated)
 
             _, membership_created = TeamMembership.objects.get_or_create(team=team, user=user, defaults={
                 'role': form.cleaned_data['role'],
@@ -363,12 +369,15 @@ def team_members_accept_new_user(request, team_pk, token):
             seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)).delete()
 
     try:
-        verification = EmailVerification.objects.get(token=token)
+        verification = EmailVerification.objects.get(token=token, email=models.F("user__username"))
     except EmailVerification.DoesNotExist:
         # good enough (though a special page might be prettier)
         raise Http404("Invalid or expired token")
 
     user = verification.user
+    if user.is_deactivated:
+        raise Http404("This account has been deactivated.")
+
     if not user.has_usable_password() or not user.is_active:
         # NOTE: we make the had assumption here that users without a password can self-upgrade to become users with a
         # password. In the future (e.g. LDAP) this may not be what we want, and we'll have to implement a separate field

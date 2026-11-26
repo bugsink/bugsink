@@ -8,6 +8,7 @@ from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 
 from files.models import Chunk, File, FileMetadata, _binary_to_bytes
 from files.tasks import vacuum_files_batch, vacuum_files_sync
+from projects.models import Project
 
 
 class VacuumFilesBatchTestCase(TransactionTestCase):
@@ -25,7 +26,8 @@ class VacuumFilesBatchTestCase(TransactionTestCase):
 
     def _create_file(self, checksum, filename, size, accessed_at):
         file = File.objects.create(checksum=checksum, filename=filename, size=size, data=b"x" * size)
-        FileMetadata.objects.create(file=file, debug_id=uuid4(), file_type="source_map", data="{}")
+        project, _ = Project.objects.get_or_create(name="test")
+        FileMetadata.objects.create(project=project, file=file, debug_id=uuid4(), file_type="source_map", data="{}")
         File.objects.filter(id=file.id).update(accessed_at=accessed_at)
         file.refresh_from_db()
         return file

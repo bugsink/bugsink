@@ -5,6 +5,8 @@ from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _, get_language_info
 
+from bugsink.transaction import immediate_atomic
+
 
 def language_choices():
     items = [("auto", _("Auto (browser preference)"))]
@@ -28,8 +30,8 @@ class User(AbstractUser):
     # as long as the number of fields is small I think the User model makes more sense. We can always push them out
     # later)
 
-    # Django provides is_active. Bugsink currently uses it for both "may authenticate" and "email/setup is confirmed".
-    # If we ever allow login with an unconfirmed email address, split that state into an explicit field.
+    # Inactive users may complete email/setup unless an administrator has deactivated them.
+    is_deactivated = models.BooleanField(default=False)
 
     send_email_alerts = models.BooleanField(default=True, blank=True)
 
@@ -55,10 +57,41 @@ class User(AbstractUser):
     class Meta:
         db_table = 'auth_user'
 
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        password_changed = (
+            self.pk is not None and self._password is not None
+            and (update_fields is None or "password" in update_fields))
+        email_may_change = self.pk is not None and (update_fields is None or "email" in update_fields)
+        if not password_changed and not email_may_change:
+            return super().save(*args, **kwargs)
+
+        using = kwargs.get("using") or self._state.db
+        with immediate_atomic(using=using, only_if_needed=True):
+            saved_user = type(self).objects.using(using).filter(pk=self.pk)
+            invalidate_tokens = password_changed or (
+                email_may_change and saved_user.exclude(email=self.email).exists())
+            super().save(*args, **kwargs)
+            if invalidate_tokens:
+                self.emailverification_set.all().delete()
+
+    def deactivate(self):
+        self.is_active = False
+        self.is_deactivated = True
+        self.is_superuser = False
+        self.is_staff = False
+        self.set_unusable_password()  # also invalidates existing sessions
+        self.save()
+
+        self.teammembership_set.all().delete()
+        self.projectmembership_set.all().delete()
+        self.emailverification_set.all().delete()
+        self.auth_tokens.filter(is_user_bound=True).delete()
+
 
 class EmailVerification(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    email = models.EmailField()  # redundant, but future-proof for when we allow multiple emails per user
+    email = models.EmailField()
     token = models.CharField(max_length=64, default=secrets.token_urlsafe, blank=False, null=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

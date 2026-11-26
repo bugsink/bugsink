@@ -44,23 +44,27 @@ logger = logging.getLogger("bugsink.ingest")
 
 @shared_task
 def digest(event_id, event_metadata):
-    if "ingestion_id" in event_metadata:
-        ingestion_id = event_metadata["ingestion_id"]  # the normal case
-    else:
-        ingestion_id = event_id  # for bugsink<=2.0.11 events in-transit in snappea queue cross version upgrade
-
-    with open(get_filename_for_event_id(ingestion_id), "rb") as f:
-        event_data = json.loads(f.read().decode("utf-8"))
-        opened = [get_filename_for_event_id(ingestion_id)]
-
+    ingestion_id = event_metadata["ingestion_id"]
+    filenames = [get_filename_for_event_id(ingestion_id)]
     if event_metadata.get("has_minidump"):
-        with open(get_filename_for_event_id(ingestion_id, filetype="minidump"), "rb") as f:
-            minidump_bytes = f.read()
-            opened += [get_filename_for_event_id(ingestion_id, filetype="minidump")]
-    else:
-        minidump_bytes = None
+        filenames.append(get_filename_for_event_id(ingestion_id, filetype="minidump"))
 
     try:
+        try:
+            with open(get_filename_for_event_id(ingestion_id), encoding="utf-8") as f:
+                event_data = json.load(f)
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            raise ValidationError("Invalid JSON in event: %s" % e) from e
+
+        if not isinstance(event_data, dict):
+            raise ValidationError("Event must be a JSON object")
+
+        if event_metadata.get("has_minidump"):
+            with open(get_filename_for_event_id(ingestion_id, filetype="minidump"), "rb") as f:
+                minidump_bytes = f.read()
+        else:
+            minidump_bytes = None
+
         project = Project.objects.filter(pk=event_metadata["project_id"], is_deleted=False).first()
         if project is None:
             return
@@ -96,9 +100,9 @@ def digest(event_id, event_metadata):
     except ValidationError as e:
         logger.warning("ValidationError in digest", exc_info=e)
     finally:
-        # "Robustly" remove all opened files (don't stop on failure), but still report any errors at the end
+        # "Robustly" remove all ingestion files (don't stop on failure), but still report any errors at the end
         errors = []
-        for filename in opened:
+        for filename in filenames:
             try:
                 os.unlink(filename)
             except FileNotFoundError as e:

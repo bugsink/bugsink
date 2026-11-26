@@ -1,4 +1,5 @@
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from django.contrib.auth import login
 from django.contrib.auth import update_session_auth_hash
@@ -11,6 +12,9 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.utils.translation import gettext as _
 from django.utils import translation
+from django.db.models import F
+from django.views.decorators.debug import sensitive_post_parameters
+from django.views.decorators.cache import never_cache
 
 from bugsink.app_settings import get_settings, CB_ANYBODY
 from bugsink.decorators import atomic_for_request_method
@@ -36,8 +40,7 @@ def user_list(request):
         action, user_pk = full_action_str.split(":", 1)
         if action == "deactivate":
             user = User.objects.get(pk=user_pk)
-            user.is_active = False
-            user.save()
+            user.deactivate()
 
             messages.success(request, 'User %s deactivated' % user.username)
             return redirect('user_list')
@@ -45,6 +48,7 @@ def user_list(request):
         if action == "activate":
             user = User.objects.get(pk=user_pk)
             user.is_active = True
+            user.is_deactivated = False
             user.save()
 
             messages.success(request, 'User %s activated' % user.username)
@@ -82,6 +86,7 @@ def user_edit(request, user_pk):
     return render(request, "users/user_edit.html", {"form": form})
 
 
+@sensitive_post_parameters("password1", "password2")
 @atomic_for_request_method
 def signup(request):
     if get_settings().USER_REGISTRATION != CB_ANYBODY:
@@ -118,10 +123,13 @@ def confirm_email(request, token=None):
             seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)).delete()
 
     try:
-        verification = EmailVerification.objects.get(token=token)
+        verification = EmailVerification.objects.get(token=token, email=F("user__username"))
     except EmailVerification.DoesNotExist:
         # good enough (though a special page might be prettier)
         raise Http404("Invalid or expired token")
+
+    if verification.user.is_active or verification.user.is_deactivated:
+        raise Http404("This account is not awaiting email confirmation.")
 
     if request.method == 'POST':
         # We insist on POST requests to do the actual confirmation (at the cost of an extra click). See:
@@ -148,8 +156,8 @@ def resend_confirmation(request):
 
         if form.is_valid():
             user = User.objects.get(username=form.cleaned_data['email'])
-            if user.is_active:
-                raise Http404("This email is already confirmed.")
+            if user.is_active or user.is_deactivated:
+                raise Http404("This account is not awaiting email confirmation.")
 
             verification = EmailVerification.objects.create(user=user, email=user.username)
             send_confirm_email.delay(user.username, verification.token)
@@ -170,11 +178,11 @@ def request_reset_password(request):
 
         if form.is_valid():
             user = User.objects.get(username=form.cleaned_data['email'])
-            # if not user.is_active  no separate branch for this: password-reset implies email-confirmation
+            if not user.is_active or user.is_deactivated:
+                raise Http404("Cannot reset the password of an inactive account.")
 
-            # we reuse the EmailVerification model for password resets; security wise it doesn't matter, because the
-            # visiting any link with the token implies control over the email account; and we have defined that such
-            # control implies both verification and password-resetting.
+            # We reuse email-verification tokens for password resets and initial password setup after invitations.
+            # Both use mailbox access to prove account ownership.
             verification = EmailVerification.objects.create(user=user, email=user.username)
             send_reset_email.delay(user.username, verification.token)
             return render(request, "users/reset_password_email_sent.html", {"email": user.username})
@@ -185,6 +193,8 @@ def request_reset_password(request):
     return render(request, "users/request_reset_password.html", {"form": form})
 
 
+@never_cache
+@sensitive_post_parameters("new_password1", "new_password2")
 @atomic_for_request_method
 def reset_password(request, token=None):
     # alternative name: set_password (because this one also works for initial setting of a password)
@@ -195,27 +205,40 @@ def reset_password(request, token=None):
         created_at__lt=timezone.now() - timedelta(
             seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)).delete()
 
+    # no_bandit_expl: "set-password" is a URL marker, not a secret token.
+    verification_token = request.session.get("_password_reset_token") if token == "set-password" else token  # nosec B105
+
     try:
-        verification = EmailVerification.objects.get(token=token)
+        verification = EmailVerification.objects.get(token=verification_token, email=F("user__username"))
     except EmailVerification.DoesNotExist:
         # good enough (though a special page might be prettier)
         raise Http404("Invalid or expired token")
 
     user = verification.user
+    if user.is_deactivated:
+        raise Http404("This account has been deactivated.")
+
     next_url = request.POST.get("next", request.GET.get("next", reverse("home")))
 
     if not is_safe_next_url(next_url, request):
         next_url = reverse("home")
 
+    # no_bandit_expl: "set-password" is a URL marker, not a secret token.
+    if token != "set-password":  # nosec B105
+        # Keep the bearer token out of the form URL and subsequent Referer headers.
+        request.session["_password_reset_token"] = verification.token
+        # no_bandit_expl: "set-password" is a URL marker, not a secret token.
+        reset_url = reverse("reset_password", kwargs={"token": "set-password"})  # nosec B105
+        return redirect(reset_url + "?" + urlencode({"next": next_url}))
+
     if request.method == 'POST':
         form = SetPasswordForm(user, request.POST)
         if form.is_valid():
-            user.is_active = True  # password-reset implies email-confirmation
+            user.is_active = True  # also completes initial setup for invited users
             user.set_password(form.cleaned_data['new_password1'])
             user.save()
 
-            verification.delete()
-
+            request.session.pop("_password_reset_token", None)
             login(request, verification.user)
 
             return redirect(next_url)
@@ -254,6 +277,7 @@ def preferences(request):
     })
 
 
+@sensitive_post_parameters("old_password", "new_password1", "new_password2")
 @atomic_for_request_method
 # in the general case this is done by Middleware but we're under /accounts/, so we need it back.
 # not security-critical because we simply get a failure on request.user if this wasn't there, but still the right thing.
