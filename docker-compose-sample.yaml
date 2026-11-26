@@ -1,13 +1,13 @@
 services:
   db:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: bugsinkuser 
       POSTGRES_PASSWORD: your_super_secret_password  # Change this
       POSTGRES_DB: bugsink
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - db-data:/var/lib/postgresql
     healthcheck:
       test: pg_isready -h db      
       retries: 5
