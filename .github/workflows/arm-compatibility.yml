@@ -1,0 +1,19 @@
+name: ARM compatibility
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+      - 'bugsink/scripts/**'
+      - '.github/workflows/**'
+
+jobs:
+  # Installation changes need ARM feedback before merging; main is covered by Extended compatibility.
+  arm-compatibility:
+    name: ARM compatibility
+    uses: ./.github/workflows/test.yml
+    with:
+      runner: ubuntu-24.04-arm
+      python-versions: '["3.11", "3.12", "3.13", "3.14", "3.15"]'
