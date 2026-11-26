@@ -360,13 +360,24 @@ class FilesTests(TransactionTestCase):
         self.assertEqual(200, allowed_response.status_code)
 
     def test_chunk_upload_settings_use_real_limits(self):
-        with bugsink_override_settings(MAX_FILE_SIZE=1234):
+        with bugsink_override_settings(MAX_FILE_SIZE=1234, BASE_URL="https://bugsink.example.com"):
             response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers=self.token_headers)
 
         self.assertEqual(200, response.status_code)
         self.assertEqual(CHUNK_UPLOAD_SIZE, response.json()["chunkSize"])
         self.assertEqual(CHUNK_UPLOAD_SIZE, response.json()["maxRequestSize"])
         self.assertEqual(1234, response.json()["maxFileSize"])
+        self.assertEqual(
+            "https://bugsink.example.com/api/0/organizations/anyorg/chunk-upload/", response.json()["url"])
+
+    def test_chunk_upload_settings_use_upload_base_url(self):
+        with bugsink_override_settings(
+                BASE_URL="https://bugsink.example.com", UPLOAD_BASE_URL="https://uploads.example.com/bugsink/"):
+            response = self.client.get("/api/0/organizations/anyorg/chunk-upload/", headers=self.token_headers)
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(
+            "https://uploads.example.com/bugsink/api/0/organizations/anyorg/chunk-upload/", response.json()["url"])
 
     def test_chunk_upload_rejects_plain_chunk_larger_than_advertised(self):
         data = b"x" * (CHUNK_UPLOAD_SIZE + 1)
@@ -1408,8 +1419,8 @@ class SentryCLITest(EnterContextMixin, LiveServerTestCase):
         self.token = auth.token
         self.project = Project.objects.create(name="test")
 
-        # sentry-cli asks _us_ for our own URL...
-        self.enterContext(bugsink_override_settings(BASE_URL=self.live_server_url))
+        self.enterContext(bugsink_override_settings(
+            BASE_URL="http://unreachable.invalid", UPLOAD_BASE_URL=self.live_server_url))
 
         # propagate exceptions so that we get the errors "from inside the server" instead of just sentry-cli reporting
         # about a 500 error (the setting just makes it end up on the output, it does not actually "escape" in such a

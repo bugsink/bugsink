@@ -25,6 +25,7 @@ _PORT = os.environ.get("PORT", "8000")
 
 DEFAULTS = {
     "BASE_URL": f"http://localhost:{_PORT}",  # no trailing slash
+    "UPLOAD_BASE_URL": None,  # defaults to BASE_URL; override when upload clients need a different address
     "SITE_TITLE": "Bugsink",  # you can customize this as e.g. "My Bugsink" or "Bugsink for My Company"
 
     # Users, teams, projects
@@ -144,6 +145,9 @@ def _sanitize(settings):
 
     if settings["BASE_URL"].endswith("/"):
         settings["BASE_URL"] = settings["BASE_URL"][:-1]
+
+    if settings["UPLOAD_BASE_URL"] and settings["UPLOAD_BASE_URL"].endswith("/"):
+        settings["UPLOAD_BASE_URL"] = settings["UPLOAD_BASE_URL"][:-1]
 
     if settings["SINGLE_USER"]:
         # this is implemented as a "hard imply". Pro: 'it just works' even when configurations are half-baked; con: may
