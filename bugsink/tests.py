@@ -618,6 +618,17 @@ class TestAtomicTransactions(TransactionTestCase):
 
         self.assertTrue(User.objects.filter(username="callback").exists())
 
+    def test_eager_mode_holds_write_semaphore_during_transaction(self):
+        if connection.vendor != "sqlite":
+            self.skipTest("Checks the SQLite write semaphore")
+
+        with patch.dict(get_snappea_settings(), TASK_ALWAYS_EAGER=True):
+            with immediate_atomic():
+                acquired = immediate_semaphores["default"].acquire(blocking=False)
+                if acquired:
+                    immediate_semaphores["default"].release()
+                self.assertFalse(acquired)
+
     def test_transaction_time_excludes_commit_callback(self):
         before = get_stat("immediate_transaction")
         with patch("bugsink.transaction.time.time", return_value=100) as clock:
