@@ -33,6 +33,13 @@ jobs:
         [{"vendor": "mysql", "name": "MySQL", "version": "8.4"},
          {"vendor": "postgres", "name": "PostgreSQL", "version": "18"}]
 
+  # Run the corpus-wide integration tests once on the baseline environment.
+  integration:
+    name: Integration tests
+    uses: ./.github/workflows/test.yml
+    with:
+      integration-only: true
+
   linters:
     name: Linters
     uses: ./.github/workflows/linters.yml
