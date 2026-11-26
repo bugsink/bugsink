@@ -90,9 +90,10 @@ class Project(models.Model):
     # > DSNs are safe to keep public because they only allow submission of new events and related event data; they do
     # > not allow read access to any information.
     #
-    # The "because" in that sentence is dubious at least; however, I get why they say it, because they want to do JS and
-    # native apps too, and there's really no way to do those without exposing (some) endpoint. Anyway, I don't think the
-    # "public" key is public, and if you can help it it's always better to keep it private.
+    # Bugsink's position is: treat a DSN as a secret when you can. It only permits event submission, but unwanted
+    # events can pollute a project and consume quota. Browser and native apps necessarily expose their DSNs;
+    # server-side applications can keep them private, and Bugsink should not disclose them unnecessarily.
+    # https://www.bugsink.com/sentry-data-source-name/#dsn-public-or-private
     sentry_key = models.UUIDField(editable=False, default=uuid.uuid4)
 
     users = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, through="ProjectMembership")
