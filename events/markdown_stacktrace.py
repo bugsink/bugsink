@@ -32,16 +32,6 @@ def _code_segments(frame):
     return pre, ctx, post
 
 
-def _code_lines(frame):
-    pre, ctx, post = _code_segments(frame)
-    lines = []
-    lines.extend(pre)
-    if ctx is not None:
-        lines.append(ctx)
-    lines.extend(post)
-    return lines
-
-
 def _frames_for_exception(exc):
     st = exc.get("stacktrace") or {}
     return list(st.get("frames") or [])

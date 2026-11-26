@@ -9,7 +9,6 @@ Still, I think it's what we have in the Python world, so I'm just extending arou
 """
 from collections import defaultdict
 from pygments.lexers import _iter_lexerclasses, _fn_matches, HtmlLexer, HtmlDjangoLexer
-from pygments.lexer import DelegatingLexer
 
 from os.path import basename
 
@@ -193,31 +192,3 @@ def choose_lexer_for_pattern(pattern, classes, filename, code, platform):
         return HtmlLexer
 
     return None
-
-
-def get_most_basic_if_exists(classes):
-    # UNUSED; kept for reference.
-    #
-    # The reasoning here was: maybe we can just pick the "simplest" of a list of Lexers, which is somehow the base-case.
-    # But the following are deductions I'm unwilling to make (among probably others):
-    #
-    # *.cp => ComponentPascalLexer' from [(ComponentPascalLexer', 4), (CppLexer', 5)]
-    # *.incl => LassoLexer' from [(LassoLexer', 4), (LassoHtmlLexer', 14), (LassoXmlLexer', 14)]
-    # *.xsl => XmlLexer' from [(XmlLexer', 4), (XsltLexer', 5)]
-    #
-    # In the end, unused b/c the general "don't build complex logic on top of Pygments, instead fix based on observed
-    # need"
-
-    def basicness(clz):
-        return len(clz.mro()) + (10 if DelegatingLexer in clz.mro() else 0)  # 10 is 'arbitrary high' for non-basic
-
-    classes = sorted(classes, key=basicness)
-    x_classes = sorted([(basicness(clz), clz) for clz in classes], key=lambda tup: tup[0])
-
-    best_basicness = x_classes[0][0]
-    best_ones = [clz for basicness, clz in x_classes if basicness == best_basicness]
-
-    if len(best_ones) > 1:
-        return None
-
-    return classes[0]

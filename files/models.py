@@ -258,15 +258,3 @@ def get_file_metadata_for_debug_ids(project, debug_ids, file_type, *, defer_file
             file_type=file_type,
         )
     }
-
-
-def get_file_metadata_for_debug_id(project, debug_id, file_type):
-    result = list(get_file_metadata_for_debug_ids(project, [debug_id], file_type).values())
-    if len(result) == 0:
-        return None
-
-    if len(result) > 1:
-        # Should be prevented by database constraints; getting here would mean our lookup logic is wrong.
-        raise RuntimeError("Multiple FileMetadata objects found for one debug_id")
-
-    return result[0]
