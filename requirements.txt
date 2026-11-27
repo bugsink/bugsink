@@ -1,7 +1,7 @@
 gunicorn==27.0.*
 Django==5.2.*
 verbose_csrf_middleware==5.2.*
-sentry-sdk==2.*
+sentry-sdk==3.*
 django-tailwind==4.2.*
 jsonschema==4.26.*
 semver==3.2.*
