@@ -1,6 +1,8 @@
 import logging
 import json
 
+from django.conf import settings
+
 from performance.context_managers import time_to_logger
 
 from . import registry
@@ -12,6 +14,15 @@ performance_logger = logging.getLogger("bugsink.performance.snappea")
 
 
 def shared_task(function):
+    """Register a task and provide .delay() for queued or eager execution.
+
+    During tests, wrap the task to reject application DB writes outside immediate_atomic. Wrapping the function here
+    checks direct calls, eager .delay() calls and registered task execution alike.
+    """
+    if settings.I_AM_RUNNING == "TEST":
+        from bugsink.test_runner import check_write_transactions
+        function = check_write_transactions(function)
+
     def delayed_function(*args, **kwargs):
         if get_settings().TASK_ALWAYS_EAGER:
             # To ensure that args and kwargs are json-serializable in automatic tests and when using the single-server
