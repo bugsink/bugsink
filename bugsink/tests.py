@@ -7,7 +7,6 @@ import brotli_rs as brotli
 
 from unittest import TestCase as RegularTestCase
 from unittest.mock import patch
-from django.test import TestCase as DjangoTestCase
 from django.test import SimpleTestCase
 from django.test import override_settings
 from django.core.exceptions import SuspiciousOperation
@@ -304,7 +303,7 @@ class StreamsTestCase(RegularTestCase):
 
 
 @override_settings(DEBUG_CSRF=True)
-class CSRFViewsTestCase(DjangoTestCase):
+class CSRFViewsTestCase(TransactionTestCase):
 
     """
     Notes on (in)completeness of tests:
@@ -545,14 +544,14 @@ class SetRemoteAddrMiddlewareTestCase(RegularTestCase):
             SetRemoteAddrMiddleware.parse_x_forwarded_for("123.123.123.123,1.2.3.4")
 
 
-class ContentEncodingCheckMiddlewareTestCase(DjangoTestCase):
+class ContentEncodingCheckMiddlewareTestCase(TransactionTestCase):
 
     def test_speak_brotli_with_arbitrary_view_fails(self):
         response = self.client.post("/", headers={"Content-Encoding": "br"})
         self.assertTrue(b"Content-Encoding handling is not supported for endpoint `home`" in response.content)
 
 
-class AllowedHostsMsgTestCase(DjangoTestCase):
+class AllowedHostsMsgTestCase(TransactionTestCase):
 
     def test_allowed_hosts_error_message(self):
         self.maxDiff = None

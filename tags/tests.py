@@ -1,9 +1,9 @@
 from unittest import TestCase as RegularTestCase
-from django.test import TestCase as DjangoTestCase
 from django.conf import settings
 
 from bugsink.app_settings import override_settings as override_bugsink_settings
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
+from bugsink.transaction import immediate_atomic
 from projects.models import Project
 from issues.factories import get_or_create_issue, denormalized_issue_fields
 from events.factories import create_event, create_event_data
@@ -93,7 +93,7 @@ class DeduceTagsTestCase(RegularTestCase):
                 self.assertEqual(deduce_tags({"request": {"url": url}}), {"url": expected})
 
 
-class StoreTagsTestCase(DjangoTestCase):
+class StoreTagsTestCase(TransactionTestCase):
     # NOTE: I do quite a few assertNumQueries() in the below; super-brittle and opaque, of course. But at least the
     # brittle part is quick to fix (a single number) and provides a canary for performance regressions.
 
@@ -111,7 +111,8 @@ class StoreTagsTestCase(DjangoTestCase):
         self.assertEqual(self.event.tags.count(), 0)
 
     def test_store_1_tags(self):
-        with self.assertNumQueries(5 + self.correct_for_mysql):
+        # Ingestion supplies the write transaction; count only the queries made by store_tags.
+        with immediate_atomic(), self.assertNumQueries(5 + self.correct_for_mysql):
             store_tags(self.event, self.issue, {"foo": "bar"})
 
         self.assertEqual(self.event.tags.count(), 1)
@@ -124,7 +125,7 @@ class StoreTagsTestCase(DjangoTestCase):
         self.assertEqual(self.issue.tags.first().value.key.key, "foo")
 
     def test_store_5_tags(self):
-        with self.assertNumQueries(5 + self.correct_for_mysql):
+        with immediate_atomic(), self.assertNumQueries(5 + self.correct_for_mysql):
             store_tags(self.event, self.issue, {f"k-{i}": f"v-{i}" for i in range(5)})
 
         self.assertEqual(self.event.tags.count(), 5)
@@ -158,7 +159,7 @@ class StoreTagsTestCase(DjangoTestCase):
         self.assertEqual(IssueTag.objects.filter(issue=self.issue).count(), 512)
 
 
-class DigestTagsTestCase(DjangoTestCase):
+class DigestTagsTestCase(TransactionTestCase):
     def test_auto_ip_address(self):
         project = Project.objects.create(name="Test Project")
         issue, _ = get_or_create_issue(project)
@@ -300,7 +301,7 @@ class SearchParserTestCase(RegularTestCase):
             parse_query("text on key:value both sides"))
 
 
-class SearchTestCase(DjangoTestCase):
+class SearchTestCase(TransactionTestCase):
     """'Integration'-test; assuming Tags are stored correctly in the DB, can we search for them?"""
 
     def setUp(self):

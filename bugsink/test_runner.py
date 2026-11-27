@@ -7,7 +7,9 @@ from unittest.mock import patch
 from django.core.handlers.base import BaseHandler
 from django.core.management.base import BaseCommand
 from django.db import connections, transaction
+from django.test import TestCase as DjangoTestCase
 from django.test.runner import DiscoverRunner
+from django.test.utils import iter_test_cases
 
 from .transaction import ImmediateAtomic
 
@@ -67,6 +69,18 @@ class TransactionTestRunner(DiscoverRunner):
 
     * shared_task wraps tasks with check_write_transactions only when settings.I_AM_RUNNING == "TEST".
     """
+
+    def build_suite(self, test_labels=None, **kwargs):
+        suite = super().build_suite(test_labels, **kwargs)
+        for test in iter_test_cases(suite):
+            if isinstance(test, DjangoTestCase):
+                test_class = type(test)
+                raise RuntimeError(
+                    f"{test_class.__module__}.{test_class.__qualname__} inherits django.test.TestCase, "
+                    "which hides transaction boundaries. Use TransactionTestCase25251 for database tests "
+                    "or SimpleTestCase for tests without database access."
+                )
+        return suite
 
     def run_tests(self, test_labels, **kwargs):
         original_ImmediateAtomic__enter__ = ImmediateAtomic.__enter__

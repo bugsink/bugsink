@@ -2,7 +2,6 @@ import json
 from datetime import timedelta
 from unittest.mock import patch
 
-from django.test import TestCase
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -17,7 +16,7 @@ from .tasks import _make_message_body, _validate_remote_messages, send_if_due
 User = get_user_model()
 
 
-class PhoneHomeTests(TestCase):
+class PhoneHomeTests(TransactionTestCase):
 
     def test_make_message_body(self):
         # simple "does not crash" test (at least tests the various database getter code paths don't crash)

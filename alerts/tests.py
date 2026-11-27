@@ -1,4 +1,3 @@
-from django.test import TestCase as DjangoTestCase
 from django.test import SimpleTestCase
 from unittest.mock import patch, Mock
 from contextlib import contextmanager
@@ -1038,7 +1037,7 @@ class TestWebhookResponses(SimpleTestCase):
                     close.assert_called()
 
 
-class TestWebhookSecurityValidation(DjangoTestCase):
+class TestWebhookSecurityValidation(TransactionTestCase):
     def test_extracts_embedded_ipv4_addresses(self):
         cases = {
             "93.184.216.34": [],
@@ -1215,7 +1214,7 @@ class TestWebhookSecurityValidation(DjangoTestCase):
             validate_webhook_url("https://hooks.example.com/webhook")
 
 
-class TestWebhookConfigForms(DjangoTestCase):
+class TestWebhookConfigForms(TransactionTestCase):
     def test_slack_form_rejects_blocked_target(self):
         form = SlackConfigForm(data={"webhook_url": "http://10.0.0.42/hooks/test"})
 
