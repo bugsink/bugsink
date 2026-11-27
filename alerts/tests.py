@@ -46,11 +46,12 @@ from .service_backends.webhook_security import _embedded_ipv4_addresses, validat
 from .tasks import send_new_issue_alert, send_regression_alert, send_unmute_alert, _get_users_for_email_alert
 from .views import DEBUG_CONTEXTS
 from bugsink.app_settings import override_settings as override_bugsink_settings
+from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 
 User = get_user_model()
 
 
-class TestAlertSending(DjangoTestCase):
+class TestAlertSending(TransactionTestCase):
 
     def test_send_new_issue_alert(self):
         project = Project.objects.create(name="Test project")
@@ -172,7 +173,7 @@ class TestAlertSending(DjangoTestCase):
         self.assertEqual(list(_get_users_for_email_alert(issue)), [user])
 
 
-class TestSlackBackendErrorHandling(DjangoTestCase):
+class TestSlackBackendErrorHandling(TransactionTestCase):
     def setUp(self):
         self.project = Project.objects.create(name="Test project")
         self.config = MessagingServiceConfig.objects.create(
@@ -347,7 +348,7 @@ class TestSlackBackendErrorHandling(DjangoTestCase):
         self.assertFalse(self.config.has_recent_failure())
 
 
-class TestDiscordBackendErrorHandling(DjangoTestCase):
+class TestDiscordBackendErrorHandling(TransactionTestCase):
     def setUp(self):
         self.project = Project.objects.create(name="Test project")
         self.config = MessagingServiceConfig.objects.create(
@@ -506,7 +507,7 @@ class TestDiscordBackendErrorHandling(DjangoTestCase):
         self.assertFalse(self.config.has_recent_failure())
 
 
-class TestTelegramBackend(DjangoTestCase):
+class TestTelegramBackend(TransactionTestCase):
     def setUp(self):
         self.project = Project.objects.create(name="Test project")
         self.bot_token = "123456:ABCdef_test_token"
@@ -697,7 +698,7 @@ class TestTelegramBackend(DjangoTestCase):
         self.assertNotIn("message_thread_id", payload)
 
 
-class TestCustomBackendErrorHandling(DjangoTestCase):
+class TestCustomBackendErrorHandling(TransactionTestCase):
     def setUp(self):
         self.project = Project.objects.create(name="Test project")
         self.config = MessagingServiceConfig.objects.create(
@@ -881,7 +882,7 @@ class TestCustomBackendErrorHandling(DjangoTestCase):
         self.assertFalse(self.config.has_recent_failure())
 
 
-class TestMsTeamsBackend(DjangoTestCase):
+class TestMsTeamsBackend(TransactionTestCase):
     def setUp(self):
         self.project = Project.objects.create(name="Test project")
         self.config = MessagingServiceConfig.objects.create(
@@ -1323,7 +1324,7 @@ class TestWebhookConfigForms(DjangoTestCase):
         self.assertIn("non-global IP address", form.errors["webhook_url"][0])
 
 
-class TestGoogleChatBackendErrorHandling(DjangoTestCase):
+class TestGoogleChatBackendErrorHandling(TransactionTestCase):
     webhook_url = "https://chat.googleapis.com/v1/spaces/test/messages"
 
     def setUp(self):
@@ -1450,7 +1451,7 @@ class TestGoogleChatBackendErrorHandling(DjangoTestCase):
         self.assertRegex(payload["text"], r"<https?://.+\|view on Bugsink>")
 
 
-class TestServiceBackendTaskArguments(DjangoTestCase):
+class TestServiceBackendTaskArguments(TransactionTestCase):
     # Snappea stores the arguments of a delayed task in its queue and logs them when the task starts, so the secrets in
     # a service's config (webhook URLs, bot tokens) must not be among those arguments.
     configs = {
