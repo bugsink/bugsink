@@ -1,4 +1,4 @@
-from django.test import TestCase as DjangoTestCase
+from django.test import SimpleTestCase
 
 from issues.grouping_mechanisms import BUGSINK_GROUPING_V1
 from issues.utils import get_key_with_mechanism_for_data
@@ -8,7 +8,7 @@ def get_grouping_key_for_data(data):
     return get_key_with_mechanism_for_data(data, grouping_mechanism=BUGSINK_GROUPING_V1).key
 
 
-class GroupingV1TestCase(DjangoTestCase):
+class GroupingV1TestCase(SimpleTestCase):
 
     def _exception_event_data(self, exception_type, exception_value, fingerprint=None):
         data = {

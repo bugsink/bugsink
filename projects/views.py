@@ -410,21 +410,22 @@ def project_member_settings(request, project_pk, user_pk):
     })
 
 
-@atomic_for_request_method
+@immediate_atomic()
 @login_exempt  # no login is required, the token is what identifies the user
 def project_members_accept_new_user(request, project_pk, token):
     # There is a lot of overlap with the email-verification flow here; security-wise we make the same assumptions as we
     # do over there, namely: access to email implies control over the account. This is also the reason we reuse that
     # app's `EmailVerification` model.
 
-    # clean up expired tokens; doing this on every request is just fine, it saves us from having to run a cron
-    # job-like thing
-    EmailVerification.objects.filter(
-        created_at__lt=timezone.now() - timedelta(
-            seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)).delete()
+    cutoff = timezone.now() - timedelta(seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)
+    if request.method == 'POST':
+        # clean up expired tokens; doing this on POST requests is just fine, it saves us from having to run a cron
+        # job-like thing
+        EmailVerification.objects.filter(created_at__lt=cutoff).delete()
 
     try:
-        verification = EmailVerification.objects.get(token=token, email=models.F("user__username"))
+        verification = EmailVerification.objects.get(
+            token=token, email=models.F("user__username"), created_at__gte=cutoff)
     except EmailVerification.DoesNotExist:
         # good enough (though a special page might be prettier)
         raise Http404("Invalid or expired token")
@@ -453,6 +454,7 @@ def project_members_accept_new_user(request, project_pk, token):
     # you've clicked on is for a different user than the one you're logged in as.
     if request.user.is_authenticated and request.user != user:
         logout(request)
+        return redirect(reverse("login"))  # not perfect (not to the accept page) but at least not so confusing
 
     # In this case, we clean up the no-longer-required verification object (we make somewhat of an exception to the
     # "don't change stuff on GET" rule, because it's immaterial here).

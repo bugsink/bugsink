@@ -11,6 +11,7 @@ import requests
 from django.core.management.base import BaseCommand
 
 from compat.dsn import get_envelope_url, get_header_value
+from bugsink.decorators import restore_sigint_handler
 from bugsink.streams import compress_with_zlib, WBITS_PARAM_FOR_GZIP, WBITS_PARAM_FOR_DEFLATE
 from bugsink.utils import nc_rnd
 from issues.utils import get_values
@@ -33,6 +34,7 @@ class Command(BaseCommand):
 
         parser.add_argument("filename")
 
+    @restore_sigint_handler
     def handle(self, *args, **options):
         self.stopping = False
         signal.signal(signal.SIGINT, self.handle_signal)

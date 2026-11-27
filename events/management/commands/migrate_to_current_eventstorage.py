@@ -4,6 +4,7 @@ from django.db.utils import OperationalError
 
 import signal
 
+from bugsink.decorators import restore_sigint_handler
 from bugsink.transaction import immediate_atomic
 
 from events.storage_registry import get_write_storage, get_storage
@@ -21,6 +22,7 @@ class Command(BaseCommand):
 
     help = """'Migrate' event data storage to the currently configured USE_FOR_WRITE"""
 
+    @restore_sigint_handler
     def handle(self, *args, **options):
         self.stopped = False
 

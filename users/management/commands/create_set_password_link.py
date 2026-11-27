@@ -3,6 +3,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.urls import reverse
 
 from bugsink.app_settings import get_settings
+from bugsink.transaction import immediate_atomic
 from users.models import EmailVerification
 
 
@@ -16,13 +17,14 @@ class Command(BaseCommand):
         parser.add_argument("email")
 
     def handle(self, *args, **options):
-        try:
-            user = User.objects.get(username=options["email"])
-        except User.DoesNotExist as e:
-            raise CommandError("No user with this email address exists") from e
+        with immediate_atomic():
+            try:
+                user = User.objects.get(username=options["email"])
+            except User.DoesNotExist as e:
+                raise CommandError("No user with this email address exists") from e
 
-        if user.is_deactivated:
-            raise CommandError("Reactivate or reinvite this user before creating a set-password link")
+            if user.is_deactivated:
+                raise CommandError("Reactivate or reinvite this user before creating a set-password link")
 
-        verification = EmailVerification.objects.create(user=user, email=user.username)
+            verification = EmailVerification.objects.create(user=user, email=user.username)
         self.stdout.write(get_settings().BASE_URL + reverse("reset_password", kwargs={"token": verification.token}))

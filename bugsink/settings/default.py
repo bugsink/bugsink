@@ -29,6 +29,8 @@ else:
 # Used for reporting / debugging purposes. The default docker conf template overrides this accordingly.
 IS_DOCKER = False
 
+TEST_RUNNER = "bugsink.test_runner.TransactionTestRunner"
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -137,6 +139,7 @@ BUGSINK_APPS = [
 INSTALLED_APPS += BUGSINK_APPS
 
 AUTH_USER_MODEL = "users.User"
+SESSION_ENGINE = "bugsink.session_backend"
 
 TAILWIND_APP_NAME = 'theme'
 

@@ -1,10 +1,9 @@
 import json
-from django.test import TestCase as DjangoTestCase
 from datetime import timedelta
 
+from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from projects.models import Project
 
-from django.test import TestCase
 from django.utils import timezone
 
 from issues.models import TurningPoint, TurningPointKind
@@ -13,7 +12,7 @@ from issues.factories import get_or_create_issue
 from .models import Release, ordered_releases, RE_PACKAGE_VERSION, create_release_if_needed
 
 
-class ReleaseTestCase(DjangoTestCase):
+class ReleaseTestCase(TransactionTestCase):
 
     def test_create_and_order(self):
         project = Project.objects.create(name="Test Project")
@@ -90,7 +89,7 @@ class ReleaseTestCase(DjangoTestCase):
             RE_PACKAGE_VERSION.match("@mypac@kage@1.2.3").groupdict())
 
 
-class CreateReleaseIfNeededTests(TestCase):
+class CreateReleaseIfNeededTests(TransactionTestCase):
     def setUp(self):
         self.timestamp0 = timezone.now()
         self.timestamp1 = self.timestamp0 + timedelta(seconds=5)

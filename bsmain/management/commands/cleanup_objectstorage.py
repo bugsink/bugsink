@@ -4,7 +4,9 @@ import sys
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from bugsink.decorators import restore_sigint_handler
 from bugsink.app_settings import get_settings
+from bugsink.transaction import immediate_atomic
 from files.object_kinds import get_object_kind_model, get_object_kind_spec
 from files.storage_registry import get_storage
 
@@ -16,6 +18,7 @@ class Command(BaseCommand):
         parser.add_argument("object_kind", type=str, help="Object kind to clean up, e.g. 'file'")
         parser.add_argument("storage_name", type=str, help="Storage name to clean up")
 
+    @restore_sigint_handler
     def handle(self, *args, **options):
         self.stopped = False
         signal.signal(signal.SIGINT, self.handle_sigint)
@@ -60,10 +63,21 @@ class Command(BaseCommand):
                 if self.stopped:
                     break
 
-                if model.objects.filter(**{key_field: key, "storage_backend": storage_name}).count() == 0:
-                    self.stdout.write(f"Deleting {object_kind} data {key}")
-                    storage.delete(key)
-                    delete_count += 1
+                is_orphan = model.objects.filter(**{key_field: key, "storage_backend": storage_name}).count() == 0
+
+            # Take immediate_atomic to double-check non-existence against a fresh DB snapshot, and block concurrent
+            # writers from creating the row between this check and storage deletion.
+            # Orphans are presumably rare, so keep the initial scan read-only and only take the writer lock for
+            # candidates, rather than hogging the DB while checking every stored object.
+            if is_orphan:
+                with immediate_atomic():
+                    if self.stopped:
+                        break
+
+                    if model.objects.filter(**{key_field: key, "storage_backend": storage_name}).count() == 0:
+                        self.stdout.write(f"Deleting {object_kind} data {key}")
+                        storage.delete(key)
+                        delete_count += 1
 
             if checked_count % 100 == 0:
                 self.stdout.write(f"Processed {checked_count} items from the storage.")

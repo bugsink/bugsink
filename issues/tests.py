@@ -14,7 +14,6 @@ from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 from zipfile import ZIP_DEFLATED, ZipFile  # intentionally uses C-zlib to test compatibility with the Rust codec
 
-from django.test import TestCase as DjangoTestCase
 from django.contrib.auth import get_user_model
 from django.test import tag
 from django.conf import settings
@@ -198,7 +197,7 @@ class RegressionUtilTestCase(RegularTestCase):
         self.assertTrue(is_regression(releases, ["3.1.2"], events_at, current_event_at="4.0.2"))
 
 
-class RegressionIssueTestCase(DjangoTestCase):
+class RegressionIssueTestCase(TransactionTestCase):
     # this particular testcase is more of an integration test: it tests the handling of issue objects.
 
     def test_issue_is_regression_no_releases(self):

@@ -3,7 +3,7 @@ import datetime
 import io
 
 from django.core.management import call_command
-from django.test import TestCase as DjangoTestCase, override_settings
+from django.test import override_settings
 from unittest import TestCase as RegularTestCase
 from unittest.mock import patch
 from django.contrib.auth import get_user_model
@@ -129,12 +129,11 @@ class ViewTests(TransactionTestCase):
                 self.assertEqual(response.status_code, 403)
 
 
-class TimeZoneTestCase(DjangoTestCase):
+class TimeZoneTestCase(TransactionTestCase):
     """This class contains some tests that formalize my understanding of how Django works; they are not strictly tests
     of bugsink code.
 
-    We put this in events/tests.py because that's a place where we use Django's TestCase, and we want to test in that
-    context, as well as the one of Event models.
+    We put this in events/tests.py to test in the same database/test configuration as the Event models.
     """
 
     def test_datetimes_are_in_utc_when_retrieved_from_the_database_with_default_conf(self):
@@ -156,7 +155,7 @@ class TimeZoneTestCase(DjangoTestCase):
             self.assertEqual(datetime.timezone.utc, e.timestamp.tzinfo)
 
 
-class EventUsageTestCase(DjangoTestCase):
+class EventUsageTestCase(TransactionTestCase):
     def test_record_event_counts(self):
         project = Project.objects.create()
         issue, _ = get_or_create_issue(project=project)
@@ -203,7 +202,7 @@ class EventUsageTestCase(DjangoTestCase):
         self.assertTrue(IssueEventCountsPerHour.objects.filter(bucket=recent_bucket).exists())
 
 
-class EventSparklineTestCase(DjangoTestCase):
+class EventSparklineTestCase(TransactionTestCase):
     def test_y_labels_respect_max_labels(self):
         cases_by_max_labels = [
             # max_labels 0, 1 are somewhat nonsensical anyway (you'd label top & bottom at the least in practice)
@@ -516,7 +515,7 @@ class RetentionUtilsTestCase(RegularTestCase):
         # self.assertEqual(0, eviction_target(10_000, 9_999))
 
 
-class RetentionTestCase(DjangoTestCase):
+class RetentionTestCase(TransactionTestCase):
 
     def test_epoch_bounds_with_irrelevance_empty_project(self):
         project = Project.objects.create()
