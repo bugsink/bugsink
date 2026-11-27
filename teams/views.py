@@ -15,6 +15,7 @@ from users.models import EmailVerification
 from bugsink.app_settings import get_settings, CB_ANYBODY, CB_ADMINS, CB_MEMBERS
 from bugsink.decorators import login_exempt, atomic_for_request_method
 from bugsink.invite_links import email_not_sent_invite_link_notice, manual_invite_link_notice
+from bugsink.transaction import immediate_atomic
 from bugsink.utils import email_backend_delivers_mail
 
 from .models import (
@@ -355,7 +356,7 @@ def team_member_settings(request, team_pk, user_pk):
     })
 
 
-@atomic_for_request_method
+@immediate_atomic()
 @login_exempt  # no login is required, the token is what identifies the user
 def team_members_accept_new_user(request, team_pk, token):
     # There is a lot of overlap with the email-verification flow here; security-wise we make the same assumptions as we

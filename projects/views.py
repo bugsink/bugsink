@@ -410,7 +410,7 @@ def project_member_settings(request, project_pk, user_pk):
     })
 
 
-@atomic_for_request_method
+@immediate_atomic()
 @login_exempt  # no login is required, the token is what identifies the user
 def project_members_accept_new_user(request, project_pk, token):
     # There is a lot of overlap with the email-verification flow here; security-wise we make the same assumptions as we
