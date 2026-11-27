@@ -1,7 +1,7 @@
 {% load add_to_qs %}
 {% load i18n %}
 
-                <form action="{% url this_view issue_pk=issue.pk nav="last" %}" method="get">{# nav="last": when doing a new search on an event-page, you want the most recent matching event to show up #}
+                <form action="{% url this_view issue_pk=issue.pk nav="last" %}" method="get" class="flex justify-end w-full sm:w-auto">{# nav="last": when doing a new search on an event-page, you want the most recent matching event to show up #}
                 {% include "theme/_search_input.html" with placeholder="search..." search_container_class="mr-2" %}
                 </form>
 
