@@ -4,6 +4,7 @@ import tempfile
 from datetime import timedelta
 from zipfile import ZipFile
 import json
+from uuid import UUID
 from hashlib import sha1
 from os.path import basename
 from django.utils import timezone
@@ -319,6 +320,7 @@ def process_artifact_bundle(bundle_checksum, chunk_checksums, project_ids):
                         if len(str(file_type)) > FileMetadata._meta.get_field("file_type").max_length:
                             raise ValueError("Artifact file type is too long")
 
+                        debug_id = str(UUID(debug_id))
                         for project_id in project_ids:
                             metadata.append(FileMetadata(
                                 project_id=project_id,
