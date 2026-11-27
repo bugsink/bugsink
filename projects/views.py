@@ -454,6 +454,7 @@ def project_members_accept_new_user(request, project_pk, token):
     # you've clicked on is for a different user than the one you're logged in as.
     if request.user.is_authenticated and request.user != user:
         logout(request)
+        return redirect(reverse("login"))  # not perfect (not to the accept page) but at least not so confusing
 
     # In this case, we clean up the no-longer-required verification object (we make somewhat of an exception to the
     # "don't change stuff on GET" rule, because it's immaterial here).
