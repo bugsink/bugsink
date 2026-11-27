@@ -139,6 +139,7 @@ BUGSINK_APPS = [
 INSTALLED_APPS += BUGSINK_APPS
 
 AUTH_USER_MODEL = "users.User"
+SESSION_ENGINE = "bugsink.session_backend"
 
 TAILWIND_APP_NAME = 'theme'
 
