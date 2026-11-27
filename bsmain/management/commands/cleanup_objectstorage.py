@@ -4,6 +4,7 @@ import sys
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from bugsink.decorators import restore_sigint_handler
 from bugsink.app_settings import get_settings
 from files.object_kinds import get_object_kind_model, get_object_kind_spec
 from files.storage_registry import get_storage
@@ -16,6 +17,7 @@ class Command(BaseCommand):
         parser.add_argument("object_kind", type=str, help="Object kind to clean up, e.g. 'file'")
         parser.add_argument("storage_name", type=str, help="Storage name to clean up")
 
+    @restore_sigint_handler
     def handle(self, *args, **options):
         self.stopped = False
         signal.signal(signal.SIGINT, self.handle_sigint)

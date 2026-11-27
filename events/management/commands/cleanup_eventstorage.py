@@ -4,6 +4,7 @@ import signal
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from bugsink.decorators import restore_sigint_handler
 from bugsink.app_settings import get_settings
 from events.storage_registry import get_storage
 from events.models import Event
@@ -27,6 +28,7 @@ class Command(BaseCommand):
 
         parser.add_argument('storage_name', type=str, help=help_text)
 
+    @restore_sigint_handler
     def handle(self, *args, **options):
         self.stopped = False
         signal.signal(signal.SIGINT, self.handle_sigint)

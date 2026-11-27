@@ -1,4 +1,5 @@
 from functools import wraps
+import signal
 
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import PermissionDenied
@@ -13,6 +14,19 @@ from .transaction import durable_atomic, immediate_atomic
 def login_exempt(view):
     view.login_exempt = True
     return view
+
+
+def restore_sigint_handler(function):
+    """Restore the caller's SIGINT handler when a command returns or raises."""
+    @wraps(function)
+    def wrapper(*args, **kwargs):
+        original_handler = signal.getsignal(signal.SIGINT)
+        try:
+            return function(*args, **kwargs)
+        finally:
+            signal.signal(signal.SIGINT, original_handler)
+
+    return wrapper
 
 
 def project_membership_required(function):

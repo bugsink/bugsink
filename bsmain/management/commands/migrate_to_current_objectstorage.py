@@ -4,6 +4,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.db.utils import OperationalError
 
+from bugsink.decorators import restore_sigint_handler
 from bugsink.transaction import immediate_atomic
 
 from files.models import cleanup_objects_on_storage
@@ -26,6 +27,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("object_kind", type=str, help="Object kind to migrate, e.g. 'file'")
 
+    @restore_sigint_handler
     def handle(self, *args, **options):
         self.stopped = False
         signal.signal(signal.SIGINT, self.handle_sigint)
