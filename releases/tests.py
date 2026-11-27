@@ -51,6 +51,25 @@ class ReleaseTestCase(DjangoTestCase):
 
         self.assertEqual(ordered_releases(), [r0, r1, r3, r2, r4])
 
+    def test_create_and_order_long_semver(self):
+        project = Project.objects.create(name="Test Project")
+        semver = "1.0.1+3eb8fd42c758-20260629030052.3eb8fd42c758cbb18a52e1b29b49f877027e5637"
+
+        # A release stored before semver introduced its 50-character limit.
+        r0 = Release.objects.create(
+            project=project, version="FutBoraBlazor.Server@" + semver,
+            semver=semver, is_semver=True, sort_epoch=0,
+        )
+        r1 = Release.objects.create(project=project, version="1.0.2-" + "a" * 194)
+        r2, created = create_release_if_needed(
+            project, "FutBoraBlazor.Server@1.0.10+" + "b" * 100, r0.date_released - timedelta(seconds=10))
+
+        self.assertTrue(created)
+        self.assertTrue(r1.is_semver)
+        self.assertTrue(r2.is_semver)
+        self.assertEqual(ordered_releases(project=project), [r0, r1, r2])
+        self.assertEqual(project.get_latest_release(), r2)
+
     def test_re_package_version(self):
         self.assertEqual({"package": None, "version": "foo"}, RE_PACKAGE_VERSION.match("foo").groupdict())
 
