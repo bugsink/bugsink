@@ -3,6 +3,7 @@
 from contextlib import contextmanager
 from functools import wraps
 from unittest.mock import patch
+from bugsink.utils import assert_
 
 from django.core.handlers.base import BaseHandler
 from django.core.management.base import BaseCommand
@@ -39,9 +40,9 @@ def require_write_transaction():
         sqlite_connection.execute("PRAGMA query_only=ON")
         yield
     finally:
-        assert application_connection.connection is sqlite_connection, (
+        assert_(application_connection.connection is sqlite_connection, (
             "Application code closed or replaced the database connection during a transaction write check"
-        )
+        ))
         sqlite_connection.execute(f"PRAGMA query_only={pragma_query_only_to_restore}")
 
 
