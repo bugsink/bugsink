@@ -362,14 +362,15 @@ def team_members_accept_new_user(request, team_pk, token):
     # do over there, namely: access to email implies control over the account. This is also the reason we reuse that
     # app's `EmailVerification` model.
 
-    # clean up expired tokens; doing this on every request is just fine, it saves us from having to run a cron
-    # job-like thing
-    EmailVerification.objects.filter(
-        created_at__lt=timezone.now() - timedelta(
-            seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)).delete()
+    cutoff = timezone.now() - timedelta(seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)
+    if request.method == 'POST':
+        # clean up expired tokens; doing this on POST requests is just fine, it saves us from having to run a cron
+        # job-like thing
+        EmailVerification.objects.filter(created_at__lt=cutoff).delete()
 
     try:
-        verification = EmailVerification.objects.get(token=token, email=models.F("user__username"))
+        verification = EmailVerification.objects.get(
+            token=token, email=models.F("user__username"), created_at__gte=cutoff)
     except EmailVerification.DoesNotExist:
         # good enough (though a special page might be prettier)
         raise Http404("Invalid or expired token")

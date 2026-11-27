@@ -117,13 +117,10 @@ def signup(request):
 
 @atomic_for_request_method
 def confirm_email(request, token=None):
-    # clean up expired tokens; doing this on every request is just fine, it saves us from having to run a cron job-like
-    EmailVerification.objects.filter(
-        created_at__lt=timezone.now() - timedelta(
-            seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)).delete()
+    cutoff = timezone.now() - timedelta(seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)
 
     try:
-        verification = EmailVerification.objects.get(token=token, email=F("user__username"))
+        verification = EmailVerification.objects.get(token=token, email=F("user__username"), created_at__gte=cutoff)
     except EmailVerification.DoesNotExist:
         # good enough (though a special page might be prettier)
         raise Http404("Invalid or expired token")
@@ -132,6 +129,10 @@ def confirm_email(request, token=None):
         raise Http404("This account is not awaiting email confirmation.")
 
     if request.method == 'POST':
+        # clean up expired tokens; doing this on POST requests is just fine, it saves us from having to run a cron
+        # job-like thing
+        EmailVerification.objects.filter(created_at__lt=cutoff).delete()
+
         # We insist on POST requests to do the actual confirmation (at the cost of an extra click). See:
         # https://softwareengineering.stackexchange.com/a/422579/168778
         # there's no Django form (fields), there's just a button to generate the post request
@@ -199,17 +200,14 @@ def request_reset_password(request):
 def reset_password(request, token=None):
     # alternative name: set_password (because this one also works for initial setting of a password)
 
-    # clean up expired tokens; doing this on every request is just fine, it saves us from having to run a cron
-    # job-like thing
-    EmailVerification.objects.filter(
-        created_at__lt=timezone.now() - timedelta(
-            seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)).delete()
+    cutoff = timezone.now() - timedelta(seconds=get_settings().USER_REGISTRATION_VERIFY_EMAIL_EXPIRY)
 
     # no_bandit_expl: "set-password" is a URL marker, not a secret token.
     verification_token = request.session.get("_password_reset_token") if token == "set-password" else token  # nosec B105
 
     try:
-        verification = EmailVerification.objects.get(token=verification_token, email=F("user__username"))
+        verification = EmailVerification.objects.get(
+            token=verification_token, email=F("user__username"), created_at__gte=cutoff)
     except EmailVerification.DoesNotExist:
         # good enough (though a special page might be prettier)
         raise Http404("Invalid or expired token")
@@ -232,6 +230,10 @@ def reset_password(request, token=None):
         return redirect(reset_url + "?" + urlencode({"next": next_url}))
 
     if request.method == 'POST':
+        # clean up expired tokens; doing this on POST requests is just fine, it saves us from having to run a cron
+        # job-like thing
+        EmailVerification.objects.filter(created_at__lt=cutoff).delete()
+
         form = SetPasswordForm(user, request.POST)
         if form.is_valid():
             user.is_active = True  # also completes initial setup for invited users
